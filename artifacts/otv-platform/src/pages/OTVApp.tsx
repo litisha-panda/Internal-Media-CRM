@@ -467,6 +467,7 @@ async function roCallAPI(msgs) {
 
 // ─── LOGIN COMPONENT ──────────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = "773380743026-i87vjdrj5n699von60sa3plqqv95mlem.apps.googleusercontent.com";
+const ZOHO_CLIENT_ID   = "1000.TQ0C2M1CLOJC0ES8EPEJJWG5LUJ9ON";
 
 function LoginScreen({ onLogin }) {
   const [mode, setMode]       = useState("options"); // "options" | "email"
@@ -527,6 +528,50 @@ function LoginScreen({ onLogin }) {
       setLoading(false);
       setErr("Google Sign-In is still loading. Please wait a moment and try again.");
     }
+  }
+
+  function handleZohoClick() {
+    setErr(""); setLoading(true);
+    const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, "");
+    const scope = "AaaServer.profile.Read";
+    const authUrl = `https://accounts.zoho.in/oauth/v2/auth?response_type=token&client_id=${ZOHO_CLIENT_ID}&scope=${encodeURIComponent(scope)}&redirect_uri=${encodeURIComponent(redirectUri)}&access_type=online&prompt=consent`;
+    const popup = window.open(authUrl, "zoho-login", "width=560,height=660,left=300,top=80");
+    if (!popup) {
+      setErr("Popup was blocked. Please allow popups for this site and try again.");
+      setLoading(false);
+      return;
+    }
+    const timer = setInterval(async () => {
+      try {
+        if (popup.closed) {
+          clearInterval(timer);
+          setErr("Zoho sign-in was cancelled.");
+          setLoading(false);
+          return;
+        }
+        const href = popup.location.href;
+        if (href && href.includes("access_token")) {
+          clearInterval(timer);
+          const hash = popup.location.hash.replace(/^#/, "");
+          const params = new URLSearchParams(hash);
+          const token = params.get("access_token");
+          popup.close();
+          try {
+            const resp = await fetch("https://accounts.zoho.in/oauth/v2/userinfo", {
+              headers: { Authorization: `Zoho-oauthtoken ${token}` },
+            });
+            const profile = await resp.json();
+            const displayName = profile.display_name || profile.given_name || profile.first_name || profile.email;
+            onLogin({ name: displayName, email: profile.email, picture: profile.picture });
+          } catch (e) {
+            setErr("Could not fetch Zoho profile. Please try again.");
+            setLoading(false);
+          }
+        }
+      } catch (_) {
+        // Cross-origin error while popup is on Zoho's domain — safe to ignore, keep polling
+      }
+    }, 500);
   }
 
   const DEMO_ACCOUNTS = [
@@ -616,13 +661,14 @@ function LoginScreen({ onLogin }) {
                   </button>
                   <div ref={hiddenGoogleBtn} style={{ position:"absolute", opacity:0, pointerEvents:"none", width:1, height:1, overflow:"hidden" }} />
                   <button
-                    onClick={() => { setLoading(true); setTimeout(()=>{ setErr("Zoho OAuth not configured in this environment. Use email or demo login."); setLoading(false); }, 800); }}
-                    style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"opacity .15s" }}
+                    onClick={handleZohoClick}
+                    disabled={loading}
+                    style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:loading?"wait":"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"opacity .15s", opacity:loading?0.7:1 }}
                     onMouseOver={e=>e.currentTarget.style.opacity=".88"}
                     onMouseOut={e=>e.currentTarget.style.opacity="1"}
                   >
                     <svg width="18" height="18" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="4" fill="#e42527"/><text x="50%" y="58%" dominantBaseline="middle" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="bold" fontFamily="sans-serif">Z</text></svg>
-                    Continue with Zoho
+                    {loading ? "Signing in…" : "Continue with Zoho"}
                   </button>
                 </div>
 
