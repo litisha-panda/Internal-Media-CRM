@@ -574,17 +574,6 @@ function LoginScreen({ onLogin }) {
     }, 500);
   }
 
-  const DEMO_ACCOUNTS = [
-    { label:"Admin",              email:"admin@odishatv.com",    role:"ADMIN",          color:"#ea3943" },
-    { label:"Litisha (CXO)",      email:"litisha@odishatv.com",  role:"CXO",            color:"#a855f7" },
-    { label:"Sales Head",         email:"saleshead@odishatv.com",role:"SALES HEAD",     color:"#f0a500" },
-    { label:"Sachin – Strategy",  email:"sachin@odishatv.com",   role:"SALES STRATEGY", color:"#16c784" },
-    { label:"Darpan – Analysis",  email:"darpan@odishatv.com",   role:"SALES ANALYSIS", color:"#60a5fa" },
-    { label:"Digital Team",       email:"digital@odishatv.com",  role:"DIGITAL",        color:"#2d7dd2" },
-    { label:"Region Head North",  email:"rhn@odishatv.com",      role:"REGION HEAD",    color:"#7d8590" },
-    { label:"Arjun – Sales Rep",  email:"arjun@odishatv.com",    role:"SALES REP",      color:"#2a3a4d" },
-  ];
-
   const handleEmail = (e) => {
     e.preventDefault(); setErr("");
     if (!email.trim()) { setErr("Email is required"); return; }
@@ -604,13 +593,6 @@ function LoginScreen({ onLogin }) {
     }
   };
 
-  const handleDemo = (account) => {
-    setLoading(true);
-    setTimeout(() => {
-      onLogin({ name: account.label, email: account.email });
-      setLoading(false);
-    }, 600);
-  };
 
   return (
     <div style={{ fontFamily:"'DM Mono','JetBrains Mono',monospace", background:"#080a0f", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
@@ -684,21 +666,6 @@ function LoginScreen({ onLogin }) {
                   Continue with Email
                 </button>
 
-                {/* DEMO ACCOUNTS */}
-                <div style={{ marginTop:24 }}>
-                  <div style={{ fontSize:10, color:"#7d8590", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:10, textAlign:"center" }}>Demo — Click to sign in as</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:7 }}>
-                    {DEMO_ACCOUNTS.map(a => (
-                      <button key={a.email} onClick={() => handleDemo(a)} disabled={loading}
-                        style={{ background:"#0d1117", border:`1px solid ${a.color}33`, borderRadius:6, padding:"8px 10px", cursor:"pointer", textAlign:"left", transition:"border-color .15s, background .15s" }}
-                        onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background="#131920"; }}
-                        onMouseOut={e=>{ e.currentTarget.style.borderColor=`${a.color}33`; e.currentTarget.style.background="#0d1117"; }}>
-                        <div style={{ fontSize:11, fontWeight:700, color:a.color, fontFamily:"'DM Sans',sans-serif", marginBottom:2 }}>{a.label}</div>
-                        <div style={{ fontSize:10, color:"#7d8590" }}>{a.role.toUpperCase()}</div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
               </>
             )}
 
