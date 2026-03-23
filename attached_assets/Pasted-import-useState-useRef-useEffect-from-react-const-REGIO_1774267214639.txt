@@ -1,4 +1,3 @@
-// @ts-nocheck
 import { useState, useRef, useEffect } from "react";
 
 const REGIONS = ["North", "South", "East", "West", "National"];
@@ -456,13 +455,11 @@ async function roBuildMessages(file) {
   return new Promise(res=>{const r=new FileReader();r.onload=()=>res([{role:"user",content:"Parse this TV RO. If multiple channels return JSON array:\n\n"+r.result}]);r.readAsText(file);});
 }
 async function roCallAPI(msgs) {
-  const base=import.meta.env.BASE_URL||"/";
-  const apiUrl=base.endsWith("/")?base+"api/parse-ro":base+"/api/parse-ro";
-  const resp=await fetch(apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:msgs})});
+  const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:16000,system:RO_PROMPT,messages:msgs})});
   if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
   const data=await resp.json();
-  if(data.error)throw new Error(data.error);
-  return data.text||"";
+  if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
+  return (data.content||[]).map(b=>b.text||"").join("").trim();
 }
 
 // ─── LOGIN COMPONENT ──────────────────────────────────────────────────────────
@@ -649,7 +646,7 @@ function LoginScreen({ onLogin }) {
 }
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
-export default function OTVApp() {
+export default function CROWarRoom() {
   const [loggedIn, setLoggedIn]   = useState(false);
   const [loginUser, setLoginUser] = useState(null);
   const [appMode, setAppMode]     = useState(null); // null = home, "ro" = RO module, "crm" = CRM
