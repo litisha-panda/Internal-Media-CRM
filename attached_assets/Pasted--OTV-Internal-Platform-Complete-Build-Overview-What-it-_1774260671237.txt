@@ -1,0 +1,119 @@
+**OTV Internal Platform — Complete Build Overview**
+
+---
+
+**What it is**
+
+A unified internal web application for Odisha Television Network. One URL, one login, two modules — RO Management for ad operations, and CRO Command for sales intelligence. Built in React, runs on Replit with a Node/Express proxy backend for the Anthropic API.
+
+---
+
+**The Entry Experience**
+
+**Login Screen** — Three options: Google, Zoho, and email/password. Email auth is fully functional today using localStorage. Google and Zoho are wired as ready buttons — in production you replace two function calls with OAuth endpoints and they go live. New users can register inline.
+
+**Home Screen** — After login, two large tiles: RO Management and CRO Command. Clean, minimal, no clutter. Each tile shows what it contains and who it's for.
+
+**Module Switcher** — Once inside either module, a permanent switcher in the sidebar lets you jump between RO and CRM in one click. No going back to home, no re-login. The view resets correctly each time.
+
+**Sign out** — Available in the topbar on every screen. Returns to login.
+
+---
+
+**MODULE 1 — RO MANAGEMENT**
+
+Built for the ad operations team. Everything related to parsing, reviewing, and exporting Release Orders.
+
+**RO Parser**
+
+AI-powered Release Order parser running on Claude Sonnet via the Anthropic API. Accepts PDF, image, Excel, CSV, and plain text. Handles eight distinct agency formats:
+
+- WPP / Wavemaker / EssenceMediacom — RODP timeband extraction, column-header-matched spots
+- Omnicom / FCBUlka / Initiative — SPOTBUY/RODP category column, separate Programme and Time columns
+- Madison — Caption row inheritance, duration carries down to all RODP rows below
+- Zenith / TLG — Timeband extracted from parenthetical in programme name
+- Spark Foundry Excel — ST/ET integer format (700 = 07:00, 2400 = 24:00)
+- Prachar Communications — HHMM format, Spot column contains Paid or Bonus
+- ENES / Direct Client — Channel boundary rule triggers new deal per channel change
+- Multi-sheet Excel — Every sheet parsed, each channel gets its own deal record
+
+Key parsing capabilities: multi-channel RO splitting into separate deal records, sponsorship keyword detection triggering SPONSORSHIP_ENTITLEMENT component, PT/NPT time band splitting at 19:00 and 23:00, discount and agency commission extracted and stored separately, Total/Subtotal footer rows stripped from spot items, Excel formula cells read as computed values not formula strings.
+
+Output shows a Zoho routing hierarchy — Company → Channel → Pipeline → Deal Type — before export. One click produces a clean XLSX with three sheets: Deal (maps to Zoho Create Deal form), Deal Breakup (maps to Zoho Deal Breakup section), and Summary (aggregates inventory, slots, amount, effective rate). Fields the sales team fills in Zoho directly — Contract Type, Secondary Type — are intentionally left blank with a clear warning.
+
+**RO Management**
+
+Library of all saved ROs. Search by client, agency, channel, RO number, or brand. Filter by channel and export status. View expands the full ROCard inline — all tabs visible without leaving the page. Export re-downloads the Zoho XLSX and marks the record as Exported. Delete has a confirmation gate. Every RO exported from the Parser is automatically saved here.
+
+---
+
+**MODULE 2 — CRO COMMAND**
+
+Built for the sales leadership and management team. Eight tabs.
+
+**War Room**
+
+The daily command view. Five headline KPIs at the top: Closed QTD, Forecast (probability-weighted pipeline), Gap to Target, Deals at Risk, and Overdue Actions. Two live alert sections below: deals with no client contact in 7 or more days flagged red with idle day count and deal value at stake; deals with overdue next steps flagged amber with the specific action that's past due. Below that, high-probability deals ranked by value with an inline stage updater — the CRO can advance a deal without navigating away. At the bottom, today's meeting log and compliance snapshot side by side.
+
+**Pipeline**
+
+Every deal grouped by stage with weighted revenue shown at each level. Probability weights: Proposal Accepted 100%, Very Interested 70%, Interested Needs Revision 50%, Price Concern 30%, Needs Callback 20%. Each row is click-to-expand, revealing contact details, notes, competitor intel, and internal requests with live status droppers. Stage updates inline. Deal aging shown in days with colour coding — green if contacted recently, amber if 3 days, red if 7 or more days idle.
+
+**Targets**
+
+Client-level revenue tracker. Every client shows their quarterly target, amount closed, pipeline value, a progress bar, and last contact date. A quarter-level coverage bar at the top stacks closed (green) and pipeline forecast (amber) against the total target. When a parsed RO matches a deal by client name, the deal automatically flips to Proposal Accepted and shows an "RO Linked" badge — the actuals update without any manual entry.
+
+**Team**
+
+Rep scorecards ranked by closed revenue. Each scorecard shows: Closed, Pipeline, Target, Meeting count, and Senior Meeting percentage. Senior Meeting percentage is the key metric — if a rep is below 50%, the system flags it as a coaching issue inline on the card. Coverage percentage shown as a progress bar.
+
+**Activity**
+
+Full daily meeting log. Every interaction logged with rep, client, contact name, contact level, outcome, next step, and whether it was logged before or after the 12pm deadline. Late entries flagged in amber. Contact level colour-coded — C-Suite and VP in blue and purple, juniors in red.
+
+**Escalations**
+
+Internal dependency tracker. Every internal request raised against a deal — Sales Strategy, Digital, Production, National Head, Finance, Legal — is tracked here with an SLA clock. SLAs: National Head 12 hours, Sales Strategy and Digital 24 hours, Production and Finance 48 hours, Legal 72 hours. Overdue requests surface at the top. Status updatable inline. Grouped by owning department with an open count badge. This solves the specific problem your CRO described — you see who's blocking what the same day, not at quarter-end review.
+
+**Compliance**
+
+Rep-by-rep attendance grid for today and yesterday. Three statuses: On Time (logged before 12pm), Logged Late (after 12pm), and Negative Attendance (nothing logged at all). Negative attendance cannot be regularised — it's permanent by design.
+
+**HR Reports**
+
+The absence engine. Simulates the EOD run that checks who hasn't logged and auto-generates absence reports firing to hr@odishatv.com. The system rules are displayed permanently in the tab — no regularisation, no exceptions in the system except through the approved authority. Only Admin and CXO roles see the Grant Exception button. Everyone else sees a message directing them to the appropriate person. Every exception is logged with the granting person's name, their role, their reason, and a timestamp. Exceptions can also be revoked, which flips the record back to Absent.
+
+---
+
+**ROLES**
+
+Eight roles. Access is enforced throughout — every data query, every visible tab, every action button is gated.
+
+| Role | Data Access | HR Exception Authority |
+|---|---|---|
+| ADMIN | Full — all regions, all reps | Yes |
+| CXO | Full — all regions, all reps | Yes |
+| SALES HEAD | Full — all regions, all reps | No |
+| SALES STRATEGY | Full — all regions, all reps | No |
+| SALES ANALYSIS | Full — all regions, all reps | No |
+| DIGITAL | Full — all regions, all reps | No |
+| REGION HEAD | Own region and assigned reps only | No |
+| SALES REP | Own deals, meetings, targets only | No |
+
+The role switcher in the topbar lets you demo any role's exact experience. The region filter disappears for roles that don't have full access. Deals, targets, team scorecards, and compliance grids all filter silently based on the active role.
+
+---
+
+**The Auto-Mapping Engine**
+
+The critical link between the two modules. When an RO is parsed and saved, the system scans open CRM deals and matches by client name. If found, the deal stage moves to Proposal Accepted, the actual billed amount populates from the RO gross amount, and the RO ID is stored on the deal. The Pipeline and Targets views show an "RO Linked" badge. Revenue actuals in the CRM update the moment an RO lands — no double entry, no manual update.
+
+---
+
+**What's production-ready today**
+
+The entire frontend. Every feature described above works in the artifact. State is managed in React with localStorage persistence for saved ROs, users, and attendance data.
+
+**What needs wiring for full production on Replit**
+
+Replace localStorage auth with a real user table in PostgreSQL and JWT sessions on the Express backend. Wire Google and Zoho OAuth buttons to their endpoints. Move the Anthropic API call from the existing proxy into the same Express server. Replace the EMAIL_ROLE_MAP with a database role lookup so roles are assigned server-side, not client-side. Wire the `fireAbsenceReport` function to a POST to your HRMS API. Set up a server-side cron job at 23:59 daily to run the EOD absence check automatically without anyone clicking the button. That's the full production delta.
