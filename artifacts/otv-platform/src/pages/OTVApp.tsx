@@ -466,6 +466,8 @@ async function roCallAPI(msgs) {
 }
 
 // ─── LOGIN COMPONENT ──────────────────────────────────────────────────────────
+const GOOGLE_CLIENT_ID = "773380743026-i87vjdrj5n699von60sa3plqqv95mlem.apps.googleusercontent.com";
+
 function LoginScreen({ onLogin }) {
   const [mode, setMode]       = useState("options"); // "options" | "email"
   const [email, setEmail]     = useState("");
@@ -474,6 +476,58 @@ function LoginScreen({ onLogin }) {
   const [isNew, setIsNew]     = useState(false);
   const [err, setErr]         = useState("");
   const [loading, setLoading] = useState(false);
+  const googleReady           = useRef(false);
+  const hiddenGoogleBtn       = useRef(null);
+
+  useEffect(() => {
+    function initGIS() {
+      if (!window.google?.accounts?.id) return;
+      window.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleGoogleCredential,
+        auto_select: false,
+        cancel_on_tap_outside: true,
+      });
+      if (hiddenGoogleBtn.current) {
+        window.google.accounts.id.renderButton(hiddenGoogleBtn.current, {
+          theme: "outline", size: "large", width: 400,
+        });
+      }
+      googleReady.current = true;
+    }
+    if (window.google?.accounts?.id) { initGIS(); return; }
+    const interval = setInterval(() => {
+      if (window.google?.accounts?.id) { clearInterval(interval); initGIS(); }
+    }, 200);
+    return () => clearInterval(interval);
+  }, []);
+
+  function handleGoogleCredential(response) {
+    try {
+      const parts = response.credential.split(".");
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
+      onLogin({ name: payload.name || payload.email, email: payload.email, picture: payload.picture });
+    } catch (e) {
+      setErr("Google sign-in failed. Please try email login.");
+      setLoading(false);
+    }
+  }
+
+  function handleGoogleClick() {
+    setErr(""); setLoading(true);
+    if (googleReady.current && window.google?.accounts?.id) {
+      window.google.accounts.id.prompt((notification) => {
+        if (notification.isNotDisplayed() || notification.isSkippedMoment()) {
+          const btn = hiddenGoogleBtn.current?.querySelector("div[role='button']");
+          if (btn) { btn.click(); }
+          else { setErr("Google Sign-In popup was blocked. Please allow popups and try again."); setLoading(false); }
+        }
+      });
+    } else {
+      setLoading(false);
+      setErr("Google Sign-In is still loading. Please wait a moment and try again.");
+    }
+  }
 
   const DEMO_ACCOUNTS = [
     { label:"Admin",              email:"admin@odishatv.com",    role:"ADMIN",          color:"#ea3943" },
@@ -551,14 +605,16 @@ function LoginScreen({ onLogin }) {
                 {/* SOCIAL BUTTONS */}
                 <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
                   <button
-                    onClick={() => { setLoading(true); setTimeout(()=>{ setErr("Google OAuth not configured in this environment. Use email or demo login."); setLoading(false); }, 800); }}
-                    style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", color:"#3c4043", border:"1px solid #dadce0", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"box-shadow .15s" }}
+                    onClick={handleGoogleClick}
+                    disabled={loading}
+                    style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", color:"#3c4043", border:"1px solid #dadce0", borderRadius:6, padding:"10px 16px", cursor:loading?"wait":"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"box-shadow .15s", opacity:loading?0.7:1 }}
                     onMouseOver={e=>e.currentTarget.style.boxShadow="0 1px 6px rgba(0,0,0,.3)"}
                     onMouseOut={e=>e.currentTarget.style.boxShadow="none"}
                   >
                     <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
-                    Continue with Google
+                    {loading ? "Signing in…" : "Continue with Google"}
                   </button>
+                  <div ref={hiddenGoogleBtn} style={{ position:"absolute", opacity:0, pointerEvents:"none", width:1, height:1, overflow:"hidden" }} />
                   <button
                     onClick={() => { setLoading(true); setTimeout(()=>{ setErr("Zoho OAuth not configured in this environment. Use email or demo login."); setLoading(false); }, 800); }}
                     style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"opacity .15s" }}
