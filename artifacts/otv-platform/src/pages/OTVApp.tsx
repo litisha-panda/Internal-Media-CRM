@@ -14,18 +14,53 @@ const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "Spo
 const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Closed"];
 const CLIENT_OR_AGENCY = ["Client", "Agency"];
 
-const TODAY  = new Date().toISOString().split("T")[0];
+const TODAY    = new Date().toISOString().split("T")[0];
+const TOMORROW = new Date(Date.now() + 86400000).toISOString().split("T")[0];
 const D1     = new Date(Date.now() - 86400000).toISOString().split("T")[0];
 const D3     = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
 const D7     = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
 const D14    = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
 
-// HR ABSENCE ENGINE
-// In production: EOD job (11:59pm) checks att[TODAY] for each rep.
-// If not logged → auto-generates AbsenceReport → POST to HR system API → marks Absent in HRMS.
-// No regularization path exists in system. Only Admin or CXO can grant exceptions.
-const DEADLINE = "12:00"; // 12pm daily
-const HR_EMAIL = "hr@odishatv.com"; // where reports fire
+// Get start of current week (Monday)
+function getWeekStart(dateStr) {
+  const d = new Date(dateStr);
+  const day = d.getDay();
+  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+  d.setDate(diff);
+  return d.toISOString().split("T")[0];
+}
+const THIS_WEEK_START = getWeekStart(TODAY);
+
+// PLANNING ENGINE
+// Rule: By 11:30 PM every night, rep must have:
+//   1. Logged today's meetings
+//   2. Planned tomorrow's meetings
+// Both required. Either missing = absent.
+// Weekly plan due by Saturday 11:30 PM.
+const PLAN_DEADLINE = "23:30";
+const HR_EMAIL = "hr@odishatv.com";
+
+// Plan status
+const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
+
+const SEED_PLANS = [
+  { id:"p1", repId:1, date:TODAY,    time:"10:00", clientAgencyName:"Reliance Retail",  contactName:"Sameer Joshi",  agenda:"Present revised OTT + TV integrated grid", pitchType:"Integrated Package", status:"Planned", loggedMeetingId:null, isUnplanned:false },
+  { id:"p2", repId:1, date:TODAY,    time:"14:30", clientAgencyName:"ITC Foods",         contactName:"Saurabh Tiwari",agenda:"Q3 renewal — push for 6-week primetime",     pitchType:"FCT",               status:"Planned", loggedMeetingId:null, isUnplanned:false },
+  { id:"p3", repId:2, date:TODAY,    time:"11:00", clientAgencyName:"Berger Paints",     contactName:"Rajesh Kumar",  agenda:"PO follow-up, brand guidelines for FCT",     pitchType:"FCT",               status:"Done",    loggedMeetingId:"ml2", isUnplanned:false },
+  { id:"p4", repId:5, date:TODAY,    time:"09:00", clientAgencyName:"Havells India",     contactName:"Deepa Menon",   agenda:"H2 sponsorship deck walkthrough",             pitchType:"Sponsorship",       status:"Done",    loggedMeetingId:"ml1", isUnplanned:false },
+  { id:"p5", repId:1, date:TOMORROW, time:"10:00", clientAgencyName:"Reliance Retail",  contactName:"Sameer Joshi",  agenda:"Follow-up on revised grid feedback",          pitchType:"Integrated Package", status:"Planned", loggedMeetingId:null, isUnplanned:false },
+  { id:"p6", repId:2, date:TOMORROW, time:"15:00", clientAgencyName:"Apollo Hospitals", contactName:"Ravi Krishnan", agenda:"Digital health campaign proposal",            pitchType:"Digital",           status:"Planned", loggedMeetingId:null, isUnplanned:false },
+  { id:"p7", repId:5, date:TOMORROW, time:"11:30", clientAgencyName:"Asian Paints",     contactName:"Harsh Goenka",  agenda:"CMO meeting — flagship package",              pitchType:"Sponsorship",       status:"Planned", loggedMeetingId:null, isUnplanned:false },
+];
+
+// Weekly plans
+const SEED_WEEKLY_PLANS = [
+  { id:"wp1", repId:1, weekStart:THIS_WEEK_START, submittedAt:"2026-03-22T21:00:00", meetings:[
+    { date:TODAY,    time:"10:00", clientAgencyName:"Reliance Retail",  agenda:"OTT + TV grid" },
+    { date:TODAY,    time:"14:30", clientAgencyName:"ITC Foods",         agenda:"Q3 renewal" },
+    { date:TOMORROW, time:"10:00", clientAgencyName:"Reliance Retail",  agenda:"Grid feedback" },
+  ]},
+];
 const SEED_ABSENCE_REPORTS = [
   { id:"ab1", repId:3, repName:"Rohit Nanda", region:"East", role:"Sales Executive", date:TODAY, generatedAt:"23:59", status:"Sent to HR", sentTo:HR_EMAIL, markedAs:"Absent", exception:null, exceptionBy:null, exceptionReason:null, generatedBy:"System (Auto)" },
   { id:"ab2", repId:3, repName:"Rohit Nanda", region:"East", role:"Sales Executive", date:D1,    generatedAt:"23:59", status:"Sent to HR", sentTo:HR_EMAIL, markedAs:"Absent", exception:null, exceptionBy:null, exceptionReason:null, generatedBy:"System (Auto)" },
@@ -456,14 +491,13 @@ async function roBuildMessages(file) {
   return new Promise(res=>{const r=new FileReader();r.onload=()=>res([{role:"user",content:"Parse this TV RO. If multiple channels return JSON array:\n\n"+r.result}]);r.readAsText(file);});
 }
 async function roCallAPI(msgs) {
-  const base=import.meta.env.BASE_URL||"/";
-  const apiUrl=base.endsWith("/")?base+"api/parse-ro":base+"/api/parse-ro";
-  const resp=await fetch(apiUrl,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({messages:msgs})});
+  const resp=await fetch("https://api.anthropic.com/v1/messages",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({model:"claude-sonnet-4-20250514",max_tokens:16000,system:RO_PROMPT,messages:msgs})});
   if(!resp.ok)throw new Error(`HTTP ${resp.status}`);
   const data=await resp.json();
-  if(data.error)throw new Error(data.error);
-  return data.text||"";
+  if(data.error)throw new Error(data.error.message||JSON.stringify(data.error));
+  return (data.content||[]).map(b=>b.text||"").join("").trim();
 }
+
 
 // ─── LOGIN COMPONENT ──────────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = "773380743026-i87vjdrj5n699von60sa3plqqv95mlem.apps.googleusercontent.com";
@@ -719,27 +753,495 @@ function LoginScreen({ onLogin }) {
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 export default function OTVApp() {
-  const [loggedIn, setLoggedIn]   = useState(false);
-  const [loginUser, setLoginUser] = useState(null);
-  const [appMode, setAppMode]     = useState(null); // null = home, "ro" = RO module, "crm" = CRM
+  const [loggedIn, setLoggedIn]       = useState(false);
+  const [loginUser, setLoginUser]     = useState(null);
+  const [appMode, setAppMode]         = useState(null);
+  // Lifted here so RepDailyView and CROApp share the same plans data
+  const [plans, setPlans]             = useState(SEED_PLANS);
+  const [weeklyPlans, setWeeklyPlans] = useState(SEED_WEEKLY_PLANS);
+  const [meetings, setMeetings]       = useState(SEED_MEETINGS);
+  const [deals, setDeals]             = useState(SEED_DEALS);
 
-  const handleLogin = (user) => {
-    setLoginUser(user);
-    setLoggedIn(true);
-    setAppMode(null);
-  };
-
-  const handleLogout = () => {
-    setLoggedIn(false);
-    setLoginUser(null);
-    setAppMode(null);
-  };
+  const handleLogin = (user) => { setLoginUser(user); setLoggedIn(true); setAppMode(null); };
+  const handleLogout = () => { setLoggedIn(false); setLoginUser(null); setAppMode(null); };
 
   if (!loggedIn) return <LoginScreen onLogin={handleLogin} />;
 
+  // Route SALES REPs to their own simple daily view — they never see the CRM tabs
+  const emailRoleMap = {
+    "arjun@odishatv.com":  { userId:"rep_arjun",  repId:1 },
+    "priya@odishatv.com":  { userId:"rep_priya",  repId:2 },
+    "rohit@odishatv.com":  { userId:"rep_rohit",  repId:3 },
+    "sneha@odishatv.com":  { userId:"rep_sneha",  repId:4 },
+    "vikram@odishatv.com": { userId:"rep_vikram", repId:5 },
+  };
+  const emailKey = (loginUser?.email||"").toLowerCase();
+  const repMapping = emailRoleMap[emailKey];
+  if (repMapping) {
+    const rep = REPS.find(r => r.id === repMapping.repId);
+    if (rep) return (
+      <RepDailyView
+        user={loginUser} rep={rep}
+        plans={plans} setPlans={setPlans}
+        meetings={meetings} setMeetings={setMeetings}
+        deals={deals}
+        weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans}
+        onLogout={handleLogout}
+      />
+    );
+  }
+
   if (!appMode) return <HomeScreen user={loginUser} onSelect={setAppMode} onLogout={handleLogout} />;
 
-  return <CROApp user={loginUser} onLogout={handleLogout} appMode={appMode} onHome={() => setAppMode(null)} onSwitchModule={setAppMode} />;
+  return <CROApp
+    user={loginUser} onLogout={handleLogout}
+    appMode={appMode} onHome={() => setAppMode(null)} onSwitchModule={setAppMode}
+    plans={plans} setPlans={setPlans}
+    weeklyPlans={weeklyPlans} setWeeklyPlans={setWeeklyPlans}
+    sharedMeetings={meetings} setSharedMeetings={setMeetings}
+    sharedDeals={deals} setSharedDeals={setDeals}
+  />;
+}
+
+// ─── REP DAILY VIEW ──────────────────────────────────────────────────────────
+// What a sales rep sees. Two things only: log today + plan tomorrow.
+// By 11:30 PM both must be done or attendance = absent.
+function RepDailyView({ user, rep, plans, setPlans, meetings, setMeetings, deals, weeklyPlans, setWeeklyPlans, onLogout, onSwitchToManagement }) {
+  const [tab, setTab]                     = useState("daily"); // "daily" | "weekly"
+  const [logModal, setLogModal]           = useState(null);    // plan object being logged
+  const [addPlanModal, setAddPlanModal]   = useState(null);    // "today" | "tomorrow" | date string
+  const [addWeekModal, setAddWeekModal]   = useState(false);
+  const [logForm, setLogForm]             = useState({ pitchType:"", discussion:"", clientFeedback:"", status:"", nextSteps:"", followUpDate:"" });
+  const [planForm, setPlanForm]           = useState({ clientAgencyName:"", time:"", agenda:"", pitchType:"", date:"" });
+  const [toast, setToast]                 = useState(null);
+  const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+
+  // Countdown to 11:30 PM
+  const [countdown, setCountdown] = useState("");
+  useEffect(() => {
+    const tick = () => {
+      const now = new Date();
+      const deadline = new Date();
+      deadline.setHours(23, 30, 0, 0);
+      const diff = deadline - now;
+      if (diff <= 0) { setCountdown("DEADLINE PASSED"); return; }
+      const h = Math.floor(diff / 3600000);
+      const m = Math.floor((diff % 3600000) / 60000);
+      setCountdown(`${h}h ${m}m remaining`);
+    };
+    tick();
+    const id = setInterval(tick, 30000);
+    return () => clearInterval(id);
+  }, []);
+
+  const repPlans   = plans.filter(p => p.repId === rep.id);
+  const todayPlans = repPlans.filter(p => p.date === TODAY);
+  const tmrwPlans  = repPlans.filter(p => p.date === TOMORROW);
+  const todayLogged   = todayPlans.some(p => p.status === "Done") || meetings.some(m => m.repId === rep.id && m.date === TODAY);
+  const tmrwPlanned   = tmrwPlans.length > 0;
+  const bothDone      = todayLogged && tmrwPlanned;
+  const deadlinePast  = countdown === "DEADLINE PASSED";
+
+  // Weekly plan for this week
+  const myWeeklyPlan  = weeklyPlans.find(w => w.repId === rep.id && w.weekStart === THIS_WEEK_START);
+  const isSaturday    = new Date().getDay() === 6;
+  const weeklyDue     = isSaturday;
+
+  const handleLogMeeting = (plan) => {
+    const now = new Date();
+    const loggedAt = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+    const newMeeting = {
+      id: `ml${Date.now()}`,
+      repId: rep.id, repName: rep.name, region: rep.region,
+      clientCompany: plan.clientAgencyName,
+      contactName: plan.contactName || logForm.contactName || "",
+      date: TODAY, loggedAt, late: false,
+      meetingTime: plan.time,
+      pitchType: logForm.pitchType || plan.pitchType,
+      discussion: logForm.discussion,
+      clientFeedback: logForm.clientFeedback,
+      status: logForm.status,
+      nextSteps: logForm.nextSteps,
+      followUpDate: logForm.followUpDate,
+      outcome: logForm.status === "Closed" ? "Proposal Accepted" : logForm.status || "Needs Callback",
+      isUnplanned: false,
+    };
+    setMeetings(p => [newMeeting, ...p]);
+    setPlans(p => p.map(pl => pl.id === plan.id ? {...pl, status:"Done", loggedMeetingId:newMeeting.id} : pl));
+    setLogModal(null);
+    setLogForm({ pitchType:"", discussion:"", clientFeedback:"", status:"", nextSteps:"", followUpDate:"" });
+    showToast("Meeting logged ✓");
+  };
+
+  const handleAddPlan = () => {
+    if (!planForm.clientAgencyName.trim()) { showToast("Enter client name", "err"); return; }
+    const newPlan = {
+      id: `p${Date.now()}`,
+      repId: rep.id,
+      date: addPlanModal === "today" ? TODAY : addPlanModal === "tomorrow" ? TOMORROW : planForm.date || TOMORROW,
+      time: planForm.time || "10:00",
+      clientAgencyName: planForm.clientAgencyName.trim(),
+      agenda: planForm.agenda.trim(),
+      pitchType: planForm.pitchType,
+      status: "Planned",
+      loggedMeetingId: null,
+      isUnplanned: false,
+    };
+    setPlans(p => [...p, newPlan]);
+    setPlanForm({ clientAgencyName:"", time:"", agenda:"", pitchType:"", date:"" });
+    setAddPlanModal(null);
+    showToast("Meeting planned ✓");
+  };
+
+  const handleAddWeeklyPlan = () => {
+    const existing = weeklyPlans.find(w => w.repId === rep.id && w.weekStart === THIS_WEEK_START);
+    const weekMeetings = repPlans.filter(p => p.date >= THIS_WEEK_START).map(p => ({
+      date: p.date, time: p.time, clientAgencyName: p.clientAgencyName, agenda: p.agenda
+    }));
+    if (existing) {
+      setWeeklyPlans(p => p.map(w => w.id === existing.id ? {...w, submittedAt: new Date().toISOString(), meetings: weekMeetings} : w));
+    } else {
+      setWeeklyPlans(p => [...p, { id:`wp${Date.now()}`, repId:rep.id, weekStart:THIS_WEEK_START, submittedAt:new Date().toISOString(), meetings:weekMeetings }]);
+    }
+    setAddWeekModal(false);
+    showToast("Weekly plan submitted ✓");
+  };
+
+  const deadlineColor = countdown === "DEADLINE PASSED" ? "#ea3943" : countdown.startsWith("0h") ? "#f97316" : "#16c784";
+
+  return (
+    <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace", background:"#080a0f", minHeight:"100vh", color:"#e6edf3", display:"flex", flexDirection:"column"}}>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;600;700;800&display=swap');
+        *{box-sizing:border-box;margin:0;padding:0}
+        .rep-input{background:#0d1117;border:1px solid #1e2d3d;border-radius:6px;padding:9px 12px;color:#e6edf3;font-size:12px;font-family:'DM Mono',monospace;outline:none;width:100%;transition:border-color .15s}
+        .rep-input:focus{border-color:#f0a500}
+        .rep-input::placeholder{color:#2a3a4d}
+        .rep-btn{padding:8px 16px;border:none;border-radius:5px;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;transition:opacity .15s}
+        .rep-btn:hover{opacity:.82}
+        .rep-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
+        .rep-modal{background:#0d1117;border:1px solid #1e2d3d;border-radius:10px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
+      `}</style>
+
+      {/* TOPBAR */}
+      <div style={{background:"#0d1117", borderBottom:"1px solid #1e2d3d", padding:"0 20px", height:46, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0}}>
+        <div style={{display:"flex", alignItems:"center", gap:10}}>
+          <div style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius:6, padding:"4px 10px", fontSize:12, fontWeight:700, letterSpacing:2}}>OTV</div>
+          <span style={{color:"#2a3a4d"}}>|</span>
+          <span style={{fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:"#7d8590", letterSpacing:2, textTransform:"uppercase"}}>My Day</span>
+        </div>
+        <div style={{display:"flex", alignItems:"center", gap:10}}>
+          <div style={{fontSize:11, fontWeight:700, color:deadlineColor, background:`${deadlineColor}18`, border:`1px solid ${deadlineColor}44`, padding:"3px 10px", borderRadius:4}}>
+            ⏱ {countdown}
+          </div>
+          <div style={{width:24, height:24, borderRadius:"50%", background:"#f0a50022", border:"1px solid #f0a50044", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#f0a500"}}>
+            {(user.name||"?")[0].toUpperCase()}
+          </div>
+          <span style={{fontSize:11, color:"#7d8590"}}>{rep.name}</span>
+          <button onClick={onLogout} style={{background:"transparent", border:"1px solid #1e2d3d", borderRadius:4, padding:"3px 9px", color:"#7d8590", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace"}}
+            onMouseOver={e=>{e.currentTarget.style.borderColor="#ea3943";e.currentTarget.style.color="#ea3943";}}
+            onMouseOut={e=>{e.currentTarget.style.borderColor="#1e2d3d";e.currentTarget.style.color="#7d8590";}}>Sign out</button>
+        </div>
+      </div>
+
+      {/* TABS */}
+      <div style={{display:"flex", borderBottom:"1px solid #1e2d3d", background:"#0d1117"}}>
+        {[{id:"daily",label:"Daily Plan"},{id:"weekly",label:"Weekly Plan"}].map(t=>{
+          const a = tab===t.id;
+          return <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 20px", background:"transparent", border:"none", color:a?"#f0a500":"#7d8590", fontWeight:a?700:400, fontSize:12, cursor:"pointer", borderBottom:a?"2px solid #f0a500":"2px solid transparent", fontFamily:"'DM Mono',monospace"}}>{t.label}</button>;
+        })}
+      </div>
+
+      <div style={{flex:1, overflow:"auto", padding:"20px 20px"}}>
+
+        {tab === "daily" && (
+          <div style={{maxWidth:640, margin:"0 auto"}}>
+
+            {/* COMPLIANCE STATUS */}
+            <div style={{background: bothDone?"#0a1a0a":"#150a0a", border:`1px solid ${bothDone?"#16c78444":"#ea394344"}`, borderRadius:10, padding:"14px 18px", marginBottom:20, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10}}>
+              <div>
+                <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:bothDone?"#16c784":"#e6edf3", marginBottom:4}}>
+                  {bothDone ? "✓ All done for today" : deadlinePast ? "⚠ Deadline passed — marked absent" : "Complete both before 11:30 PM"}
+                </div>
+                <div style={{display:"flex", gap:16}}>
+                  <span style={{fontSize:12, color:todayLogged?"#16c784":"#ea3943", fontWeight:600}}>{todayLogged?"✓":"✗"} Today logged</span>
+                  <span style={{fontSize:12, color:tmrwPlanned?"#16c784":"#ea3943", fontWeight:600}}>{tmrwPlanned?"✓":"✗"} Tomorrow planned</span>
+                </div>
+              </div>
+              {!bothDone && !deadlinePast && (
+                <div style={{fontSize:11, color:"#7d8590", textAlign:"right"}}>
+                  {!todayLogged && !tmrwPlanned ? "2 things to do" : "1 more thing to do"}
+                </div>
+              )}
+            </div>
+
+            {/* ── TODAY ── */}
+            <div style={{marginBottom:24}}>
+              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
+                <div>
+                  <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700}}>Today · {TODAY}</div>
+                  <div style={{fontSize:11, color:"#7d8590", marginTop:2}}>{todayPlans.filter(p=>p.status==="Done").length}/{todayPlans.length} meetings logged</div>
+                </div>
+                <button onClick={()=>setAddPlanModal("today")} className="rep-btn" style={{background:"#1a2332", color:"#e6edf3", border:"1px solid #1e2d3d", fontSize:11}}>+ Add meeting</button>
+              </div>
+
+              {todayPlans.length === 0 && !meetings.some(m=>m.repId===rep.id&&m.date===TODAY) && (
+                <div style={{background:"#0d1117", border:"1px dashed #1e2d3d", borderRadius:8, padding:24, textAlign:"center"}}>
+                  <div style={{fontSize:13, color:"#7d8590", marginBottom:8}}>No meetings planned for today</div>
+                  <div style={{fontSize:11, color:"#2a3a4d"}}>Add a planned meeting above, or log an unplanned one</div>
+                </div>
+              )}
+
+              <div style={{display:"flex", flexDirection:"column", gap:10}}>
+                {todayPlans.map(plan => (
+                  <div key={plan.id} style={{background:"#0d1117", border:`1px solid ${plan.status==="Done"?"#16c78444":plan.status==="Cancelled"?"#ea394322":"#1e2d3d"}`, borderRadius:8, padding:"14px 16px"}}>
+                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8}}>
+                      <div style={{flex:1}}>
+                        <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4}}>
+                          <span style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700, fontSize:14}}>{plan.clientAgencyName}</span>
+                          {plan.pitchType && <span style={{background:"#f0a50018", color:"#f0a500", padding:"1px 7px", borderRadius:8, fontSize:10, fontWeight:600}}>{plan.pitchType}</span>}
+                          <span style={{background:plan.status==="Done"?"#16c78422":plan.status==="Cancelled"?"#ea394322":"#1e2d3d", color:plan.status==="Done"?"#16c784":plan.status==="Cancelled"?"#ea3943":"#7d8590", padding:"1px 7px", borderRadius:8, fontSize:10, fontWeight:600, marginLeft:"auto"}}>{plan.status}</span>
+                        </div>
+                        <div style={{fontSize:11, color:"#7d8590"}}>🕐 {plan.time}{plan.contactName?` · ${plan.contactName}`:""}</div>
+                        {plan.agenda && <div style={{fontSize:12, color:"#e6edf3", marginTop:6}}>Agenda: {plan.agenda}</div>}
+                      </div>
+                    </div>
+                    {plan.status === "Planned" && (
+                      <div style={{display:"flex", gap:8, marginTop:12}}>
+                        <button onClick={()=>{setLogModal(plan);setLogForm({pitchType:plan.pitchType||"",discussion:"",clientFeedback:"",status:"Meeting Done",nextSteps:"",followUpDate:"",contactName:plan.contactName||""});}} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff", flex:1}}>Log this meeting</button>
+                        <button onClick={()=>setPlans(p=>p.map(pl=>pl.id===plan.id?{...pl,status:"Cancelled"}:pl))} className="rep-btn" style={{background:"#1a1010", color:"#ea3943", border:"1px solid #ea394322"}}>Cancel</button>
+                      </div>
+                    )}
+                    {plan.status === "Done" && <div style={{marginTop:8, fontSize:11, color:"#16c784"}}>✓ Logged</div>}
+                  </div>
+                ))}
+
+                {/* Unplanned meetings logged today */}
+                {meetings.filter(m=>m.repId===rep.id&&m.date===TODAY&&m.isUnplanned).map(m=>(
+                  <div key={m.id} style={{background:"#0d1117", border:"1px solid #f0a50033", borderRadius:8, padding:"12px 16px"}}>
+                    <div style={{display:"flex", alignItems:"center", gap:8}}>
+                      <span style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700}}>{m.clientCompany}</span>
+                      <span style={{background:"#f0a50018", color:"#f0a500", padding:"1px 7px", borderRadius:8, fontSize:10, fontWeight:700}}>UNPLANNED</span>
+                      <span style={{fontSize:11, color:"#7d8590", marginLeft:"auto"}}>Logged {m.loggedAt}</span>
+                    </div>
+                  </div>
+                ))}
+
+                {/* Quick log unplanned */}
+                <button onClick={()=>{setLogModal({id:`up${Date.now()}`,isUnplanned:true,clientAgencyName:"",time:"",agenda:""});setLogForm({pitchType:"",discussion:"",clientFeedback:"",status:"Meeting Done",nextSteps:"",followUpDate:"",contactName:"",clientAgencyName:"",isUnplanned:true});}} style={{background:"transparent", border:"1px dashed #1e2d3d", borderRadius:8, padding:"11px", color:"#7d8590", fontSize:12, cursor:"pointer", fontFamily:"'DM Mono',monospace", textAlign:"center", transition:"border-color .15s,color .15s"}}
+                  onMouseOver={e=>{e.currentTarget.style.borderColor="#f0a500";e.currentTarget.style.color="#f0a500";}}
+                  onMouseOut={e=>{e.currentTarget.style.borderColor="#1e2d3d";e.currentTarget.style.color="#7d8590";}}>
+                  + Log unplanned meeting
+                </button>
+              </div>
+            </div>
+
+            {/* ── TOMORROW ── */}
+            <div>
+              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
+                <div>
+                  <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700}}>Tomorrow · {TOMORROW}</div>
+                  <div style={{fontSize:11, color:tmrwPlanned?"#16c784":"#ea3943", marginTop:2, fontWeight:600}}>
+                    {tmrwPlanned ? `${tmrwPlans.length} meeting${tmrwPlans.length!==1?"s":""} planned ✓` : "⚠ Not planned yet — required by 11:30 PM"}
+                  </div>
+                </div>
+                <button onClick={()=>setAddPlanModal("tomorrow")} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff"}}>+ Plan meeting</button>
+              </div>
+
+              {tmrwPlans.length === 0 && (
+                <div style={{background:"#150a0a", border:"1px solid #ea394333", borderRadius:8, padding:24, textAlign:"center"}}>
+                  <div style={{fontSize:28, marginBottom:8}}>📅</div>
+                  <div style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700, color:"#e6edf3", marginBottom:4}}>Plan tomorrow before 11:30 PM</div>
+                  <div style={{fontSize:11, color:"#7d8590", marginBottom:16}}>Add at least one meeting. Missing this = absent.</div>
+                  <button onClick={()=>setAddPlanModal("tomorrow")} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff"}}>+ Plan a meeting</button>
+                </div>
+              )}
+
+              <div style={{display:"flex", flexDirection:"column", gap:10}}>
+                {tmrwPlans.map(plan=>(
+                  <div key={plan.id} style={{background:"#0d1117", border:"1px solid #1e2d3d", borderRadius:8, padding:"14px 16px"}}>
+                    <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4}}>
+                      <span style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700, fontSize:14}}>{plan.clientAgencyName}</span>
+                      {plan.pitchType&&<span style={{background:"#f0a50018", color:"#f0a500", padding:"1px 7px", borderRadius:8, fontSize:10, fontWeight:600}}>{plan.pitchType}</span>}
+                      <button onClick={()=>setPlans(p=>p.filter(pl=>pl.id!==plan.id))} style={{marginLeft:"auto", background:"transparent", border:"none", color:"#7d8590", cursor:"pointer", fontSize:13}} title="Remove">✕</button>
+                    </div>
+                    <div style={{fontSize:11, color:"#7d8590"}}>🕐 {plan.time}</div>
+                    {plan.agenda&&<div style={{fontSize:12, color:"#e6edf3", marginTop:5}}>Agenda: {plan.agenda}</div>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {tab === "weekly" && (
+          <div style={{maxWidth:640, margin:"0 auto"}}>
+            <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:10}}>
+              <div>
+                <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700}}>Week of {THIS_WEEK_START}</div>
+                <div style={{fontSize:11, color:myWeeklyPlan?"#16c784":"#ea3943", marginTop:2, fontWeight:600}}>
+                  {myWeeklyPlan ? `✓ Submitted ${new Date(myWeeklyPlan.submittedAt).toLocaleDateString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}` : "⚠ Not submitted — due Saturday 11:30 PM"}
+                </div>
+              </div>
+              <button onClick={handleAddWeeklyPlan} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff"}}>
+                {myWeeklyPlan ? "↻ Resubmit" : "Submit weekly plan"}
+              </button>
+            </div>
+
+            <div style={{background:"#0d1117", border:"1px solid #1e2d3d", borderRadius:8, padding:"12px 16px", marginBottom:16, fontSize:12, color:"#7d8590"}}>
+              Your weekly plan is built from all the meetings you've planned in Daily Plan. Add meetings there day by day and submit the week's plan here every Saturday by 11:30 PM.
+            </div>
+
+            {/* All planned meetings this week */}
+            {[TODAY, TOMORROW, ...Array.from({length:5},(_,i)=>new Date(Date.now()+(i+2)*86400000).toISOString().split("T")[0])].slice(0,7).map(date=>{
+              const dayPlans = repPlans.filter(p=>p.date===date);
+              if (dayPlans.length===0) return null;
+              return (
+                <div key={date} style={{marginBottom:12}}>
+                  <div style={{fontSize:10, color:"#7d8590", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:6}}>
+                    {date===TODAY?"Today":date===TOMORROW?"Tomorrow":new Date(date).toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}
+                  </div>
+                  {dayPlans.map(p=>(
+                    <div key={p.id} style={{background:"#0d1117", border:"1px solid #1e2d3d", borderRadius:6, padding:"10px 14px", marginBottom:6, display:"flex", alignItems:"center", gap:12}}>
+                      <div style={{flex:1}}>
+                        <span style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700}}>{p.clientAgencyName}</span>
+                        <span style={{color:"#7d8590", fontSize:12}}> · {p.time}</span>
+                        {p.agenda&&<div style={{fontSize:11, color:"#7d8590", marginTop:2}}>{p.agenda}</div>}
+                      </div>
+                      <span style={{background:p.status==="Done"?"#16c78422":"#1e2d3d", color:p.status==="Done"?"#16c784":"#7d8590", padding:"2px 7px", borderRadius:8, fontSize:10, fontWeight:600}}>{p.status}</span>
+                    </div>
+                  ))}
+                </div>
+              );
+            })}
+
+            <button onClick={()=>setAddPlanModal("week")} style={{width:"100%", background:"transparent", border:"1px dashed #1e2d3d", borderRadius:8, padding:12, color:"#7d8590", fontSize:12, cursor:"pointer", fontFamily:"'DM Mono',monospace", marginTop:8}}
+              onMouseOver={e=>{e.currentTarget.style.borderColor="#f0a500";e.currentTarget.style.color="#f0a500";}}
+              onMouseOut={e=>{e.currentTarget.style.borderColor="#1e2d3d";e.currentTarget.style.color="#7d8590";}}>
+              + Plan a meeting for the week
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* LOG MEETING MODAL */}
+      {logModal && (
+        <div className="rep-overlay" onClick={()=>setLogModal(null)}>
+          <div className="rep-modal" onClick={e=>e.stopPropagation()}>
+            <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, marginBottom:4}}>
+              {logModal.isUnplanned ? "Log Unplanned Meeting" : `Log — ${logModal.clientAgencyName}`}
+            </div>
+            {logModal.isUnplanned && (
+              <div style={{marginBottom:10}}>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Client / Agency Name *</label>
+                <input className="rep-input" placeholder="Who did you meet?" value={logForm.clientAgencyName||""} onChange={e=>setLogForm(p=>({...p,clientAgencyName:e.target.value}))} />
+              </div>
+            )}
+            {logModal.agenda && <div style={{fontSize:11, color:"#7d8590", marginBottom:12, background:"#131920", padding:"8px 10px", borderRadius:5}}>Your agenda: {logModal.agenda}</div>}
+            <div style={{display:"flex", flexDirection:"column", gap:10}}>
+              <div>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Pitch Type</label>
+                <div style={{display:"flex", gap:5, flexWrap:"wrap"}}>
+                  {PITCH_TYPES.map(pt=>(
+                    <button key={pt} onClick={()=>setLogForm(p=>({...p,pitchType:pt}))} style={{padding:"4px 10px", fontSize:11, borderRadius:4, border:`1px solid ${logForm.pitchType===pt?"#f0a500":"#1e2d3d"}`, background:logForm.pitchType===pt?"#f0a50018":"#0d1117", color:logForm.pitchType===pt?"#f0a500":"#7d8590", cursor:"pointer", fontFamily:"'DM Mono',monospace"}}>
+                      {pt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>What happened *</label>
+                <textarea className="rep-input" rows={3} placeholder="What did you discuss? What was said?" value={logForm.discussion} onChange={e=>setLogForm(p=>({...p,discussion:e.target.value}))} style={{resize:"vertical"}} />
+              </div>
+              <div>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Client feedback</label>
+                <textarea className="rep-input" rows={2} placeholder="How did the client react?" value={logForm.clientFeedback} onChange={e=>setLogForm(p=>({...p,clientFeedback:e.target.value}))} style={{resize:"vertical"}} />
+              </div>
+              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10}}>
+                <div>
+                  <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Status</label>
+                  <select className="rep-input" value={logForm.status} onChange={e=>setLogForm(p=>({...p,status:e.target.value}))}>
+                    {MEETING_STATUS.map(s=><option key={s}>{s}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Follow-up date</label>
+                  <input className="rep-input" type="date" value={logForm.followUpDate} onChange={e=>setLogForm(p=>({...p,followUpDate:e.target.value}))} />
+                </div>
+              </div>
+              <div>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Next steps</label>
+                <input className="rep-input" placeholder="What needs to happen next?" value={logForm.nextSteps} onChange={e=>setLogForm(p=>({...p,nextSteps:e.target.value}))} />
+              </div>
+            </div>
+            <div style={{display:"flex", gap:8, marginTop:16, justifyContent:"flex-end"}}>
+              <button onClick={()=>setLogModal(null)} className="rep-btn" style={{background:"#1a2332", color:"#7d8590", border:"1px solid #1e2d3d"}}>Cancel</button>
+              <button onClick={()=>{
+                if (logModal.isUnplanned) {
+                  const now=new Date();
+                  const loggedAt=`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
+                  setMeetings(p=>[{id:`ml${Date.now()}`,repId:rep.id,repName:rep.name,region:rep.region,clientCompany:logForm.clientAgencyName||"",date:TODAY,loggedAt,late:false,pitchType:logForm.pitchType,discussion:logForm.discussion,clientFeedback:logForm.clientFeedback,status:logForm.status,nextSteps:logForm.nextSteps,followUpDate:logForm.followUpDate,outcome:logForm.status==="Closed"?"Proposal Accepted":logForm.status||"Needs Callback",isUnplanned:true},...p]);
+                  setLogModal(null);setLogForm({pitchType:"",discussion:"",clientFeedback:"",status:"Meeting Done",nextSteps:"",followUpDate:"",clientAgencyName:"",isUnplanned:true});
+                  showToast("Unplanned meeting logged — visible to management");
+                } else {
+                  handleLogMeeting(logModal);
+                }
+              }} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff", flex:1}}>
+                Submit Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ADD PLAN MODAL */}
+      {addPlanModal && (
+        <div className="rep-overlay" onClick={()=>setAddPlanModal(null)}>
+          <div className="rep-modal" onClick={e=>e.stopPropagation()}>
+            <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, marginBottom:16}}>
+              Plan a meeting — {addPlanModal==="today"?"Today":addPlanModal==="tomorrow"?"Tomorrow":"This week"}
+            </div>
+            <div style={{display:"flex", flexDirection:"column", gap:10}}>
+              <div>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Client / Agency *</label>
+                <input className="rep-input" placeholder="Who are you meeting?" value={planForm.clientAgencyName} onChange={e=>setPlanForm(p=>({...p,clientAgencyName:e.target.value}))} autoFocus />
+              </div>
+              {addPlanModal==="week" && (
+                <div>
+                  <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Date</label>
+                  <input className="rep-input" type="date" value={planForm.date||TOMORROW} onChange={e=>setPlanForm(p=>({...p,date:e.target.value}))} />
+                </div>
+              )}
+              <div>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Time</label>
+                <input className="rep-input" type="time" value={planForm.time} onChange={e=>setPlanForm(p=>({...p,time:e.target.value}))} />
+              </div>
+              <div>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Agenda — what are you going in for?</label>
+                <input className="rep-input" placeholder="e.g. Present Q2 FCT grid, discuss H2 budget" value={planForm.agenda} onChange={e=>setPlanForm(p=>({...p,agenda:e.target.value}))} />
+              </div>
+              <div>
+                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Pitch Type</label>
+                <div style={{display:"flex", gap:5, flexWrap:"wrap"}}>
+                  {PITCH_TYPES.map(pt=>(
+                    <button key={pt} onClick={()=>setPlanForm(p=>({...p,pitchType:pt}))} style={{padding:"4px 10px", fontSize:11, borderRadius:4, border:`1px solid ${planForm.pitchType===pt?"#f0a500":"#1e2d3d"}`, background:planForm.pitchType===pt?"#f0a50018":"transparent", color:planForm.pitchType===pt?"#f0a500":"#7d8590", cursor:"pointer", fontFamily:"'DM Mono',monospace"}}>
+                      {pt}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+            <div style={{display:"flex", gap:8, marginTop:16, justifyContent:"flex-end"}}>
+              <button onClick={()=>setAddPlanModal(null)} className="rep-btn" style={{background:"#1a2332", color:"#7d8590", border:"1px solid #1e2d3d"}}>Cancel</button>
+              <button onClick={handleAddPlan} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff", flex:1}}>Plan this meeting</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {toast && <div style={{position:"fixed", bottom:18, right:18, background:toast.type==="err"?"#ea3943":"#16c784", color:"#fff", padding:"9px 16px", borderRadius:5, fontWeight:700, fontSize:12, zIndex:999, boxShadow:"0 4px 20px rgba(0,0,0,.5)"}}>{toast.msg}</div>}
+    </div>
+  );
 }
 
 function HomeScreen({ user, onSelect, onLogout }) {
@@ -845,15 +1347,16 @@ function HomeScreen({ user, onSelect, onLogout }) {
   );
 }
 
-function CROApp({ user, onLogout, appMode, onHome, onSwitchModule }) {
+function CROApp({ user, onLogout, appMode, onHome, onSwitchModule, plans, setPlans, weeklyPlans, setWeeklyPlans, sharedMeetings, setSharedMeetings, sharedDeals, setSharedDeals }) {
   const [view, setView] = useState(appMode === "ro" ? "ro-parser" : "warroom");
 
   useEffect(() => {
     setView(appMode === "ro" ? "ro-parser" : "warroom");
     setTargetDrilldown(null);
   }, [appMode]);
-  const [deals, setDeals]         = useState(SEED_DEALS);
-  const [meetings, setMeetings]   = useState(SEED_MEETINGS);
+  const [deals, setDeals]         = useState(sharedDeals || SEED_DEALS);
+  const [meetings, setMeetings]   = useState(sharedMeetings || SEED_MEETINGS);
+  const [plans_crm]               = [plans || SEED_PLANS];
   const [att, setAtt]             = useState(SEED_ATT);
   const [absenceReports, setAbsenceReports] = useState(SEED_ABSENCE_REPORTS);
   const [exceptionModal, setExceptionModal] = useState(null); // { reportId, repName }
@@ -979,23 +1482,31 @@ function CROApp({ user, onLogout, appMode, onHome, onSwitchModule }) {
     showToast(`Absence report fired to HR for ${rep.name}`);
   };
 
-  // Simulate EOD run — checks all reps not logged today
+  // Simulate EOD run — 11:30 PM check: today logged AND tomorrow planned both required
   const runEODCheck = () => {
-    const unlogged = REPS.filter(r => !att[TODAY]?.[r.id]);
-    if (unlogged.length === 0) { showToast("All reps logged today. No absences."); return; }
     let count = 0;
-    unlogged.forEach(rep => {
-      const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === TODAY);
-      if (!alreadyFiled) {
-        setAbsenceReports(p => [{
-          id:`ab${Date.now()+rep.id}`, repId:rep.id, repName:rep.name, region:rep.region, role:rep.role,
-          date:TODAY, generatedAt:"23:59", status:"Sent to HR", sentTo:HR_EMAIL, markedAs:"Absent",
-          exception:null, exceptionBy:null, exceptionReason:null, generatedBy:"System (Auto — EOD)"
-        }, ...p]);
-        count++;
+    REPS.forEach(rep => {
+      const todayLogged = meetings.some(m=>m.repId===rep.id&&m.date===TODAY);
+      const tmrwPlanned = (plans_crm||plans||[]).some(p=>p.repId===rep.id&&p.date===TOMORROW&&p.status==="Planned");
+      const bothDone = todayLogged && tmrwPlanned;
+      if (!bothDone) {
+        const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === TODAY);
+        if (!alreadyFiled) {
+          const reason = !todayLogged && !tmrwPlanned ? "Neither today's meetings logged nor tomorrow planned"
+            : !todayLogged ? "Today's meetings not logged by 11:30 PM"
+            : "Tomorrow's meetings not planned by 11:30 PM";
+          setAbsenceReports(p => [{
+            id:`ab${Date.now()+rep.id}`, repId:rep.id, repName:rep.name, region:rep.region, role:rep.role,
+            date:TODAY, generatedAt:"23:30", status:"Sent to HR", sentTo:HR_EMAIL, markedAs:"Absent",
+            exception:null, exceptionBy:null, exceptionReason:null,
+            generatedBy:`System (Auto — EOD: ${reason})`,
+          }, ...p]);
+          count++;
+        }
       }
     });
-    showToast(`EOD run: ${count} absence report${count!==1?"s":""} sent to HR`);
+    if (count === 0) showToast("All reps compliant — logged + planned ✓");
+    else showToast(`EOD: ${count} absence report${count!==1?"s":""} sent to HR`);
   };
 
   // ONLY Litisha can grant exception
@@ -1625,15 +2136,30 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   ))}
                 </div>
                 <div className="card" style={{padding:14}}>
-                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:9}}>COMPLIANCE — TODAY</div>
+                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:9}}>COMPLIANCE — TODAY · 11:30 PM DEADLINE</div>
+                  <div style={{display:"grid",gridTemplateColumns:"auto 1fr auto auto auto",gap:6,alignItems:"center",fontSize:10,color:C.muted,fontWeight:700,letterSpacing:".06em",marginBottom:8,paddingBottom:6,borderBottom:`1px solid ${C.border}`}}>
+                    <span/>
+                    <span>REP</span>
+                    <span style={{textAlign:"center"}}>TODAY<br/>LOGGED</span>
+                    <span style={{textAlign:"center"}}>TMR<br/>PLANNED</span>
+                    <span style={{textAlign:"center"}}>STATUS</span>
+                  </div>
                   {REPS.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId).map(r=>{
-                    const logged=att[TODAY]?.[r.id];
+                    const todayLogged = meetings.some(m=>m.repId===r.id&&m.date===TODAY) || (plans_crm||plans||[]).some(p=>p.repId===r.id&&p.date===TODAY&&p.status==="Done");
+                    const tmrwPlanned = (plans_crm||plans||[]).some(p=>p.repId===r.id&&p.date===TOMORROW&&p.status==="Planned");
+                    const bothDone    = todayLogged && tmrwPlanned;
+                    const status      = bothDone ? "DONE" : !todayLogged && !tmrwPlanned ? "NOTHING" : !todayLogged ? "NOT LOGGED" : "NOT PLANNED";
+                    const statusColor = bothDone ? C.green : status==="NOTHING" ? C.red : C.orange;
                     return (
-                      <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                        <span style={{fontSize:13,color:logged?C.green:C.red,fontWeight:700}}>{logged?"✓":"✗"}</span>
-                        <span className="sans" style={{flex:1,fontSize:12,fontWeight:logged?500:700,color:logged?C.text:C.red}}>{r.name}</span>
-                        <span style={{fontSize:10,color:C.dim}}>{r.region}</span>
-                        {!logged&&<span className="pill" style={{background:`${C.red}22`,color:C.red}}>NEG ATT</span>}
+                      <div key={r.id} style={{display:"grid",gridTemplateColumns:"auto 1fr auto auto auto",gap:6,alignItems:"center",marginBottom:7,paddingBottom:7,borderBottom:`1px solid ${C.s2}`}}>
+                        <span style={{fontSize:13,color:bothDone?C.green:C.red,fontWeight:700}}>{bothDone?"✓":"✗"}</span>
+                        <div>
+                          <span className="sans" style={{fontSize:12,fontWeight:600,color:bothDone?C.text:C.red}}>{r.name}</span>
+                          <span style={{fontSize:10,color:C.muted,marginLeft:6}}>{r.region}</span>
+                        </div>
+                        <span style={{textAlign:"center",fontSize:14,color:todayLogged?C.green:C.red}}>{todayLogged?"✓":"✗"}</span>
+                        <span style={{textAlign:"center",fontSize:14,color:tmrwPlanned?C.green:C.orange}}>{tmrwPlanned?"✓":"—"}</span>
+                        <span className="pill" style={{background:`${statusColor}22`,color:statusColor,fontSize:9,whiteSpace:"nowrap"}}>{status}</span>
                       </div>
                     );
                   })}
