@@ -583,6 +583,25 @@ function LoginScreen({ onLogin }) {
   const [isNew, setIsNew]     = useState(false);
   const [err, setErr]         = useState("");
   const [loading, setLoading] = useState(false);
+
+  const DEMO_ACCOUNTS = [
+    { label:"Litisha (CEO)",       email:"litisha@odishatv.com",   role:"CEO",            color:"#a855f7" },
+    { label:"Jaggi (MD)",          email:"jaggi@odishatv.com",     role:"MD",             color:"#be185d" },
+    { label:"Darpan (CRO)",        email:"darpan@odishatv.com",    role:"CRO",            color:"#10b981" },
+    { label:"Sales Head (NSH)",    email:"saleshead@odishatv.com", role:"SALES HEAD",     color:"#0891b2" },
+    { label:"Sachin (Strategy)",   email:"sachin@odishatv.com",    role:"SALES STRATEGY", color:"#f0a500" },
+    { label:"Digi Ops",            email:"digiops@odishatv.com",   role:"DIGI OPS",       color:"#2d7dd2" },
+    { label:"RH – National",       email:"rhn@odishatv.com",       role:"REGION HEAD",    color:"#7c3aed" },
+    { label:"RH – North",          email:"rhnorth@odishatv.com",   role:"REGION HEAD",    color:"#7c3aed" },
+    { label:"Arjun (Sales Rep)",   email:"arjun@odishatv.com",     role:"SALES REP",      color:"#60a5fa" },
+    { label:"Vikram (Sales Rep)",  email:"vikram@odishatv.com",    role:"SALES REP",      color:"#60a5fa" },
+  ];
+
+  const handleDemo = (account) => {
+    setLoading(true);
+    setTimeout(() => { onLogin({ name: account.label, email: account.email }); setLoading(false); }, 500);
+  };
+
   const googleReady           = useRef(false);
   const hiddenGoogleBtn       = useRef(null);
 
@@ -771,6 +790,24 @@ function LoginScreen({ onLogin }) {
                   onMouseOut={e=>e.currentTarget.style.borderColor="#1e2d3d"}>
                   Continue with Email
                 </button>
+
+                {/* QUICK DEMO */}
+                <div style={{ marginTop:24 }}>
+                  <div style={{ fontSize:10, color:"#7d8590", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:10, textAlign:"center" }}>Quick Demo — Sign in as</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                    {DEMO_ACCOUNTS.map(a => (
+                      <button key={a.email}
+                        onClick={() => handleDemo(a)}
+                        disabled={loading}
+                        style={{ background:"#0d1117", border:`1px solid ${a.color}33`, borderRadius:6, padding:"8px 10px", cursor:"pointer", textAlign:"left", transition:"border-color .15s, background .15s" }}
+                        onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background="#131920"; }}
+                        onMouseOut={e=>{ e.currentTarget.style.borderColor=`${a.color}33`; e.currentTarget.style.background="#0d1117"; }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:a.color, fontFamily:"'DM Sans',sans-serif", marginBottom:1 }}>{a.label}</div>
+                        <div style={{ fontSize:9, color:"#7d8590", letterSpacing:".04em" }}>{a.role}</div>
+                      </button>
+                    ))}
+                  </div>
+                </div>
 
               </>
             )}
