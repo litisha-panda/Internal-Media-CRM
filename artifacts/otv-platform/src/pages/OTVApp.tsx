@@ -599,7 +599,7 @@ function LoginScreen({ onLogin }) {
 
   const handleDemo = (account) => {
     setLoading(true);
-    setTimeout(() => { onLogin({ name: account.label, email: account.email }); setLoading(false); }, 500);
+    setTimeout(() => { onLogin({ name: account.label, email: account.email }); setLoading(false); }, 600);
   };
 
   const googleReady           = useRef(false);
@@ -699,22 +699,29 @@ function LoginScreen({ onLogin }) {
     }, 500);
   }
 
-  const handleEmail = (e) => {
+  const handleEmail = async (e) => {
     e.preventDefault(); setErr("");
     if (!email.trim()) { setErr("Email is required"); return; }
     if (!password.trim()) { setErr("Password is required"); return; }
     if (isNew && !name.trim()) { setErr("Name is required"); return; }
-    // Simulate auth — in production replace with real API call
-    const stored = JSON.parse(localStorage.getItem("otv_crm_users") || "[]");
-    const existing = stored.find(u => u.email.toLowerCase() === email.toLowerCase());
-    if (existing) {
-      if (existing.password !== password) { setErr("Incorrect password"); return; }
-      onLogin({ name: existing.name, email: existing.email });
-    } else {
-      if (!isNew) { setErr("No account found. Click 'Create account'."); return; }
-      const newUser = { name: name.trim(), email: email.toLowerCase(), password };
-      localStorage.setItem("otv_crm_users", JSON.stringify([...stored, newUser]));
-      onLogin({ name: newUser.name, email: newUser.email });
+    setLoading(true);
+    try {
+      const stored = JSON.parse(localStorage.getItem("otv_crm_users") || "[]");
+      const existing = stored.find(u => u.email.toLowerCase() === email.toLowerCase());
+      if (existing) {
+        const h = await hashPwd(password);
+        if (existing.passwordHash !== h && existing.password !== password) {
+          setErr("Incorrect password"); setLoading(false); return;
+        }
+        onLogin({ name: existing.name, email: existing.email });
+      } else {
+        if (!isNew) { setErr("No account found — click 'Create account'."); setLoading(false); return; }
+        const newUser = { name: name.trim(), email: email.toLowerCase(), passwordHash: await hashPwd(password) };
+        localStorage.setItem("otv_crm_users", JSON.stringify([...stored, newUser]));
+        onLogin({ name: newUser.name, email: newUser.email });
+      }
+    } catch(_) {
+      setErr("Login error — try again."); setLoading(false);
     }
   };
 
