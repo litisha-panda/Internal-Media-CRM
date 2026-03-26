@@ -1,0 +1,19 @@
+OTV's sales reality is completely different:
+
+The Actual Problems This CRM Solves
+1. Accountability without micromanagement
+Reps go out for meetings all day. There's no way to know if they actually met the client, what was discussed, what the outcome was, or what the next step is — unless they log it. Generic CRMs have no enforcement mechanism. This platform has the 11:30 PM rule — log today + plan tomorrow or you're marked absent. That's a management culture problem disguised as a product problem.
+2. The pipeline stalls silently
+A deal goes to "Needs NSH approval" and sits there for 2 weeks. Nobody knows. No escalation fires. Zoho doesn't know what "NSH approval" means — it's just a text field. This platform has an explicit approval chain, SLA tracking, and escalation logic tied to OTV's actual org structure.
+3. Management has no real-time operational visibility
+The NSH opens Zoho and sees deal stages. That tells you nothing about what happened today, whether the rep actually met the client, whether tomorrow is planned, or which deals are about to go cold. The War Room, compliance strip, and My Plan views solve this.
+4. Targets are disconnected from reality
+In Zoho, a target is a number in a field. Here, targets are submitted by reps, approved through RH → NSH → Strategy → CRO, and then compared against actual pipeline and closed revenue — client by client, quarter by quarter. The gap is visible instantly.
+5. No concept of OTV-specific roles and visibility
+A Region Head should only see their region. A Sales Rep should only see their own deals. CRO can see everything but can't log meetings. Digi Ops needs a different pipeline view entirely. Zoho's role system costs enterprise licences and requires IT configuration for every change. This is hardcoded to OTV's org chart.
+6. The internal request/approval system doesn't exist anywhere
+When a rep needs a deck from Sales Strategy, or rate approval from NSH, or a digital plan from Digi Ops — where does that go today? WhatsApp. Email. It gets lost. This platform formalises that as an internal request with SLA tracking.
+
+The One-Line Answer
+Zoho is OTV's database. This CRM is OTV's daily operating system for the sales team.
+Zoho stores the final record. This is where the work actually happens — planning, accountability, approvals, visibility, escalations.
