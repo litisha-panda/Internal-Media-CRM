@@ -6,7 +6,7 @@ import { useState, useRef, useEffect, useMemo } from "react";
 const CLAUDE_PROXY_URL = `${window.location.protocol}//${window.location.hostname}:8080/api/claude`;
 const REGIONS   = ["North", "South", "East", "West", "National"];
 const ALL_ROLES = ["SALES REP","REGION HEAD","SALES HEAD","CRO","SALES STRATEGY","DIGI OPS","ADMIN"];
-const DEAL_TYPES = ["Linear TV", "Digital", "Sponsorship", "Branded Content", "Integrated Package"];
+const DEAL_TYPES = ["Linear TV", "IPs", "Digital", "Media Solutions", "Integrated Packages"];
 const CONTACT_LEVELS = ["C-Suite / Owner", "VP / GM", "Marketing Head", "Brand Manager", "Agency Lead", "Junior/Exec"];
 const OUTCOMES = ["Proposal Accepted", "Very Interested", "Interested – Needs Revision", "Price Concern", "Needs Callback", "Not Interested"];
 const DEPARTMENTS = ["Sales Strategy", "Digital", "Production", "National Head", "Finance", "Legal"];
@@ -14,7 +14,7 @@ const REQ_STATUS = ["Pending", "In Progress", "Done", "Overdue"];
 const SLA = { "Sales Strategy": 24, "Digital": 24, "Production": 48, "National Head": 12, "Finance": 48, "Legal": 72 };
 const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26"];
 const STAGE_PROB = { "Proposal Accepted": 100, "Very Interested": 70, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 20, "Not Interested": 0 };
-const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "Sponsorship", "Others"];
+const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
 const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Closed"];
 const MEETING_TYPES  = ["Physical Meeting", "Online Meeting", "Phone Call"];
 const CLIENT_OR_AGENCY = ["Client", "Agency"];
@@ -75,13 +75,13 @@ const HR_EMAIL = "hr@odishatv.com";
 const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
 
 const SEED_PLANS = [
-  { id:"p1", repId:1, date:TODAY,    time:"10:00", clientAgencyName:"Reliance Retail",  contactName:"Sameer Joshi",  agenda:"Present revised OTT + TV integrated grid", pitchType:"Integrated Package", status:"Planned", loggedMeetingId:null, isUnplanned:false },
+  { id:"p1", repId:1, date:TODAY,    time:"10:00", clientAgencyName:"Reliance Retail",  contactName:"Sameer Joshi",  agenda:"Present revised OTT + TV integrated grid", pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null, isUnplanned:false },
   { id:"p2", repId:1, date:TODAY,    time:"14:30", clientAgencyName:"ITC Foods",         contactName:"Saurabh Tiwari",agenda:"Q3 renewal — push for 6-week primetime",     pitchType:"FCT",               status:"Planned", loggedMeetingId:null, isUnplanned:false },
   { id:"p3", repId:2, date:TODAY,    time:"11:00", clientAgencyName:"Berger Paints",     contactName:"Rajesh Kumar",  agenda:"PO follow-up, brand guidelines for FCT",     pitchType:"FCT",               status:"Done",    loggedMeetingId:"ml2", isUnplanned:false },
-  { id:"p4", repId:5, date:TODAY,    time:"09:00", clientAgencyName:"Havells India",     contactName:"Deepa Menon",   agenda:"H2 sponsorship deck walkthrough",             pitchType:"Sponsorship",       status:"Done",    loggedMeetingId:"ml1", isUnplanned:false },
-  { id:"p5", repId:1, date:TOMORROW, time:"10:00", clientAgencyName:"Reliance Retail",  contactName:"Sameer Joshi",  agenda:"Follow-up on revised grid feedback",          pitchType:"Integrated Package", status:"Planned", loggedMeetingId:null, isUnplanned:false },
+  { id:"p4", repId:5, date:TODAY,    time:"09:00", clientAgencyName:"Havells India",     contactName:"Deepa Menon",   agenda:"H2 sponsorship deck walkthrough",             pitchType:"IPs",       status:"Done",    loggedMeetingId:"ml1", isUnplanned:false },
+  { id:"p5", repId:1, date:TOMORROW, time:"10:00", clientAgencyName:"Reliance Retail",  contactName:"Sameer Joshi",  agenda:"Follow-up on revised grid feedback",          pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null, isUnplanned:false },
   { id:"p6", repId:2, date:TOMORROW, time:"15:00", clientAgencyName:"Apollo Hospitals", contactName:"Ravi Krishnan", agenda:"Digital health campaign proposal",            pitchType:"Digital",           status:"Planned", loggedMeetingId:null, isUnplanned:false },
-  { id:"p7", repId:5, date:TOMORROW, time:"11:30", clientAgencyName:"Asian Paints",     contactName:"Harsh Goenka",  agenda:"CMO meeting — flagship package",              pitchType:"Sponsorship",       status:"Planned", loggedMeetingId:null, isUnplanned:false },
+  { id:"p7", repId:5, date:TOMORROW, time:"11:30", clientAgencyName:"Asian Paints",     contactName:"Harsh Goenka",  agenda:"CMO meeting — flagship package",              pitchType:"IPs",       status:"Planned", loggedMeetingId:null, isUnplanned:false },
 ];
 
 // Weekly plans
@@ -131,21 +131,21 @@ const USER_ROLES = [
 
 const SEED_DEALS = [
   // ── NATIONAL (Vikram Sen, repId:5) ──
-  { id:"d1",  repId:5, clientCompany:"Havells India",      contactName:"Deepa Menon",    designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9823401234", email:"deepa@havells.com",      dealType:"Sponsorship",        outcome:"Very Interested",             amount:15000000, targetAmount:15000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Send H2 sponsorship deck",               nextStepDate:D1,       awaitingApproval:"NSH",            awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"H2 sponsorship deck",status:"In Progress",raisedAt:"14:00"}], notes:"Budget confirmed. CMO interested." },
-  { id:"d2",  repId:5, clientCompany:"Asian Paints",       contactName:"Harsh Goenka",   designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9834512345", email:"harsh@asianpaints.com",  dealType:"Sponsorship",        outcome:"Very Interested",             amount:12000000, targetAmount:12000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D3,    nextStep:"CMO meeting – present flagship package", nextStepDate:D1,       awaitingApproval:"CXO",            awaitingApprovalSince:D1,   reqs:[], notes:"Need CEO to attend CMO meeting." },
-  { id:"d3",  repId:5, clientCompany:"Tata Consumer",      contactName:"Ravi Shankar",   designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9812309876", email:"ravi@tataconsumer.com",  dealType:"Integrated Package", outcome:"Interested – Needs Revision", amount:9000000,  targetAmount:9000000,  region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised multi-brand grid",               nextStepDate:D3,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D7,   reqs:[{dept:"Sales Strategy",desc:"Multi-brand integrated grid",status:"Overdue",raisedAt:"09:00"}], notes:"Multi-brand portfolio." },
+  { id:"d1",  repId:5, clientCompany:"Havells India",      contactName:"Deepa Menon",    designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9823401234", email:"deepa@havells.com",      dealType:"IPs",        outcome:"Very Interested",             amount:15000000, targetAmount:15000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Send H2 sponsorship deck",               nextStepDate:D1,       awaitingApproval:"NSH",            awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"H2 sponsorship deck",status:"In Progress",raisedAt:"14:00"}], notes:"Budget confirmed. CMO interested." },
+  { id:"d2",  repId:5, clientCompany:"Asian Paints",       contactName:"Harsh Goenka",   designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9834512345", email:"harsh@asianpaints.com",  dealType:"IPs",        outcome:"Very Interested",             amount:12000000, targetAmount:12000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D3,    nextStep:"CMO meeting – present flagship package", nextStepDate:D1,       awaitingApproval:"CXO",            awaitingApprovalSince:D1,   reqs:[], notes:"Need CEO to attend CMO meeting." },
+  { id:"d3",  repId:5, clientCompany:"Tata Consumer",      contactName:"Ravi Shankar",   designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9812309876", email:"ravi@tataconsumer.com",  dealType:"Integrated Packages", outcome:"Interested – Needs Revision", amount:9000000,  targetAmount:9000000,  region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised multi-brand grid",               nextStepDate:D3,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D7,   reqs:[{dept:"Sales Strategy",desc:"Multi-brand integrated grid",status:"Overdue",raisedAt:"09:00"}], notes:"Multi-brand portfolio." },
   // ── SOUTH (Priya Dash repId:2, Meera Rao repId:6) ──
   { id:"d4",  repId:2, clientCompany:"Berger Paints",      contactName:"Rajesh Kumar",   designation:"Brand Manager",  contactLevel:"Brand Manager",   phone:"9812345678", email:"rajesh@berger.com",      dealType:"Linear TV",          outcome:"Proposal Accepted",           amount:2200000,  targetAmount:3500000,  region:"South",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"PO follow-up",                           nextStepDate:TODAY,    awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"6-week primetime deal closed." },
   { id:"d5",  repId:6, clientCompany:"Apollo Hospitals",   contactName:"Ravi Krishnan",  designation:"GM Marketing",   contactLevel:"VP / GM",         phone:"9901234567", email:"ravi@apollo.com",        dealType:"Digital",            outcome:"Very Interested",             amount:6000000,  targetAmount:7500000,  region:"South",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Custom digital media plan",              nextStepDate:D3,       awaitingApproval:"Digital",        awaitingApprovalSince:D1,   reqs:[{dept:"Digital",desc:"Custom digital plan",status:"Done",raisedAt:"12:00"}], notes:"Full digital takeover." },
   { id:"d6",  repId:2, clientCompany:"Sundaram Finance",   contactName:"Kavita Nair",    designation:"Marketing Head", contactLevel:"VP / GM",         phone:"9845612345", email:"kavita@sundaram.com",    dealType:"Linear TV",          outcome:"Needs Callback",              amount:3000000,  targetAmount:4000000,  region:"South",    priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Follow up after budget approval",        nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Q2 budget cycle." },
   // ── NORTH (Arjun Mishra, repId:1) ──
   { id:"d7",  repId:1, clientCompany:"Daikin India",       contactName:"Prashant Joshi", designation:"VP Sales",       contactLevel:"VP / GM",         phone:"9876543210", email:"prashant@daikin.in",     dealType:"Linear TV",          outcome:"Very Interested",             amount:4500000,  targetAmount:5000000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D1,    nextStep:"Revised FCT grid for summer campaign",   nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Summer AC campaign — high intent." },
-  { id:"d8",  repId:1, clientCompany:"Relaxo Footwear",    contactName:"Amit Gupta",     designation:"Brand Manager",  contactLevel:"Brand Manager",   phone:"9911223344", email:"amit@relaxo.com",        dealType:"Sponsorship",        outcome:"Interested – Needs Revision", amount:2800000,  targetAmount:3500000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Sponsorship deck with property details", nextStepDate:D1,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"Property sponsorship deck",status:"Pending",raisedAt:"10:00"}], notes:"Property title rights needed." },
+  { id:"d8",  repId:1, clientCompany:"Relaxo Footwear",    contactName:"Amit Gupta",     designation:"Brand Manager",  contactLevel:"Brand Manager",   phone:"9911223344", email:"amit@relaxo.com",        dealType:"IPs",        outcome:"Interested – Needs Revision", amount:2800000,  targetAmount:3500000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Sponsorship deck with property details", nextStepDate:D1,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"Property sponsorship deck",status:"Pending",raisedAt:"10:00"}], notes:"Property title rights needed." },
   // ── EAST (Rohit Nanda, repId:3) ──
-  { id:"d9",  repId:3, clientCompany:"ITC Limited",        contactName:"Sumit Das",      designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9933445566", email:"sumit@itc.in",           dealType:"Integrated Package", outcome:"Very Interested",             amount:5500000,  targetAmount:6000000,  region:"East",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Integrated plan for FMCG brands",        nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"ITC wants TV+Digital combo for East market." },
+  { id:"d9",  repId:3, clientCompany:"ITC Limited",        contactName:"Sumit Das",      designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9933445566", email:"sumit@itc.in",           dealType:"Integrated Packages", outcome:"Very Interested",             amount:5500000,  targetAmount:6000000,  region:"East",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Integrated plan for FMCG brands",        nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"ITC wants TV+Digital combo for East market." },
   { id:"d10", repId:3, clientCompany:"Emami Group",        contactName:"Harsha Reddy",   designation:"Brand Director", contactLevel:"VP / GM",         phone:"9955667788", email:"harsha@emami.com",       dealType:"Linear TV",          outcome:"Price Concern",               amount:2000000,  targetAmount:3000000,  region:"East",     priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised rate card with discount",        nextStepDate:D3,       awaitingApproval:"NSH",            awaitingApprovalSince:D7,   reqs:[], notes:"Rate sensitivity. NSH approval needed on discount." },
   // ── WEST (Sneha Patel, repId:4) ──
-  { id:"d11", repId:4, clientCompany:"Pidilite Industries",contactName:"Rakesh Shah",    designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9977889900", email:"rakesh@pidilite.com",    dealType:"Sponsorship",        outcome:"Very Interested",             amount:7000000,  targetAmount:8000000,  region:"West",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Sponsorship deal for Fevicol brand",     nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"CMO personally keen. Premium slot required." },
+  { id:"d11", repId:4, clientCompany:"Pidilite Industries",contactName:"Rakesh Shah",    designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9977889900", email:"rakesh@pidilite.com",    dealType:"IPs",        outcome:"Very Interested",             amount:7000000,  targetAmount:8000000,  region:"West",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Sponsorship deal for Fevicol brand",     nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"CMO personally keen. Premium slot required." },
   { id:"d12", repId:4, clientCompany:"Godrej Consumer",    contactName:"Nisha Mehta",    designation:"Marketing Head", contactLevel:"VP / GM",         phone:"9988001122", email:"nisha@godrej.com",       dealType:"Digital",            outcome:"Needs Callback",              amount:3500000,  targetAmount:5000000,  region:"West",     priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Digital campaign brief",                 nextStepDate:TOMORROW, awaitingApproval:"Digital",        awaitingApprovalSince:D3,   reqs:[{dept:"Digital",desc:"Campaign brief for GCPL",status:"In Progress",raisedAt:"11:00"}], notes:"GCPL digital push for West India." },
 ];
 
@@ -212,9 +212,9 @@ const SEED_TARGET_SUBMISSIONS = [
   },
   { id:"ts3", repId:5, repName:"Vikram Sen", region:"National", quarter:"Q1 FY26",
     clients:[
-      {clientCompany:"Havells India",  dealType:"Sponsorship",       targetAmount:15000000},
-      {clientCompany:"Asian Paints",   dealType:"Sponsorship",       targetAmount:12000000},
-      {clientCompany:"Tata Consumer",  dealType:"Integrated Package",targetAmount:9000000},
+      {clientCompany:"Havells India",  dealType:"IPs",       targetAmount:15000000},
+      {clientCompany:"Asian Paints",   dealType:"IPs",       targetAmount:12000000},
+      {clientCompany:"Tata Consumer",  dealType:"Integrated Packages",targetAmount:9000000},
     ],
     totalTarget:36000000, status:"Pending Strategy",
     submittedAt:D7, approvalLog:[
@@ -226,7 +226,7 @@ const SEED_TARGET_SUBMISSIONS = [
 
 const SEED_REVENUE_ENTRIES = [
   { id:"re1", repId:2, clientCompany:"Berger Paints",  dealType:"Linear TV", amount:2200000, invoiceRef:"INV-2024-001", date:D3, quarter:"Q1 FY26", notes:"6-week primetime deal PO received" },
-  { id:"re2", repId:5, clientCompany:"Havells India",  dealType:"Sponsorship", amount:5000000, invoiceRef:"INV-2024-002", date:D1, quarter:"Q1 FY26", notes:"First instalment — sponsorship confirmed" },
+  { id:"re2", repId:5, clientCompany:"Havells India",  dealType:"IPs", amount:5000000, invoiceRef:"INV-2024-002", date:D1, quarter:"Q1 FY26", notes:"First instalment — sponsorship confirmed" },
 ];
 
 const SEED_MEETINGS = [
@@ -305,7 +305,7 @@ function roRound2(n) { return Math.round((n||0)*100)/100; }
 function roDetectNonFCT(d) { if(!d)return false; return RO_NON_FCT_TYPES.some(t=>d.toLowerCase().includes(t.toLowerCase())); }
 function roDetectDealType(r) {
   const text=[r.special_instructions||"",r.campaign_name||"",...(r.spot_items||[]).map(s=>(s.caption||"")+" "+(s.program_or_timeband||"")),...(r.components||[]).map(c=>c.component_label||"")].join(" ").toLowerCase();
-  if(RO_SPONSORSHIP_KEYWORDS.some(k=>text.includes(k))||(r.components||[]).some(c=>["EVENT_FCT","SPONSORSHIP_ENTITLEMENT"].includes(c.component_type))) return "Sponsorship";
+  if(RO_SPONSORSHIP_KEYWORDS.some(k=>text.includes(k))||(r.components||[]).some(c=>["EVENT_FCT","SPONSORSHIP_ENTITLEMENT"].includes(c.component_type))) return "IPs";
   if((r.components||[]).some(c=>!c.is_fct)||(r.spot_items||[]).some(s=>roDetectNonFCT(s.caption||s.program_or_timeband||""))) return "Impact";
   return "Regular";
 }
@@ -434,7 +434,7 @@ function ZohoHierarchy({r,exp}){
   const ch=roNormalizeChannel(r.channel||"");
   const company=RO_CHANNEL_COMPANY[ch]||"Odisha Television Ltd";
   const dealType=roDetectDealType(r);
-  const dtColor=dealType==="Sponsorship"?"#f0a500":dealType==="Impact"?"#f97316":"#a855f7";
+  const dtColor=dealType==="IPs"?"#f0a500":dealType==="Impact"?"#f97316":"#a855f7";
   const chValid=ALL_CHANNELS.includes(ch); const m=exp.meta;
   return(
     <div style={{background:"#080a0f",border:"1px solid #1e2d3d",borderRadius:8,padding:"12px 14px",marginBottom:14}}>
@@ -470,7 +470,7 @@ function ROCard({result,onExport,onPushToPipeline}){
   const badge={RELEASE_ORDER:{bg:"#1a1a3a",color:"#a855f7",label:"Release Order"},RO_ADDITION:{bg:"#2a1a1a",color:"#f97316",label:"RO Addition"},SALES_AGREEMENT:{bg:"#0a1a0a",color:"#16c784",label:"Sales Agreement"}}[result.document_type]||{bg:"#1a2332",color:"#7d8590",label:"RO"};
   const exp=roBuildExport(result);
   const dealType=roDetectDealType(result);
-  const dtColor=dealType==="Sponsorship"?"#f0a500":dealType==="Impact"?"#f97316":"#a855f7";
+  const dtColor=dealType==="IPs"?"#f0a500":dealType==="Impact"?"#f97316":"#a855f7";
   const m=exp.meta;
   const tabs=[{id:"deal",label:"Deal Form"},{id:"breakup",label:`Breakup (${exp.breakupRows.length})`},{id:"summary",label:"Summary"},{id:"spots",label:`Raw Spots (${(result.spot_items||[]).length})`},{id:"json",label:"JSON"}];
   return(
@@ -1400,8 +1400,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       const hasFCT    = comps.some(c => c.is_fct);
       const hasNonFCT = comps.some(c => !c.is_fct);
       const hasSpon   = JSON.stringify(roResult).match(/pwd by|co pwd by|powered by|sponsored/i);
-      if (hasSpon) return "Sponsorship";
-      if (hasFCT && hasNonFCT) return "Integrated Package";
+      if (hasSpon) return "IPs";
+      if (hasFCT && hasNonFCT) return "Integrated Packages";
       return "Linear TV";
     })();
 
@@ -1567,9 +1567,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if(d.outcome==="Proposal Accepted"){
       if(d.dealType==="Linear TV") c.fct += d.amount;
       else if(d.dealType==="Digital") c.digital += d.amount;
-      else if(d.dealType==="Integrated Package") c.integrated += d.amount;
-      else if(d.dealType==="Sponsorship") c.sponsorship += d.amount;
-      else if(d.dealType==="Branded Content") c.branded += d.amount;
+      else if(d.dealType==="Integrated Packages") c.integrated += d.amount;
+      else if(d.dealType==="IPs") c.sponsorship += d.amount;
+      else if(d.dealType==="Media Solutions") c.branded += d.amount;
       c.total += d.amount;
     }
     if(!c.lastContact||d.lastContact>c.lastContact) c.lastContact=d.lastContact;
@@ -1749,7 +1749,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         contactName: logForm.contactName || "",
         designation: logForm.designation || "",
         phone: logForm.mobile || "",
-        dealType: logForm.pitchType ? (logForm.pitchType.includes("FCT")?"Linear TV":logForm.pitchType.includes("Digital")?"Digital":"Branded Content") : "Linear TV",
+        dealType: logForm.pitchType ? (logForm.pitchType.includes("FCT")?"Linear TV":logForm.pitchType.includes("Digital")?"Digital":"Media Solutions") : "Linear TV",
         outcome: "Needs Callback",
         amount: 0,
         targetAmount: 0,
@@ -3388,7 +3388,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         const achieved  = revenueEntries.filter(e=>e.quarter===filterQ).reduce((s,e)=>s+(e.amount||0),0);
                         const pipeline  = allD.filter(d=>d.outcome!=="Proposal Accepted"&&d.outcome!=="Not Interested").reduce((s,d)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
                         const projection = achieved + pipeline;
-                        return [["TV / FCT","Linear TV"],["Digital","Digital"],["Integrated","Integrated Package"],["Sponsorship","Sponsorship"],["Brand Solutions","Brand Solutions"]].map(([label,type])=>{
+                        return [["Linear TV","Linear TV"],["IPs","IPs"],["Digital","Digital"],["Media Solutions","Media Solutions"],["Integrated Packages","Integrated Packages"]].map(([label,type])=>{
                           const td = allD.filter(d=>d.dealType===type);
                           const t  = td.reduce((s,d)=>s+(d.targetAmount||0),0);
                           const a  = revenueEntries.filter(e=>e.dealType===type&&e.quarter===filterQ).reduce((s,e)=>s+(e.amount||0),0);
@@ -3762,7 +3762,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   ] : [
                     {id:"accounts",  label:"Accounts",       sub:"Client-led"},
                     {id:"properties",label:"Properties / IPs",sub:"Inventory"},
-                    {id:"brand",     label:"Brand Solutions", sub:"Custom packages"},
+                    {id:"brand",     label:"Media Solutions", sub:"Custom packages"},
                   ]).map(t=>(
                     <button key={t.id} onClick={()=>setRtTab(t.id)}
                       style={{padding:"10px 20px",background:"transparent",border:"none",borderBottom:rtTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",color:rtTab===t.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:rtTab===t.id?700:400,textAlign:"left"}}>
@@ -3880,7 +3880,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     const amtStr = "0"; const parsed = 0; // TODO: replace with inline input
                                     if(!parsed){ showToast("Use Revenue Log to record slot contribution","ok"); return; }
                                     // Store as revenue entry
-                                    const entry = {id:`re${Date.now()}`,repId:user_role?.repId||null,clientCompany:prop.name+" — "+slot.label,dealType:"Sponsorship",amount:parsed,invoiceRef:"",date:TODAY,quarter:filterQ,notes:`IP contribution: ${prop.name} ${slot.label}`};
+                                    const entry = {id:`re${Date.now()}`,repId:user_role?.repId||null,clientCompany:prop.name+" — "+slot.label,dealType:"IPs",amount:parsed,invoiceRef:"",date:TODAY,quarter:filterQ,notes:`IP contribution: ${prop.name} ${slot.label}`};
                                     setRevenueEntries(p=>[entry,...p]);
                                     showToast(`₹${(parsed/100000).toFixed(1)}L logged for ${slot.label} ✓`);
                                   }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Log Contribution</button>
@@ -3922,7 +3922,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         const pkg = "Custom Package";
                         const val = "1000000";
                         // TODO: replace with Add Deal modal
-                        const newDeal = {...BLANK_DEAL,clientCompany:client,dealType:"Brand Solutions",outcome:"Needs Callback",amount:parseCurrency(val||"0"),targetAmount:parseCurrency(val||"0"),quarter:filterQ,repId:user_role?.repId||"",lastContact:TODAY,notes:pkg};
+                        const newDeal = {...BLANK_DEAL,clientCompany:client,dealType:"Media Solutions",outcome:"Needs Callback",amount:parseCurrency(val||"0"),targetAmount:parseCurrency(val||"0"),quarter:filterQ,repId:user_role?.repId||"",lastContact:TODAY,notes:pkg};
                         setDeals(p=>[{id:`d${Date.now()}`,...newDeal,repId:parseInt(newDeal.repId)||5,region:user_role?.region||"National",reqs:[]},...p]);
                         showToast("Brand Solutions deal created ✓");
                       }}>+ New Package</button>
@@ -3930,7 +3930,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                     {/* Brand Solutions deals */}
                     {(()=>{
-                      const bsDeals = visibleDeals.filter(d=>d.dealType==="Brand Solutions"||d.dealType==="Branded Content"||d.dealType==="Integrated Package");
+                      const bsDeals = visibleDeals.filter(d=>d.dealType==="Media Solutions"||d.dealType==="Integrated Packages");
                       if(!bsDeals.length) return (
                         <div style={{textAlign:"center",padding:"50px 20px",color:C.muted}}>
                           <div style={{fontSize:32,marginBottom:12}}>🎯</div>
@@ -4644,7 +4644,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 ];
                 const getTileDeals=k=>{
                   if(k==="DigitalOnly") return allD.filter(d=>d.dealType==="Digital");
-                  if(k==="DigitalTV")   return allD.filter(d=>["Digital","Linear TV","Integrated Package","Branded Content"].includes(d.dealType));
+                  if(k==="DigitalTV")   return allD.filter(d=>["Digital","Linear TV","Integrated Packages","Media Solutions"].includes(d.dealType));
                   return allD.filter(d=>d.region===k);
                 };
                 return (
@@ -5660,7 +5660,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {view==="target-submit" && isRep && (()=>{
             const myRepId = user_role?.repId;
             const mySubs  = targetSubs.filter(t=>t.repId===myRepId);
-            const dealTypes = ["Linear TV","Digital","Integrated Package","Sponsorship","Brand Solutions","Branded Content"];
+            const dealTypes = ["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"];
             const statusColor = s => s==="Approved"?C.green:s==="Pending RH"||s==="Pending NSH"||s==="Pending Strategy"||s==="Pending CRO"?C.orange:s==="Rejected"?C.red:C.dim;
 
             // Summary stats across all approved/pending subs for this quarter
@@ -5966,7 +5966,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const myRepId   = user_role?.repId;
             const myEntries = isRep ? revenueEntries.filter(e=>e.repId===myRepId) : revenueEntries;
             const totalRev  = myEntries.filter(e=>e.quarter===filterQ).reduce((s,e)=>s+(e.amount||0),0);
-            const dealTypes = ["Linear TV","Digital","Integrated Package","Sponsorship","Brand Solutions","Branded Content"];
+            const dealTypes = ["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"];
 
             return (
               <div className="fin">
@@ -6250,11 +6250,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const downloadTemplate = (type) => {
                   const headers = TEMPLATES[type] || [];
                   const sampleRow = {
-                    deals:      ["Havells India","Deepa Menon","VP Marketing","9823401234","deepa@havells.com","Vikram Sen","National","Sponsorship","Very Interested","15000000","12000000","Q1 FY26","Top 5","Budget confirmed","Send deck","2026-04-15"],
+                    deals:      ["Havells India","Deepa Menon","VP Marketing","9823401234","deepa@havells.com","Vikram Sen","National","IPs","Very Interested","15000000","12000000","Q1 FY26","Top 5","Budget confirmed","Send deck","2026-04-15"],
                     reps:       ["Arjun Mishra","arjun@odishatv.com","North","SALES REP","10000000"],
                     clients:    ["Havells India","FMCG","Deepa Menon","VP Marketing","9823401234","deepa@havells.com","Vikram Sen","National"],
-                    targets:    ["Vikram Sen","National","Havells India","Sponsorship","15000000","Q1 FY26"],
-                    revenue:    ["Vikram Sen","Havells India","Sponsorship","5000000","INV-2024-001","2026-04-10","Q1 FY26","First instalment"],
+                    targets:    ["Vikram Sen","National","Havells India","IPs","15000000","Q1 FY26"],
+                    revenue:    ["Vikram Sen","Havells India","IPs","5000000","INV-2024-001","2026-04-10","Q1 FY26","First instalment"],
                     properties: ["Odia Idol S3","Reality Show","OTV","Q1 FY26","12000000","Title Sponsor","5000000","Available",""],
                   }[type] || [];
                   const csv = [headers.join(","), sampleRow.join(",")].join("\n");
@@ -6618,7 +6618,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>TV + DIGITAL DEALS</div>
               <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Integrated deals combining TV FCT with digital components</div>
               {(()=>{
-                const tvDigiDeals = deals.filter(d=>d.dealType==="Integrated Package"||d.dealType==="Brand Solutions");
+                const tvDigiDeals = deals.filter(d=>d.dealType==="Integrated Packages"||d.dealType==="Media Solutions");
                 if(!tvDigiDeals.length) return <div style={{textAlign:"center",padding:50,color:C.muted}}>No TV+Digital integrated deals yet.</div>;
                 return tvDigiDeals.map(d=>{
                   const rep = REPS.find(r=>r.id===d.repId);
@@ -6682,7 +6682,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           )}
 
           {view==="digi-deals" && isDigiOps && (()=>{
-            const digiDeals=deals.filter(d=>d.quarter===filterQ&&(d.dealType==="Digital"||d.dealType==="Integrated Package"||(d.reqs||[]).some(r=>r.dept==="Digital"))).sort((a,b)=>b.amount-a.amount);
+            const digiDeals=deals.filter(d=>d.quarter===filterQ&&(d.dealType==="Digital"||d.dealType==="Integrated Packages"||(d.reqs||[]).some(r=>r.dept==="Digital"))).sort((a,b)=>b.amount-a.amount);
             const blocked=digiDeals.filter(d=>d.awaitingApproval==="Digital");
             const digiTasks=tasks.filter(t=>t.dept==="Digital"&&t.status!=="Done");
             return(<div className="fin">
