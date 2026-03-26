@@ -2275,6 +2275,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("hr","My HR Report","⊘"),
       ]},
       { label:"TEAM'S CRM",  items:[
+        N("rh-team-plan","Team's Plan","◎"),
         N("rh-team-targets","Team's Targets","◈"),
         N("rh-team-tasks","Team's Tasks","✓"),
         N("rh-team-hr","Team's HR Reports","⊘"),
