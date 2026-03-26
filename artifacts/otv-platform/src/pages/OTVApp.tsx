@@ -2134,14 +2134,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("compliance","Compliance","✦"),
         N("hr","My HR Report","⊘",hrBadge),
       ]},
-      { label:"TEAM",        items:[
+      { label:"REGION HEADS", items:[
         N("nsh-rh-scorecard","All Region Heads","◇"),
-        N("nsh-rep-scorecard","All Sales Reps","◇"),
-        N("leaderboard","Leaderboard","◇"),
-      ]},
-      { label:"HR",          items:[
+        N("nsh-rh-targets","RH Targets","◎"),
+        N("nsh-rh-tasks","RH Tasks","✓"),
         N("nsh-rh-hr","RH's HR Reports","⊘"),
+      ]},
+      { label:"SALES REPS",  items:[
+        N("nsh-rep-scorecard","All Sales Reps","◇"),
+        N("nsh-rep-targets","Rep Targets","◎"),
+        N("nsh-rep-tasks","Rep Tasks","✓"),
         N("nsh-rep-hr","Sales Reps' HR Reports","⊘"),
+      ]},
+      { label:"LEADERBOARD", items:[
+        N("lb-region","By Region","◇"),
+        N("lb-all","By Sales Rep","◇"),
       ]},
     ];
 
@@ -2164,14 +2171,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("compliance","Compliance","✦"),
         N("hr","My HR Report","⊘",hrBadge),
       ]},
-      { label:"TEAM",        items:[
+      { label:"REGION HEADS", items:[
         N("nsh-rh-scorecard","All Region Heads","◇"),
-        N("nsh-rep-scorecard","All Sales Reps","◇"),
-        N("leaderboard","Leaderboard","◇"),
-      ]},
-      { label:"HR",          items:[
+        N("nsh-rh-targets","RH Targets","◎"),
+        N("nsh-rh-tasks","RH Tasks","✓"),
         N("nsh-rh-hr","RH's HR Reports","⊘"),
+      ]},
+      { label:"SALES REPS",  items:[
+        N("nsh-rep-scorecard","All Sales Reps","◇"),
+        N("nsh-rep-targets","Rep Targets","◎"),
+        N("nsh-rep-tasks","Rep Tasks","✓"),
         N("nsh-rep-hr","Sales Reps' HR Reports","⊘"),
+      ]},
+      { label:"LEADERBOARD", items:[
+        N("lb-region","By Region","◇"),
+        N("lb-all","By Sales Rep","◇"),
       ]},
     ];
 
@@ -2194,14 +2208,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("compliance","Compliance","✦"),
         N("hr","My HR Report","⊘",hrBadge),
       ]},
-      { label:"TEAM",        items:[
+      { label:"REGION HEADS", items:[
         N("nsh-rh-scorecard","All Region Heads","◇"),
-        N("nsh-rep-scorecard","All Sales Reps","◇"),
-        N("leaderboard","Leaderboard","◇"),
-      ]},
-      { label:"HR",          items:[
+        N("nsh-rh-targets","RH Targets","◎"),
+        N("nsh-rh-tasks","RH Tasks","✓"),
         N("nsh-rh-hr","RH's HR Reports","⊘"),
+      ]},
+      { label:"SALES REPS",  items:[
+        N("nsh-rep-scorecard","All Sales Reps","◇"),
+        N("nsh-rep-targets","Rep Targets","◎"),
+        N("nsh-rep-tasks","Rep Tasks","✓"),
         N("nsh-rep-hr","Sales Reps' HR Reports","⊘"),
+      ]},
+      { label:"LEADERBOARD", items:[
+        N("lb-region","By Region","◇"),
+        N("lb-all","By Sales Rep","◇"),
       ]},
     ];
 
