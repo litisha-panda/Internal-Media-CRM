@@ -3865,50 +3865,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   );
                 })()}
 
-                {/* ── HIGH RISK DEALS ── */}
-                <div style={{height:1,background:C.border,marginBottom:16}} />
-                <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>
-                  ⚠ High Priority Deals — Highest Target, Lowest Achievement
-                </div>
-                <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead><tr>
-                      {["Client","Rep","Region","Target","Achieved","Pipeline","Achieve %","Stage","Idle"].map(h=>(
-                        <th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                      ))}
-                    </tr></thead>
-                    <tbody>
-                      {highRisk.length===0&&<tr><td colSpan={9} style={{padding:20,textAlign:"center",color:C.muted}}>No at-risk deals found.</td></tr>}
-                      {highRisk.map(d=>{
-                        const rep  = REPS.find(r=>r.id===d.repId);
-                        const idle = daysSince(d.lastContact);
-                        const sc   = d.pct>=50?C.accent:C.red;
-                        return (
-                          <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.red}03`}}
-                            onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                            onMouseOut={e=>e.currentTarget.style.background=`${C.red}03`}>
-                            <td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
-                            <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
-                            <td style={{padding:"9px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td>
-                            <td style={{padding:"9px 12px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
-                            <td style={{padding:"9px 12px",color:C.muted}}>—</td>
-                            <td style={{padding:"9px 12px",color:C.accent}}>{fmtR(d.amount)}</td>
-                            <td style={{padding:"9px 12px"}}>
-                              <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                <div style={{width:40,height:4,background:C.s3,borderRadius:2,overflow:"hidden"}}>
-                                  <div style={{height:"100%",width:`${Math.min(d.pct,100)}%`,background:sc}} />
-                                </div>
-                                <span style={{color:sc,fontWeight:700,fontSize:11}}>{d.pct}%</span>
-                              </div>
-                            </td>
-                            <td style={{padding:"9px 12px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
-                            <td style={{padding:"9px 12px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11}}>{idle===0?"Today":`${idle}d`}</td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
               </div>
             );
           })()}
