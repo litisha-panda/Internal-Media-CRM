@@ -3801,7 +3801,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
                   <div>
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REVENUE TRACKER</div>
-                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>{isDigiOps?"Website · App · Social · Direct · Internal · Programmatic":"Accounts · Properties · Brand Solutions"}</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>{isDigiOps?"Website · App · Social · Direct · Internal · Programmatic":"Linear TV · IPs · Digital · Media Solutions · Integrated Packages"}</div>
                   </div>
                   <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
                 </div>
@@ -3809,19 +3809,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* Tab switcher */}
                 <div style={{display:"flex",gap:0,marginBottom:16,borderBottom:`1px solid ${C.border}`}}>
                   {(isDigiOps ? [
-                    {id:"accounts",  label:"Website",      sub:"Digital"},
-                    {id:"digi-app",  label:"App",          sub:"Mobile"},
-                    {id:"digi-social",label:"Social Media",sub:"Platforms"},
-                    {id:"digi-direct",label:"Direct",      sub:"Direct sales"},
-                    {id:"digi-internal",label:"Internal",  sub:"Cross-sell"},
-                    {id:"digi-prog", label:"Programmatic", sub:"Automated"},
+                    {id:"accounts",    label:"Website",      sub:"Digital"},
+                    {id:"digi-app",    label:"App",          sub:"Mobile"},
+                    {id:"digi-social", label:"Social Media", sub:"Platforms"},
+                    {id:"digi-direct", label:"Direct",       sub:"Direct sales"},
+                    {id:"digi-internal",label:"Internal",    sub:"Cross-sell"},
+                    {id:"digi-prog",   label:"Programmatic", sub:"Automated"},
                   ] : [
-                    {id:"accounts",  label:"Accounts",       sub:"Client-led"},
-                    {id:"properties",label:"Properties / IPs",sub:"Inventory"},
-                    {id:"brand",     label:"Media Solutions", sub:"Custom packages"},
+                    {id:"accounts",    label:"Accounts",            sub:"All clients"},
+                    {id:"linear-tv",   label:"Linear TV",           sub:"TV deals"},
+                    {id:"properties",  label:"IPs",                 sub:"IP inventory"},
+                    {id:"digital",     label:"Digital",             sub:"Online deals"},
+                    {id:"brand",       label:"Media Solutions",     sub:"Custom packages"},
+                    {id:"integrated",  label:"Integrated Packages", sub:"Multi-platform"},
                   ]).map(t=>(
                     <button key={t.id} onClick={()=>setRtTab(t.id)}
-                      style={{padding:"10px 20px",background:"transparent",border:"none",borderBottom:rtTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",color:rtTab===t.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:rtTab===t.id?700:400,textAlign:"left"}}>
+                      style={{padding:"10px 16px",background:"transparent",border:"none",borderBottom:rtTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",color:rtTab===t.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:rtTab===t.id?700:400,textAlign:"left",whiteSpace:"nowrap"}}>
                       <div>{t.label}</div>
                       <div style={{fontSize:9,color:C.muted,marginTop:1}}>{t.sub}</div>
                     </button>
@@ -3857,11 +3860,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </div>
                           </div>
                           <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
-                            {c.fct>0&&<span style={{background:`${C.purple}18`,color:C.purple,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>FCT {fmtR(c.fct)}</span>}
+                            {c.fct>0&&<span style={{background:`${C.purple}18`,color:C.purple,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Linear TV {fmtR(c.fct)}</span>}
                             {c.digital>0&&<span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Digital {fmtR(c.digital)}</span>}
-                            {c.integrated>0&&<span style={{background:`${C.green}18`,color:C.green,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Integrated {fmtR(c.integrated)}</span>}
-                            {c.sponsorship>0&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Sponsorship {fmtR(c.sponsorship)}</span>}
-                            {c.branded>0&&<span style={{background:`${C.orange}18`,color:C.orange,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Branded {fmtR(c.branded)}</span>}
+                            {c.integrated>0&&<span style={{background:`${C.green}18`,color:C.green,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Integrated Packages {fmtR(c.integrated)}</span>}
+                            {c.sponsorship>0&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>IPs {fmtR(c.sponsorship)}</span>}
+                            {c.branded>0&&<span style={{background:`${C.orange}18`,color:C.orange,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Media Solutions {fmtR(c.branded)}</span>}
                             {c.fct>0&&c.digital===0&&<span style={{background:`${C.red}10`,color:C.red,padding:"2px 9px",borderRadius:10,fontSize:10,border:`1px dashed ${C.red}44`}}>No digital yet</span>}
                             {c.total===0&&openDeals.length>0&&<span style={{background:`${C.orange}10`,color:C.orange,padding:"2px 9px",borderRadius:10,fontSize:10}}>In discussion</span>}
                           </div>
@@ -3893,7 +3896,62 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 )}
 
-                                {/* ── PROPERTIES TAB ── */}
+                {/* ── LINEAR TV TAB ── */}
+                {(()=>{
+                  const dtDeals = visibleDeals.filter(d=>d.dealType==="Linear TV");
+                  const dT=dtDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
+                  const dC=dtDeals.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                  const dP=dtDeals.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
+                  const dG=Math.max(0,dT-dC); const dPct=dT>0?Math.round((dC/dT)*100):0;
+                  const dsc=dPct>=80?C.green:dPct>=50?C.accent:C.red;
+                  return rtTab==="linear-tv" ? (
+                    <div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+                        {[{label:"TARGET",value:fmtR(dT),color:C.accent},{label:"ACHIEVED",value:fmtR(dC),color:C.green},{label:"SHORTFALL",value:fmtR(dG),color:dG===0?C.green:C.red},{label:"% COMPLETE",value:`${dPct}%`,color:dsc}].map(card=>(
+                          <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                            <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                            <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color}}>{card.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",marginBottom:14}}>
+                        <div style={{height:"100%",width:`${Math.min(dPct,100)}%`,background:dsc,borderRadius:2}}/>
+                      </div>
+                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No Linear TV deals for {filterQ}.</div>:(
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Proposal Accepted"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Proposal Accepted"?a.amount:0))).map(d=>{
+                                const rep=REPS.find(r=>r.id===d.repId);
+                                const ach=d.outcome==="Proposal Accepted"?d.amount:0;
+                                const sf=Math.max(0,(d.targetAmount||0)-ach);
+                                const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                return (
+                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                    <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                    <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
+                                    <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                    <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
+                                    <td style={{padding:"9px 14px"}}>
+                                      <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)} style={{padding:"2px 6px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                        {OUTCOMES.map(o=><option key={o} style={{background:"#0d1117",color:"#e6edf3"}}>{o}</option>)}
+                                      </select>
+                                    </td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* ── PROPERTIES / IPs TAB ── */}
                 {rtTab==="properties" && (
                   <div>
                     {(properties||[]).filter(p=>qMatch(p.quarter)).map(prop=>{
@@ -4038,6 +4096,115 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     })()}
                   </div>
                 )}
+
+                {/* ── DIGITAL TAB ── */}
+                {(()=>{
+                  const dtDeals = visibleDeals.filter(d=>d.dealType==="Digital");
+                  const dT=dtDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
+                  const dC=dtDeals.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                  const dG=Math.max(0,dT-dC); const dPct=dT>0?Math.round((dC/dT)*100):0;
+                  const dsc=dPct>=80?C.green:dPct>=50?C.accent:C.red;
+                  return rtTab==="digital" ? (
+                    <div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+                        {[{label:"TARGET",value:fmtR(dT),color:C.accent},{label:"ACHIEVED",value:fmtR(dC),color:C.green},{label:"SHORTFALL",value:fmtR(dG),color:dG===0?C.green:C.red},{label:"% COMPLETE",value:`${dPct}%`,color:dsc}].map(card=>(
+                          <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                            <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                            <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color}}>{card.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",marginBottom:14}}>
+                        <div style={{height:"100%",width:`${Math.min(dPct,100)}%`,background:dsc,borderRadius:2}}/>
+                      </div>
+                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No Digital deals for {filterQ}.</div>:(
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Proposal Accepted"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Proposal Accepted"?a.amount:0))).map(d=>{
+                                const rep=REPS.find(r=>r.id===d.repId);
+                                const ach=d.outcome==="Proposal Accepted"?d.amount:0;
+                                const sf=Math.max(0,(d.targetAmount||0)-ach);
+                                const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                return (
+                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                    <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                    <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
+                                    <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                    <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
+                                    <td style={{padding:"9px 14px"}}>
+                                      <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)} style={{padding:"2px 6px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                        {OUTCOMES.map(o=><option key={o} style={{background:"#0d1117",color:"#e6edf3"}}>{o}</option>)}
+                                      </select>
+                                    </td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
+
+                {/* ── INTEGRATED PACKAGES TAB ── */}
+                {(()=>{
+                  const dtDeals = visibleDeals.filter(d=>d.dealType==="Integrated Packages");
+                  const dT=dtDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
+                  const dC=dtDeals.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                  const dG=Math.max(0,dT-dC); const dPct=dT>0?Math.round((dC/dT)*100):0;
+                  const dsc=dPct>=80?C.green:dPct>=50?C.accent:C.red;
+                  return rtTab==="integrated" ? (
+                    <div>
+                      <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Multi-platform packages combining Linear TV + Digital + On-ground + Content</div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+                        {[{label:"TARGET",value:fmtR(dT),color:C.accent},{label:"ACHIEVED",value:fmtR(dC),color:C.green},{label:"SHORTFALL",value:fmtR(dG),color:dG===0?C.green:C.red},{label:"% COMPLETE",value:`${dPct}%`,color:dsc}].map(card=>(
+                          <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                            <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                            <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color}}>{card.value}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",marginBottom:14}}>
+                        <div style={{height:"100%",width:`${Math.min(dPct,100)}%`,background:dsc,borderRadius:2}}/>
+                      </div>
+                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No Integrated Package deals for {filterQ}.</div>:(
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                            <tbody>
+                              {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Proposal Accepted"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Proposal Accepted"?a.amount:0))).map(d=>{
+                                const rep=REPS.find(r=>r.id===d.repId);
+                                const ach=d.outcome==="Proposal Accepted"?d.amount:0;
+                                const sf=Math.max(0,(d.targetAmount||0)-ach);
+                                const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                return (
+                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                    <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                    <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
+                                    <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                    <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
+                                    <td style={{padding:"9px 14px"}}>
+                                      <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)} style={{padding:"2px 6px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                        {OUTCOMES.map(o=><option key={o} style={{background:"#0d1117",color:"#e6edf3"}}>{o}</option>)}
+                                      </select>
+                                    </td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      )}
+                    </div>
+                  ) : null;
+                })()}
 
                 {rtTab==="deals" && (
                   <div>
