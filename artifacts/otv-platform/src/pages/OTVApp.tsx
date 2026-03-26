@@ -1,10 +1,11 @@
 // @ts-nocheck
 import { useState, useRef, useEffect, useMemo } from "react";
 
+
 // Route all Claude API calls through the API server proxy (key stays server-side)
 const CLAUDE_PROXY_URL = `${window.location.protocol}//${window.location.hostname}:8080/api/claude`;
-
-const REGIONS = ["North", "South", "East", "West", "National"];
+const REGIONS   = ["North", "South", "East", "West", "National"];
+const ALL_ROLES = ["SALES REP","REGION HEAD","SALES HEAD","CRO","SALES STRATEGY","DIGI OPS","ADMIN"];
 const DEAL_TYPES = ["Linear TV", "Digital", "Sponsorship", "Branded Content", "Integrated Package"];
 const CONTACT_LEVELS = ["C-Suite / Owner", "VP / GM", "Marketing Head", "Brand Manager", "Agency Lead", "Junior/Exec"];
 const OUTCOMES = ["Proposal Accepted", "Very Interested", "Interested – Needs Revision", "Price Concern", "Needs Callback", "Not Interested"];
@@ -109,8 +110,6 @@ const REPS = [
 const USER_ROLES = [
   // FULL ACCESS
   { id: "admin",          name: "Admin",                  role: "ADMIN",          canView: "all",    region: null },
-  { id: "litisha",        name: "Litisha (CEO)",           role: "CEO",            canView: "all",    region: null },
-  { id: "jaggi",          name: "Jaggi (MD)",              role: "MD",             canView: "all",    region: null },
   { id: "sales_head",     name: "Sales Head",             role: "SALES HEAD",     canView: "all",    region: null },
   { id: "sales_strategy", name: "Sachin (Sales Strategy)",role: "SALES STRATEGY", canView: "all",    region: null },
   { id: "sales_analysis", name: "Darpan (CRO)",           role: "CRO",            canView: "all",    region: null },
@@ -150,6 +149,85 @@ const SEED_DEALS = [
   { id:"d12", repId:4, clientCompany:"Godrej Consumer",    contactName:"Nisha Mehta",    designation:"Marketing Head", contactLevel:"VP / GM",         phone:"9988001122", email:"nisha@godrej.com",       dealType:"Digital",            outcome:"Needs Callback",              amount:3500000,  targetAmount:5000000,  region:"West",     priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Digital campaign brief",                 nextStepDate:TOMORROW, awaitingApproval:"Digital",        awaitingApprovalSince:D3,   reqs:[{dept:"Digital",desc:"Campaign brief for GCPL",status:"In Progress",raisedAt:"11:00"}], notes:"GCPL digital push for West India." },
 ];
 
+const SEED_PROPERTIES = [
+  {
+    id:"pr1", name:"Odia Idol S3", type:"Reality Show", channel:"OTV",
+    quarter:"Q1 FY26", totalValue:12000000,
+    slots:[
+      {id:"s1",label:"Title Sponsor",value:5000000,status:"In Discussion",clientCompany:"Havells India",repId:5},
+      {id:"s2",label:"Co-Sponsor",value:3000000,status:"Available",clientCompany:"",repId:null},
+      {id:"s3",label:"Associate 1",value:1000000,status:"Committed",clientCompany:"Berger Paints",repId:2},
+      {id:"s4",label:"Associate 2",value:1000000,status:"Available",clientCompany:"",repId:null},
+      {id:"s5",label:"Associate 3",value:1000000,status:"Available",clientCompany:"",repId:null},
+      {id:"s6",label:"Associate 4",value:1000000,status:"Available",clientCompany:"",repId:null},
+    ]
+  },
+  {
+    id:"pr2", name:"Tarang Music Awards", type:"Award Show", channel:"Tarang",
+    quarter:"Q1 FY26", totalValue:8000000,
+    slots:[
+      {id:"s7",label:"Title Sponsor",value:4000000,status:"Available",clientCompany:"",repId:null},
+      {id:"s8",label:"Co-Sponsor",value:2000000,status:"In Discussion",clientCompany:"Asian Paints",repId:5},
+      {id:"s9",label:"Associate 1",value:1000000,status:"Available",clientCompany:"",repId:null},
+      {id:"s10",label:"Associate 2",value:1000000,status:"Available",clientCompany:"",repId:null},
+    ]
+  },
+];
+
+
+const SEED_INTERNAL_REQS = [
+  { id:"ir1", type:"Approval",     raisedBy:"rep_arjun", raisedByName:"Arjun Mishra", repId:1, dealId:"d7", clientCompany:"Daikin India",   dept:"NSH",            subject:"Discount approval — 12% off rate card",       details:"Client pushing for 12% off. Standard is 8%. Need NSH sign-off to close.",        status:"Pending", raisedAt:D3,    slaHours:48, resolvedAt:null, resolverNote:"" },
+  { id:"ir2", type:"Support",      raisedBy:"rep_vikram", raisedByName:"Vikram Sen",   repId:5, dealId:"d1", clientCompany:"Havells India",  dept:"Sales Strategy", subject:"H2 sponsorship deck for Havells",               details:"Need a customised deck with Odia Idol + Tarang Music Awards for Havells CMO.",    status:"In Progress", raisedAt:D3, slaHours:48, resolvedAt:null, resolverNote:"" },
+  { id:"ir3", type:"Approval",     raisedBy:"rep_vikram", raisedByName:"Vikram Sen",   repId:5, dealId:"d2", clientCompany:"Asian Paints",   dept:"NSH",            subject:"CXO attendance at CMO meeting",                 details:"Asian Paints CMO wants CEO/NSH in the room to finalise ₹1.2Cr deal.",            status:"Overdue",  raisedAt:D7,    slaHours:48, resolvedAt:null, resolverNote:"" },
+  { id:"ir4", type:"Creative",     raisedBy:"rep_priya",  raisedByName:"Priya Dash",   repId:2, dealId:"d4", clientCompany:"Berger Paints",  dept:"Branding Team",  subject:"On-air promo material for Berger Paints",       details:"Need 30-sec on-air promo. Brand guidelines shared on email.",                    status:"Done",     raisedAt:D7,    slaHours:48, resolvedAt:D3,  resolverNote:"Sent to production." },
+  { id:"ir5", type:"Escalation",   raisedBy:"rep_rohit",  raisedByName:"Rohit Nanda",  repId:3, dealId:"d9", clientCompany:"ITC Limited",    dept:"NSH",            subject:"ITC deal stalled — NSH intervention needed",    details:"ITC VP wants a direct call with NSH before committing ₹55L integrated plan.",    status:"Pending", raisedAt:D1,    slaHours:48, resolvedAt:null, resolverNote:"" },
+];
+
+// Target approval chain: Draft → Pending RH → Pending NSH → Pending Strategy → Pending CRO → Approved
+const TARGET_APPROVAL_CHAIN = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO","Approved"];
+
+const SEED_TARGET_SUBMISSIONS = [
+  { id:"ts1", repId:1, repName:"Arjun Mishra", region:"North", quarter:"Q1 FY26",
+    clients:[
+      {clientCompany:"Daikin India",   dealType:"Linear TV",   targetAmount:5000000},
+      {clientCompany:"LG Electronics", dealType:"Digital",     targetAmount:2000000},
+    ],
+    totalTarget:7000000, status:"Approved",
+    submittedAt:D7, approvalLog:[
+      {step:"Pending RH",       by:"RH North",   at:D7, note:"Looks good"},
+      {step:"Pending NSH",      by:"NSH",         at:D3, note:"Approved"},
+      {step:"Pending Strategy", by:"Sales Strategy", at:D1, note:"Aligned"},
+      {step:"Pending CRO",      by:"CRO",         at:TODAY, note:"Approved — go"},
+    ]
+  },
+  { id:"ts2", repId:2, repName:"Priya Dash", region:"South", quarter:"Q1 FY26",
+    clients:[
+      {clientCompany:"Berger Paints",  dealType:"Linear TV",         targetAmount:3500000},
+      {clientCompany:"Sundaram Finance",dealType:"Linear TV",        targetAmount:4000000},
+    ],
+    totalTarget:7500000, status:"Pending NSH",
+    submittedAt:D3, approvalLog:[
+      {step:"Pending RH",       by:"RH South",   at:D3, note:"Approved"},
+    ]
+  },
+  { id:"ts3", repId:5, repName:"Vikram Sen", region:"National", quarter:"Q1 FY26",
+    clients:[
+      {clientCompany:"Havells India",  dealType:"Sponsorship",       targetAmount:15000000},
+      {clientCompany:"Asian Paints",   dealType:"Sponsorship",       targetAmount:12000000},
+      {clientCompany:"Tata Consumer",  dealType:"Integrated Package",targetAmount:9000000},
+    ],
+    totalTarget:36000000, status:"Pending Strategy",
+    submittedAt:D7, approvalLog:[
+      {step:"Pending RH",       by:"RH National", at:D7, note:"Okayed"},
+      {step:"Pending NSH",      by:"NSH",          at:D3, note:"Approved"},
+    ]
+  },
+];
+
+const SEED_REVENUE_ENTRIES = [
+  { id:"re1", repId:2, clientCompany:"Berger Paints",  dealType:"Linear TV", amount:2200000, invoiceRef:"INV-2024-001", date:D3, quarter:"Q1 FY26", notes:"6-week primetime deal PO received" },
+  { id:"re2", repId:5, clientCompany:"Havells India",  dealType:"Sponsorship", amount:5000000, invoiceRef:"INV-2024-002", date:D1, quarter:"Q1 FY26", notes:"First instalment — sponsorship confirmed" },
+];
 
 const SEED_MEETINGS = [
   { id:"ml1", repId:5, repName:"Vikram Sen",  region:"National", dealId:"d1", clientCompany:"Havells India",    contactName:"Deepa Menon",   contactLevel:"VP / GM",       outcome:"Very Interested",            discussion:"Flagship show sponsorship for H2. Budget confirmed.", nextStep:"Send sponsorship deck EOD",  date:TODAY, loggedAt:"09:15", late:false },
@@ -169,7 +247,7 @@ const fmt = (n) => { if (!n || n===0) return "—"; if (n>=10000000) return `${(
 const fmtR = (n) => n ? `\u20B9${fmt(n)}` : "—";
 const daysSince = (d) => { if (!d) return 999; return Math.floor((Date.now()-new Date(d).getTime())/86400000); };
 const riskColor = (d) => { if (d.outcome==="Not Interested") return C.muted; if (d.outcome==="Proposal Accepted") return C.green; const x=daysSince(d.lastContact); return x>=7?C.red:x>=3?C.orange:C.green; };
-const riskLabel = (d) => { if (d.outcome==="Not Interested") return "Lost"; if (d.outcome==="Proposal Accepted") return "Won"; const x=daysSince(d.lastContact); return x>=7?"At Risk":x>=3?"Cooling":"Active"; };
+const riskLabel = (d) => { if (d.outcome==="Not Interested") return "Lost"; if (d.outcome==="Proposal Accepted") return "Won"; if (d.atRisk) return "At Risk"; const x=daysSince(d.lastContact); return x>=7?"At Risk":x>=3?"Cooling":"Active"; };
 const oColor = (o) => ({ "Proposal Accepted":C.green, "Very Interested":"#4ade80", "Interested – Needs Revision":C.accent, "Price Concern":C.orange, "Needs Callback":C.blue, "Not Interested":C.muted }[o]||C.dim);
 const lColor = (l) => ({ "C-Suite / Owner":C.purple, "VP / GM":C.blue, "Marketing Head":C.green, "Brand Manager":C.accent, "Agency Lead":"#6366f1", "Junior/Exec":C.red }[l]||C.dim);
 
@@ -386,7 +464,7 @@ function ZohoHierarchy({r,exp}){
     </div>
   );
 }
-function ROCard({result,onExport}){
+function ROCard({result,onExport,onPushToPipeline}){
   const [activeTab,setActiveTab]=useState("deal");
   const [copied,setCopied]=useState(false);
   const badge={RELEASE_ORDER:{bg:"#1a1a3a",color:"#a855f7",label:"Release Order"},RO_ADDITION:{bg:"#2a1a1a",color:"#f97316",label:"RO Addition"},SALES_AGREEMENT:{bg:"#0a1a0a",color:"#16c784",label:"Sales Agreement"}}[result.document_type]||{bg:"#1a2332",color:"#7d8590",label:"RO"};
@@ -423,6 +501,9 @@ function ROCard({result,onExport}){
       </div>
       <div style={{padding:"10px 16px",background:"#0a1a0a",borderBottom:"1px solid #1e2d3d",display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
         <button onClick={()=>onExport(result)} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",border:"none",padding:"8px 22px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:13}}>Export to Zoho</button>
+        {onPushToPipeline && (
+          <button onClick={()=>onPushToPipeline(result)} style={{background:"linear-gradient(135deg,#16c784,#0ea570)",color:"#fff",border:"none",padding:"8px 22px",borderRadius:7,cursor:"pointer",fontWeight:700,fontSize:13}}>⬡ Push to Pipeline</button>
+        )}
         <span style={{color:"#7d8590",fontSize:11}}>Deal + Breakup + Summary sheets</span>
       </div>
       <div style={{display:"flex",borderBottom:"1px solid #1e2d3d",overflowX:"auto"}}>
@@ -544,11 +625,11 @@ async function roCallAPI(msgs) {
   _roAbortCtrl = new AbortController();
   const tid = setTimeout(() => { if (_roAbortCtrl) _roAbortCtrl.abort(); }, 120000);
   try {
-    const resp = await fetch(CLAUDE_PROXY_URL, {
+    const resp = await fetch("/api/claude", {
       method: "POST",
       signal: _roAbortCtrl.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:16000, system:RO_PROMPT, messages:msgs })
+      body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:16000, system:RO_PROMPT, messages:msgs })
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -686,8 +767,6 @@ function LoginScreen({ onLogin }) {
 
 
   const DEMO_ACCOUNTS = [
-    { label:"Litisha (CEO)",       email:"litisha@odishatv.com",    role:"CEO",            color:"#a855f7" },
-    { label:"Jaggi (MD)",          email:"jaggi@odishatv.com",      role:"MD",             color:"#be185d" },
     { label:"Darpan (CRO)",        email:"darpan@odishatv.com",     role:"CRO",            color:"#065f46" },
     { label:"Sales Head (NSH)",    email:"saleshead@odishatv.com",  role:"SALES HEAD",     color:"#0891b2" },
     { label:"Sachin (Strategy)",   email:"sachin@odishatv.com",     role:"SALES STRATEGY", color:"#7c2d12" },
@@ -748,7 +827,7 @@ function LoginScreen({ onLogin }) {
           <div style={{ display:"inline-flex", alignItems:"center", gap:12, marginBottom:12 }}>
             <div style={{ background:"linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius:10, padding:"8px 14px", fontSize:15, fontWeight:700, color:"#fff", letterSpacing:2 }}>OTV</div>
             <div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700, color:"#e6edf3", letterSpacing:1 }}>CRO Command</div>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700, color:"#e6edf3", letterSpacing:1 }}>OTV CRM</div>
               <div style={{ fontSize:10, color:"#7d8590", letterSpacing:2, textTransform:"uppercase" }}>Sales Intelligence Platform</div>
             </div>
           </div>
@@ -759,7 +838,7 @@ function LoginScreen({ onLogin }) {
           {/* HEADER */}
           <div style={{ padding:"20px 24px 16px", borderBottom:"1px solid #1e2d3d" }}>
             <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, color:"#e6edf3", marginBottom:3 }}>
-              {mode==="email" ? (isNew ? "Create account" : "Sign in with email") : "Sign in"}
+              {mode==="email" ? (isNew ? "Create account" : "Sign in") : "Sign in"}
             </div>
             <div style={{ fontSize:11, color:"#7d8590" }}>Odisha Television Network · Internal use only</div>
           </div>
@@ -767,68 +846,75 @@ function LoginScreen({ onLogin }) {
           <div style={{ padding:24 }}>
             {mode==="options" && (
               <>
-                {/* SOCIAL BUTTONS */}
-                <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
-                  <button
-                    onClick={handleGoogleClick}
-                    style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", color:"#3c4043", border:"1px solid #dadce0", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"box-shadow .15s" }}
-                    onMouseOver={e=>e.currentTarget.style.boxShadow="0 1px 6px rgba(0,0,0,.3)"}
-                    onMouseOut={e=>e.currentTarget.style.boxShadow="none"}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
-                    Continue with Google
-                  </button>
-                  <button
-                    onClick={handleZohoClick}
-                    style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"opacity .15s" }}
-                    onMouseOver={e=>e.currentTarget.style.opacity=".88"}
-                    onMouseOut={e=>e.currentTarget.style.opacity="1"}
-                  >
-                    <svg width="18" height="18" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="4" fill="#e42527"/><text x="50%" y="58%" dominantBaseline="middle" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="bold" fontFamily="sans-serif">Z</text></svg>
-                    Continue with Zoho
-                  </button>
-                </div>
+                {/* Google */}
+                <button
+                  onClick={handleGoogleClick}
+                  disabled={loading}
+                  style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", color:"#3c4043", border:"1px solid #dadce0", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", marginBottom:10, transition:"box-shadow .15s" }}
+                  onMouseOver={e=>e.currentTarget.style.boxShadow="0 1px 6px rgba(0,0,0,.3)"}
+                  onMouseOut={e=>e.currentTarget.style.boxShadow="none"}>
+                  <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
+                  Continue with Google
+                </button>
 
-                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:20 }}>
+                {/* Zoho */}
+                <button
+                  onClick={handleZohoClick}
+                  disabled={loading}
+                  style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", marginBottom:16, transition:"opacity .15s" }}
+                  onMouseOver={e=>e.currentTarget.style.opacity=".88"}
+                  onMouseOut={e=>e.currentTarget.style.opacity="1"}>
+                  <svg width="18" height="18" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="4" fill="#e42527"/><text x="50%" y="58%" dominantBaseline="middle" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="bold" fontFamily="sans-serif">Z</text></svg>
+                  Continue with Zoho
+                </button>
+
+                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
                   <div style={{ flex:1, height:1, background:"#1e2d3d" }} />
                   <span style={{ fontSize:11, color:"#7d8590" }}>or</span>
                   <div style={{ flex:1, height:1, background:"#1e2d3d" }} />
                 </div>
 
-                <button onClick={() => setMode("email")} style={{ width:"100%", background:"transparent", border:"1px solid #1e2d3d", borderRadius:6, padding:"10px 16px", color:"#e6edf3", fontSize:13, cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"border-color .15s" }}
+                {/* Email */}
+                <button onClick={() => setMode("email")} style={{ width:"100%", background:"transparent", border:"1px solid #1e2d3d", borderRadius:6, padding:"10px 16px", color:"#e6edf3", fontSize:13, cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"border-color .15s", marginBottom:10 }}
                   onMouseOver={e=>e.currentTarget.style.borderColor="#a855f7"}
                   onMouseOut={e=>e.currentTarget.style.borderColor="#1e2d3d"}>
-                  Continue with Email
+                  Continue with Email →
                 </button>
 
-                {/* DEMO ACCOUNTS */}
-                <div style={{ marginTop:24 }}>
-                  <div style={{ fontSize:10, color:"#7d8590", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:10, textAlign:"center" }}>Quick Demo — Sign in as</div>
+                {/* Demo access */}
+                <div style={{ marginTop:20, borderTop:"1px solid #1e2d3d", paddingTop:16 }}>
+                  <div style={{ fontSize:10, color:"#7d8590", fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", marginBottom:10, textAlign:"center" }}>Demo Access</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                     {[
-                      { label:"Litisha (CXO)",        email:"litisha@odishatv.com",    role:"CXO",            color:"#a855f7" },
-                      { label:"Darpan (CRO)",          email:"darpan@odishatv.com",     role:"CRO",            color:"#f0a500" },
-                      { label:"GK (Nat. Sales Head)",  email:"gk@odishatv.com",         role:"SALES HEAD",     color:"#2d7dd2" },
-                      { label:"Sachin (Strategy)",     email:"sachin@odishatv.com",     role:"SALES STRATEGY", color:"#16c784" },
-                      { label:"Biswa (Digital)",       email:"biswa@odishatv.com",      role:"DIGITAL",        color:"#60a5fa" },
-                      { label:"Sameer (Operations)",   email:"sameer@odishatv.com",     role:"SALES ANALYSIS", color:"#f97316" },
-                      { label:"Arjun (Sales Rep)",     email:"arjun@odishatv.com",      role:"SALES REP",      color:"#7d8590" },
-                      { label:"Priya (Sales Rep)",     email:"priya@odishatv.com",      role:"SALES REP",      color:"#7d8590" },
+                      { label:"Sales Rep",           email:"arjun@odishatv.com",      color:"#2563eb" },
+                      { label:"Region Head",          email:"rhnorth@odishatv.com",     color:"#7c3aed" },
+                      { label:"National Sales Head",  email:"saleshead@odishatv.com",   color:"#0891b2" },
+                      { label:"Digi Ops",             email:"digiops@odishatv.com",     color:"#1e40af" },
+                      { label:"Sales Strategy",       email:"sachin@odishatv.com",      color:"#16c784" },
+                      { label:"CRO",                  email:"darpan@odishatv.com",      color:"#f0a500" },
                     ].map(a => (
                       <button key={a.email}
-                        onClick={() => { setLoading(true); setTimeout(() => { onLogin({ name: a.label, email: a.email }); setLoading(false); }, 400); }}
+                        onClick={() => { setLoading(true); setTimeout(()=>{ onLogin({ name:a.label, email:a.email }); setLoading(false); }, 300); }}
                         disabled={loading}
                         style={{ background:"#0d1117", border:`1px solid ${a.color}33`, borderRadius:6, padding:"8px 10px", cursor:"pointer", textAlign:"left", transition:"border-color .15s, background .15s" }}
                         onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background="#131920"; }}
                         onMouseOut={e=>{ e.currentTarget.style.borderColor=`${a.color}33`; e.currentTarget.style.background="#0d1117"; }}>
                         <div style={{ fontSize:11, fontWeight:700, color:a.color, fontFamily:"'DM Sans',sans-serif", marginBottom:1 }}>{a.label}</div>
-                        <div style={{ fontSize:9, color:"#7d8590", letterSpacing:".04em" }}>{a.role}</div>
+                        <div style={{ fontSize:9, color:"#4a5568", letterSpacing:".04em" }}>demo</div>
                       </button>
                     ))}
                   </div>
                 </div>
 
+                {/* Admin quick-login — bottom, subtle */}
+                <button
+                  onClick={() => { setLoading(true); setTimeout(()=>{ onLogin({ name:"Admin", email:"admin@odishatv.com" }); setLoading(false); }, 300); }}
+                  disabled={loading}
+                  style={{ width:"100%", marginTop:10, background:"transparent", border:"1px solid #1e2d3d44", borderRadius:6, padding:"8px 16px", color:"#7d8590", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", letterSpacing:".04em" }}>
+                  ⚙ Admin access
+                </button>
 
+                {err && <div style={{ marginTop:12, background:"#450a0a", border:"1px solid #7f1d1d", borderRadius:5, padding:"8px 12px", fontSize:12, color:"#fca5a5" }}>{err}</div>}
               </>
             )}
 
@@ -873,7 +959,7 @@ function LoginScreen({ onLogin }) {
         </div>
 
         <div style={{ textAlign:"center", marginTop:16, fontSize:10, color:"#2a3a4d" }}>
-          OTV CRO Command · Internal platform · Odisha Television Network
+          OTV CRM · Internal platform · Odisha Television Network
         </div>
       </div>
     </div>
@@ -920,532 +1006,6 @@ export default function OTVApp() {
     sharedMeetings={meetings} setSharedMeetings={setMeetings}
     sharedDeals={deals} setSharedDeals={setDeals}
   />;
-}
-
-// ─── REP DAILY VIEW ──────────────────────────────────────────────────────────
-// What a sales rep sees. Two things only: log today + plan tomorrow.
-// By 11:30 PM both must be done or attendance = absent.
-function RepDailyView({ user, rep, plans, setPlans, meetings, setMeetings, deals, setDeals, tasks, setTasks, weeklyPlans, setWeeklyPlans, onLogout, onSwitchToManagement }) {
-  const [tab, setTab]                     = useState("daily"); // "daily" | "weekly" | "ro"
-  const [logModal, setLogModal]           = useState(null);    // plan object being logged
-  const [addPlanModal, setAddPlanModal]   = useState(null);    // "today" | "tomorrow" | date string
-  const [addWeekModal, setAddWeekModal]   = useState(false);
-  const [logForm, setLogForm]             = useState({ pitchType:"", discussion:"", clientFeedback:"", status:"", nextSteps:"", followUpDate:"" });
-  const [planForm, setPlanForm]           = useState({ clientAgencyName:"", time:"", agenda:"", pitchType:"", date:"" });
-  const [toast, setToast]                 = useState(null);
-  const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
-
-  // RO PARSER STATE (same as CROApp)
-  const [roFiles, setRoFiles]         = useState([]);
-  const [roInputText, setRoInputText] = useState("");
-  const [roLoading, setRoLoading]     = useState(false);
-  const [roResults, setRoResults]     = useState([]);
-  const [roActiveDoc, setRoActiveDoc] = useState(0);
-  const [roError, setRoError]         = useState(null);
-  const [roProgress, setRoProgress]   = useState("");
-  const [roSearch, setRoSearch]       = useState("");
-  const [savedROs, setSavedROs]       = useState([]);
-  const [roMgmtChannel, setRoMgmtChannel]             = useState("all");
-  const [roMgmtStatus, setRoMgmtStatus]               = useState("all");
-  const [roMgmtViewRO, setRoMgmtViewRO]               = useState(null);
-  const [roMgmtConfirmDelete, setRoMgmtConfirmDelete] = useState(null);
-  const roFileRef = useRef();
-
-  // Countdown to 11:30 PM
-  const [countdown, setCountdown] = useState("");
-  useEffect(() => {
-    const tick = () => {
-      const now = new Date();
-      const deadline = new Date();
-      deadline.setHours(23, 30, 0, 0);
-      const diff = deadline - now;
-      if (diff <= 0) { setCountdown("DEADLINE PASSED"); return; }
-      const h = Math.floor(diff / 3600000);
-      const m = Math.floor((diff % 3600000) / 60000);
-      setCountdown(`${h}h ${m}m left`);
-    };
-    tick();
-    const id = setInterval(tick, 60000);
-    return () => clearInterval(id);
-  }, []);
-
-  const repPlans   = plans.filter(p => p.repId === rep.id);
-  const todayPlans = repPlans.filter(p => p.date === TODAY);
-  const tmrwPlans  = repPlans.filter(p => p.date === TOMORROW);
-  const todayLogged   = todayPlans.some(p => p.status === "Done") || meetings.some(m => m.repId === rep.id && m.date === TODAY);
-  const tmrwPlanned   = tmrwPlans.length > 0;
-  const bothDone      = todayLogged && tmrwPlanned;
-  const deadlinePast  = countdown === "DEADLINE PASSED";
-
-  // Weekly plan for this week
-  const myWeeklyPlan  = weeklyPlans.find(w => w.repId === rep.id && w.weekStart === THIS_WEEK_START);
-  const isSaturday    = new Date().getDay() === 6;
-  const weeklyDue     = isSaturday;
-
-  const handleLogMeeting = (plan) => {
-    const now = new Date();
-    const loggedAt = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-    const newMeeting = {
-      id: `ml${Date.now()}`,
-      repId: rep.id, repName: rep.name, region: rep.region,
-      clientCompany: plan.clientAgencyName,
-      contactName: plan.contactName || logForm.contactName || "",
-      date: TODAY, loggedAt, late: false,
-      meetingTime: plan.time,
-      meetingType: logForm.meetingType || "Physical Meeting",
-      pitchType: logForm.pitchType || plan.pitchType,
-      discussion: logForm.discussion,
-      clientFeedback: logForm.clientFeedback,
-      status: logForm.status,
-      nextSteps: logForm.nextSteps,
-      followUpDate: logForm.followUpDate,
-      actionType: logForm.actionType || "",
-      neededFrom: logForm.neededFrom || "",
-      actionRemarks: logForm.actionRemarks || "",
-      outcome: logForm.status === "Closed" ? "Proposal Accepted" : logForm.status || "Needs Callback",
-      isUnplanned: false,
-    };
-    setMeetings(p => [newMeeting, ...p]);
-    setPlans(p => p.map(pl => pl.id === plan.id ? {...pl, status:"Done", loggedMeetingId:newMeeting.id} : pl));
-    // Auto-create task + flag pipeline if neededFrom set
-    if (logForm.neededFrom && logForm.nextSteps) {
-      setTasks(p => [{
-        id:`t${Date.now()}`,
-        title: logForm.nextSteps,
-        description: (logForm.actionRemarks||"") + (logForm.actionType?" ["+logForm.actionType+"]":""),
-        clientCompany: plan.clientAgencyName || "",
-        assignedTo: null,
-        repId: rep.id,
-        assignedBy: rep.id,
-        assignedByName: rep.name,
-        dept: logForm.neededFrom,
-        priority: "High",
-        status: "Open",
-        dueDate: logForm.followUpDate || TOMORROW,
-        createdAt: TODAY,
-      }, ...p]);
-      const matchDeal = deals.find(d => d.repId===rep.id && (d.clientCompany||"").toLowerCase().includes((plan.clientAgencyName||"").toLowerCase().slice(0,5)));
-      if (matchDeal) setDeals(p => p.map(d => d.id===matchDeal.id ? {...d, awaitingApproval:logForm.neededFrom, awaitingApprovalSince:TODAY, nextStep:logForm.nextSteps, nextStepDate:logForm.followUpDate||TOMORROW} : d));
-    }
-    setLogModal(null);
-    setLogForm({ pitchType:"", discussion:"", clientFeedback:"", status:"", nextSteps:"", followUpDate:"", meetingType:"Physical Meeting", actionType:"", neededFrom:"", actionRemarks:"" });
-    showToast(logForm.neededFrom ? "Meeting logged + task created for "+logForm.neededFrom : "Meeting logged ✓");
-  };
-
-  const handleAddPlan = () => {
-    if (!planForm.clientAgencyName.trim()) { showToast("Enter client name", "err"); return; }
-    const newPlan = {
-      id: `p${Date.now()}`,
-      repId: rep.id,
-      date: addPlanModal === "today" ? TODAY : addPlanModal === "tomorrow" ? TOMORROW : planForm.date || TOMORROW,
-      time: planForm.time || "10:00",
-      clientAgencyName: planForm.clientAgencyName.trim(),
-      agenda: planForm.agenda.trim(),
-      pitchType: planForm.pitchType,
-      status: "Planned",
-      loggedMeetingId: null,
-      isUnplanned: false,
-    };
-    setPlans(p => [...p, newPlan]);
-    setPlanForm({ clientAgencyName:"", time:"", agenda:"", pitchType:"", date:"" });
-    setAddPlanModal(null);
-    showToast("Meeting planned ✓");
-  };
-
-  const handleAddWeeklyPlan = () => {
-    const existing = weeklyPlans.find(w => w.repId === rep.id && w.weekStart === THIS_WEEK_START);
-    const weekMeetings = repPlans.filter(p => p.date >= THIS_WEEK_START).map(p => ({
-      date: p.date, time: p.time, clientAgencyName: p.clientAgencyName, agenda: p.agenda
-    }));
-    if (existing) {
-      setWeeklyPlans(p => p.map(w => w.id === existing.id ? {...w, submittedAt: new Date().toISOString(), meetings: weekMeetings} : w));
-    } else {
-      setWeeklyPlans(p => [...p, { id:`wp${Date.now()}`, repId:rep.id, weekStart:THIS_WEEK_START, submittedAt:new Date().toISOString(), meetings:weekMeetings }]);
-    }
-    setAddWeekModal(false);
-    showToast("Weekly plan submitted ✓");
-  };
-
-  const deadlineColor = countdown === "DEADLINE PASSED" ? "#ea3943" : countdown.startsWith("0h") ? "#f97316" : "#16c784";
-
-  return (
-    <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace", background:"#080a0f", minHeight:"100vh", color:"#e6edf3", display:"flex", flexDirection:"column"}}>
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;600;700;800&display=swap');
-        *{box-sizing:border-box;margin:0;padding:0}
-        .rep-input{background:#0d1117;border:1px solid #1e2d3d;border-radius:6px;padding:9px 12px;color:#e6edf3;font-size:12px;font-family:'DM Mono',monospace;outline:none;width:100%;transition:border-color .15s}
-        .rep-input:focus{border-color:#f0a500}
-        .rep-input::placeholder{color:#2a3a4d}
-        .rep-btn{padding:8px 16px;border:none;border-radius:5px;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;font-weight:600;transition:opacity .15s}
-        .rep-btn:hover{opacity:.82}
-        .rep-overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:100;display:flex;align-items:center;justify-content:center;padding:16px}
-        .rep-modal{background:#0d1117;border:1px solid #1e2d3d;border-radius:10px;padding:24px;width:100%;max-width:480px;max-height:90vh;overflow-y:auto}
-      `}</style>
-
-      {/* TOPBAR */}
-      <div style={{background:"#0d1117", borderBottom:"1px solid #1e2d3d", padding:"0 20px", height:46, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0}}>
-        <div style={{display:"flex", alignItems:"center", gap:10}}>
-          <div style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius:6, padding:"4px 10px", fontSize:12, fontWeight:700, letterSpacing:2}}>OTV</div>
-          <span style={{color:"#2a3a4d"}}>|</span>
-          <span style={{fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:"#7d8590", letterSpacing:2, textTransform:"uppercase"}}>My Day</span>
-        </div>
-        <div style={{display:"flex", alignItems:"center", gap:10}}>
-          <div style={{fontSize:11, fontWeight:700, color:deadlineColor, background:`${deadlineColor}18`, border:`1px solid ${deadlineColor}44`, padding:"3px 10px", borderRadius:4}}>
-            ⏱ {countdown}
-          </div>
-          <div style={{width:24, height:24, borderRadius:"50%", background:"#f0a50022", border:"1px solid #f0a50044", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#f0a500"}}>
-            {(user.name||"?")[0].toUpperCase()}
-          </div>
-          <span style={{fontSize:11, color:"#7d8590"}}>{rep.name}</span>
-          <button onClick={onLogout} style={{background:"transparent", border:"1px solid #1e2d3d", borderRadius:4, padding:"3px 9px", color:"#7d8590", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace"}}
-            onMouseOver={e=>{e.currentTarget.style.borderColor="#ea3943";e.currentTarget.style.color="#ea3943";}}
-            onMouseOut={e=>{e.currentTarget.style.borderColor="#1e2d3d";e.currentTarget.style.color="#7d8590";}}>Sign out</button>
-        </div>
-      </div>
-
-      {/* TABS */}
-      <div style={{display:"flex", borderBottom:"1px solid #1e2d3d", background:"#0d1117"}}>
-        {[{id:"daily",label:"Daily Plan"},{id:"weekly",label:"Weekly Plan"}].map(t=>{
-          const a = tab===t.id;
-          return <button key={t.id} onClick={()=>setTab(t.id)} style={{padding:"10px 20px", background:"transparent", border:"none", color:a?"#f0a500":"#7d8590", fontWeight:a?700:400, fontSize:12, cursor:"pointer", borderBottom:a?"2px solid #f0a500":"2px solid transparent", fontFamily:"'DM Mono',monospace"}}>{t.label}</button>;
-        })}
-      </div>
-
-      <div style={{flex:1, overflow:"auto", padding:"20px 20px"}}>
-
-        {tab === "daily" && (
-          <div style={{maxWidth:640, margin:"0 auto"}}>
-
-            {/* COMPLIANCE STATUS */}
-            <div style={{background: bothDone?"#0a1a0a":"#150a0a", border:`1px solid ${bothDone?"#16c78444":"#ea394344"}`, borderRadius:10, padding:"14px 18px", marginBottom:20, display:"flex", alignItems:"center", justifyContent:"space-between", flexWrap:"wrap", gap:10}}>
-              <div>
-                <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:14, fontWeight:700, color:bothDone?"#16c784":"#e6edf3", marginBottom:4}}>
-                  {bothDone ? "✓ All done for today" : deadlinePast ? "⚠ Deadline passed — marked absent" : "Complete both before 11:30 PM"}
-                </div>
-                <div style={{display:"flex", gap:16}}>
-                  <span style={{fontSize:12, color:todayLogged?"#16c784":"#ea3943", fontWeight:600}}>{todayLogged?"✓":"✗"} Today logged</span>
-                  <span style={{fontSize:12, color:tmrwPlanned?"#16c784":"#ea3943", fontWeight:600}}>{tmrwPlanned?"✓":"✗"} Tomorrow planned</span>
-                </div>
-              </div>
-              {!bothDone && !deadlinePast && (
-                <div style={{fontSize:11, color:"#7d8590", textAlign:"right"}}>
-                  {!todayLogged && !tmrwPlanned ? "2 things to do" : "1 more thing to do"}
-                </div>
-              )}
-            </div>
-
-            {/* ── TODAY ── */}
-            <div style={{marginBottom:24}}>
-              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
-                <div>
-                  <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700}}>Today · {TODAY}</div>
-                  <div style={{fontSize:11, color:"#7d8590", marginTop:2}}>{todayPlans.filter(p=>p.status==="Done").length}/{todayPlans.length} meetings logged</div>
-                </div>
-                <button onClick={()=>setAddPlanModal("today")} className="rep-btn" style={{background:"#1a2332", color:"#e6edf3", border:"1px solid #1e2d3d", fontSize:11}}>+ Add meeting</button>
-              </div>
-
-              {todayPlans.length === 0 && !meetings.some(m=>m.repId===rep.id&&m.date===TODAY) && (
-                <div style={{background:"#0d1117", border:"1px dashed #1e2d3d", borderRadius:8, padding:24, textAlign:"center"}}>
-                  <div style={{fontSize:13, color:"#7d8590", marginBottom:8}}>No meetings planned for today</div>
-                  <div style={{fontSize:11, color:"#2a3a4d"}}>Add a planned meeting above, or log an unplanned one</div>
-                </div>
-              )}
-
-              <div style={{display:"flex", flexDirection:"column", gap:10}}>
-                {todayPlans.map(plan => (
-                  <div key={plan.id} style={{background:"#0d1117", border:`1px solid ${plan.status==="Done"?"#16c78444":plan.status==="Cancelled"?"#ea394322":"#1e2d3d"}`, borderRadius:8, padding:"14px 16px"}}>
-                    <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", gap:8}}>
-                      <div style={{flex:1}}>
-                        <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4}}>
-                          <span style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700, fontSize:14}}>{plan.clientAgencyName}</span>
-                          {plan.pitchType && <span style={{background:"#f0a50018", color:"#f0a500", padding:"1px 7px", borderRadius:8, fontSize:10, fontWeight:600}}>{plan.pitchType}</span>}
-                          <span style={{background:plan.status==="Done"?"#16c78422":plan.status==="Cancelled"?"#ea394322":"#1e2d3d", color:plan.status==="Done"?"#16c784":plan.status==="Cancelled"?"#ea3943":"#7d8590", padding:"1px 7px", borderRadius:8, fontSize:10, fontWeight:600, marginLeft:"auto"}}>{plan.status}</span>
-                        </div>
-                        <div style={{fontSize:11, color:"#7d8590"}}>🕐 {plan.time}{plan.contactName?` · ${plan.contactName}`:""}</div>
-                        {plan.agenda && <div style={{fontSize:12, color:"#e6edf3", marginTop:6}}>Agenda: {plan.agenda}</div>}
-                      </div>
-                    </div>
-                    {plan.status === "Planned" && (
-                      <div style={{display:"flex", gap:8, marginTop:12}}>
-                        <button onClick={()=>{setLogModal(plan);setLogForm({pitchType:plan.pitchType||"",discussion:"",clientFeedback:"",status:"Meeting Done",nextSteps:"",followUpDate:"",contactName:plan.contactName||""});}} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff", flex:1}}>Log this meeting</button>
-                        <button onClick={()=>setPlans(p=>p.map(pl=>pl.id===plan.id?{...pl,status:"Cancelled"}:pl))} className="rep-btn" style={{background:"#1a1010", color:"#ea3943", border:"1px solid #ea394322"}}>Cancel</button>
-                      </div>
-                    )}
-                    {plan.status === "Done" && <div style={{marginTop:8, fontSize:11, color:"#16c784"}}>✓ Logged</div>}
-                  </div>
-                ))}
-
-                {/* Unplanned meetings logged today */}
-                {meetings.filter(m=>m.repId===rep.id&&m.date===TODAY&&m.isUnplanned).map(m=>(
-                  <div key={m.id} style={{background:"#0d1117", border:"1px solid #f0a50033", borderRadius:8, padding:"12px 16px"}}>
-                    <div style={{display:"flex", alignItems:"center", gap:8}}>
-                      <span style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700}}>{m.clientCompany}</span>
-                      <span style={{background:"#f0a50018", color:"#f0a500", padding:"1px 7px", borderRadius:8, fontSize:10, fontWeight:700}}>UNPLANNED</span>
-                      <span style={{fontSize:11, color:"#7d8590", marginLeft:"auto"}}>Logged {m.loggedAt}</span>
-                    </div>
-                  </div>
-                ))}
-
-                {/* Quick log unplanned */}
-                <button onClick={()=>{setLogModal({id:`up${Date.now()}`,isUnplanned:true,clientAgencyName:"",time:"",agenda:""});setLogForm({pitchType:"",discussion:"",clientFeedback:"",status:"Meeting Done",nextSteps:"",followUpDate:"",contactName:"",clientAgencyName:"",isUnplanned:true});}} style={{background:"transparent", border:"1px dashed #1e2d3d", borderRadius:8, padding:"11px", color:"#7d8590", fontSize:12, cursor:"pointer", fontFamily:"'DM Mono',monospace", textAlign:"center", transition:"border-color .15s,color .15s"}}
-                  onMouseOver={e=>{e.currentTarget.style.borderColor="#f0a500";e.currentTarget.style.color="#f0a500";}}
-                  onMouseOut={e=>{e.currentTarget.style.borderColor="#1e2d3d";e.currentTarget.style.color="#7d8590";}}>
-                  + Log unplanned meeting
-                </button>
-              </div>
-            </div>
-
-            {/* ── TOMORROW ── */}
-            <div>
-              <div style={{display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom:12}}>
-                <div>
-                  <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700}}>Tomorrow · {TOMORROW}</div>
-                  <div style={{fontSize:11, color:tmrwPlanned?"#16c784":"#ea3943", marginTop:2, fontWeight:600}}>
-                    {tmrwPlanned ? `${tmrwPlans.length} meeting${tmrwPlans.length!==1?"s":""} planned ✓` : "⚠ Not planned yet — required by 11:30 PM"}
-                  </div>
-                </div>
-                <button onClick={()=>setAddPlanModal("tomorrow")} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff"}}>+ Plan meeting</button>
-              </div>
-
-              {tmrwPlans.length === 0 && (
-                <div style={{background:"#150a0a", border:"1px solid #ea394333", borderRadius:8, padding:24, textAlign:"center"}}>
-                  <div style={{fontSize:28, marginBottom:8}}>📅</div>
-                  <div style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700, color:"#e6edf3", marginBottom:4}}>Plan tomorrow before 11:30 PM</div>
-                  <div style={{fontSize:11, color:"#7d8590", marginBottom:16}}>Add at least one meeting. Missing this = absent.</div>
-                  <button onClick={()=>setAddPlanModal("tomorrow")} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff"}}>+ Plan a meeting</button>
-                </div>
-              )}
-
-              <div style={{display:"flex", flexDirection:"column", gap:10}}>
-                {tmrwPlans.map(plan=>(
-                  <div key={plan.id} style={{background:"#0d1117", border:"1px solid #1e2d3d", borderRadius:8, padding:"14px 16px"}}>
-                    <div style={{display:"flex", alignItems:"center", gap:8, marginBottom:4}}>
-                      <span style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700, fontSize:14}}>{plan.clientAgencyName}</span>
-                      {plan.pitchType&&<span style={{background:"#f0a50018", color:"#f0a500", padding:"1px 7px", borderRadius:8, fontSize:10, fontWeight:600}}>{plan.pitchType}</span>}
-                      <button onClick={()=>setPlans(p=>p.filter(pl=>pl.id!==plan.id))} style={{marginLeft:"auto", background:"transparent", border:"none", color:"#7d8590", cursor:"pointer", fontSize:13}} title="Remove">✕</button>
-                    </div>
-                    <div style={{fontSize:11, color:"#7d8590"}}>🕐 {plan.time}</div>
-                    {plan.agenda&&<div style={{fontSize:12, color:"#e6edf3", marginTop:5}}>Agenda: {plan.agenda}</div>}
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {tab === "weekly" && (
-          <div style={{maxWidth:640, margin:"0 auto"}}>
-            <div style={{display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20, flexWrap:"wrap", gap:10}}>
-              <div>
-                <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700}}>Week of {THIS_WEEK_START}</div>
-                <div style={{fontSize:11, color:myWeeklyPlan?"#16c784":"#ea3943", marginTop:2, fontWeight:600}}>
-                  {myWeeklyPlan ? `✓ Submitted ${new Date(myWeeklyPlan.submittedAt).toLocaleDateString("en-IN",{day:"2-digit",month:"short",hour:"2-digit",minute:"2-digit"})}` : "⚠ Not submitted — due Saturday 11:30 PM"}
-                </div>
-              </div>
-              <button onClick={handleAddWeeklyPlan} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff"}}>
-                {myWeeklyPlan ? "↻ Resubmit" : "Submit weekly plan"}
-              </button>
-            </div>
-
-            <div style={{background:"#0d1117", border:"1px solid #1e2d3d", borderRadius:8, padding:"12px 16px", marginBottom:16, fontSize:12, color:"#7d8590"}}>
-              Your weekly plan is built from all the meetings you've planned in Daily Plan. Add meetings there day by day and submit the week's plan here every Saturday by 11:30 PM.
-            </div>
-
-            {/* All planned meetings this week */}
-            {[TODAY, TOMORROW, ...Array.from({length:5},(_,i)=>new Date(Date.now()+(i+2)*86400000).toISOString().split("T")[0])].slice(0,7).map(date=>{
-              const dayPlans = repPlans.filter(p=>p.date===date);
-              if (dayPlans.length===0) return null;
-              return (
-                <div key={date} style={{marginBottom:12}}>
-                  <div style={{fontSize:10, color:"#7d8590", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:6}}>
-                    {date===TODAY?"Today":date===TOMORROW?"Tomorrow":new Date(date).toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}
-                  </div>
-                  {dayPlans.map(p=>(
-                    <div key={p.id} style={{background:"#0d1117", border:"1px solid #1e2d3d", borderRadius:6, padding:"10px 14px", marginBottom:6, display:"flex", alignItems:"center", gap:12}}>
-                      <div style={{flex:1}}>
-                        <span style={{fontFamily:"'DM Sans',sans-serif", fontWeight:700}}>{p.clientAgencyName}</span>
-                        <span style={{color:"#7d8590", fontSize:12}}> · {p.time}</span>
-                        {p.agenda&&<div style={{fontSize:11, color:"#7d8590", marginTop:2}}>{p.agenda}</div>}
-                      </div>
-                      <span style={{background:p.status==="Done"?"#16c78422":"#1e2d3d", color:p.status==="Done"?"#16c784":"#7d8590", padding:"2px 7px", borderRadius:8, fontSize:10, fontWeight:600}}>{p.status}</span>
-                    </div>
-                  ))}
-                </div>
-              );
-            })}
-
-            <button onClick={()=>setAddPlanModal("week")} style={{width:"100%", background:"transparent", border:"1px dashed #1e2d3d", borderRadius:8, padding:12, color:"#7d8590", fontSize:12, cursor:"pointer", fontFamily:"'DM Mono',monospace", marginTop:8}}
-              onMouseOver={e=>{e.currentTarget.style.borderColor="#f0a500";e.currentTarget.style.color="#f0a500";}}
-              onMouseOut={e=>{e.currentTarget.style.borderColor="#1e2d3d";e.currentTarget.style.color="#7d8590";}}>
-              + Plan a meeting for the week
-            </button>
-          </div>
-        )}
-      </div>
-
-      {/* LOG MEETING MODAL */}
-      {logModal && (
-        <div className="rep-overlay" onClick={()=>setLogModal(null)}>
-          <div className="rep-modal" onClick={e=>e.stopPropagation()}>
-            <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, marginBottom:4}}>
-              {logModal.isUnplanned ? "Log Unplanned Meeting" : `Log — ${logModal.clientAgencyName}`}
-            </div>
-            {logModal.isUnplanned && (
-              <div style={{marginBottom:10}}>
-                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Client / Agency Name *</label>
-                <input className="rep-input" placeholder="Who did you meet?" value={logForm.clientAgencyName||""} onChange={e=>setLogForm(p=>({...p,clientAgencyName:e.target.value}))} />
-              </div>
-            )}
-            {logModal.agenda && <div style={{fontSize:11, color:"#7d8590", marginBottom:12, background:"#131920", padding:"8px 10px", borderRadius:5}}>Your agenda: {logModal.agenda}</div>}
-            <div style={{display:"flex", flexDirection:"column", gap:10}}>
-              <div>
-                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Pitch Type</label>
-                <div style={{display:"flex", gap:5, flexWrap:"wrap"}}>
-                  {PITCH_TYPES.map(pt=>(
-                    <button key={pt} onClick={()=>setLogForm(p=>({...p,pitchType:pt}))} style={{padding:"4px 10px", fontSize:11, borderRadius:4, border:`1px solid ${logForm.pitchType===pt?"#f0a500":"#1e2d3d"}`, background:logForm.pitchType===pt?"#f0a50018":"#0d1117", color:logForm.pitchType===pt?"#f0a500":"#7d8590", cursor:"pointer", fontFamily:"'DM Mono',monospace"}}>
-                      {pt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>What happened *</label>
-                <textarea className="rep-input" rows={3} placeholder="What did you discuss? What was said?" value={logForm.discussion} onChange={e=>setLogForm(p=>({...p,discussion:e.target.value}))} style={{resize:"vertical"}} />
-              </div>
-              <div>
-                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Client feedback</label>
-                <textarea className="rep-input" rows={2} placeholder="How did the client react?" value={logForm.clientFeedback} onChange={e=>setLogForm(p=>({...p,clientFeedback:e.target.value}))} style={{resize:"vertical"}} />
-              </div>
-              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10}}>
-                <div>
-                  <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Status</label>
-                  <select className="rep-input" value={logForm.status} onChange={e=>setLogForm(p=>({...p,status:e.target.value}))}>
-                    {MEETING_STATUS.map(s=><option key={s}>{s}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Follow-up date</label>
-                  <input className="rep-input" type="date" value={logForm.followUpDate} onChange={e=>setLogForm(p=>({...p,followUpDate:e.target.value}))} />
-                </div>
-              </div>
-              {/* NEXT STEPS — enriched */}
-              <div style={{background:"#0d1a2a", border:"1px solid #1e2d3d", borderRadius:8, padding:"12px 14px"}}>
-                <div style={{fontSize:10, color:"#4285F4", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:10}}>Next Steps / Action Required</div>
-                <div style={{display:"flex", flexDirection:"column", gap:10}}>
-                  <div>
-                    <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>What needs to happen *</label>
-                    <input className="rep-input" placeholder="e.g. Send revised proposal, get approval on pricing…" value={logForm.nextSteps} onChange={e=>setLogForm(p=>({...p,nextSteps:e.target.value}))} />
-                  </div>
-                  <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10}}>
-                    <div>
-                      <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Action Type</label>
-                      <select className="rep-input" value={logForm.actionType||""} onChange={e=>setLogForm(p=>({...p,actionType:e.target.value}))}>
-                        <option value="">— Select —</option>
-                        <option>Internal Approval Needed</option>
-                        <option>Content / Collateral Required</option>
-                        <option>Pricing Sign-off</option>
-                        <option>Digital Plan Required</option>
-                        <option>Legal / Contract</option>
-                        <option>Client Follow-up (self)</option>
-                        <option>Others</option>
-                      </select>
-                    </div>
-                    <div>
-                      <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Who do you need it from?</label>
-                      <select className="rep-input" value={logForm.neededFrom||""} onChange={e=>setLogForm(p=>({...p,neededFrom:e.target.value}))}>
-                        <option value="">— Self / No one —</option>
-                        {APPROVAL_TARGETS.map(t=><option key={t}>{t}</option>)}
-                      </select>
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Remarks (optional)</label>
-                    <input className="rep-input" placeholder="Add context for the person you're tagging…" value={logForm.actionRemarks||""} onChange={e=>setLogForm(p=>({...p,actionRemarks:e.target.value}))} />
-                  </div>
-                  {logForm.neededFrom && logForm.nextSteps && (
-                    <div style={{background:"#0d2a1a", border:"1px solid #166534", borderRadius:5, padding:"8px 12px", fontSize:11, color:"#86efac"}}>
-                      ✓ A task will be auto-created for <strong>{logForm.neededFrom}</strong> and the deal will be flagged as awaiting their approval.
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div style={{display:"flex", gap:8, marginTop:16, justifyContent:"flex-end"}}>
-              <button onClick={()=>setLogModal(null)} className="rep-btn" style={{background:"#1a2332", color:"#7d8590", border:"1px solid #1e2d3d"}}>Cancel</button>
-              <button onClick={()=>{
-                if (logModal.isUnplanned) {
-                  const now=new Date();
-                  const loggedAt=`${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-                  const newMeeting = {id:`ml${Date.now()}`,repId:rep.id,repName:rep.name,region:rep.region,clientCompany:logForm.clientAgencyName||"",date:TODAY,loggedAt,late:false,pitchType:logForm.pitchType,discussion:logForm.discussion,clientFeedback:logForm.clientFeedback,status:logForm.status,nextSteps:logForm.nextSteps,followUpDate:logForm.followUpDate,outcome:logForm.status==="Closed"?"Proposal Accepted":logForm.status||"Needs Callback",isUnplanned:true};
-                  setMeetings(p=>[newMeeting,...p]);
-                  // Auto-create task + flag pipeline if neededFrom set
-                  if (logForm.neededFrom && logForm.nextSteps) {
-                    setTasks(p=>[{id:`t${Date.now()}`,title:logForm.nextSteps,description:(logForm.actionRemarks||"")+(logForm.actionType?" ["+logForm.actionType+"]":""),clientCompany:logForm.clientAgencyName||"",assignedTo:null,repId:rep.id,assignedBy:rep.id,assignedByName:rep.name,dept:logForm.neededFrom,priority:"High",status:"Open",dueDate:logForm.followUpDate||TOMORROW,createdAt:TODAY},...p]);
-                    // Flag deal in pipeline as awaiting approval
-                    const matchDeal = deals.find(d=>d.repId===rep.id&&(d.clientCompany||"").toLowerCase().includes((logForm.clientAgencyName||"").toLowerCase().slice(0,5)));
-                    if (matchDeal) setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,awaitingApproval:logForm.neededFrom,awaitingApprovalSince:TODAY,nextStep:logForm.nextSteps,nextStepDate:logForm.followUpDate||TOMORROW}:d));
-                  }
-                  setLogModal(null);setLogForm({...BLANK_LOG,pitchType:"",discussion:"",clientFeedback:"",status:"Meeting Done",nextSteps:"",followUpDate:"",clientAgencyName:"",isUnplanned:true,actionType:"",neededFrom:"",actionRemarks:""});
-                  showToast(logForm.neededFrom?"Meeting logged + task created for "+logForm.neededFrom:"Unplanned meeting logged");
-                } else {
-                  handleLogMeeting(logModal);
-                }
-              }} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff", flex:1}}>
-                Submit Log
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ADD PLAN MODAL */}
-      {addPlanModal && (
-        <div className="rep-overlay" onClick={()=>setAddPlanModal(null)}>
-          <div className="rep-modal" onClick={e=>e.stopPropagation()}>
-            <div style={{fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, marginBottom:16}}>
-              Plan a meeting — {addPlanModal==="today"?"Today":addPlanModal==="tomorrow"?"Tomorrow":"This week"}
-            </div>
-            <div style={{display:"flex", flexDirection:"column", gap:10}}>
-              <div>
-                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Client / Agency *</label>
-                <input className="rep-input" placeholder="Who are you meeting?" value={planForm.clientAgencyName} onChange={e=>setPlanForm(p=>({...p,clientAgencyName:e.target.value}))} autoFocus />
-              </div>
-              {addPlanModal==="week" && (
-                <div>
-                  <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Date</label>
-                  <input className="rep-input" type="date" value={planForm.date||TOMORROW} onChange={e=>setPlanForm(p=>({...p,date:e.target.value}))} />
-                </div>
-              )}
-              <div>
-                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Time</label>
-                <input className="rep-input" type="time" value={planForm.time} onChange={e=>setPlanForm(p=>({...p,time:e.target.value}))} />
-              </div>
-              <div>
-                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Agenda — what are you going in for?</label>
-                <input className="rep-input" placeholder="e.g. Present Q2 FCT grid, discuss H2 budget" value={planForm.agenda} onChange={e=>setPlanForm(p=>({...p,agenda:e.target.value}))} />
-              </div>
-              <div>
-                <label style={{fontSize:10, color:"#7d8590", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em"}}>Pitch Type</label>
-                <div style={{display:"flex", gap:5, flexWrap:"wrap"}}>
-                  {PITCH_TYPES.map(pt=>(
-                    <button key={pt} onClick={()=>setPlanForm(p=>({...p,pitchType:pt}))} style={{padding:"4px 10px", fontSize:11, borderRadius:4, border:`1px solid ${planForm.pitchType===pt?"#f0a500":"#1e2d3d"}`, background:planForm.pitchType===pt?"#f0a50018":"transparent", color:planForm.pitchType===pt?"#f0a500":"#7d8590", cursor:"pointer", fontFamily:"'DM Mono',monospace"}}>
-                      {pt}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-            <div style={{display:"flex", gap:8, marginTop:16, justifyContent:"flex-end"}}>
-              <button onClick={()=>setAddPlanModal(null)} className="rep-btn" style={{background:"#1a2332", color:"#7d8590", border:"1px solid #1e2d3d"}}>Cancel</button>
-              <button onClick={handleAddPlan} className="rep-btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff", flex:1}}>Plan this meeting</button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {toast && <div style={{position:"fixed", bottom:18, right:18, background:toast.type==="err"?"#ea3943":"#16c784", color:"#fff", padding:"9px 16px", borderRadius:5, fontWeight:700, fontSize:12, zIndex:999, boxShadow:"0 4px 20px rgba(0,0,0,.5)"}}>{toast.msg}</div>}
-    </div>
-  );
 }
 
 function HomeScreen({ user, onSelect, onLogout }) {
@@ -1528,7 +1088,7 @@ function HomeScreen({ user, onSelect, onLogout }) {
               ⬡
             </div>
             <div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:20, fontWeight:800, color:"#e6edf3", marginBottom:6, letterSpacing:-.3 }}>CRO Command</div>
+              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:20, fontWeight:800, color:"#e6edf3", marginBottom:6, letterSpacing:-.3 }}>OTV CRM</div>
               <div style={{ fontSize:12, color:"#7d8590", lineHeight:1.6 }}>Pipeline, targets, team scorecards, meeting logs, escalations, HR compliance and absence reports.</div>
             </div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:4 }}>
@@ -1552,11 +1112,27 @@ function HomeScreen({ user, onSelect, onLogout }) {
 }
 
 function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlans, setWeeklyPlans, sharedMeetings, setSharedMeetings, sharedDeals, setSharedDeals }) {
-  const [view, setView] = useState(section === "ro" ? "ro-parser" : "my-plan");
-  const [deals, setDeals]         = useState(sharedDeals || SEED_DEALS);
-  const [meetings, setMeetings]   = useState(sharedMeetings || SEED_MEETINGS);
+  const [view, setView] = useState(section === "ro" ? "ro-parser" : (user?.email==="admin@odishatv.com" ? "admin-access" : "my-plan"));
+  // Persist deals + meetings directly — no more sync bug
+  const [deals, _setDeals]        = usePersistedState("otv_deals",    sharedDeals   || SEED_DEALS);
+  const [meetings, _setMeetings]  = usePersistedState("otv_meetings", sharedMeetings|| SEED_MEETINGS);
   const [plans_crm]               = [plans || SEED_PLANS];
   const [att, setAtt]             = usePersistedState("otv_att",      SEED_ATT);
+
+  // Wrap setters — propagate to parent (handles both value and functional updates)
+  const setDeals = v => {
+    _setDeals(v);
+    if (setSharedDeals) {
+      // if v is a function, resolve it against current deals before syncing
+      setSharedDeals(typeof v === "function" ? prev => v(prev) : v);
+    }
+  };
+  const setMeetings = v => {
+    _setMeetings(v);
+    if (setSharedMeetings) {
+      setSharedMeetings(typeof v === "function" ? prev => v(prev) : v);
+    }
+  };
 
   // Countdown to 11:30 PM — shown in topbar for all users
   const [countdown, setCountdown] = useState("");
@@ -1579,18 +1155,17 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [exceptionReason, setExceptionReason] = useState("");
   // Derive activeUser from login email — prevents role spoofing via DevTools
   const derivedUserId = useMemo(() => {
-    if (!user?.email) return "litisha";
+    if (!user?.email) return "admin";
     const email = user.email.toLowerCase();
     // Direct email match against USER_ROLES name patterns
     const emailToId = {
-      "litisha@odishatv.com":    "litisha",
-      "jaggi@odishatv.com":      "jaggi",
       "darpan@odishatv.com":     "sales_analysis",
       "saleshead@odishatv.com":  "sales_head",
+      "nsh@odishatv.com":        "sales_head",
       "sachin@odishatv.com":     "sales_strategy",
+      "admin@odishatv.com":      "admin",
       "digiops@odishatv.com":    "digi_ops",
       "digital@odishatv.com":    "digi_ops",
-      "admin@odishatv.com":      "admin",
       "rhn@odishatv.com":        "rh_national",
       "rhnorth@odishatv.com":    "rh_north",
       "rhsouth@odishatv.com":    "rh_south",
@@ -1603,13 +1178,15 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       "vikram@odishatv.com":     "rep_vikram",
       "meera@odishatv.com":      "rep_meera",
     };
-    return emailToId[email] || "litisha";
+    return emailToId[email] || "admin";
   }, [user?.email]);
   const [activeUser, setActiveUser] = useState(() => derivedUserId);
   const [filterRegion, setFilterRegion] = useState("All");
   const [filterQ, setFilterQ]     = useState("Q1 FY26");
   const [expanded, setExpanded]   = useState(null);
   const [toast, setToast]         = useState(null);
+  const [noteModal, setNoteModal] = useState(null);   // {title, placeholder, onSubmit}
+  const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [tasks, setTasks]         = usePersistedState("otv_tasks", SEED_TASKS);
   const [taskModal, setTaskModal] = useState(false);
@@ -1635,8 +1212,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [addDealOpen, setAddDealOpen] = useState(false);
   const [logOpen, setLogOpen]     = useState(false);
   const [targetDrilldown, setTargetDrilldown] = useState(null); // { key, label, color }
+  const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
 
-  const BLANK_DEAL = { clientCompany:"", repId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Needs Callback", amount:"", targetAmount:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", reqs:[] };
+  const BLANK_DEAL = { clientCompany:"", repId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Needs Callback", amount:"", targetAmount:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", reqs:[], auditLog:[] };
   const BLANK_NEXT_STEP_ITEM = {action:"", neededFrom:"", remarks:"", dueDate:""};
   const BLANK_LOG = {
     repId:"",
@@ -1657,6 +1235,44 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [dealForm, setDealForm]   = useState(BLANK_DEAL);
   const [logForm, setLogForm]     = useState(BLANK_LOG);
   const [calendarLoading, setCalendarLoading] = useState(false);
+  const [adminConfig, setAdminConfig]         = usePersistedState("otv_adminConfig", {
+    approvalThresholds: { RH: 5000000, NSH: 10000000, CXO: 30000000 },
+    slaHours:           { RH: 24, NSH: 48, CXO: 72, default: 48 },
+    inactivityDaysRisk: 7,
+    inactivityDaysEscalate: 14,
+  });
+
+  // ── DEAL INACTIVITY ENFORCEMENT — runs on load and when adminConfig changes ──
+  useEffect(() => {
+    const escalateDays = adminConfig?.inactivityDaysEscalate || 14;
+    const riskDays     = adminConfig?.inactivityDaysRisk     || 7;
+    setDeals(prev => prev.map(d => {
+      if (d.outcome === "Proposal Accepted" || d.outcome === "Not Interested") return d;
+      const idle = daysSince(d.lastContact);
+      // 7+ days idle → mark at risk (if not already)
+      if (idle >= riskDays && idle < escalateDays && !d.atRisk) {
+        return { ...d, atRisk: true };
+      }
+      // escalateDays+ idle → auto-escalate to NSH if not already flagged
+      if (idle >= escalateDays && !d.awaitingApproval) {
+        return {
+          ...d, atRisk: true,
+          awaitingApproval:      "NSH",
+          awaitingApprovalSince: TODAY,
+          auditLog: [...(d.auditLog || []), {
+            at: TODAY, by: "System", role: "AUTO",
+            action: "Auto-escalated", from: null, to: "NSH",
+            note: `No contact for ${idle} days — auto-escalated (threshold: ${escalateDays}d)`,
+          }],
+        };
+      }
+      // Clear atRisk if contact was made recently
+      if (idle < riskDays && d.atRisk) {
+        return { ...d, atRisk: false };
+      }
+      return d;
+    }));
+  }, [adminConfig?.inactivityDaysEscalate, adminConfig?.inactivityDaysRisk]);
 
   // RO PARSER STATE
   const [roFiles, setRoFiles]         = useState([]);
@@ -1667,7 +1283,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [roError, setRoError]         = useState(null);
   const [roProgress, setRoProgress]   = useState("");
   const [roSearch, setRoSearch]       = useState("");
-  const [savedROs, setSavedROs]       = useState([]);
+  const [savedROs, setSavedROs]       = usePersistedState("otv_savedROs", []);
   const roFileRef = useRef();
 
   // RO MANAGEMENT STATE
@@ -1675,8 +1291,41 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [roMgmtStatus, setRoMgmtStatus]             = useState("all");
   const [roMgmtViewRO, setRoMgmtViewRO]             = useState(null);
   const [roMgmtConfirmDelete, setRoMgmtConfirmDelete] = useState(null);
+  const [properties, setProperties]                   = usePersistedState("otv_properties", SEED_PROPERTIES);
+  const [internalReqs, setInternalReqs]               = usePersistedState("otv_internalReqs", SEED_INTERNAL_REQS);
+  const [irStatusFilter, setIrStatusFilter]            = useState("all");
+  const [lbTab, setLbTab]                              = useState("team");
+  const [targetSubs, setTargetSubs]                    = usePersistedState("otv_targetSubs", SEED_TARGET_SUBMISSIONS);
+  const [revenueEntries, setRevenueEntries]             = usePersistedState("otv_revenueEntries", SEED_REVENUE_ENTRIES);
+  const [targetSubTab, setTargetSubTab]                 = useState("mine");
+  const [revTab, setRevTab]                             = useState("log");
+  const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", [
+    {id:"pu1", name:"Ravi Kumar",  email:"ravi@odishatv.com",  requestedAt: "2026-03-20"},
+    {id:"pu2", name:"Sonal Mehta", email:"sonal@odishatv.com", requestedAt: "2026-03-23"},
+    {id:"pu3", name:"Deepak Panda",email:"deepak@odishatv.com",requestedAt: "2026-03-26"},
+  ]);
+  const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles",
+    USER_ROLES.filter(u=>u.id!=="admin").map(u=>({...u}))
+  );
+  const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
+  const [revForm, setRevForm]                           = useState({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
+  const [importTab, setImportTab]                       = useState("deals");
+
+  // Hoisted parseCurrency — usable everywhere in CROApp
+  const parseCurrency = v => {
+    if (!v) return 0;
+    const s = String(v).replace(/[,₹]/g, "").trim();
+    if (/^[0-9]+(\.[0-9]+)?[Cc][Rr]$/.test(s)) return Math.round(parseFloat(s) * 10000000);
+    if (/^[0-9]+(\.[0-9]+)?[Ll]$/.test(s))   return Math.round(parseFloat(s) * 100000);
+    const n = parseFloat(s);
+    return isNaN(n) ? 0 : Math.round(n);
+  };
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+  const openNoteModal = (title, placeholder, onSubmit) => {
+    setNoteModalVal(placeholder || "");
+    setNoteModal({ title, placeholder: placeholder || "", onSubmit });
+  };
 
   // RO PARSER HANDLERS
   const roParseAll = async () => {
@@ -1724,6 +1373,52 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const saved={id:`ro_${Date.now()}`,savedAt:new Date().toISOString(),client_name:r.client_name||"",brand_name:r.brand_name||"",agency_name:r.agency_name||"",channel:roNormalizeChannel(r.channel||""),ro_number:r.ro_number||"",ro_date:r.ro_date||"",gross_amount:r.gross_amount||0,total_payable:r.total_payable||0,filename:r._filename||"",data:r,status:"Parsed"};
     setSavedROs(p=>[saved,...p.filter(x=>x.ro_number!==saved.ro_number||!saved.ro_number)]);
     showToast("Saved to RO Management");
+  };
+
+  // RO → Pipeline bridge
+  const roPushToPipeline = (roResult) => {
+    if (!roResult) return;
+    // Map RO fields to deal form
+    const dealType = (() => {
+      const t = roResult.document_type || "";
+      const comps = roResult.components || [];
+      const hasFCT    = comps.some(c => c.is_fct);
+      const hasNonFCT = comps.some(c => !c.is_fct);
+      const hasSpon   = JSON.stringify(roResult).match(/pwd by|co pwd by|powered by|sponsored/i);
+      if (hasSpon) return "Sponsorship";
+      if (hasFCT && hasNonFCT) return "Integrated Package";
+      return "Linear TV";
+    })();
+
+    const rep  = REPS.find(r => r.region === "National") || REPS[0];
+    const prefilled = {
+      clientCompany:  roResult.client_name   || roResult.brand_name  || "",
+      contactName:    roResult.contact_person || "",
+      designation:    "",
+      phone:          "",
+      email:          "",
+      dealType,
+      outcome:        "Needs Callback",
+      amount:         String(roResult.total_payable || roResult.gross_amount || 0),
+      targetAmount:   String(roResult.gross_amount  || roResult.total_payable || 0),
+      priority:       "Regular",
+      quarter:        filterQ,
+      notes:          [
+        roResult.ro_number   ? `RO# ${roResult.ro_number}`   : "",
+        roResult.ro_date     ? `Dated: ${roResult.ro_date}`   : "",
+        roResult.agency_name ? `Agency: ${roResult.agency_name}` : "",
+        roResult.campaign_name ? `Campaign: ${roResult.campaign_name}` : "",
+        roResult.channel     ? `Channel: ${roResult.channel}` : "",
+      ].filter(Boolean).join(" · "),
+      nextStep:       "Follow up on RO",
+      nextStepDate:   roResult.start_date || TOMORROW,
+      repId:          String(user_role?.repId || rep?.id || ""),
+      reqs:           [],
+      _fromRO:        roResult.ro_number || "",
+    };
+    setDealForm(prefilled);
+    setAddDealOpen(true);
+    showToast(`RO pre-filled → deal form opened ✓`);
   };
 
   const roExportAll = async () => {
@@ -1781,7 +1476,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   // ONLY Litisha can grant exception
   const grantException = () => {
-    if (!isCRO) { showToast("Only Admin or CXO can grant exceptions", "err"); return; }
+    if (!canGrantException) { showToast("Only Admin or CXO can grant exceptions", "err"); return; }
     if (!exceptionReason.trim()) { showToast("Reason required", "err"); return; }
     setAbsenceReports(p => p.map(r => r.id === exceptionModal.reportId
       ? { ...r, status:"Exception Granted", markedAs:"Present", exception:"Overridden", exceptionBy:user_role?.name||"Admin", exceptionReason: exceptionReason.trim() }
@@ -1795,15 +1490,15 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   };
 
   const revokeException = (reportId) => {
-    if (!isCRO) { showToast("Only Admin or CXO can revoke exceptions", "err"); return; }
+    if (!canGrantException) { showToast("Only Admin or CXO can revoke exceptions", "err"); return; }
     setAbsenceReports(p => p.map(r => r.id === reportId
       ? { ...r, status:"Sent to HR", markedAs:"Absent", exception:null, exceptionBy:null, exceptionReason:null }
       : r
     ));
     showToast("Exception revoked — marked Absent again");
   };
-  const user_role = USER_ROLES.find(u=>u.id===activeUser);
-  const isCRO = ["ADMIN","CXO","CEO","CRO"].includes(user_role?.role);
+  const user_role = USER_ROLES.find(u=>u.id===activeUser) || USER_ROLES.find(u=>u.id==="admin") || USER_ROLES[0];
+  const canGrantException = ["ADMIN","CXO","CEO","CRO"].includes(user_role?.role); // can grant HR exceptions
 
   // Auto-fill repId when log meeting modal opens for a Sales Rep
   useEffect(()=>{
@@ -1820,6 +1515,28 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const regionOk = user_role.canView==="all" ? (filterRegion==="All"||d.region===filterRegion) : user_role.canView==="region" ? d.region===user_role.region : d.repId===user_role.repId;
     return regionOk && d.quarter===filterQ;
   });
+
+  // Revenue Tracker: group visibleDeals by client
+  const rtClientMap = {};
+  visibleDeals.forEach(d=>{
+    if(!rtClientMap[d.clientCompany]) rtClientMap[d.clientCompany]={
+      clientCompany:d.clientCompany, repId:d.repId, lastContact:d.lastContact,
+      deals:[], fct:0, digital:0, integrated:0, sponsorship:0, branded:0, total:0, target:0
+    };
+    const c = rtClientMap[d.clientCompany];
+    c.deals.push(d);
+    c.target += (d.targetAmount||0);
+    if(d.outcome==="Proposal Accepted"){
+      if(d.dealType==="Linear TV") c.fct += d.amount;
+      else if(d.dealType==="Digital") c.digital += d.amount;
+      else if(d.dealType==="Integrated Package") c.integrated += d.amount;
+      else if(d.dealType==="Sponsorship") c.sponsorship += d.amount;
+      else if(d.dealType==="Branded Content") c.branded += d.amount;
+      c.total += d.amount;
+    }
+    if(!c.lastContact||d.lastContact>c.lastContact) c.lastContact=d.lastContact;
+  });
+  const rtClients = Object.values(rtClientMap).sort((a,b)=>daysSince(b.lastContact)-daysSince(a.lastContact));
 
   const closedDeals  = visibleDeals.filter(d=>d.outcome==="Proposal Accepted");
   const activeDeals  = visibleDeals.filter(d=>d.outcome!=="Not Interested");
@@ -1849,15 +1566,32 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       const cPct    = rep.target>0?Math.round((closed/rep.target)*100):0;
       const senPct  = rm.length>0?Math.round((seniorM/rm.length)*100):0;
       return {...rep,closed,pipe,meetings:rm.length,seniorM,senPct,risk,attOk,cPct,coverage:rep.target>0?Math.round(((closed+pipe)/rep.target)*100):0};
-    }).sort((a,b)=>b.closed-a.closed), [deals, meetings, att, filterQ, user_role]);
+    }).sort((a,b)=>b.cPct-a.cPct), [deals, meetings, att, filterQ, user_role]);
 
-  const updateOutcome = (id, outcome) => setDeals(p=>p.map(d=>d.id===id?{...d,outcome,lastContact:TODAY}:d));
+  const updateOutcome = (id, outcome) => setDeals(p=>p.map(d => {
+    if (d.id !== id) return d;
+    const closed = outcome === "Proposal Accepted";
+    const entry  = closed && d.awaitingApproval ? [{
+      at: TODAY, by: user_role?.name||"Manager", role: user_role?.role||"",
+      action: "Closed", from: d.awaitingApproval, to: null, note: "Deal closed — approval cleared",
+    }] : [];
+    return {
+      ...d, outcome, lastContact: TODAY,
+      awaitingApproval:      closed ? null : d.awaitingApproval,
+      awaitingApprovalSince: closed ? null : d.awaitingApprovalSince,
+      atRisk: closed ? false : d.atRisk,
+      auditLog: [...(d.auditLog||[]), ...entry],
+    };
+  }));
   const updateReq     = (dealId, reqIdx, status) => setDeals(p=>p.map(d=>d.id===dealId?{...d,reqs:d.reqs.map((r,i)=>i===reqIdx?{...r,status}:r)}:d));
 
   const handleAddDeal = () => {
-    if (!dealForm.clientCompany||!dealForm.repId||!dealForm.targetAmount){showToast("Fill required fields","err");return;}
+    const parsedRepId = parseInt(dealForm.repId);
+    if (!dealForm.clientCompany||!parsedRepId||!dealForm.targetAmount){showToast("Fill required fields (client, rep, target)","err");return;}
+    if (!REPS.find(r=>r.id===parsedRepId)){showToast("Select a valid rep","err");return;}
     const rep=REPS.find(r=>r.id===parseInt(dealForm.repId));
-    const parseCurrency = v => { if(!v)return 0; const s=String(v).replace(/,/g,"").trim(); if(/^\d+(\.\d+)?[Cc][Rr]$/.test(s))return Math.round(parseFloat(s)*10000000); if(/^\d+(\.\d+)?[Ll]$/.test(s))return Math.round(parseFloat(s)*100000); const n=parseFloat(s); return isNaN(n)?0:Math.round(n); };
+    // Auto-fill amount from targetAmount if blank
+    if(!dealForm.amount) setDealForm(p=>({...p,amount:p.targetAmount}));
     setDeals(p=>[...p,{id:`d${Date.now()}`,...dealForm,repId:parseInt(dealForm.repId),repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:parseCurrency(dealForm.targetAmount),lastContact:null,reqs:[]}]);
     setDealForm(BLANK_DEAL);setAddDealOpen(false);showToast("Deal added");
   };
@@ -1867,7 +1601,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const rep  = REPS.find(r => r.id === parseInt(logForm.repId));
     const deal = deals.find(d => d.id === logForm.dealId);
     const now  = new Date();
-    const late = now.getHours() >= 12;
+    const late = now.getHours() >= 23;
     const loggedAt = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     const clientCompany = deal?.clientCompany || logForm.clientAgencyName || "";
 
@@ -1916,12 +1650,18 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     // Update deal last contact, outcome, and next step
     const firstFollowUpItem = (logForm.nextStepItems||[]).find(i=>i.action);
     if (deal) {
+      const approvalItem2 = (logForm.nextStepItems||[]).find(i =>
+        i.neededFrom && ["NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
+      );
       setDeals(p => p.map(d => d.id === logForm.dealId ? {
         ...d,
         lastContact: TODAY,
         outcome: logForm.status === "Closed" ? "Proposal Accepted" : d.outcome,
         nextStep: nextStepsSummary || firstFollowUpItem?.action || logForm.nextSteps,
         nextStepDate: firstFollowUpItem?.dueDate || logForm.followUpDate || d.nextStepDate,
+        awaitingApproval: approvalItem2 ? approvalItem2.neededFrom : d.awaitingApproval,
+        awaitingApprovalSince: approvalItem2 ? TODAY : d.awaitingApprovalSince,
+        auditLog: [...(d.auditLog||[]), ...(approvalItem2?[{at:TODAY,by:user_role?.name||"Rep",role:user_role?.role||"",action:"Flagged",from:null,to:approvalItem2.neededFrom,note:approvalItem2.action}]:[])],
       } : d));
     } else if (clientCompany && (logForm.nextStepItems||[]).some(i=>i.action)) {
       // No deal yet — create a pipeline stub for follow-up
@@ -1955,7 +1695,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     setLogForm(BLANK_LOG);
     setLogOpen(false);
     const taskMsg = newTasks.length ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
-    showToast((late ? "Logged — flagged late (after 12pm)" : "Meeting logged ✓") + taskMsg);
+    showToast((late ? "Logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg);
   };
 
   // ─── CALENDAR INTEGRATION ────────────────────────────────────────────────────
@@ -1971,7 +1711,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         meeting.clientFeedback ? `Client feedback: ${meeting.clientFeedback}` : "",
         meeting.nextSteps ? `Next steps: ${meeting.nextSteps}` : "",
         "—",
-        "Logged via OTV CRO Command",
+        "Logged via OTV CRM",
       ].filter(Boolean).join("\n");
 
       const startTime  = meeting.nextMeetingTime || "10:00";
@@ -1998,11 +1738,11 @@ ${meeting.addMeetLink ? "Add Google Meet video conferencing link." : ""}
 Use the primary calendar. Return the event ID and Meet link if created.`
         : `I need to create a calendar event titled "${title}" on ${meeting.nextMeetingDate} from ${startTime} to ${endH}:${String(sm).padStart(2,"0")} IST. Attendees: ${attendees.join(", ")}. Description: ${desc}. Please create this event.`;
 
-      const resp = await fetch(CLAUDE_PROXY_URL, {
+      const resp = await fetch("/api/claude", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-opus-4-5",
+          model: "claude-sonnet-4-20250514",
           max_tokens: 1024,
           messages: [{ role: "user", content: calPrompt }],
           mcp_servers: meeting.calendarPlatform === "google"
@@ -2031,6 +1771,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
   const handleLogMeetingWithCalendar = async () => {
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
+
+    // ── HARD BLOCK VALIDATION ──
+    if (!logForm.discussion?.trim()) { showToast("'What you pitched' is required", "err"); return; }
+    if (!logForm.clientFeedback?.trim()) { showToast("Client feedback is required", "err"); return; }
+    if (!logForm.status) { showToast("Meeting status is required", "err"); return; }
+    if (!logForm.followUpDate) { showToast("Follow-up date is required", "err"); return; }
+    const hasValidNextStep = (logForm.nextStepItems||[]).some(i => i.action && i.neededFrom);
+    if (!hasValidNextStep) { showToast("At least one next step with an owner is required", "err"); return; }
+    if (logForm.seniorRequested === "Yes" && !logForm.seniorRequestedName?.trim()) { showToast("Senior's name is required when escalation is Yes", "err"); return; }
+
     let calResult = null;
     if (logForm.scheduleNext && logForm.nextMeetingDate) {
       calResult = await createCalendarEvent(logForm);
@@ -2039,7 +1789,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     const rep  = REPS.find(r => r.id === parseInt(updatedForm.repId));
     const deal = deals.find(d => d.id === updatedForm.dealId);
     const now  = new Date();
-    const late = now.getHours() >= 12;
+    const late = now.getHours() >= 23;
     const loggedAt = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     const clientCompany = deal?.clientCompany || updatedForm.clientAgencyName || "";
 
@@ -2079,13 +1829,41 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       }));
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
 
+    // Auto-create internal requests from next step items (when neededFrom is a dept, not Self/Client)
+    const newIRs = (updatedForm.nextStepItems||[])
+      .filter(i => i.action && i.neededFrom && !["Self","Client"].includes(i.neededFrom))
+      .map(i => ({
+        id: `ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+        type: i.neededFrom==="NSH"||i.neededFrom==="CXO" ? "Approval" : "Support",
+        dept: i.neededFrom, subject: i.action,
+        details: (i.remarks||"") + (clientCompany ? ` — ${clientCompany}` : ""),
+        raisedBy: activeUser, raisedByName: user_role?.name||"",
+        repId: parseInt(updatedForm.repId)||null,
+        dealId: updatedForm.dealId||null, clientCompany,
+        status: "Pending", raisedAt: TODAY, slaHours: 48, resolvedAt: null, resolverNote: ""
+      }));
+    if (newIRs.length) setInternalReqs(p => [...newIRs, ...p]);
+
     const firstFollowUpItem = (updatedForm.nextStepItems||[]).find(i=>i.action);
     if (deal) {
+      // Determine if any next step requires internal approval
+      const approvalItem = (updatedForm.nextStepItems||[]).find(i =>
+        i.neededFrom && ["NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
+      );
+      const newAwaiting = approvalItem ? approvalItem.neededFrom : deal.awaitingApproval;
+      const auditEntry  = approvalItem ? [{
+        at: TODAY, by: user_role?.name || "Rep", role: user_role?.role || "SALES REP",
+        action: "Flagged for approval", from: null, to: approvalItem.neededFrom,
+        note: `${approvalItem.action} — raised via meeting log`,
+      }] : [];
       setDeals(p => p.map(d => d.id === updatedForm.dealId ? {
         ...d, lastContact: TODAY,
         outcome: updatedForm.status === "Closed" ? "Proposal Accepted" : d.outcome,
         nextStep: nextStepsSummary || firstFollowUpItem?.action || updatedForm.nextSteps,
         nextStepDate: firstFollowUpItem?.dueDate || updatedForm.followUpDate || d.nextStepDate,
+        awaitingApproval: newAwaiting,
+        awaitingApprovalSince: approvalItem ? TODAY : d.awaitingApprovalSince,
+        auditLog: [...(d.auditLog||[]), ...auditEntry],
       } : d));
     }
 
@@ -2093,20 +1871,107 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     setLogForm(BLANK_LOG);
     setLogOpen(false);
     const taskMsg = newTasks.length ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
-    if (calResult?.meetLink) showToast(`Meeting logged + Calendar event created ✓` + taskMsg);
-    else showToast((late ? "Meeting logged — flagged as late (after 12pm)" : "Meeting logged ✓") + taskMsg);
+    const irMsg   = newIRs.length   ? ` · ${newIRs.length} request${newIRs.length>1?"s":""} raised`  : "";
+    if (calResult?.meetLink) showToast(`Meeting logged + Calendar event created ✓` + taskMsg + irMsg);
+    else showToast((late ? "Meeting logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsg);
   };
 
   // ── ROLE CONSTANTS ──
-  const isRep   = user_role?.role === "SALES REP";
-  const isRH    = user_role?.role === "REGION HEAD";
-  const isNSH   = user_role?.role === "SALES HEAD";
-  const isAdmin = ["ADMIN","CXO","CEO","CRO"].includes(user_role?.role);
-  const isCEORole  = user_role?.role === "CEO";
-  const isMDRole   = user_role?.role === "MD";
-  const isCRORole  = user_role?.role === "CRO";
-  const isStrategy = user_role?.role === "SALES STRATEGY";
-  const isDigiOps  = user_role?.role === "DIGI OPS";
+  const isRep          = user_role?.role === "SALES REP";
+  const isRH           = user_role?.role === "REGION HEAD";
+  const isNSH          = user_role?.role === "SALES HEAD";
+  const isCRORole      = user_role?.role === "CRO";
+  const isStrategy     = user_role?.role === "SALES STRATEGY";
+  const isDigiOps      = user_role?.role === "DIGI OPS";
+  const isAdmin        = user_role?.role === "ADMIN";
+  // NSH Dashboard is shared by NSH, CRO, and Sales Strategy
+  const isNSHDashboard = ["SALES HEAD","CRO","SALES STRATEGY"].includes(user_role?.role);
+  // CRO and Sales Strategy can VIEW meetings but cannot log them
+  const canLogMeeting  = !["CRO","SALES STRATEGY"].includes(user_role?.role);
+  // Legacy aliases
+  const isCEORole = false;
+  const isMDRole  = false;
+
+  // ── APPROVAL HELPERS ──
+  const APPROVAL_THRESHOLDS = {
+    RH:   5000000,   // Deals > ₹50L need RH approval
+    NSH:  10000000,  // Deals > ₹1Cr need NSH approval
+    CXO:  30000000,  // Deals > ₹3Cr need CXO approval
+  };
+
+  const getRequiredApprover = (amount) => {
+    if (amount >= APPROVAL_THRESHOLDS.CXO) return "CXO";
+    if (amount >= APPROVAL_THRESHOLDS.NSH) return "NSH";
+    if (amount >= APPROVAL_THRESHOLDS.RH)  return "NSH"; // RH approves then routes to NSH
+    return "NSH"; // default
+  };
+
+  const getApprovalChainNext = (currentApprover, amount) => {
+    if (currentApprover === "NSH") return amount >= APPROVAL_THRESHOLDS.CXO ? "CXO" : null;
+    if (currentApprover === "CXO") return null;
+    if (currentApprover === "RH")  return "NSH";
+    return null;
+  };
+
+  const canApprove = (deal) => {
+    const wa = deal.awaitingApproval;
+    if (!wa) return false;
+    if (isAdmin) return true;
+    if (wa === "NSH" && isNSH) return true;
+    if (wa === "CXO" && (isAdmin || user_role?.role === "CXO" || user_role?.role === "CRO")) return true;
+    if (wa === "RH"  && isRH && deal.region === rhRegion) return true;
+    if (wa === "Sales Strategy" && isStrategy) return true;
+    if (wa === "Digital"        && isDigiOps)  return true;
+    return false;
+  };
+
+  const approveDeal = (dealId, note = "") => {
+    setDeals(prev => prev.map(d => {
+      if (d.id !== dealId) return d;
+      const next  = getApprovalChainNext(d.awaitingApproval, d.amount);
+      const entry = {
+        at:       TODAY,
+        by:       user_role?.name || "Unknown",
+        role:     user_role?.role || "",
+        action:   "Approved",
+        from:     d.awaitingApproval,
+        to:       next,
+        note,
+      };
+      return {
+        ...d,
+        awaitingApproval:      next,
+        awaitingApprovalSince: next ? TODAY : null,
+        auditLog:              [...(d.auditLog || []), entry],
+      };
+    }));
+    const d = deals.find(x => x.id === dealId);
+    const next = d ? getApprovalChainNext(d.awaitingApproval, d.amount) : null;
+    showToast(next ? `Approved → forwarded to ${next}` : "Deal fully approved ✓");
+  };
+
+  const rejectDeal = (dealId, note = "") => {
+    setDeals(prev => prev.map(d => {
+      if (d.id !== dealId) return d;
+      const entry = {
+        at:     TODAY,
+        by:     user_role?.name || "Unknown",
+        role:   user_role?.role || "",
+        action: "Rejected",
+        from:   d.awaitingApproval,
+        to:     null,
+        note,
+      };
+      return {
+        ...d,
+        awaitingApproval:      null,
+        awaitingApprovalSince: null,
+        outcome:               "Price Concern",
+        auditLog:              [...(d.auditLog || []), entry],
+      };
+    }));
+    showToast("Deal rejected — rep notified");
+  };
 
   // ── BADGE COUNTS ──
   const rhEscBadge = deals.filter(d=>d.awaitingApproval==="NSH"&&daysSince(d.awaitingApprovalSince||TODAY)>=APPROVAL_SLA_DAYS).length||null;
@@ -2123,106 +1988,138 @@ Use the primary calendar. Return the event ID and Meet link if created.`
   const getSidebarSections = () => {
     if (section === "ro") return [{ label:"RO", items:[N("ro-parser","RO Parser","↑"), N("ro-management","RO Management","≡")] }];
 
+    const irBadge      = internalReqs.filter(r=>r.status!=="Done"&&r.raisedBy===activeUser).length||null;
+    const irInboxBadge  = internalReqs.filter(r=>r.status!=="Done"&&["NSH","Sales Strategy","CRO","Branding Team","Content Team","Digital","Finance","Legal"].includes(r.dept)).length||null;
+
+    // ── SALES REP ──
     if (isRep) return [
-      { label:"PLANNING", items:[N("my-plan","My Plan","◎")] },
-      { label:"MY CRM",   items:[
+      { label:"PLANNING",    items:[N("my-plan","My Plan","◎")] },
+      { label:"MY CRM",      items:[
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
-        N("pipeline","Pipeline","◈"),
-        N("targets","Targets","◎"),
+        N("pipeline","Revenue Tracker","◈"),
+        N("target-submit","My Targets","◎",targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
         N("tasks","Tasks","✓",myRepTaskBadge),
+        N("internal-requests","Internal Requests","⬆",irBadge),
         N("hr","HR Reports","⊘"),
       ]},
-      { label:"MY TEAM",  items:[
-        N("rep-team","My Region","◇"),
-        N("rep-allreps","All Sales Reps","◇"),
+      { label:"RO",          items:[
+        N("ro-parser","RO Parser","↑"),
+        N("ro-management","RO Management","≡",savedROs.length||null),
+      ]},
+      { label:"LEADERBOARD", items:[
+        N("leaderboard","Leaderboard","◇"),
+        N("rep-team","My Team","◇"),
       ]},
     ];
 
+    // ── REGION HEAD ──
     if (isRH) return [
-      { label:"PLANNING",   items:[N("my-plan","My Plan","◎"), N("rh-team-plan","Team's Plan","◎")] },
-      { label:"MY CRM",     items:[
+      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("rh-team-plan","Team's Plan","◎")] },
+      { label:"MY CRM",      items:[
         N("warroom","War Room","⬡",rhEscBadge),
-        N("pipeline","Pipeline","◈"),
+        N("pipeline","Revenue Tracker","◈"),
         N("targets","My Targets","◎"),
+        N("target-approvals","Target Approvals","◎",targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length||null),
         N("my-tasks","My Tasks","✓"),
         N("rh-escalations","Escalations","▲",rhEscBadge),
+        N("internal-requests","Internal Requests","⬆",irBadge),
         N("hr","HR Reports","⊘"),
       ]},
-      { label:"TEAM'S CRM", items:[
-        N("rh-xscore","RH Leaderboard","◇"),
-        N("team","My Team Scorecard","◇"),
-        N("rh-team-pipeline","Team Pipeline","◈"),
-        N("rh-team-targets","Team Targets","◎"),
-        N("rh-team-tasks","Team Tasks","✓"),
-        N("rh-team-hr","Team HR","⊘"),
+      { label:"MY TEAM",     items:[
+        N("rh-team-plan","Team's Plan","◎"),
+        N("team","Team Scorecard","◇"),
+        N("leaderboard","Leaderboard","◇"),
       ]},
     ];
 
+    // ── NSH (logs meetings) ──
     if (isNSH) return [
-      { label:"PLANNING",        items:[N("my-plan","My Plan","◎"), N("nsh-rh-plan","RH's Plan","◎"), N("nsh-regional-plan","Sales Rep's Plan","◎")] },
-      { label:"MY CRM",          items:[
+      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("nsh-rh-plan","RH's Plan","◎"), N("nsh-regional-plan","Rep's Plan","◎")] },
+      { label:"COMMAND",     items:[
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
-        N("pipeline","Pipeline","◈"),
+        N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
-        N("my-tasks","My Tasks","✓"),
+        N("target-approvals","Target Approvals","◎",targetSubs.filter(t=>t.status==="Pending NSH").length||null),
         N("escalations","Escalations","▲",escBadge),
-      ]},
-      { label:"REGION HEAD CRM", items:[
-        N("nsh-rh-scorecard","RH Scorecard","◇"),
-        N("nsh-rh-pipeline","RH Pipeline","◈"),
-        N("nsh-rh-targets","RH Targets","◎"),
-        N("nsh-rh-tasks","RH Tasks","✓"),
-        N("nsh-rh-hr","RH HR Reports","⊘"),
-      ]},
-      { label:"SALES REPS CRM",  items:[
-        N("nsh-rep-scorecard","Rep Scorecard","◇"),
-        N("nsh-rep-pipeline","Rep Pipeline","◈"),
-        N("nsh-rep-targets","Rep Targets","◎"),
-        N("nsh-rep-tasks","Rep Tasks","✓"),
-        N("nsh-rep-hr","Rep HR Reports","⊘"),
-      ]},
-    ];
-
-    // ── CEO ──
-    if (isCEORole) return [
-      { label:"OVERVIEW",      items:[N("ceo-kpi","Strategic KPIs","⬡"), N("ceo-risks","Top Risks","▲",atRisk.length||null)] },
-      { label:"INTELLIGENCE",  items:[N("ceo-senior","Senior Requests","⬆"), N("ceo-approvals","Approvals Queue","✦")] },
-      { label:"RO",            items:[N("ro-parser","RO Parser","↑"), N("ro-management","RO Management","≡")] },
-    ];
-    if (isMDRole) return [
-      { label:"OVERVIEW",      items:[N("md-accounts","Key Accounts","◈"), N("md-escalations","Escalations","▲",escBadge)] },
-    ];
-    if (isCRORole) return [
-      { label:"COMMAND",   items:[N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null), N("pipeline","Pipeline","◈")] },
-      { label:"NUMBERS",   items:[N("targets","Targets","◎"), N("team","Team","◇")] },
-      { label:"CONTROLS",  items:[N("escalations","Escalations","▲",escBadge), N("compliance","Compliance","✦"), N("hr","HR Reports","⊘",hrBadge)] },
-      { label:"ADMIN",     items:[N("import","Import Data","⬆")] },
-    ];
-    if (isStrategy) return [
-      { label:"ANALYTICS", items:[N("strategy-analytics","Analytics","◉"), N("strategy-whitespace","Whitespace","◎")] },
-      { label:"PIPELINE",  items:[N("pipeline","Pipeline","◈"), N("targets","Targets","◎")] },
-      { label:"EXECUTION", items:[N("tasks","Tasks","✓",myRepTaskBadge), N("escalations","Escalations","▲",escBadge)] },
-    ];
-    if (isDigiOps) return [
-      { label:"DIGITAL",   items:[N("digi-deals","Digital Deals","◉"), N("digi-tasks","My Tasks","✓",tasks.filter(t=>t.dept==="Digital"&&t.status!=="Done").length||null)] },
-      { label:"PIPELINE",  items:[N("pipeline","Full Pipeline","◈")] },
-      { label:"APPROVALS", items:[N("digi-escalations","Escalations","▲",deals.filter(d=>d.awaitingApproval==="Digital"&&d.outcome!=="Proposal Accepted").length||null)] },
-    ];
-    // Management / CXO / Admin / Strategy / Digital
-    return [
-      { label:"PLANNING", items:[N("my-plan","My Plan","◎")] },
-      { label:"CRM",      items:[
-        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
-        N("pipeline","Pipeline","◈"),
-        N("targets","Targets","◎"),
-        N("team","Team","◇"),
-        N("tasks","Tasks","✓",myRepTaskBadge),
-        N("activity","Activity","≡"),
-        N("escalations","Escalations","▲",escBadge),
+        N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
         N("hr","HR Reports","⊘",hrBadge),
       ]},
-      ...(isAdmin ? [{ label:"ADMIN", items:[N("import","Import Data","⬆")] }] : []),
+      { label:"TEAM",        items:[
+        N("nsh-rh-scorecard","All Region Heads","◇"),
+        N("nsh-rep-scorecard","All Sales Reps","◇"),
+        N("leaderboard","Leaderboard","◇"),
+      ]},
+    ];
+
+    // ── SALES STRATEGY (view-only, monthly plan) ──
+    if (isStrategy) return [
+      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("nsh-rh-plan","NSH's Plan","◎"), N("nsh-regional-plan","Rep's Plan","◎")] },
+      { label:"COMMAND",     items:[
+        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
+        N("pipeline","Revenue Tracker","◈"),
+        N("targets","Targets","◎"),
+        N("target-approvals","Target Approvals","◎",targetSubs.filter(t=>t.status==="Pending Strategy").length||null),
+        N("escalations","Escalations","▲",escBadge),
+        N("internal-requests","Internal Requests","⬆",irInboxBadge),
+        N("compliance","Compliance","✦"),
+        N("hr","HR Reports","⊘",hrBadge),
+      ]},
+      { label:"TEAM",        items:[
+        N("nsh-rh-scorecard","All Region Heads","◇"),
+        N("nsh-rep-scorecard","All Sales Reps","◇"),
+        N("leaderboard","Leaderboard","◇"),
+      ]},
+    ];
+
+    // ── CRO (view-only, approvals) ──
+    if (isCRORole) return [
+      { label:"PLANNING",    items:[N("nsh-rh-plan","NSH's Plan","◎"), N("nsh-regional-plan","Rep's Plan","◎")] },
+      { label:"COMMAND",     items:[
+        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
+        N("pipeline","Revenue Tracker","◈"),
+        N("targets","Targets","◎"),
+        N("target-approvals","Target Approvals","◎",targetSubs.filter(t=>t.status==="Pending CRO").length||null),
+        N("escalations","Escalations","▲",escBadge),
+        N("internal-requests","Internal Requests","⬆",irInboxBadge),
+        N("compliance","Compliance","✦"),
+        N("hr","HR Reports","⊘",hrBadge),
+      ]},
+      { label:"TEAM",        items:[
+        N("nsh-rh-scorecard","All Region Heads","◇"),
+        N("nsh-rep-scorecard","All Sales Reps","◇"),
+        N("leaderboard","Leaderboard","◇"),
+      ]},
+    ];
+
+    // ── DIGI OPS ──
+    if (isDigiOps) return [
+      { label:"DIGITAL",     items:[
+        N("digi-deals","Digital Deals","◉"),
+        N("digi-tv-deals","TV + Digital Deals","◉"),
+        N("digi-tasks","My Tasks","✓",tasks.filter(t=>t.dept==="Digital"&&t.status!=="Done").length||null),
+        N("digi-projects","Digital Projects","◈"),
+      ]},
+      { label:"PIPELINE",    items:[N("pipeline","Revenue Tracker","◈")] },
+      { label:"APPROVALS",   items:[N("internal-requests","Internal Requests","⬆",irInboxBadge)] },
+      { label:"LEADERBOARD", items:[N("leaderboard","Leaderboard","◇")] },
+    ];
+
+    // ── ADMIN ──
+    if (isAdmin) return [
+      { label:"ACCESS",    items:[N("admin-access","Access Management","◎",pendingUsers.length||null)] },
+      { label:"APPROVALS", items:[N("admin-approvals","Approval Queue","✦",internalReqs.filter(r=>r.status==="Pending"||r.status==="Overdue").length||null)] },
+      { label:"DATA",      items:[N("import","Import Data","⬆"), N("admin-config","System Config","⚙")] },
+    ];
+
+    // Fallback — should never reach here but prevents blank screen
+    return [
+      { label:"CRM", items:[
+        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
+        N("pipeline","Revenue Tracker","◈"),
+        N("targets","Targets","◎"),
+        N("leaderboard","Leaderboard","◇"),
+      ]},
     ];
   };
 
@@ -2292,10 +2189,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           )}
           <div style={{width:1,height:20,background:C.border}} />
 
-          {/* Countdown */}
-          <div style={{fontSize:11,fontWeight:700,color:countdown.includes("passed")?C.red:C.green,background:countdown.includes("passed")?`${C.red}12`:`${C.green}10`,border:`1px solid ${countdown.includes("passed")?C.red:C.green}33`,padding:"3px 10px",borderRadius:4,whiteSpace:"nowrap"}}>
-            ⏱ {countdown}
-          </div>
+          {/* Countdown — only reps + RHs have 11:30 PM obligation */}
+          {(isRep || isRH) && <div style={{fontSize:11,fontWeight:700,color:countdown.includes("passed")?C.red:C.green,background:countdown.includes("passed")?`${C.red}12`:`${C.green}10`,border:`1px solid ${countdown.includes("passed")?C.red:C.green}33`,padding:"3px 10px",borderRadius:4,whiteSpace:"nowrap"}}>⏱ {countdown}</div>}
 
           {/* Profile button — click to open dropdown with sign out */}
           <div style={{position:"relative"}}>
@@ -2358,6 +2253,53 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ MY PLAN ═══ */}
           {view==="my-plan" && (()=>{
+            // ── SALES STRATEGY / CRO: monthly overview (read-only, no daily limits) ──
+            if (isStrategy || isCRORole) {
+              const allMeetings = meetings;
+              const months = [...new Set(allMeetings.map(m=>m.date?.slice(0,7)))].sort().reverse().slice(0,6);
+              return (
+                <div className="fin">
+                  <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>
+                    {isStrategy?"Team Meeting Overview":"CRO Meeting Overview"}
+                  </div>
+                  <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Monthly meeting summary across all reps and region heads. Read-only.</div>
+                  {months.map(ym=>{
+                    const monthMeetings = allMeetings.filter(m=>m.date?.startsWith(ym));
+                    const byRep = {};
+                    monthMeetings.forEach(m=>{
+                      const key = m.repId;
+                      if(!byRep[key]) byRep[key]={repId:m.repId,repName:m.repName||"Rep "+m.repId,count:0,clients:new Set()};
+                      byRep[key].count++;
+                      if(m.clientCompany) byRep[key].clients.add(m.clientCompany);
+                    });
+                    const repRows = Object.values(byRep).sort((a,b)=>b.count-a.count);
+                    const [yr,mo] = ym.split("-");
+                    const label   = new Date(parseInt(yr),parseInt(mo)-1,1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+                    return (
+                      <div key={ym} className="card" style={{padding:"14px 18px",marginBottom:12}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                          <div className="sans" style={{fontWeight:700,fontSize:14}}>{label}</div>
+                          <div style={{display:"flex",gap:12}}>
+                            <div style={{textAlign:"right"}}><div className="sans" style={{fontSize:20,fontWeight:800,color:C.blue}}>{monthMeetings.length}</div><div style={{fontSize:9,color:C.dim}}>TOTAL MEETINGS</div></div>
+                            <div style={{textAlign:"right"}}><div className="sans" style={{fontSize:20,fontWeight:800,color:C.accent}}>{Object.keys(byRep).length}</div><div style={{fontSize:9,color:C.dim}}>REPS ACTIVE</div></div>
+                          </div>
+                        </div>
+                        {repRows.map(r=>(
+                          <div key={r.repId} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",background:C.s2,borderRadius:5,marginBottom:4}}>
+                            <span className="sans" style={{flex:1,fontWeight:600,fontSize:12}}>{r.repName}</span>
+                            <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 8px",borderRadius:6,fontSize:11,fontWeight:700}}>{r.count} meetings</span>
+                            <span style={{fontSize:10,color:C.dim}}>{r.clients.size} clients</span>
+                          </div>
+                        ))}
+                        {repRows.length===0&&<div style={{textAlign:"center",padding:12,color:C.muted,fontSize:11}}>No meetings logged this month</div>}
+                      </div>
+                    );
+                  })}
+                  {months.length===0&&<div style={{textAlign:"center",padding:60,color:C.muted}}>No meeting history yet.</div>}
+                </div>
+              );
+            }
+
             const myRepId = user_role?.repId || null;
             const allPlans = plans || [];
             const todayPlans  = allPlans.filter(p => (myRepId ? p.repId===myRepId : true) && p.date===TODAY);
@@ -2417,7 +2359,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <span style={{fontSize:11,color:C.dim,marginLeft:"auto"}}>{todayLogged&&tmrwPlanned?"All done ✓":"Complete both before 11:30 PM"}</span>
                 </div>
 
+                {/* After 6 PM nudge banner */}
+                {(()=>{
+                  const unlogged = todayPlans.filter(p=>p.status==="Planned").length;
+                  if (new Date().getHours() >= 18 && unlogged > 0) {
+                    return (
+                      <div style={{background:`${C.orange}12`,border:`1px solid ${C.orange}44`,borderRadius:7,padding:"10px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:16}}>⚠</span>
+                        <span style={{fontSize:13,color:C.orange,fontWeight:700}}>{unlogged} meeting{unlogged!==1?"s":""} not logged yet — deadline is 11:30 PM tonight</span>
+                      </div>
+                    );
+                  }
+                  return null;
+                })()}
+
                 {/* TODAY + TOMORROW cards */}
+
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
                   {[{label:"TODAY",date:TODAY,planList:todayPlans,done:todayLogged},{label:"TOMORROW",date:TOMORROW,planList:tmrwPlans,done:tmrwPlanned}].map(({label,date,planList,done})=>(
                     <div key={label} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
@@ -2545,11 +2502,24 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       if (!ns.trim())  { alert("Next steps are required"); return; }
                                       const loggedAt = `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}`;
                                       setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done"}:pl));
-                                      setMeetings(q=>[{id:`ml${Date.now()}`,repId:myRepId||(REPS[0]?.id),repName:REPS.find(r=>r.id===myRepId)?.name||"",region:REPS.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=12,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Proposal Accepted":"Needs Callback",isUnplanned:false},...q]);
+                                      setMeetings(q=>[{id:`ml${Date.now()}`,repId:myRepId||(REPS[0]?.id),repName:REPS.find(r=>r.id===myRepId)?.name||"",region:REPS.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Proposal Accepted":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
                                         setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:myRepId,assignedByName:REPS.find(r=>r.id===myRepId)?.name||""},...q]);
-                                        if(md) setDeals(q=>q.map(d=>d.id===md.id?{...d,awaitingApproval:frm,awaitingApprovalSince:TODAY,nextStep:ns,nextStepDate:bywhen||fu||TOMORROW}:d));
+                                        if(md) {
+                                          // Route approval based on deal amount thresholds
+                                          const amt = md.amount || 0;
+                                          const routedTo = (frm === "NSH" || frm === "CXO")
+                                            ? getRequiredApprover(amt)
+                                            : frm;
+                                          setDeals(q=>q.map(d=>d.id===md.id?{...d,
+                                            awaitingApproval:routedTo,
+                                            awaitingApprovalSince:TODAY,
+                                            nextStep:ns,nextStepDate:bywhen||fu||TOMORROW,
+                                            atRisk: daysSince(d.lastContact)>=7,
+                                            auditLog:[...(d.auditLog||[]),{at:TODAY,by:"Rep",role:"SALES REP",action:"Flagged",from:null,to:routedTo,note:act}]
+                                          }:d));
+                                        }
                                       }
                                       setAtt(q=>({...q,[TODAY]:{...(q[TODAY]||{}),[(myRepId||REPS[0]?.id)]:true}}));
                                       setInlineLogPlan(null);
@@ -2770,7 +2740,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}</div>
                   </div>
                   <div style={{display:"flex",gap:8}}>
-                    <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>
+                    {canLogMeeting && <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>}
                     <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
                   </div>
                 </div>
@@ -2798,7 +2768,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                         <span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:700}}>{dw}d waiting</span>
                         <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.amount)}</span>
-                        <button onClick={()=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:null,awaitingApprovalSince:null}:x))}
+                        <button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()}
                           style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Approve →</button>
                       </div>
                     );
@@ -3071,7 +3041,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 <td style={{padding:"10px 14px",color:dw>=APPROVAL_SLA_DAYS?C.red:C.orange,fontWeight:700}}>{dw}d</td>
                                 <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
                                 <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
-                                  <button onClick={()=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:null,awaitingApprovalSince:null}:x))}
+                                  <button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()}
                                     style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>Approve</button>
                                   <button onClick={()=>setView("pipeline")}
                                     style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>View</button>
@@ -3197,8 +3167,32 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>National overview · {filterQ} · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}</div>
                   </div>
                   <div style={{display:"flex",gap:8}}>
-                    <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>
+                    {canLogMeeting && <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>}
                     <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
+                    <button className="btn btn-ghost" onClick={()=>{
+                      const allD = deals.filter(d=>d.quarter===filterQ);
+                      const totC = allD.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                      const totT = allD.reduce((s,d)=>s+(d.targetAmount||0),0);
+                      const blocked = allD.filter(d=>d.awaitingApproval&&d.outcome!=="Proposal Accepted");
+                      const atRiskD = allD.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7);
+                      const nonCompliant = REPS.filter(r=>!att[TODAY]?.[r.id]);
+                      const pct = totT>0?Math.round((totC/totT)*100):0;
+                      const digest = [
+                        `📊 OTV Sales Digest — ${TODAY}`,
+                        ``,
+                        `Revenue: ${fmtR(totC)} closed / ${fmtR(totT)} target (${pct}%)`,
+                        ``,
+                        blocked.length ? `⏳ ${blocked.length} deal(s) awaiting approval:` : `✅ No deals blocked`,
+                        ...blocked.slice(0,5).map(d=>`  • ${d.clientCompany} — ${fmtR(d.amount)} → ${d.awaitingApproval} (${daysSince(d.awaitingApprovalSince||TODAY)}d)`),
+                        ``,
+                        atRiskD.length ? `🔴 ${atRiskD.length} deal(s) at risk (7+ days no contact):` : `✅ No at-risk deals`,
+                        ...atRiskD.slice(0,5).map(d=>{const r=REPS.find(x=>x.id===d.repId);return`  • ${d.clientCompany} — ${r?.name||""} (${daysSince(d.lastContact)}d idle)`;}),
+                        ``,
+                        nonCompliant.length ? `⚠️ Not logged today: ${nonCompliant.map(r=>r.name).join(", ")}` : `✅ All reps logged`,
+                      ].join("\n");
+                      navigator.clipboard?.writeText(digest);
+                      showToast("Daily digest copied to clipboard ✓");
+                    }} title="Copy daily digest for WhatsApp/email">📋 Digest</button>
                   </div>
                 </div>
 
@@ -3242,6 +3236,158 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                     );
                   })}
+                </div>
+
+                {/* ── SECTION 1: REVENUE ── */}
+                <div style={{height:1,background:C.border,marginBottom:16,marginTop:4}} />
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>1 · Revenue · {filterQ}</div>
+                <div className="card" style={{overflow:"hidden",marginBottom:16}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead><tr>
+                      {["","April–Till Date Target","Monthly Target","Projection","Achieved Till Date","LY Month Total"].map(h=>(
+                        <th key={h} style={{padding:"7px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {(()=>{
+                        const allD    = deals.filter(d=>d.quarter===filterQ);
+                        const aprilTarget = allD.reduce((s,d)=>s+(d.targetAmount||0),0);
+                        const monthTarget = Math.round(aprilTarget/3);
+                        const achieved  = revenueEntries.filter(e=>e.quarter===filterQ).reduce((s,e)=>s+(e.amount||0),0);
+                        const pipeline  = allD.filter(d=>d.outcome!=="Proposal Accepted"&&d.outcome!=="Not Interested").reduce((s,d)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
+                        const projection = achieved + pipeline;
+                        return [["TV / FCT","Linear TV"],["Digital","Digital"],["Integrated","Integrated Package"],["Sponsorship","Sponsorship"],["Brand Solutions","Brand Solutions"]].map(([label,type])=>{
+                          const td = allD.filter(d=>d.dealType===type);
+                          const t  = td.reduce((s,d)=>s+(d.targetAmount||0),0);
+                          const a  = revenueEntries.filter(e=>e.dealType===type&&e.quarter===filterQ).reduce((s,e)=>s+(e.amount||0),0);
+                          const p  = td.filter(d=>d.outcome!=="Proposal Accepted"&&d.outcome!=="Not Interested").reduce((s,d)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
+                          const proj = a + p;
+                          const sc = t>0&&proj>=t?C.green:t>0&&proj>=t*0.7?C.accent:t>0?C.red:C.dim;
+                          return (
+                            <tr key={label} style={{borderBottom:`1px solid ${C.s2}`}}>
+                              <td style={{padding:"10px 14px",fontWeight:700}}>{label}</td>
+                              <td style={{padding:"10px 14px",color:C.dim}}>{t>0?fmtR(t):"—"}</td>
+                              <td style={{padding:"10px 14px",color:C.dim}}>{t>0?fmtR(Math.round(t/3)):"—"}</td>
+                              <td style={{padding:"10px 14px",color:sc,fontWeight:700}}>{proj>0?fmtR(proj):"—"}</td>
+                              <td style={{padding:"10px 14px",color:a>0?C.green:C.muted,fontWeight:700}}>{a>0?fmtR(a):"—"}</td>
+                              <td style={{padding:"10px 14px",color:C.muted}}>—</td>
+                            </tr>
+                          );
+                        });
+                      })()}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ── CALL REPORT SECTION ── */}
+                <div style={{height:1,background:C.border,marginBottom:16,marginTop:4}} />
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>2 · Call Report</div>
+                <div className="card" style={{overflow:"hidden",marginBottom:16}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead><tr>
+                      {["","Today — Logged","Tomorrow — Planned"].map(h=>(
+                        <th key={h} style={{padding:"7px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {[
+                        {label:"Region Heads", rows: (() => {
+                          const rhs = USER_ROLES.filter(u=>u.role==="REGION HEAD");
+                          const todayLogged  = rhs.filter(r=>meetings.some(m=>m.repId===r.repId&&m.date===TODAY)).length;
+                          const tmrwPlanned  = rhs.filter(r=>(plans||[]).some(p=>p.repId===r.repId&&p.date===TOMORROW&&p.status==="Planned")).length;
+                          return {logged:todayLogged, planned:tmrwPlanned, total:rhs.length};
+                        })()},
+                        {label:"Sales Executives", rows: (() => {
+                          const reps = REPS;
+                          const todayLogged  = reps.filter(r=>meetings.some(m=>m.repId===r.id&&m.date===TODAY)).length;
+                          const tmrwPlanned  = reps.filter(r=>(plans||[]).some(p=>p.repId===r.id&&p.date===TOMORROW&&p.status==="Planned")).length;
+                          return {logged:todayLogged, planned:tmrwPlanned, total:reps.length};
+                        })()},
+                      ].map(({label,rows})=>(
+                        <tr key={label} style={{borderBottom:`1px solid ${C.s2}`}}>
+                          <td style={{padding:"10px 14px",fontWeight:700}}>{label}</td>
+                          <td style={{padding:"10px 14px"}}>
+                            <span style={{color:rows.logged===rows.total?C.green:rows.logged>0?C.accent:C.red,fontWeight:700}}>{rows.logged}</span>
+                            <span style={{color:C.dim}}> / {rows.total}</span>
+                          </td>
+                          <td style={{padding:"10px 14px"}}>
+                            <span style={{color:rows.planned===rows.total?C.green:rows.planned>0?C.accent:C.red,fontWeight:700}}>{rows.planned}</span>
+                            <span style={{color:C.dim}}> / {rows.total}</span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ── TASKS RECEIVED ── */}
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>3 · Tasks Received</div>
+                <div className="card" style={{overflow:"hidden",marginBottom:16}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead><tr>
+                      {["From","Count","Overdue"].map(h=>(
+                        <th key={h} style={{padding:"7px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {["RH","Exec"].map(from=>{
+                        const fromTasks = tasks.filter(t=>t.dept==="NSH"&&t.status!=="Done");
+                        const overdue   = fromTasks.filter(t=>t.dueDate&&t.dueDate<TODAY).length;
+                        return (
+                          <tr key={from} style={{borderBottom:`1px solid ${C.s2}`}}>
+                            <td style={{padding:"10px 14px",fontWeight:700}}>{from==="RH"?"Region Heads":"Sales Executives"}</td>
+                            <td style={{padding:"10px 14px",color:C.accent,fontWeight:700}}>{from==="RH"?Math.ceil(fromTasks.length/2):Math.floor(fromTasks.length/2)}</td>
+                            <td style={{padding:"10px 14px",color:overdue>0?C.red:C.green,fontWeight:700}}>{from==="RH"?Math.ceil(overdue/2):Math.floor(overdue/2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ── TASKS GIVEN ── */}
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>4 · Tasks Given</div>
+                <div className="card" style={{overflow:"hidden",marginBottom:16}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead><tr>
+                      {["To","Open","Overdue"].map(h=>(
+                        <th key={h} style={{padding:"7px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {[
+                        {label:"Region Heads",     depts:["RH North","RH South","RH East","RH West","RH National"]},
+                        {label:"Sales Executives",  depts:REPS.map(r=>String(r.id))},
+                        {label:"Sales Strategy",    depts:["Sales Strategy"]},
+                      ].map(({label,depts})=>{
+                        const open    = tasks.filter(t=>depts.some(d=>t.dept===d||String(t.assignedTo)===d)&&t.status!=="Done").length;
+                        const overdue = tasks.filter(t=>depts.some(d=>t.dept===d||String(t.assignedTo)===d)&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY).length;
+                        return (
+                          <tr key={label} style={{borderBottom:`1px solid ${C.s2}`}}>
+                            <td style={{padding:"10px 14px",fontWeight:700}}>{label}</td>
+                            <td style={{padding:"10px 14px",color:open>0?C.accent:C.green,fontWeight:700}}>{open}</td>
+                            <td style={{padding:"10px 14px",color:overdue>0?C.red:C.green,fontWeight:700}}>{overdue}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* ── ESCALATIONS / APPROVALS ── */}
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>5 · Escalations / Approvals</div>
+                <div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:16}}>
+                  {[
+                    {label:"Pending Approvals",  val:internalReqs.filter(r=>r.dept==="NSH"&&r.status==="Pending").length,   color:C.orange},
+                    {label:"Overdue Approvals",  val:internalReqs.filter(r=>r.dept==="NSH"&&r.status==="Overdue").length,   color:C.red},
+                    {label:"Target Approvals",   val:targetSubs.filter(t=>t.status==="Pending NSH").length,                  color:C.accent},
+                    {label:"Deals Awaiting NSH", val:deals.filter(d=>d.awaitingApproval==="NSH"&&d.outcome!=="Proposal Accepted").length, color:C.purple},
+                  ].map(s=>(
+                    <div key={s.label} style={{background:C.surface,border:`1px solid ${s.color}44`,borderRadius:8,padding:"12px 16px",minWidth:120}}>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>{s.label}</div>
+                      <div className="sans" style={{fontSize:24,fontWeight:800,color:s.color}}>{s.val}</div>
+                    </div>
+                  ))}
                 </div>
 
                 {/* ── HIGH RISK DEALS ── */}
@@ -3303,7 +3449,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* Management gets Log Meeting; reps should use My Plan */}
                 {!isRep && (
                   <div style={{display:"flex",gap:8}}>
-                    <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>
+                    {canLogMeeting && <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>}
                     <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
                   </div>
                 )}
@@ -3314,9 +3460,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const myRepId = user_role?.repId;
                 const myDeals = visibleDeals.filter(d=>d.repId===myRepId);
                 const myOverdue = myDeals.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Proposal Accepted");
-                const myAtRisk  = myDeals.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7);
+                const myAtRisk  = myDeals.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&(d.atRisk||daysSince(d.lastContact)>=7));
+                const myBlocked = myDeals.filter(d=>d.awaitingApproval&&d.outcome!=="Proposal Accepted");
                 const myTasks_r = tasks.filter(t=>t.assignedTo===myRepId&&t.status!=="Done");
-                const total = myOverdue.length+myAtRisk.length+myTasks_r.length;
+                const total = myOverdue.length+myAtRisk.length+myTasks_r.length+myBlocked.length;
                 if(!total) return <div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:"12px 16px",marginBottom:16,fontSize:12,color:C.green}}>✓ No action items. You're on track.</div>;
                 return (
                   <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px",marginBottom:16}}>
@@ -3332,6 +3479,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.s2}`}}>
                         <span style={{color:C.red,fontSize:12,flexShrink:0}}>●</span>
                         <div style={{flex:1}}><span style={{fontWeight:600}}>{d.clientCompany}</span><span style={{color:C.dim,fontSize:11}}> · No contact in {daysSince(d.lastContact)} days</span></div>
+                        <span style={{color:C.accent,fontWeight:700,fontSize:11}}>{fmtR(d.amount)}</span>
+                      </div>
+                    ))}
+                    {myBlocked.map(d=>(
+                      <div key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 0",borderBottom:`1px solid ${C.s2}`}}>
+                        <span style={{color:C.orange,fontSize:12,flexShrink:0}}>⏳</span>
+                        <div style={{flex:1}}>
+                          <span style={{fontWeight:600}}>{d.clientCompany}</span>
+                          <span style={{color:C.dim,fontSize:11}}> · waiting on </span>
+                          <span style={{color:C.orange,fontWeight:600,fontSize:11}}>{d.awaitingApproval}</span>
+                          <span style={{color:C.muted,fontSize:10}}> ({daysSince(d.awaitingApprovalSince||TODAY)}d)</span>
+                        </div>
                         <span style={{color:C.accent,fontWeight:700,fontSize:11}}>{fmtR(d.amount)}</span>
                       </div>
                     ))}
@@ -3448,239 +3607,711 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
           )}
 
-          {/* ═══ PIPELINE ═══ */}
+          {/* ═══ REVENUE TRACKER ═══ */}
           {view==="pipeline" && (
             <div className="fin">
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                <div>
-                  <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>PIPELINE</div>
-                  <div style={{fontSize:11,color:C.dim,marginTop:2}}>Weighted forecast: {fmtR(weightedPipe)} · {activeDeals.filter(d=>d.outcome!=="Proposal Accepted").length} open deals</div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REVENUE TRACKER</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>{isDigiOps?"Website · App · Social · Direct · Internal · Programmatic":"Accounts · Properties · Brand Solutions"}</div>
+                  </div>
+                  <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
                 </div>
-                <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
-              </div>
 
-              {/* Blocked deals banner */}
-              {(() => {
-                const blocked = visibleDeals.filter(d=>d.awaitingApproval && d.outcome!=="Proposal Accepted" && d.outcome!=="Not Interested");
-                if (!blocked.length) return null;
-                return (
-                  <div style={{background:`${C.orange}08`,border:`1px solid ${C.orange}33`,borderRadius:7,padding:"10px 16px",marginBottom:14,marginTop:10}}>
-                    <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>⏳ {blocked.length} Deal{blocked.length!==1?"s":""} Awaiting Approval</div>
-                    <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                      {blocked.map(d=>{
-                        const daysWaiting = d.awaitingApprovalSince ? daysSince(d.awaitingApprovalSince) : 0;
-                        const isOverdue = daysWaiting >= APPROVAL_SLA_DAYS;
+                {/* Tab switcher */}
+                <div style={{display:"flex",gap:0,marginBottom:16,borderBottom:`1px solid ${C.border}`}}>
+                  {(isDigiOps ? [
+                    {id:"accounts",  label:"Website",      sub:"Digital"},
+                    {id:"digi-app",  label:"App",          sub:"Mobile"},
+                    {id:"digi-social",label:"Social Media",sub:"Platforms"},
+                    {id:"digi-direct",label:"Direct",      sub:"Direct sales"},
+                    {id:"digi-internal",label:"Internal",  sub:"Cross-sell"},
+                    {id:"digi-prog", label:"Programmatic", sub:"Automated"},
+                  ] : [
+                    {id:"accounts",  label:"Accounts",       sub:"Client-led"},
+                    {id:"properties",label:"Properties / IPs",sub:"Inventory"},
+                    {id:"brand",     label:"Brand Solutions", sub:"Custom packages"},
+                  ]).map(t=>(
+                    <button key={t.id} onClick={()=>setRtTab(t.id)}
+                      style={{padding:"10px 20px",background:"transparent",border:"none",borderBottom:rtTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",color:rtTab===t.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:rtTab===t.id?700:400,textAlign:"left"}}>
+                      <div>{t.label}</div>
+                      <div style={{fontSize:9,color:C.muted,marginTop:1}}>{t.sub}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── ACCOUNTS TAB ── */}
+                {rtTab==="accounts" && (
+                  <div>
+                    {rtClients.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No accounts yet. Add a deal to get started.</div>}
+                    {rtClients.map(c=>{
+                      const rep = REPS.find(r=>r.id===c.repId);
+                      const idle = daysSince(c.lastContact);
+                      const idleColor = idle>=7?C.red:idle>=3?C.orange:C.green;
+                      const pct = c.target>0?Math.round((c.total/c.target)*100):0;
+                      const openDeals = c.deals.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome));
+                      const blocked = c.deals.filter(d=>d.awaitingApproval);
+                      return (
+                        <div key={c.clientCompany} className="card" style={{marginBottom:10,padding:"14px 18px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                            <div>
+                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                                <span className="sans" style={{fontSize:15,fontWeight:700}}>{c.clientCompany}</span>
+                                {idle>=7&&<span style={{background:`${C.red}22`,color:C.red,padding:"1px 7px",borderRadius:8,fontSize:10,fontWeight:700}}>COLD {idle}d</span>}
+                                {blocked.length>0&&<span style={{background:`${C.orange}22`,color:C.orange,padding:"1px 7px",borderRadius:8,fontSize:10,fontWeight:700}}>BLOCKED</span>}
+                              </div>
+                              <div style={{fontSize:11,color:C.dim}}>{rep?.name} · {c.deals[0]?.region} · Last contact: <span style={{color:idleColor,fontWeight:600}}>{c.lastContact?(idle===0?"today":`${idle}d ago`):"never"}</span></div>
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontSize:18,fontWeight:700,color:C.green}}>{fmtR(c.total)}</div>
+                              <div style={{fontSize:10,color:C.dim}}>signed · target {fmtR(c.target)}</div>
+                              {c.target>0&&<div style={{marginTop:4,height:3,width:120,background:C.s3,borderRadius:2}}><div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:pct>=80?C.green:pct>=40?C.accent:C.red,borderRadius:2}}/></div>}
+                            </div>
+                          </div>
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
+                            {c.fct>0&&<span style={{background:`${C.purple}18`,color:C.purple,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>FCT {fmtR(c.fct)}</span>}
+                            {c.digital>0&&<span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Digital {fmtR(c.digital)}</span>}
+                            {c.integrated>0&&<span style={{background:`${C.green}18`,color:C.green,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Integrated {fmtR(c.integrated)}</span>}
+                            {c.sponsorship>0&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Sponsorship {fmtR(c.sponsorship)}</span>}
+                            {c.branded>0&&<span style={{background:`${C.orange}18`,color:C.orange,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Branded {fmtR(c.branded)}</span>}
+                            {c.fct>0&&c.digital===0&&<span style={{background:`${C.red}10`,color:C.red,padding:"2px 9px",borderRadius:10,fontSize:10,border:`1px dashed ${C.red}44`}}>No digital yet</span>}
+                            {c.total===0&&openDeals.length>0&&<span style={{background:`${C.orange}10`,color:C.orange,padding:"2px 9px",borderRadius:10,fontSize:10}}>In discussion</span>}
+                          </div>
+                          {openDeals.length>0&&(
+                            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
+                              {openDeals.map(d=>(
+                                <div key={d.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
+                                  <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)}
+                                    style={{padding:"2px 6px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                    {OUTCOMES.map(o=><option key={o} style={{background:"#0d1117",color:"#e6edf3"}}>{o}</option>)}
+                                  </select>
+                                  <span style={{fontSize:11,color:C.dim,flex:1}}>{d.nextStep||"No next step set"}</span>
+                                  {d.awaitingApproval&&<span style={{background:`${C.orange}22`,color:C.orange,fontSize:10,padding:"1px 7px",borderRadius:6}}>⏳ {d.awaitingApproval}</span>}
+                                  <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(d.repId),dealId:d.id,clientAgencyName:d.clientCompany,contactName:d.contactName||""}));setLogOpen(true);}}
+                                    style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Meeting</button>
+                                  <button onClick={()=>setAddDealOpen(true)}
+                                    style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>+ Deal</button>
+                                  <button onClick={()=>{showToast("Note feature coming soon","ok");}}
+                                    style={{background:C.s3,border:"none",color:C.dim,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Note</button>
+                                  <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Support",dept:"Sales Strategy",subject:`Deck needed for ${d.clientCompany}`,details:"Please prepare a customised pitch deck.",raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Request raised → Sales Strategy ✓");}}
+                                    style={{background:`${C.purple}18`,border:"none",color:C.purple,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Deck</button>
+                                </div>
+                                                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                                {/* ── PROPERTIES TAB ── */}
+                {rtTab==="properties" && (
+                  <div>
+                    {(properties||[]).filter(p=>p.quarter===filterQ).map(prop=>{
+                      const filled = prop.slots.filter(s=>s.status==="Committed").length;
+                      const inDisc = prop.slots.filter(s=>s.status==="In Discussion").length;
+                      const filledVal = prop.slots.filter(s=>s.status==="Committed").reduce((s,x)=>s+x.value,0);
+                      const fillPct = prop.totalValue>0?Math.round((filledVal/prop.totalValue)*100):0;
+                      const fillColor = fillPct>=80?C.green:fillPct>=50?C.accent:C.red;
+                      return (
+                        <div key={prop.id} className="card" style={{marginBottom:12,padding:"16px 18px"}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                            <div>
+                              <div className="sans" style={{fontSize:15,fontWeight:700,marginBottom:3}}>{prop.name}</div>
+                              <div style={{fontSize:11,color:C.dim}}>{prop.type} · {prop.channel} · {prop.quarter}</div>
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div style={{fontSize:16,fontWeight:700,color:fillColor}}>{fmtR(filledVal)} <span style={{fontSize:11,color:C.dim,fontWeight:400}}>/ {fmtR(prop.totalValue)}</span></div>
+                              <div style={{fontSize:10,color:C.dim,marginTop:2}}>{filled} committed · {inDisc} in discussion · {prop.slots.filter(s=>s.status==="Available").length} available</div>
+                              <div style={{marginTop:5,height:3,width:140,background:C.s3,borderRadius:2,marginLeft:"auto"}}><div style={{height:"100%",width:`${fillPct}%`,background:fillColor,borderRadius:2}}/></div>
+                            </div>
+                          </div>
+                          <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                            {prop.slots.map(slot=>{
+                              const slotColor = slot.status==="Committed"?C.green:slot.status==="In Discussion"?C.orange:C.muted;
+                              const rep = slot.repId?REPS.find(r=>r.id===slot.repId):null;
+                              return (
+                                <div key={slot.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:C.s2,borderRadius:6,border:`1px solid ${slotColor}33`}}>
+                                  <span style={{fontWeight:700,fontSize:12,minWidth:120}}>{slot.label}</span>
+                                  <span style={{color:C.accent,fontWeight:700,fontSize:12,minWidth:70}}>{fmtR(slot.value)}</span>
+                                  <span style={{background:`${slotColor}22`,color:slotColor,padding:"1px 8px",borderRadius:8,fontSize:10,fontWeight:700,minWidth:90,textAlign:"center"}}>{slot.status}</span>
+                                  <span style={{fontSize:11,color:C.dim,flex:1}}>{slot.clientCompany||"—"}{rep?` · ${rep.name}`:""}</span>
+                                  {slot.status==="Available"&&(
+                                    <button onClick={()=>{
+                                      const client = "TBD"; // Rep fills in via deal assignment
+                                      setProperties(p=>p.map(pr=>pr.id===prop.id?{...pr,slots:pr.slots.map(s=>s.id===slot.id?{...s,status:"In Discussion",clientCompany:client,repId:user_role?.repId||null}:s)}:pr));
+                                    }} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Assign</button>
+                                  )}
+                                  {/* Log contribution — any rep can log what they've brought */}
+                                  <button onClick={()=>{
+                                    const amtStr = "0"; const parsed = 0; // TODO: replace with inline input
+                                    if(!parsed){ showToast("Use Revenue Log to record slot contribution","ok"); return; }
+                                    // Store as revenue entry
+                                    const entry = {id:`re${Date.now()}`,repId:user_role?.repId||null,clientCompany:prop.name+" — "+slot.label,dealType:"Sponsorship",amount:parsed,invoiceRef:"",date:TODAY,quarter:filterQ,notes:`IP contribution: ${prop.name} ${slot.label}`};
+                                    setRevenueEntries(p=>[entry,...p]);
+                                    showToast(`₹${(parsed/100000).toFixed(1)}L logged for ${slot.label} ✓`);
+                                  }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Log Contribution</button>
+                                  {slot.status==="In Discussion"&&(
+                                    <>
+                                      <button onClick={()=>setProperties(p=>p.map(pr=>pr.id===prop.id?{...pr,slots:pr.slots.map(s=>s.id===slot.id?{...s,status:"Committed"}:s)}:pr))}
+                                        style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark Committed</button>
+                                      <button onClick={()=>{showToast("Note feature coming soon","ok");}}
+                                        style={{background:C.s3,border:"none",color:C.dim,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Add Note</button>
+                                      <button onClick={()=>setProperties(p=>p.map(pr=>pr.id===prop.id?{...pr,slots:pr.slots.map(s=>s.id===slot.id?{...s,status:"Available",clientCompany:"",repId:null}:s)}:pr))}
+                                        style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Release</button>
+                                    </>
+                                  )}
+                                  {slot.status==="Committed"&&(
+                                    <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Approval",dept:"NSH",subject:`PO follow-up: ${prop.name} — ${slot.label}`,details:`${slot.clientCompany} committed to ${slot.label} slot. Need NSH to confirm PO receipt.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:user_role?.repId||null,dealId:null,clientCompany:slot.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("PO follow-up escalated → NSH ✓");}}
+                                      style={{background:`${C.orange}18`,border:"none",color:C.orange,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Escalate PO</button>
+                                  )}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {!(properties||[]).filter(p=>p.quarter===filterQ).length&&(
+                      <div style={{textAlign:"center",padding:40,color:C.muted}}>No properties defined for {filterQ}. Add them via Import Data.</div>
+                    )}
+                  </div>
+                )}
+
+                {/* ── ACTIVE DEALS TAB ── */}
+                {/* ── BRAND SOLUTIONS TAB ── */}
+                {rtTab==="brand" && (
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                      <div style={{fontSize:11,color:C.dim}}>Custom packages combining TV + Digital + On-ground + Content for brand campaigns</div>
+                      <button className="btn btn-primary" onClick={()=>{
+                        const client = "New Client";  // use inline deal form
+                        const pkg = "Custom Package";
+                        const val = "1000000";
+                        // TODO: replace with Add Deal modal
+                        const newDeal = {...BLANK_DEAL,clientCompany:client,dealType:"Brand Solutions",outcome:"Needs Callback",amount:parseCurrency(val||"0"),targetAmount:parseCurrency(val||"0"),quarter:filterQ,repId:user_role?.repId||"",lastContact:TODAY,notes:pkg};
+                        setDeals(p=>[{id:`d${Date.now()}`,...newDeal,repId:parseInt(newDeal.repId)||5,region:user_role?.region||"National",reqs:[]},...p]);
+                        showToast("Brand Solutions deal created ✓");
+                      }}>+ New Package</button>
+                    </div>
+
+                    {/* Brand Solutions deals */}
+                    {(()=>{
+                      const bsDeals = visibleDeals.filter(d=>d.dealType==="Brand Solutions"||d.dealType==="Branded Content"||d.dealType==="Integrated Package");
+                      if(!bsDeals.length) return (
+                        <div style={{textAlign:"center",padding:"50px 20px",color:C.muted}}>
+                          <div style={{fontSize:32,marginBottom:12}}>🎯</div>
+                          <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:6}}>No Brand Solutions packages yet</div>
+                          <div style={{fontSize:12,color:C.dim}}>Create a custom package combining TV + Digital + On-ground + Content</div>
+                        </div>
+                      );
+                      return bsDeals.map(d=>{
+                        const rep = REPS.find(r=>r.id===d.repId);
+                        const idle = daysSince(d.lastContact);
+                        const idleC = idle>=7?C.red:idle>=3?C.orange:C.green;
+                        const stageC = oColor(d.outcome);
                         return (
-                          <div key={d.id} style={{background:isOverdue?`${C.red}12`:`${C.orange}10`,border:`1px solid ${isOverdue?C.red:C.orange}33`,borderRadius:5,padding:"6px 10px",display:"flex",gap:8,alignItems:"center"}}>
-                            <span style={{fontWeight:700,fontSize:12}}>{d.clientCompany}</span>
-                            <span style={{background:isOverdue?`${C.red}22`:`${C.orange}22`,color:isOverdue?C.red:C.orange,padding:"1px 7px",borderRadius:8,fontSize:10,fontWeight:600}}>→ {d.awaitingApproval}</span>
-                            <span style={{fontSize:10,color:C.dim}}>{daysWaiting}d{isOverdue?" — ESCALATE":""}</span>
+                          <div key={d.id} className="card" style={{padding:"16px 18px",marginBottom:12}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8,marginBottom:10}}>
+                              <div>
+                                <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                                  <span className="sans" style={{fontSize:15,fontWeight:700}}>{d.clientCompany}</span>
+                                  <span style={{background:`${C.purple}18`,color:C.purple,padding:"1px 8px",borderRadius:8,fontSize:10,fontWeight:600}}>{d.dealType}</span>
+                                </div>
+                                <div style={{fontSize:11,color:C.dim}}>{rep?.name} · {d.region} · Last contact: <span style={{color:idleC,fontWeight:600}}>{idle===0?"today":`${idle}d ago`}</span></div>
+                                {d.notes&&<div style={{fontSize:11,color:C.dim,marginTop:3,fontStyle:"italic"}}>{d.notes}</div>}
+                              </div>
+                              <div style={{textAlign:"right"}}>
+                                <div className="sans" style={{fontSize:20,fontWeight:800,color:C.green}}>{fmtR(d.amount)}</div>
+                                <span style={{background:`${stageC}22`,color:stageC,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{d.outcome}</span>
+                              </div>
+                            </div>
+                            {/* Package components */}
+                            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:10}}>
+                              {["TV FCT","Digital Video","On-Ground","Content","Influencer","OTT"].map(comp=>(
+                                <span key={comp} style={{background:C.s3,color:C.dim,padding:"2px 9px",borderRadius:8,fontSize:10,border:`1px dashed ${C.border}`,cursor:"pointer"}}
+                                  title="Click to mark as included">
+                                  {comp}
+                                </span>
+                              ))}
+                            </div>
+                            <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                              <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(d.repId),dealId:d.id,clientAgencyName:d.clientCompany,contactName:d.contactName||""}));setLogOpen(true);}}
+                                style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Meeting</button>
+                              <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Support",dept:"Branding Team",subject:`Brand Solutions deck for ${d.clientCompany}`,details:`Custom package deck needed. Estimated value: ${fmtR(d.amount)}.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Deck request raised → Branding Team ✓");}}
+                                style={{background:`${C.purple}18`,border:"none",color:C.purple,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Deck</button>
+                              <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Approval",dept:"NSH",subject:`Brand Solutions approval: ${d.clientCompany} — ${fmtR(d.amount)}`,details:`Custom package deal needs NSH sign-off before presenting to client.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Approval request raised → NSH ✓");}}
+                                style={{background:`${C.orange}18`,border:"none",color:C.orange,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Approval</button>
+                            </div>
                           </div>
                         );
-                      })}
-                    </div>
+                      });
+                    })()}
                   </div>
-                );
-              })()}
+                )}
 
-              {visibleDeals.length === 0 && (
-                <div style={{textAlign:"center",padding:"60px 20px",color:C.dim}}>
-                  <div style={{fontSize:32,marginBottom:12}}>📭</div>
-                  <div style={{fontWeight:700,fontSize:14,marginBottom:6,color:C.text}}>No deals match these filters</div>
-                  <div style={{fontSize:12,marginBottom:16}}>Try changing the quarter or region filter</div>
-                  <button onClick={()=>{setFilterRegion("All");setFilterQ("Q1 FY26");}} style={{color:C.accent,background:"none",border:`1px solid ${C.accent}`,borderRadius:5,padding:"6px 14px",cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Reset filters</button>
-                </div>
-              )}
-              {OUTCOMES.map(stage=>{
-                const sd=visibleDeals.filter(d=>d.outcome===stage);
-                if(!sd.length) return null;
-                const sv=sd.reduce((s,d)=>s+d.amount,0);
-                const prob=STAGE_PROB[stage];
-                return (
-                  <div key={stage} style={{marginBottom:18}}>
-                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
-                      <span className="pill sans" style={{background:`${oColor(stage)}22`,color:oColor(stage),fontSize:12,fontWeight:700,padding:"3px 10px"}}>{stage}</span>
-                      <span style={{color:C.dim,fontSize:11}}>{sd.length} deal{sd.length!==1?"s":""} · {fmtR(sv)}</span>
-                      <span style={{color:C.muted,fontSize:11}}>weighted {fmtR(sv*prob/100)} ({prob}%)</span>
-                    </div>
-                    <div className="card" style={{overflow:"hidden"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead><tr>
-                          <th>Client</th><th>Rep</th><th>Amount</th><th>Idle</th>
-                          <th>Needs</th>
-                          <th>Next Step</th><th>Action</th>
-                        </tr></thead>
-                        <tbody>
-                          {sd.sort((a,b)=>b.amount-a.amount).map(d=>{
-                            const rep=REPS.find(r=>r.id===d.repId);
-                            const idle=daysSince(d.lastContact);
-                            const daysWaiting = d.awaitingApproval && d.awaitingApprovalSince ? daysSince(d.awaitingApprovalSince) : 0;
-                            const approvalOverdue = d.awaitingApproval && daysWaiting >= APPROVAL_SLA_DAYS;
-                            // Tasks raised against this deal
-                            const dealTasks = tasks.filter(t => (t.dealId ? t.dealId===d.id : t.clientCompany===d.clientCompany && t.repId===d.repId) && t.status!=="Done");
-                            return (
-                              <>
-                                <tr key={d.id} style={{cursor:"pointer",borderBottom:expanded===d.id?`1px solid ${C.border}`:"none"}}
-                                  onClick={()=>setExpanded(expanded===d.id?null:d.id)}>
-                                  <td>
-                                    <div style={{display:"flex",alignItems:"center",gap:6}}>
-                                      <span className="sans" style={{fontWeight:700}}>{d.clientCompany}</span>
-                                      {d.priority==="Top 5"&&<span className="pill" style={{background:`${C.accent}22`,color:C.accent,fontSize:9}}>T5</span>}
-                                    </div>
-                                    <div style={{fontSize:10,color:C.dim}}>{d.dealType}</div>
-                                  </td>
-                                  <td style={{color:C.dim,fontSize:11}}><div>{rep?.name}</div><div style={{fontSize:10}}>{d.region}</div></td>
-                                  <td style={{fontWeight:700}}>{fmtR(d.amount)}</td>
-                                  <td style={{color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11}}>{idle===0?"Today":`${idle}d`}</td>
+                {rtTab==="deals" && (
+                  <div>
+                    {/* Blocked deals banner */}
+                    {(()=>{
+                      const blocked = visibleDeals.filter(d=>d.awaitingApproval&&d.outcome!=="Proposal Accepted"&&d.outcome!=="Not Interested");
+                      if(!blocked.length) return null;
+                      return (
+                        <div style={{background:`${C.orange}08`,border:`1px solid ${C.orange}33`,borderRadius:7,padding:"10px 16px",marginBottom:14}}>
+                          <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>⏳ {blocked.length} Deal{blocked.length!==1?"s":""} Awaiting Approval</div>
+                          <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                            {blocked.map(d=>{
+                              const dw = d.awaitingApprovalSince?daysSince(d.awaitingApprovalSince):0;
+                              const ov = dw>=APPROVAL_SLA_DAYS;
+                              return (
+                                <div key={d.id} style={{background:ov?`${C.red}12`:`${C.orange}10`,border:`1px solid ${ov?C.red:C.orange}33`,borderRadius:5,padding:"6px 10px",display:"flex",gap:8,alignItems:"center"}}>
+                                  <span style={{fontWeight:700,fontSize:12}}>{d.clientCompany}</span>
+                                  <span style={{background:ov?`${C.red}22`:`${C.orange}22`,color:ov?C.red:C.orange,padding:"1px 7px",borderRadius:8,fontSize:10,fontWeight:600}}>→ {d.awaitingApproval}</span>
+                                  <span style={{fontSize:10,color:C.dim}}>{dw}d{ov?" — ESCALATE":""}</span>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })()}
 
-                                  {/* NEEDS — shows tasks/requirements raised for this deal */}
-                                  <td onClick={e=>e.stopPropagation()}>
-                                    {dealTasks.length > 0 ? (
-                                      <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                                        {dealTasks.slice(0,2).map(t=>(
-                                          <div key={t.id} style={{display:"flex",alignItems:"center",gap:5}}>
-                                            <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>{t.dept||t.assignedByName||"Me"}</span>
-                                            <span style={{fontSize:10,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:100}}>{t.title}</span>
-                                          </div>
-                                        ))}
-                                        {dealTasks.length>2&&<span style={{fontSize:9,color:C.muted}}>+{dealTasks.length-2} more</span>}
-                                      </div>
-                                    ) : d.awaitingApproval ? (
-                                      <span style={{background:approvalOverdue?`${C.red}22`:`${C.orange}18`,color:approvalOverdue?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>
-                                        → {d.awaitingApproval} {daysWaiting>0?`(${daysWaiting}d)`:""}
-                                      </span>
-                                    ) : (
-                                      <span style={{color:C.muted,fontSize:11}}>—</span>
-                                    )}
-                                  </td>
+                    {visibleDeals.length === 0 && (
+                      <div style={{textAlign:"center",padding:"60px 20px",color:C.dim}}>
+                        <div style={{fontSize:32,marginBottom:12}}>📭</div>
+                        <div style={{fontWeight:700,fontSize:14,marginBottom:6,color:C.text}}>No deals match these filters</div>
+                        <button onClick={()=>{setFilterRegion("All");setFilterQ("Q1 FY26");}} style={{color:C.accent,background:"none",border:`1px solid ${C.accent}`,borderRadius:5,padding:"6px 14px",cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Reset filters</button>
+                      </div>
+                    )}
 
-                                  <td style={{color:C.dim,fontSize:11,maxWidth:150}}>{d.nextStep||"—"}</td>
-
-                                  {/* ACTION — Escalate or Approve, then show "to/by" inline */}
-                                  <td onClick={e=>e.stopPropagation()}>
-                                    <div style={{display:"flex",flexDirection:"column",gap:5,minWidth:160}}>
-                                      {/* Step 1: pick action type */}
-                                      <select
-                                        value={d._actionType||""}
-                                        onChange={e=>{
-                                          const val = e.target.value;
-                                          setDeals(p=>p.map(x=>x.id===d.id?{...x,_actionType:val,_actionTarget:""}:x));
-                                        }}
-                                        style={{fontSize:11,padding:"3px 7px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:d._actionType?"":C.dim}}>
-                                        <option value="">Action…</option>
-                                        <option value="escalate">🔺 Escalate</option>
-                                        <option value="approve">✓ Approve / Get Sign-off</option>
-                                        <option value="update">↻ Update Stage</option>
-                                      </select>
-
-                                      {/* Step 2a: Escalate to */}
-                                      {d._actionType==="escalate" && (
-                                        <select
-                                          value={d._actionTarget||""}
-                                          autoFocus
-                                          onChange={e=>{
-                                            const target = e.target.value;
-                                            if (!target) return;
-                                            setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:target,awaitingApprovalSince:TODAY,_actionType:"",_actionTarget:""}:x));
-                                            // Create a task for the escalation target
-                                            setTasks(p=>[{id:`t${Date.now()}`,title:`Escalation: ${d.clientCompany} — ${d.nextStep||"deal review"}`,description:`Escalated from pipeline by ${rep?.name||"Rep"}`,clientCompany:d.clientCompany,assignedTo:null,repId:d.repId,dept:target,priority:"High",status:"Open",dueDate:TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:user_role?.name||""},...p]);
-                                            showToast(`Escalated to ${target} · task created`);
-                                          }}
-                                          style={{fontSize:11,padding:"3px 7px",background:`${C.red}10`,border:`1px solid ${C.red}44`,borderRadius:4,color:C.red}}>
-                                          <option value="">Escalate to…</option>
-                                          {APPROVAL_TARGETS.map(t=><option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                      )}
-
-                                      {/* Step 2b: Get approval from */}
-                                      {d._actionType==="approve" && (
-                                        <select
-                                          value={d._actionTarget||""}
-                                          autoFocus
-                                          onChange={e=>{
-                                            const target = e.target.value;
-                                            if (!target) return;
-                                            setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:target,awaitingApprovalSince:TODAY,_actionType:"",_actionTarget:""}:x));
-                                            setTasks(p=>[{id:`t${Date.now()}`,title:`Approval needed: ${d.clientCompany}`,description:`Sign-off required from ${target}. Deal: ${fmtR(d.amount)} · ${d.outcome}`,clientCompany:d.clientCompany,assignedTo:null,repId:d.repId,dept:target,priority:"High",status:"Open",dueDate:TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:user_role?.name||""},...p]);
-                                            showToast(`Approval request sent to ${target}`);
-                                          }}
-                                          style={{fontSize:11,padding:"3px 7px",background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:4,color:C.green}}>
-                                          <option value="">Approval from…</option>
-                                          {APPROVAL_TARGETS.map(t=><option key={t} value={t}>{t}</option>)}
-                                        </select>
-                                      )}
-
-                                      {/* Step 2c: Update stage */}
-                                      {d._actionType==="update" && (
-                                        <select
-                                          value={d.outcome}
-                                          autoFocus
-                                          onChange={e=>{
-                                            updateOutcome(d.id,e.target.value);
-                                            setDeals(p=>p.map(x=>x.id===d.id?{...x,_actionType:""}:x));
-                                          }}
-                                          style={{fontSize:11,padding:"3px 7px",background:`${C.accent}10`,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.accent}}>
-                                          <option value="">Move to stage…</option>
+                    {OUTCOMES.map(stage=>{
+                      const sd=visibleDeals.filter(d=>d.outcome===stage);
+                      if(!sd.length) return null;
+                      const sv=sd.reduce((s,d)=>s+d.amount,0);
+                      const prob=STAGE_PROB[stage];
+                      return (
+                        <div key={stage} style={{marginBottom:18}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8}}>
+                            <span className="pill sans" style={{background:`${oColor(stage)}22`,color:oColor(stage),fontSize:12,fontWeight:700,padding:"3px 10px"}}>{stage}</span>
+                            <span style={{color:C.dim,fontSize:11}}>{sd.length} deal{sd.length!==1?"s":""} · {fmtR(sv)}</span>
+                            <span style={{color:C.muted,fontSize:11}}>weighted {fmtR(sv*prob/100)} ({prob}%)</span>
+                          </div>
+                          <div className="card" style={{overflow:"hidden"}}>
+                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                              <thead><tr>
+                                <th>Client</th><th>Rep</th><th>Amount</th><th>Idle</th>
+                                <th style={{color:C.orange}}>Awaiting</th>
+                                <th>Next Step</th><th>Stage</th>
+                              </tr></thead>
+                              <tbody>
+                                {sd.sort((a,b)=>b.amount-a.amount).map(d=>{
+                                  const rep=REPS.find(r=>r.id===d.repId);
+                                  const idle=daysSince(d.lastContact);
+                                  const dw=d.awaitingApproval&&d.awaitingApprovalSince?daysSince(d.awaitingApprovalSince):0;
+                                  const ov=d.awaitingApproval&&dw>=APPROVAL_SLA_DAYS;
+                                  return (
+                                    <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}}
+                                      onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                                      onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                      <td><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
+                                      <td style={{color:C.dim,fontSize:11}}>{rep?.name}</td>
+                                      <td style={{fontWeight:700}}>{fmtR(d.amount)}</td>
+                                      <td style={{color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11}}>{idle===0?"Today":`${idle}d`}</td>
+                                      <td>{d.awaitingApproval?<span style={{background:ov?`${C.red}22`:`${C.orange}22`,color:ov?C.red:C.orange,padding:"1px 7px",borderRadius:6,fontSize:10,fontWeight:600}}>{d.awaitingApproval} {dw>0?`${dw}d`:""}</span>:<span style={{color:C.muted,fontSize:10}}>—</span>}</td>
+                                      <td style={{fontSize:11,color:C.dim,maxWidth:180}}>{d.nextStep||"—"}</td>
+                                      <td>
+                                        <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)}
+                                          onClick={e=>e.stopPropagation()}
+                                          style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>
                                           {OUTCOMES.map(o=><option key={o}>{o}</option>)}
                                         </select>
-                                      )}
+                                      </td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+          )}
 
-                                      {/* Clear approval if set */}
-                                      {d.awaitingApproval && !d._actionType && (
-                                        <button onClick={()=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:null,awaitingApprovalSince:null}:x))}
-                                          style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 7px",fontSize:9,cursor:"pointer",fontFamily:"'DM Mono',monospace",textAlign:"left"}}>
-                                          ✓ Mark as approved
-                                        </button>
-                                      )}
-                                    </div>
-                                  </td>
-                                </tr>
-                                {expanded===d.id&&(
-                                  <tr key={d.id+"_exp"}>
-                                    <td colSpan={7} style={{padding:"12px 16px",background:C.s2}}>
-                                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12}}>
-                                        <div>
-                                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".06em",marginBottom:4}}>CONTACT</div>
-                                          <div style={{fontSize:12}}>{d.contactName} · {d.designation}</div>
-                                          <div style={{fontSize:11,color:C.dim}}>{d.phone}</div>
-                                        </div>
-                                        <div>
-                                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".06em",marginBottom:4}}>NOTES</div>
-                                          <div style={{fontSize:11,color:C.text,lineHeight:1.5}}>{d.notes||"—"}</div>
-                                        </div>
-                                        <div>
-                                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".06em",marginBottom:4}}>NEXT STEP</div>
-                                          <div style={{fontSize:11,color:C.text}}>{d.nextStep||"—"}</div>
-                                          {d.nextStepDate&&<div style={{fontSize:10,color:C.dim,marginTop:2}}>Due: {d.nextStepDate}</div>}
-                                        </div>
-                                      </div>
-                                      {d.reqs&&d.reqs.length>0&&(
-                                        <div style={{marginTop:10}}>
-                                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".06em",marginBottom:4}}>INTERNAL REQUESTS</div>
-                                          {d.reqs.map((r,i)=>(
-                                            <div key={i} style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-                                              <span style={{fontSize:11,color:C.text,flex:1}}>{r.dept}: {r.desc}</span>
-                                              <select value={r.status} onChange={e=>updateReq(d.id,i,e.target.value)}
-                                                style={{fontSize:10,padding:"2px 5px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:3,color:C.text}}>
-                                                {REQ_STATUS.map(s=><option key={s}>{s}</option>)}
-                                              </select>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      )}
-                                    </td>
-                                  </tr>
-                                )}
-                              </>
-                            );
-                          })}
-                        </tbody>
-                      </table>
+          {/* ═══ LEADERBOARD ═══ */}
+          {view==="leaderboard" && (()=>{
+            const medals = ["🥇","🥈","🥉"];
+            const myRegion = user_role?.region;
+
+            // Filter sets per tab
+            const teamReps   = repScores.filter(r => myRegion ? r.region===myRegion : true);
+            const allReps    = repScores;
+
+            // Region rollup for Region tab
+            const regionMap  = {};
+            repScores.forEach(r => {
+              if (!regionMap[r.region]) regionMap[r.region] = {region:r.region, reps:0, meetings:0, seniorM:0, risk:0, attOk:0, cPct:0};
+              const g = regionMap[r.region];
+              g.reps++;
+              g.meetings  += r.meetings;
+              g.seniorM   += r.seniorM;
+              g.risk      += r.risk;
+              g.attOk     += r.attOk ? 1 : 0;
+              g.cPct      += r.cPct;
+            });
+            const regionRows = Object.values(regionMap).map(g => ({
+              ...g,
+              avgMeetings: g.reps ? Math.round(g.meetings/g.reps) : 0,
+              senPct:      g.meetings ? Math.round((g.seniorM/g.meetings)*100) : 0,
+              attPct:      g.reps ? Math.round((g.attOk/g.reps)*100) : 0,
+              avgCPct:     g.reps ? Math.round(g.cPct/g.reps) : 0,
+            })).sort((a,b) => b.avgCPct - a.avgCPct);
+
+            const RepCard = ({rep, rank}) => {
+              const sc = rep.cPct>=80?C.green:rep.cPct>=50?C.accent:C.red;
+              return (
+                <div className="card" style={{padding:"14px 16px",marginBottom:8}}>
+                  <div style={{display:"flex",alignItems:"center",gap:12}}>
+                    <div style={{width:32,height:32,borderRadius:"50%",background:rank<3?`${[C.accent,C.blue,C.green][rank]}33`:C.s3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:rank<3?17:12,fontWeight:800,color:rank<3?[C.accent,C.blue,C.green][rank]:C.dim,flexShrink:0}}>
+                      {rank<3?medals[rank]:`#${rank+1}`}
+                    </div>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
+                        <span className="sans" style={{fontWeight:700,fontSize:14}}>{rep.name}</span>
+                        <span style={{fontSize:11,color:C.dim}}>{rep.region}</span>
+                      </div>
+                      <div style={{fontSize:10,color:C.dim,marginTop:2}}>{rep.role}</div>
+                    </div>
+                    <div style={{textAlign:"right",flexShrink:0}}>
+                      <div className="sans" style={{fontSize:22,fontWeight:800,color:sc}}>{rep.cPct}%</div>
+                      <div style={{fontSize:9,color:C.dim,letterSpacing:".06em"}}>TARGET CLOSED</div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:6,marginTop:10}}>
+                    {[
+                      {label:"MEETINGS",      value:rep.meetings, color:C.blue},
+                      {label:"TARGET CLOSED", value:`${rep.cPct}%`, color:sc},
+                    ].map(s=>(
+                      <div key={s.label} style={{background:C.s2,borderRadius:4,padding:"7px 10px"}}>
+                        <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".07em",marginBottom:2}}>{s.label}</div>
+                        <div className="sans" style={{fontSize:14,fontWeight:700,color:s.color}}>{s.value}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{marginTop:8,height:3,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                    <div style={{height:"100%",width:`${Math.min(rep.cPct,100)}%`,background:sc,borderRadius:2}}/>
+                  </div>
+                </div>
+              );
+            };
+
+            return (
+              <div className="fin">
+                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>LEADERBOARD</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Activity, compliance and target performance — no revenue figures shown</div>
+
+                {/* Tab switcher */}
+                <div style={{display:"flex",gap:0,marginBottom:16,borderBottom:`1px solid ${C.border}`}}>
+                  {[
+                    {id:"team",   label:"My Team",          sub:myRegion||"All"},
+                    {id:"region", label:"By Region",        sub:"Aggregated"},
+                    {id:"all",    label:"All Sales Reps",   sub:"Company-wide"},
+                  ].map(t=>(
+                    <button key={t.id} onClick={()=>setLbTab(t.id)}
+                      style={{padding:"10px 20px",background:"transparent",border:"none",
+                        borderBottom:lbTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
+                        color:lbTab===t.id?C.accent:C.dim,cursor:"pointer",
+                        fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:lbTab===t.id?700:400,textAlign:"left"}}>
+                      <div>{t.label}</div>
+                      <div style={{fontSize:9,color:C.muted,marginTop:1}}>{t.sub}</div>
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── MY TEAM TAB ── */}
+                {lbTab==="team" && (
+                  <div>
+                    {teamReps.length===0 && <div style={{textAlign:"center",padding:40,color:C.muted}}>No reps in your team.</div>}
+                    {teamReps.map((rep,rank)=><RepCard key={rep.id} rep={rep} rank={rank}/>)}
+                  </div>
+                )}
+
+                {/* ── BY REGION TAB ── */}
+                {lbTab==="region" && (
+                  <div>
+                    {regionRows.map((g,rank)=>{
+                      const sc = g.avgCPct>=80?C.green:g.avgCPct>=50?C.accent:C.red;
+                      return (
+                        <div key={g.region} className="card" style={{padding:"14px 18px",marginBottom:8}}>
+                          <div style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+                            <div style={{width:32,height:32,borderRadius:"50%",background:rank<3?`${[C.accent,C.blue,C.green][rank]}33`:C.s3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:rank<3?17:12,fontWeight:800,color:rank<3?[C.accent,C.blue,C.green][rank]:C.dim,flexShrink:0}}>
+                              {rank<3?medals[rank]:`#${rank+1}`}
+                            </div>
+                            <div style={{flex:1}}>
+                              <div className="sans" style={{fontWeight:700,fontSize:15}}>{g.region}</div>
+                              <div style={{fontSize:11,color:C.dim}}>{g.reps} rep{g.reps!==1?"s":""}</div>
+                            </div>
+                            <div style={{textAlign:"right"}}>
+                              <div className="sans" style={{fontSize:22,fontWeight:800,color:sc}}>{g.avgCPct}%</div>
+                              <div style={{fontSize:9,color:C.dim,letterSpacing:".06em"}}>AVG TARGET CLOSED</div>
+                            </div>
+                          </div>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:6}}>
+                            {[
+                              {label:"TOTAL MEETINGS", value:g.meetings,    color:C.blue},
+                              {label:"AVG MTG/REP",    value:g.avgMeetings, color:C.blue},
+                            ].map(s=>(
+                              <div key={s.label} style={{background:C.s2,borderRadius:4,padding:"7px 10px"}}>
+                                <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".07em",marginBottom:2}}>{s.label}</div>
+                                <div className="sans" style={{fontSize:14,fontWeight:700,color:s.color}}>{s.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{marginTop:8,height:3,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                            <div style={{height:"100%",width:`${Math.min(g.avgCPct,100)}%`,background:sc,borderRadius:2}}/>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* ── ALL SALES REPS TAB ── */}
+                {lbTab==="all" && (
+                  <div>
+                    {allReps.length===0 && <div style={{textAlign:"center",padding:40,color:C.muted}}>No rep data.</div>}
+                    {allReps.map((rep,rank)=><RepCard key={rep.id} rep={rep} rank={rank}/>)}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ═══ INTERNAL REQUESTS ═══ */}
+          {view==="internal-requests" && (() => {
+            const IR_DEPTS = ["NSH","Sales Strategy","Branding Team","Content Team","Digital","Finance","Legal","CXO"];
+            const myReqs  = isRep||isRH ? internalReqs.filter(r=>r.raisedBy===activeUser) : internalReqs;
+            const filtered = irStatusFilter==="all" ? myReqs : myReqs.filter(r=>r.status===irStatusFilter);
+            const pending  = myReqs.filter(r=>r.status==="Pending"||r.status==="Overdue");
+            const inprog   = myReqs.filter(r=>r.status==="In Progress");
+            const done     = myReqs.filter(r=>r.status==="Done");
+
+            const statusColor = s => s==="Done"?C.green:s==="In Progress"?C.blue:s==="Overdue"?C.red:s==="Withdrawn"?C.muted:C.orange;
+
+            return (
+              <div className="fin">
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>INTERNAL REQUESTS</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>Approvals · Escalations · Support requests</div>
+                  </div>
+                  <button className="btn btn-primary" onClick={()=>{
+                    // TODO: open inline IR form — for now use defaults
+                    const type   = "Approval";
+                    const dept   = "NSH";
+                    const subj   = "New Request";
+                    const detail = "";
+                    const newReq = {
+                      id:`ir${Date.now()}`,
+                      type, dept, subject:subj, details:detail||"",
+                      raisedBy:activeUser,
+                      raisedByName:user_role?.name||"",
+                      repId:user_role?.repId||null,
+                      dealId:null, clientCompany:"",
+                      status:"Pending", raisedAt:TODAY, slaHours:48, resolvedAt:null, resolverNote:""
+                    };
+                    setInternalReqs(p=>[newReq,...p]);
+                  }}>+ New Request</button>
+                </div>
+
+                {/* Summary pills */}
+                <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
+                  {[
+                    {label:"Pending / Overdue", count:pending.length, color:C.red},
+                    {label:"In Progress",        count:inprog.length,  color:C.blue},
+                    {label:"Done",               count:done.length,    color:C.green},
+                  ].map(s=>(
+                    <div key={s.label} style={{background:C.surface,border:`1px solid ${s.color}44`,borderRadius:8,padding:"10px 16px",minWidth:120}}>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{s.label}</div>
+                      <div className="sans" style={{fontSize:22,fontWeight:800,color:s.color,marginTop:2}}>{s.count}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Status filter */}
+                <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
+                  {["all","Pending","Overdue","In Progress","Done","Withdrawn"].map(s=>(
+                    <button key={s} onClick={()=>setIrStatusFilter(s)}
+                      style={{padding:"4px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:irStatusFilter===s?700:400,
+                        background:irStatusFilter===s?C.accent:`${C.accent}12`,
+                        color:irStatusFilter===s?"#fff":C.dim,border:"none"}}>
+                      {s==="all"?"All":s}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Request cards */}
+                {filtered.length===0 && <div style={{textAlign:"center",padding:50,color:C.muted}}>{irStatusFilter==="all"?"No requests yet. Hit + New Request to raise one.":"No requests with this status."}</div>}
+                {filtered.map(req=>{
+                  const daysOld = daysSince(req.raisedAt);
+                  const overdue = daysOld >= (req.slaHours/24) && req.status!=="Done";
+                  const sc = statusColor(overdue?"Overdue":req.status);
+                  const deal = deals.find(d=>d.id===req.dealId);
+                  return (
+                    <div key={req.id} className="card" style={{padding:"14px 18px",marginBottom:10,borderLeft:`3px solid ${sc}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,flexWrap:"wrap",gap:8}}>
+                        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                          <span style={{background:`${sc}22`,color:sc,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{overdue?"OVERDUE":req.status}</span>
+                          <span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:600}}>{req.type}</span>
+                          <span style={{background:C.s3,color:C.dim,padding:"2px 9px",borderRadius:8,fontSize:10}}>→ {req.dept}</span>
+                        </div>
+                        <span style={{fontSize:10,color:overdue?C.red:C.muted}}>{daysOld===0?"Today":`${daysOld}d ago`}{overdue?" — SLA breached":""}</span>
+                      </div>
+                      <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
+                      {req.clientCompany&&<div style={{fontSize:11,color:C.dim,marginBottom:4}}>Re: {req.clientCompany}{deal?` · ${fmtR(deal.amount)}`:""}</div>}
+                      {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.5}}>{req.details}</div>}
+                      {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:8}}>✓ {req.resolverNote}</div>}
+                      <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                        {isNSHDashboard && req.status!=="Done" && (
+                          <>
+                            <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
+                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
+                          </>
+                        )}
+                        {(isRep||isRH) && req.status!=="Done" && (
+                          <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          {/* ═══ ADMIN ═══ */}
+          {(view==="admin-access"||view==="admin-approvals") && isAdmin && (
+              <div className="fin">
+                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>
+                  {view==="admin-access"?"ACCESS MANAGEMENT":"APPROVAL QUEUE"}
+                </div>
+
+                {/* ── ACCESS MANAGEMENT ── */}
+                {view==="admin-access" && (
+                  <div>
+                    {/* Pending signups */}
+                    {pendingUsers.length>0&&(
+                      <div style={{marginBottom:24}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+                          <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>Pending Access Requests</div>
+                          <span style={{background:`${C.orange}22`,color:C.orange,padding:"1px 8px",borderRadius:8,fontSize:11,fontWeight:700}}>{pendingUsers.length}</span>
+                        </div>
+                        {pendingUsers.map(pu=>(
+                          <div key={pu.id} className="card" style={{padding:"14px 18px",marginBottom:8,borderLeft:`3px solid ${C.orange}`,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                            <div style={{width:36,height:36,borderRadius:"50%",background:`${C.orange}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:C.orange,flexShrink:0}}>{pu.name[0]}</div>
+                            <div style={{flex:1}}>
+                              <div className="sans" style={{fontWeight:700,fontSize:13}}>{pu.name}</div>
+                              <div style={{fontSize:11,color:C.dim}}>{pu.email} · Requested {daysSince(pu.requestedAt)===0?"today":`${daysSince(pu.requestedAt)}d ago`}</div>
+                            </div>
+                            {/* Role + Region selectors inline */}
+                            <select id={`role-${pu.id}`} defaultValue="SALES REP"
+                              style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                              {ALL_ROLES.filter(r=>r!=="ADMIN").map(r=><option key={r}>{r}</option>)}
+                            </select>
+                            <select id={`region-${pu.id}`} defaultValue="North"
+                              style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                              {REGIONS.map(r=><option key={r}>{r}</option>)}
+                            </select>
+                            <div style={{display:"flex",gap:6}}>
+                              <button onClick={()=>{
+                                const roleEl   = document.getElementById(`role-${pu.id}`);
+                                const regionEl = document.getElementById(`region-${pu.id}`);
+                                const role     = roleEl?.value || "SALES REP";
+                                const region   = regionEl?.value || "North";
+                                const newUser  = {id:`u_${pu.id}`,name:pu.name,role,canView:role==="SALES REP"?"self":role==="REGION HEAD"?"region":"all",region};
+                                setLiveRoles(p=>[...p, newUser]);
+                                setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
+                                showToast(`${pu.name} approved as ${role} ✓`);
+                              }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                ✓ Approve
+                              </button>
+                              <button onClick={()=>{
+                                setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
+                                showToast(`${pu.name} rejected`,"err");
+                              }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                Reject
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Active users */}
+                    <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>
+                      Active Users ({liveRoles.length})
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                      {liveRoles.map(u=>(
+                        <div key={u.id} className="card" style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
+                          <div style={{width:32,height:32,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.accent,flexShrink:0}}>{u.name[0]}</div>
+                          <div style={{flex:1,minWidth:120}}>
+                            <div className="sans" style={{fontWeight:700,fontSize:13}}>{u.name}</div>
+                            <div style={{fontSize:10,color:C.dim}}>{u.region||"All regions"}</div>
+                          </div>
+                          {/* Editable role */}
+                          <select value={u.role} onChange={e=>{
+                            const newRole = e.target.value;
+                            setLiveRoles(p=>p.map(r=>r.id===u.id?{...r,role:newRole,canView:newRole==="SALES REP"?"self":newRole==="REGION HEAD"?"region":"all"}:r));
+                            showToast(`${u.name} role updated to ${newRole}`);
+                          }} style={{padding:"4px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                            {ALL_ROLES.map(r=><option key={r}>{r}</option>)}
+                          </select>
+                          <button onClick={()=>{
+                            if(!window.confirm(`Revoke access for ${u.name}?`)) return;
+                            setLiveRoles(p=>p.filter(r=>r.id!==u.id));
+                            showToast(`${u.name}'s access revoked`,"err");
+                          }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"4px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Revoke</button>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── APPROVAL QUEUE ── */}
+                {view==="admin-approvals" && (
+                  <div>
+                    <div style={{fontSize:11,color:C.dim,marginBottom:16}}>All pending approvals across teams.</div>
+                    {internalReqs.filter(r=>r.status!=="Done").length===0&&<div style={{textAlign:"center",padding:50,color:C.muted}}>No pending approvals.</div>}
+                    {internalReqs.filter(r=>r.status!=="Done").map(req=>{
+                      const daysOld=daysSince(req.raisedAt);
+                      const overdue=daysOld>=(req.slaHours/24);
+                      const sc=overdue?C.red:req.status==="In Progress"?C.blue:C.orange;
+                      return (
+                        <div key={req.id} className="card" style={{padding:"14px 18px",marginBottom:10,borderLeft:`3px solid ${sc}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:8}}>
+                            <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
+                              <span style={{background:`${sc}22`,color:sc,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{overdue?"OVERDUE":req.status}</span>
+                              <span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:8,fontSize:10}}>{req.type}</span>
+                              <span style={{fontSize:11,color:C.dim}}>From: {req.raisedByName} → {req.dept}</span>
+                            </div>
+                            <span style={{fontSize:10,color:overdue?C.red:C.muted}}>{daysOld===0?"Today":`${daysOld}d ago`}</span>
+                          </div>
+                          <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
+                          {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8}}>{req.details}</div>}
+                          <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                            <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
+                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved by admin", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
           )}
 
           {/* ═══ TARGETS ═══ */}
@@ -4075,7 +4706,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   <td style={{padding:"10px 14px",color:C.red,fontWeight:700}}>{dw}d</td>
                                   <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
                                   <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
-                                    <button onClick={()=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:null,awaitingApprovalSince:null}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>Approved</button>
+                                    <button onClick={()=>{
+                                      if(!canApprove(d)){showToast("Only the designated approver can approve","err");return;}
+                                      openNoteModal("Approval Note","Approved",note=>approveDeal(d.id,note));
+                                    }} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>Approve →</button>
                                     <button onClick={()=>setView("pipeline")} style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>View Deal</button>
                                   </td>
                                 </tr>
@@ -4274,16 +4908,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>ACTIVITY LOG</div>
                   <div style={{fontSize:11,color:C.dim,marginTop:2}}>Every client interaction. Log before 12pm. {meetings.length} meetings recorded.</div>
                 </div>
-                <button className="btn btn-primary" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>
+                {canLogMeeting && <button className="btn btn-primary" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>}
               </div>
 
-              {/* GK FIX — today's count up front so reps can see what they logged */}
+              {/* KPI cards — filtered to own meetings for reps */}
+              {(()=>{
+                const myRepId = user_role?.repId;
+                const visM = isRep
+                  ? meetings.filter(m=>m.repId===myRepId)
+                  : meetings;
+                return (
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:18}}>
                 {[
-                  {label:"TODAY'S MEETINGS",  value:meetings.filter(m=>m.date===TODAY).length,                                     color:C.blue},
-                  {label:"ON TIME",            value:meetings.filter(m=>m.date===TODAY&&!m.late).length,                            color:C.green},
-                  {label:"LOGGED LATE",        value:meetings.filter(m=>m.date===TODAY&&m.late).length,                             color:C.orange},
-                  {label:"SENIOR REQUESTS",    value:meetings.filter(m=>m.seniorRequested==="Yes").length,                          color:C.accent},
+                  {label:"TODAY'S MEETINGS",  value:visM.filter(m=>m.date===TODAY).length,                 color:C.blue},
+                  {label:"ON TIME",            value:visM.filter(m=>m.date===TODAY&&!m.late).length,        color:C.green},
+                  {label:"LOGGED LATE",        value:visM.filter(m=>m.date===TODAY&&m.late).length,         color:C.orange},
+                  {label:"SENIOR REQUESTS",    value:visM.filter(m=>m.seniorRequested==="Yes").length,      color:C.accent},
                 ].map(k=>(
                   <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
                     <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em"}}>{k.label}</div>
@@ -4291,6 +4931,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 ))}
               </div>
+                );
+              })()}
 
               {/* SENIOR ESCALATION REQUESTS — Darpan's requirement */}
               {meetings.filter(m=>m.seniorRequested==="Yes").length>0 && (
@@ -4529,7 +5171,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <td style={{padding:"10px 14px",color:C.red,fontWeight:700}}>{dw}d overdue</td>
                                     <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
                                     <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
-                                      <button onClick={()=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:null,awaitingApprovalSince:null}:x))}
+                                      <button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()}
                                         style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>
                                         Resolved
                                       </button>
@@ -4689,7 +5331,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>HR ABSENCE REPORTS</div>
                   <div style={{fontSize:11,color:C.dim,marginTop:2}}>Auto-generated 23:30 · Sent to <span style={{color:C.accent}}>{HR_EMAIL}</span></div>
                 </div>
-                {isCRO&&<button className="btn btn-primary" onClick={runEODCheck}>▶ Simulate EOD Run</button>}
+                {canGrantException&&<button className="btn btn-primary" onClick={runEODCheck}>▶ Simulate EOD Run</button>}
               </div>
 
               {/* Rules — compact strip */}
@@ -4743,10 +5385,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {filed
                           ?<span className="pill" style={{background:`${C.red}22`,color:C.red,fontSize:10}}>Report Sent</span>
                           :<span className="pill" style={{background:`${C.orange}22`,color:C.orange,fontSize:10}}>EOD Pending</span>}
-                        {isCRO&&filed&&filed.markedAs==="Absent"&&(
+                        {canGrantException&&filed&&filed.markedAs==="Absent"&&(
                           <button className="btn" style={{fontSize:10,padding:"3px 10px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{setExceptionModal({reportId:filed.id,repName:rep.name});setExceptionReason("");}}>Grant Exception</button>
                         )}
-                        {isCRO&&!filed&&(
+                        {canGrantException&&!filed&&(
                           <button className="btn" style={{fontSize:10,padding:"3px 10px",background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`}} onClick={()=>fireAbsenceReport(rep,TODAY)}>Fire Report</button>
                         )}
                       </div>
@@ -4785,9 +5427,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   :<span style={{color:C.muted,fontSize:11}}>—</span>}
                               </td>
                               {!isRep&&<td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
-                                {isCRO&&r.markedAs==="Absent"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{setExceptionModal({reportId:r.id,repName:r.repName});setExceptionReason("");}}>Grant Exception</button>}
-                                {isCRO&&r.exception==="Overridden"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,marginLeft:4}} onClick={()=>revokeException(r.id)}>Revoke</button>}
-                                {!isCRO&&r.markedAs==="Absent"&&<span style={{fontSize:10,color:C.muted}}>No access</span>}
+                                {canGrantException&&r.markedAs==="Absent"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{setExceptionModal({reportId:r.id,repName:r.repName});setExceptionReason("");}}>Grant Exception</button>}
+                                {canGrantException&&r.exception==="Overridden"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,marginLeft:4}} onClick={()=>revokeException(r.id)}>Revoke</button>}
+                                {!canGrantException&&r.markedAs==="Absent"&&<span style={{fontSize:10,color:C.muted}}>No access</span>}
                               </td>}
                             </tr>
                           ))}
@@ -4798,7 +5440,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 );
               })()}
 
-              {!isCRO&&!isRep&&<div style={{marginTop:12,padding:"10px 14px",background:`${C.orange}08`,border:`1px solid ${C.orange}33`,borderRadius:5,fontSize:11,color:C.orange}}>⚠ Logged in as {user_role.name} ({user_role.role}). Only Admin or CXO can grant or revoke exceptions.</div>}
+              {!canGrantException&&!isRep&&<div style={{marginTop:12,padding:"10px 14px",background:`${C.orange}08`,border:`1px solid ${C.orange}33`,borderRadius:5,fontSize:11,color:C.orange}}>⚠ Logged in as {user_role.name} ({user_role.role}). Only Admin or CXO can grant or revoke exceptions.</div>}
             </div>
           )}
 
@@ -4877,119 +5519,682 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
           )}
 
-          {/* ═══ IMPORT DATA ═══ */}
-          {view==="import" && isAdmin && (
-            <div className="fin">
-              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>IMPORT DATA</div>
-              <div style={{fontSize:11,color:C.dim,marginBottom:20}}>Bulk load deals, clients, and reps from Excel. Download the template, fill it in, upload.</div>
+          {/* ═══ TARGET SUBMISSION (REP) ═══ */}
+          {view==="target-submit" && isRep && (()=>{
+            const myRepId = user_role?.repId;
+            const mySubs  = targetSubs.filter(t=>t.repId===myRepId);
+            const dealTypes = ["Linear TV","Digital","Integrated Package","Sponsorship","Brand Solutions","Branded Content"];
+            const statusColor = s => s==="Approved"?C.green:s==="Pending RH"||s==="Pending NSH"||s==="Pending Strategy"||s==="Pending CRO"?C.orange:s==="Rejected"?C.red:C.dim;
 
-              {/* Template download */}
-              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"20px 24px",marginBottom:16}}>
-                <div className="sans" style={{fontWeight:700,marginBottom:8}}>Step 1 — Download Template</div>
-                <div style={{fontSize:12,color:C.dim,marginBottom:14}}>Fill in your real clients, reps, and deal data. One row per deal.</div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
-                  {["Deals","Reps","Clients"].map(t=>(
-                    <div key={t} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,padding:"12px 14px"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:C.text,marginBottom:4}}>📋 {t} Template</div>
-                      <div style={{fontSize:10,color:C.dim,marginBottom:10}}>Required columns pre-filled</div>
-                      <button onClick={()=>{
-                        // Generate template XLSX via SheetJS
-                        const headers = t==="Deals"
-                          ? ["Client Company","Contact Name","Designation","Phone","Email","Rep Name","Region","Deal Type","Stage","Target Amount","Expected Amount","Quarter","Priority","Notes","Next Step","Next Step Date"]
-                          : t==="Reps"
-                          ? ["Rep Name","Email","Region","Role","Target Amount"]
-                          : ["Client Company","Industry","Primary Contact","Designation","Phone","Email","Assigned Rep","Region"];
-                        const csvContent = headers.join(",");
-                        const blob = new Blob([csvContent+"\n"], {type:"text/csv"});
-                        const a = document.createElement("a"); a.href=URL.createObjectURL(blob); a.download=`OTV_${t}_Template.csv`; a.click();
-                      }} className="btn" style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",color:"#fff",fontSize:11,width:"100%"}}>
-                        Download {t} CSV
-                      </button>
+            return (
+              <div className="fin">
+                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>MY TARGETS</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Submit your client-wise targets for approval. Once CRO approves, they become your official quota.</div>
+
+                {/* Approval chain indicator */}
+                <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:20,flexWrap:"wrap"}}>
+                  {["You","Region Head","NSH","Sales Strategy","CRO → Approved"].map((s,i)=>(
+                    <div key={s} style={{display:"flex",alignItems:"center"}}>
+                      <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"4px 10px",fontSize:10,color:C.accent,fontWeight:600,whiteSpace:"nowrap"}}>{s}</div>
+                      {i<4&&<div style={{width:16,height:1,background:C.border}}/>}
+                    </div>
+                  ))}
+                </div>
+
+                {/* New submission form */}
+                <div className="card" style={{padding:"16px 18px",marginBottom:20}}>
+                  <div className="sans" style={{fontWeight:700,fontSize:13,marginBottom:12}}>New Target Submission — {filterQ}</div>
+                  {newClients.map((row,idx)=>(
+                    <div key={idx} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
+                      <input value={row.clientCompany} placeholder="Client name"
+                        onChange={e=>setNewClients(p=>p.map((r,i)=>i===idx?{...r,clientCompany:e.target.value}:r))}
+                        style={{padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                      <select value={row.dealType} onChange={e=>setNewClients(p=>p.map((r,i)=>i===idx?{...r,dealType:e.target.value}:r))}
+                        style={{padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                        {dealTypes.map(d=><option key={d}>{d}</option>)}
+                      </select>
+                      <input value={row.targetAmount} placeholder="Amount ₹" type="text"
+                        onChange={e=>setNewClients(p=>p.map((r,i)=>i===idx?{...r,targetAmount:e.target.value}:r))}
+                        style={{padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                      <button onClick={()=>setNewClients(p=>p.filter((_,i)=>i!==idx))} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"6px 10px",cursor:"pointer",fontSize:12}}>✕</button>
+                    </div>
+                  ))}
+                  <div style={{display:"flex",gap:8,marginTop:8}}>
+                    <button onClick={()=>setNewClients(p=>[...p,{clientCompany:"",dealType:"Linear TV",targetAmount:""}])}
+                      style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Add Client</button>
+                    <button onClick={()=>{
+                      const clients = newClients.filter(r=>r.clientCompany.trim()&&r.targetAmount);
+                      if(!clients.length){alert("Add at least one client with a target");return;}
+                      const parsed = clients.map(r=>({...r,targetAmount:parseCurrency(r.targetAmount)}));
+                      const total  = parsed.reduce((s,r)=>s+r.targetAmount,0);
+                      const sub    = {id:`ts${Date.now()}`,repId:myRepId,repName:user_role?.name||"",region:user_role?.region||"",quarter:filterQ,clients:parsed,totalTarget:total,status:"Pending RH",submittedAt:TODAY,approvalLog:[]};
+                      setTargetSubs(p=>[sub,...p]);
+                      setNewClients([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
+                      showToast("Targets submitted → Region Head for approval ✓");
+                    }} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:4,padding:"6px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Submit for Approval →</button>
+                  </div>
+                </div>
+
+                {/* Current quarter client target vs achieved */}
+                {(()=>{
+                  const approvedSub = mySubs.find(s=>s.quarter===filterQ&&s.status==="Approved");
+                  const pendingSub  = mySubs.find(s=>s.quarter===filterQ&&s.status!=="Approved"&&s.status!=="Rejected");
+                  const displaySub  = approvedSub || pendingSub;
+                  if(!displaySub) return null;
+                  return (
+                    <div style={{marginBottom:20}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{filterQ} · Client Targets</div>
+                        <span style={{background:`${statusColor(displaySub.status)}22`,color:statusColor(displaySub.status),padding:"2px 10px",borderRadius:8,fontSize:10,fontWeight:700}}>{displaySub.status}</span>
+                      </div>
+                      <div className="card" style={{overflow:"hidden"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead><tr>
+                            {["Client","Deal Type","Target","Achieved","Progress"].map(h=>(
+                              <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                            ))}
+                          </tr></thead>
+                          <tbody>
+                            {displaySub.clients.map((cl,i)=>{
+                              const achieved = revenueEntries
+                                .filter(e=>e.repId===myRepId&&e.clientCompany===cl.clientCompany&&e.quarter===filterQ)
+                                .reduce((s,e)=>s+(e.amount||0),0);
+                              const pct = cl.targetAmount>0?Math.min(100,Math.round((achieved/cl.targetAmount)*100)):0;
+                              const pc = pct>=100?C.green:pct>=60?C.accent:C.red;
+                              return (
+                                <tr key={i} style={{borderBottom:`1px solid ${C.s2}`}}>
+                                  <td style={{padding:"10px 14px",fontWeight:700}}>{cl.clientCompany}</td>
+                                  <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{cl.dealType}</span></td>
+                                  <td style={{padding:"10px 14px",color:C.dim}}>{fmtR(cl.targetAmount)}</td>
+                                  <td style={{padding:"10px 14px",fontWeight:700,color:pc}}>{achieved>0?fmtR(achieved):"—"}</td>
+                                  <td style={{padding:"10px 14px",minWidth:100}}>
+                                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                      <div style={{flex:1,height:4,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                                        <div style={{height:"100%",width:`${pct}%`,background:pc,borderRadius:2}}/>
+                                      </div>
+                                      <span style={{fontSize:10,color:pc,fontWeight:700,minWidth:30}}>{pct}%</span>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                      {/* Prior approvals log */}
+                      {displaySub.approvalLog.length>0&&(
+                        <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:8}}>
+                          {displaySub.approvalLog.map((log,i)=>(
+                            <span key={i} style={{background:`${C.green}12`,color:C.green,padding:"1px 8px",borderRadius:6,fontSize:10}}>✓ {log.by}: {log.note}</span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                {/* Past submissions (other quarters) */}
+                {mySubs.filter(s=>s.quarter!==filterQ).length>0&&(
+                  <div>
+                    <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:8}}>Other Quarters</div>
+                    {mySubs.filter(s=>s.quarter!==filterQ).map(sub=>(
+                      <div key={sub.id} className="card" style={{padding:"10px 14px",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span className="sans" style={{fontWeight:700,fontSize:12}}>{sub.quarter} · {fmtR(sub.totalTarget)}</span>
+                        <span style={{background:`${statusColor(sub.status)}22`,color:statusColor(sub.status),padding:"1px 8px",borderRadius:6,fontSize:10,fontWeight:700}}>{sub.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ═══ TARGET APPROVALS (RH / NSH / STRATEGY / CRO) ═══ */}
+          {view==="target-approvals" && !isRep && (()=>{
+            const pendingStep = isRH?"Pending RH":isNSH?"Pending NSH":isStrategy?"Pending Strategy":isCRORole?"Pending CRO":null;
+            const nextStep    = isRH?"Pending NSH":isNSH?"Pending Strategy":isStrategy?"Pending CRO":isCRORole?"Approved":null;
+            const myPending   = isRH
+              ? targetSubs.filter(t=>t.status===pendingStep&&t.region===rhRegion)
+              : targetSubs.filter(t=>t.status===pendingStep);
+            const approved    = targetSubs.filter(t=>t.status==="Approved");
+            const statusColor = s => s==="Approved"?C.green:s.startsWith("Pending")?C.orange:C.red;
+
+            return (
+              <div className="fin">
+                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>TARGET APPROVALS</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>
+                  {isRH?"Review and approve target submissions from your region's sales reps.":
+                   isNSH?"Approve targets cleared by Region Heads.":
+                   isStrategy?"Review NSH-approved targets for strategic alignment.":
+                   "Final CRO sign-off on targets cleared by Sales Strategy."}
+                </div>
+
+                {/* Pending approvals */}
+                {myPending.length===0 ? (
+                  <div style={{textAlign:"center",padding:50,color:C.muted}}>
+                    <div style={{fontSize:28,marginBottom:8}}>✓</div>
+                    <div style={{fontWeight:700,color:C.green}}>No pending approvals at your level</div>
+                  </div>
+                ) : myPending.map(sub=>{
+                  const rep = REPS.find(r=>r.id===sub.repId);
+                  return (
+                    <div key={sub.id} className="card" style={{padding:"16px 18px",marginBottom:12,borderLeft:`3px solid ${C.orange}`}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
+                        <div>
+                          <div className="sans" style={{fontWeight:700,fontSize:14}}>{sub.repName} · {sub.region}</div>
+                          <div style={{fontSize:11,color:C.dim}}>{sub.quarter} · Submitted {daysSince(sub.submittedAt)===0?"today":`${daysSince(sub.submittedAt)}d ago`}</div>
+                        </div>
+                        <div className="sans" style={{fontSize:20,fontWeight:800,color:C.accent}}>{fmtR(sub.totalTarget)}</div>
+                      </div>
+                      {/* Client breakdown */}
+                      <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:12}}>
+                        {sub.clients.map((cl,i)=>(
+                          <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",background:C.s2,borderRadius:5}}>
+                            <span style={{fontSize:12,fontWeight:600}}>{cl.clientCompany}</span>
+                            <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                              <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:6,fontSize:10}}>{cl.dealType}</span>
+                              <span style={{fontSize:12,fontWeight:700,color:C.accent}}>{fmtR(cl.targetAmount)}</span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      {/* Prior approvals */}
+                      {sub.approvalLog.length>0&&(
+                        <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
+                          {sub.approvalLog.map((log,i)=>(
+                            <span key={i} style={{background:`${C.green}12`,color:C.green,padding:"1px 8px",borderRadius:6,fontSize:10}}>✓ {log.by}: {log.note}</span>
+                          ))}
+                        </div>
+                      )}
+                      {/* Action buttons */}
+                      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                        <button onClick={()=>{
+                          setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,status:"Rejected",approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note:"Rejected"}]}:t));
+                          showToast("Target submission rejected");
+                        }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Reject</button>
+                        <button onClick={()=>{
+                          // approval note auto-logged
+                          const note = "Approved";
+                          setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,status:nextStep,approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note}]}:t));
+                          if(nextStep==="Approved"){
+                            // Push into deals as targetAmount
+                            sub.clients.forEach(cl=>{
+                              const existing = deals.find(d=>d.repId===sub.repId&&d.clientCompany===cl.clientCompany&&d.quarter===sub.quarter);
+                              if(existing) setDeals(p=>p.map(d=>d.id===existing.id?{...d,targetAmount:cl.targetAmount}:d));
+                            });
+                          }
+                          showToast(nextStep==="Approved"?"✓ Targets approved and pushed to deals!":"Approved → forwarded to "+(nextStep||""));
+                        }} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:4,padding:"6px 18px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                          {nextStep==="Approved"?"✓ Final Approve":"Approve → "+(nextStep||"")}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {/* Approved targets summary */}
+                {approved.length>0&&(
+                  <div style={{marginTop:20}}>
+                    <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>Approved Targets This Quarter</div>
+                    {approved.filter(t=>t.quarter===filterQ).map(sub=>(
+                      <div key={sub.id} className="card" style={{padding:"12px 16px",marginBottom:8,borderLeft:`3px solid ${C.green}`}}>
+                        <div style={{display:"flex",justifyContent:"space-between"}}>
+                          <span className="sans" style={{fontWeight:700}}>{sub.repName} · {sub.region}</span>
+                          <span style={{color:C.green,fontWeight:700}}>{fmtR(sub.totalTarget)}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ═══ REVENUE LOG ═══ */}
+          {view==="revenue-log" && (()=>{
+            const myRepId   = user_role?.repId;
+            const myEntries = isRep ? revenueEntries.filter(e=>e.repId===myRepId) : revenueEntries;
+            const totalRev  = myEntries.filter(e=>e.quarter===filterQ).reduce((s,e)=>s+(e.amount||0),0);
+            const dealTypes = ["Linear TV","Digital","Integrated Package","Sponsorship","Brand Solutions","Branded Content"];
+
+            return (
+              <div className="fin">
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REVENUE LOG</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>Log revenue booked per advertiser. Updates deal achieved amounts automatically.</div>
+                  </div>
+                  {/* Total pill */}
+                  <div style={{textAlign:"right"}}>
+                    <div className="sans" style={{fontSize:22,fontWeight:800,color:C.green}}>{fmtR(totalRev)}</div>
+                    <div style={{fontSize:9,color:C.dim,letterSpacing:".06em"}}>{filterQ} LOGGED</div>
+                  </div>
+                </div>
+
+                {/* Log new revenue entry */}
+                <div className="card" style={{padding:"16px 18px",marginBottom:20}}>
+                  <div className="sans" style={{fontWeight:700,fontSize:13,marginBottom:12}}>Log New Revenue</div>
+                  {(()=>{
+                    const rf = revForm;
+                    const setRf = setRevForm;
+                    const myDeals = isRep ? deals.filter(d=>d.repId===myRepId&&d.quarter===filterQ) : deals.filter(d=>d.quarter===filterQ);
+                    return (
+                      <div>
+                        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:8}}>
+                          <div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>CLIENT / ADVERTISER</div>
+                            <select value={rf.clientCompany} onChange={e=>setRf(p=>({...p,clientCompany:e.target.value}))}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                              <option value="">Select client…</option>
+                              {[...new Set(myDeals.map(d=>d.clientCompany))].map(cl=><option key={cl}>{cl}</option>)}
+                              <option value="__new__">+ Enter manually</option>
+                            </select>
+                            {rf.clientCompany==="__new__"&&(
+                              <input placeholder="Client name" value={rf._manual||""} onChange={e=>setRf(p=>({...p,_manual:e.target.value}))}
+                                style={{marginTop:6,width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                            )}
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
+                            <select value={rf.dealType} onChange={e=>setRf(p=>({...p,dealType:e.target.value}))}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                              {dealTypes.map(d=><option key={d}>{d}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                          <div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>AMOUNT ₹</div>
+                            <input value={rf.amount} placeholder="e.g. 5L or 1Cr" onChange={e=>setRf(p=>({...p,amount:e.target.value}))}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>INVOICE / PO REF</div>
+                            <input value={rf.invoiceRef} placeholder="INV-2024-XXX" onChange={e=>setRf(p=>({...p,invoiceRef:e.target.value}))}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>DATE</div>
+                            <input type="date" value={rf.date} onChange={e=>setRf(p=>({...p,date:e.target.value}))}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                          </div>
+                        </div>
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:3}}>NOTES</div>
+                          <input value={rf.notes} placeholder="Optional notes" onChange={e=>setRf(p=>({...p,notes:e.target.value}))}
+                            style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                        </div>
+                        <button onClick={()=>{
+                          const client = rf.clientCompany==="__new__" ? (rf._manual||"").trim() : rf.clientCompany;
+                          if(!client||!rf.amount){showToast("Client and amount are required","err");return;}
+                          const amt = parseCurrency(rf.amount);
+                          if(!amt){showToast("Invalid amount","err");return;}
+                          const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:filterQ,notes:rf.notes};
+                          setRevenueEntries(p=>[entry,...p]);
+                          // Update matching deal's achieved amount
+                          const matchDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&d.clientCompany===client&&d.quarter===filterQ);
+                          if(matchDeal){
+                            const allForDeal = [...revenueEntries.filter(e=>e.clientCompany===client&&e.quarter===filterQ),entry];
+                            const total = allForDeal.reduce((s,e)=>s+(e.amount||0),0);
+                            setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,amount:total,outcome:total>=matchDeal.targetAmount?"Proposal Accepted":d.outcome}:d));
+                          }
+                          setRf({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
+                          showToast(`₹${(amt/100000).toFixed(1)}L logged for ${client} ✓`);
+                        }} style={{background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:5,padding:"8px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                          ✓ Log Revenue
+                        </button>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* Revenue history */}
+                {myEntries.length===0 ? (
+                  <div style={{textAlign:"center",padding:40,color:C.muted}}>No revenue logged yet.</div>
+                ) : (
+                  <div>
+                    <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>Revenue Entries · {filterQ}</div>
+                    <div className="card" style={{overflow:"hidden"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead><tr>
+                          {["Client","Deal Type","Amount","Invoice Ref","Date","Notes"].map(h=>(
+                            <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {myEntries.filter(e=>e.quarter===filterQ).sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(
+                            <tr key={e.id} style={{borderBottom:`1px solid ${C.s2}`}}
+                              onMouseOver={ev=>ev.currentTarget.style.background=C.s2}
+                              onMouseOut={ev=>ev.currentTarget.style.background="transparent"}>
+                              <td style={{padding:"10px 14px",fontWeight:700}}>{e.clientCompany}</td>
+                              <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{e.dealType}</span></td>
+                              <td style={{padding:"10px 14px",fontWeight:700,color:C.green}}>{fmtR(e.amount)}</td>
+                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{e.invoiceRef||"—"}</td>
+                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{e.date}</td>
+                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11,maxWidth:160}}>{e.notes||"—"}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ═══ IMPORT DATA ═══ */}
+          {/* ═══ ADMIN CONFIG ═══ */}
+          {view==="admin-config" && isAdmin && (
+            <div className="fin">
+              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>SYSTEM CONFIGURATION</div>
+              <div style={{fontSize:11,color:C.dim,marginBottom:20}}>Approval thresholds, SLA hours, inactivity rules — no code deploy needed.</div>
+
+              {/* Approval Thresholds */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
+                <div className="sans" style={{fontWeight:700,marginBottom:12}}>Approval Thresholds</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Deal amount determines who must approve before it can proceed.</div>
+                {[
+                  {key:"RH",  label:"Region Head approves deals above",  help:"Below this → rep can proceed"},
+                  {key:"NSH", label:"NSH approves deals above",          help:"After RH clears"},
+                  {key:"CXO", label:"CXO approval required above",       help:"Final gate for strategic deals"},
+                ].map(({key,label,help})=>(
+                  <div key={key} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10,flexWrap:"wrap"}}>
+                    <div style={{flex:1,minWidth:200}}>
+                      <div style={{fontSize:12,fontWeight:600}}>{label}</div>
+                      <div style={{fontSize:10,color:C.dim}}>{help}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:11,color:C.dim}}>₹</span>
+                      <input type="number" value={adminConfig.approvalThresholds[key]/100000}
+                        onChange={e=>setAdminConfig(p=>({...p,approvalThresholds:{...p.approvalThresholds,[key]:parseFloat(e.target.value||0)*100000}}))}
+                        style={{width:80,padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"right"}}/>
+                      <span style={{fontSize:11,color:C.dim}}>L</span>
+                    </div>
+                    <div style={{minWidth:80,fontSize:11,color:C.accent,fontWeight:700}}>{(adminConfig.approvalThresholds[key]/100000).toFixed(0)}L = ₹{(adminConfig.approvalThresholds[key]/10000000).toFixed(2)}Cr</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* SLA Hours */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
+                <div className="sans" style={{fontWeight:700,marginBottom:12}}>SLA Hours by Level</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Approvals breaching these hours are flagged Overdue and auto-escalate.</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                  {Object.entries(adminConfig.slaHours).map(([k,v])=>(
+                    <div key={k} style={{background:C.s2,borderRadius:6,padding:"10px 12px"}}>
+                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:6}}>{k.toUpperCase()}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <input type="number" value={v}
+                          onChange={e=>setAdminConfig(p=>({...p,slaHours:{...p.slaHours,[k]:parseInt(e.target.value||48)}}))}
+                          style={{width:50,padding:"4px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
+                        <span style={{fontSize:10,color:C.dim}}>hrs</span>
+                      </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Upload */}
-              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"20px 24px",marginBottom:16}}>
-                <div className="sans" style={{fontWeight:700,marginBottom:8}}>Step 2 — Upload Filled Template</div>
-                <div style={{fontSize:12,color:C.dim,marginBottom:14}}>CSV or Excel. The system maps columns automatically and shows a preview before importing.</div>
-                <input ref={importRef} type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={async e=>{
-                  const file = e.target.files[0]; if(!file)return;
+              {/* Inactivity Rules */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
+                <div className="sans" style={{fontWeight:700,marginBottom:12}}>Deal Inactivity Rules</div>
+                {[
+                  {key:"inactivityDaysRisk",      label:"Flag as At Risk after",      suffix:"days no contact"},
+                  {key:"inactivityDaysEscalate",  label:"Auto-escalate to NSH after", suffix:"days no contact"},
+                ].map(({key,label,suffix})=>(
+                  <div key={key} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10}}>
+                    <div style={{flex:1,fontSize:12,fontWeight:600}}>{label}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <input type="number" value={adminConfig[key]}
+                        onChange={e=>setAdminConfig(p=>({...p,[key]:parseInt(e.target.value||7)}))}
+                        style={{width:55,padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
+                      <span style={{fontSize:11,color:C.dim}}>{suffix}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Audit log summary */}
+              <div className="card" style={{padding:"18px 20px"}}>
+                <div className="sans" style={{fontWeight:700,marginBottom:12}}>Recent Approval Activity</div>
+                {(()=>{
+                  const allLogs = deals.flatMap(d=>(d.auditLog||[]).map(l=>({...l,dealId:d.id,clientCompany:d.clientCompany,amount:d.amount})));
+                  const sorted  = allLogs.sort((a,b)=>b.at?.localeCompare(a.at||"")||0).slice(0,20);
+                  if(!sorted.length) return <div style={{textAlign:"center",padding:20,color:C.muted}}>No approval actions yet.</div>;
+                  return (
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {sorted.map((l,i)=>{
+                        const ac = l.action==="Approved"?C.green:l.action==="Rejected"?C.red:C.orange;
+                        return (
+                          <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:C.s2,borderRadius:5,flexWrap:"wrap"}}>
+                            <span style={{background:`${ac}22`,color:ac,padding:"1px 8px",borderRadius:6,fontSize:10,fontWeight:700}}>{l.action}</span>
+                            <span style={{fontSize:11,fontWeight:600}}>{l.clientCompany}</span>
+                            <span style={{fontSize:10,color:C.dim}}>by {l.by} ({l.role})</span>
+                            <span style={{fontSize:10,color:C.dim}}>→ {l.to||"Cleared"}</span>
+                            {l.note&&<span style={{fontSize:10,color:C.dim,fontStyle:"italic"}}>"{l.note}"</span>}
+                            <span style={{fontSize:10,color:C.muted,marginLeft:"auto"}}>{l.at}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+              </div>
+            </div>
+          )}
+
+          {view==="import" && isAdmin && (
+            <div className="fin">
+              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>IMPORT DATA</div>
+              <div style={{fontSize:11,color:C.dim,marginBottom:20}}>Upload your data via CSV or Excel. Download a template, fill it in, upload it back.</div>
+
+              {/* ── DATA TYPE TABS ── */}
+              {(()=>{
+                const tabs = [
+                  {id:"deals",      label:"Deals",          icon:"◈", desc:"Client deals, pipeline, targets"},
+                  {id:"reps",       label:"Sales Reps",     icon:"◇", desc:"Rep names, regions, roles"},
+                  {id:"clients",    label:"Clients",        icon:"◎", desc:"Client master list"},
+                  {id:"targets",    label:"Targets",        icon:"✦", desc:"Client-wise targets per rep"},
+                  {id:"revenue",    label:"Revenue Entries",icon:"₹", desc:"Actual revenue logged"},
+                  {id:"properties", label:"Properties/IPs", icon:"⬡", desc:"Sponsorship inventory"},
+                ];
+                const [impTab, setImpTab] = [importTab, setImportTab];
+
+                const TEMPLATES = {
+                  deals:      ["Client Company","Contact Name","Designation","Phone","Email","Rep Name","Region","Deal Type","Stage","Target Amount","Expected Amount","Quarter","Priority","Notes","Next Step","Next Step Date"],
+                  reps:       ["Rep Name","Email","Region","Role","Target Amount"],
+                  clients:    ["Client Company","Industry","Primary Contact","Designation","Phone","Email","Assigned Rep","Region"],
+                  targets:    ["Rep Name","Region","Client Company","Deal Type","Target Amount","Quarter"],
+                  revenue:    ["Rep Name","Client Company","Deal Type","Amount","Invoice Ref","Date","Quarter","Notes"],
+                  properties: ["Property Name","Type","Channel","Quarter","Total Value","Slot Label","Slot Value","Status","Client Company"],
+                };
+
+                const downloadTemplate = (type) => {
+                  const headers = TEMPLATES[type] || [];
+                  const sampleRow = {
+                    deals:      ["Havells India","Deepa Menon","VP Marketing","9823401234","deepa@havells.com","Vikram Sen","National","Sponsorship","Very Interested","15000000","12000000","Q1 FY26","Top 5","Budget confirmed","Send deck","2026-04-15"],
+                    reps:       ["Arjun Mishra","arjun@odishatv.com","North","SALES REP","10000000"],
+                    clients:    ["Havells India","FMCG","Deepa Menon","VP Marketing","9823401234","deepa@havells.com","Vikram Sen","National"],
+                    targets:    ["Vikram Sen","National","Havells India","Sponsorship","15000000","Q1 FY26"],
+                    revenue:    ["Vikram Sen","Havells India","Sponsorship","5000000","INV-2024-001","2026-04-10","Q1 FY26","First instalment"],
+                    properties: ["Odia Idol S3","Reality Show","OTV","Q1 FY26","12000000","Title Sponsor","5000000","Available",""],
+                  }[type] || [];
+                  const csv = [headers.join(","), sampleRow.join(",")].join("\n");
+                  const blob = new Blob([csv], {type:"text/csv"});
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `OTV_${type}_template.csv`;
+                  a.click();
+                };
+
+                const processUpload = async (file, type) => {
                   const XLSX = await loadXLSX();
                   const reader = new FileReader();
                   reader.onload = ev => {
                     try {
-                      const wb = XLSX.read(ev.target.result,{type:"array",raw:false});
-                      const ws = wb.Sheets[wb.SheetNames[0]];
+                      const wb   = XLSX.read(ev.target.result, {type:"array", raw:false});
+                      const ws   = wb.Sheets[wb.SheetNames[0]];
                       const rows = XLSX.utils.sheet_to_json(ws);
-                      setImportData({filename:file.name, rows, type:"deals"});
-                    } catch(err){ showToast("Could not read file: "+err.message,"err"); }
+                      setImportData({filename:file.name, rows, type});
+                    } catch(err) { showToast("Could not read file: "+err.message, "err"); }
                   };
                   reader.readAsArrayBuffer(file);
-                }} />
-                <button onClick={()=>importRef.current.click()} className="btn" style={{background:C.s2,color:C.text,border:`1px solid ${C.border}`,marginBottom:16,padding:"10px 20px",fontSize:13}}>
-                  📁 Choose File to Upload
-                </button>
+                };
 
-                {/* Preview */}
-                {importData && (
+                const commitImport = () => {
+                  if (!importData) return;
+                  const {rows, type} = importData;
+                  const parseCur = v => { if(!v)return 0; const s=String(v).replace(/[,₹]/g,"").trim(); if(/[0-9]+[Cc][Rr]$/.test(s))return parseFloat(s)*10000000; if(/[0-9]+[Ll]$/.test(s))return parseFloat(s)*100000; return parseFloat(s)||0; };
+
+                  if (type==="deals") {
+                    const newDeals = rows.map((row,i)=>{
+                      const repName = row["Rep Name"]||"";
+                      const rep = REPS.find(r=>r.name.toLowerCase().includes(repName.toLowerCase().slice(0,5))) || REPS[0];
+                      return {id:`imp_${Date.now()}_${i}`,repId:rep.id,clientCompany:row["Client Company"]||"Unknown",contactName:row["Contact Name"]||"",designation:row["Designation"]||"",phone:row["Phone"]||"",email:row["Email"]||"",dealType:row["Deal Type"]||"Linear TV",outcome:row["Stage"]||"Needs Callback",amount:parseCur(row["Expected Amount"]),targetAmount:parseCur(row["Target Amount"]),region:row["Region"]||rep.region||"North",priority:row["Priority"]||"Regular",quarter:row["Quarter"]||"Q1 FY26",notes:row["Notes"]||"",nextStep:row["Next Step"]||"",nextStepDate:row["Next Step Date"]||null,lastContact:null,reqs:[]};
+                    });
+                    setDeals(p=>[...p,...newDeals]);
+                    showToast(`✓ ${newDeals.length} deals imported`);
+                  } else if (type==="revenue") {
+                    const repLookup = r => REPS.find(rep=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
+                    const entries = rows.map((row,i)=>{
+                      const rep = repLookup(row["Rep Name"]);
+                      return {id:`re_imp_${Date.now()}_${i}`,repId:rep?.id||null,clientCompany:row["Client Company"]||"",dealType:row["Deal Type"]||"Linear TV",amount:parseCur(row["Amount"]),invoiceRef:row["Invoice Ref"]||"",date:row["Date"]||TODAY,quarter:row["Quarter"]||"Q1 FY26",notes:row["Notes"]||""};
+                    });
+                    setRevenueEntries(p=>[...p,...entries]);
+                    showToast(`✓ ${entries.length} revenue entries imported`);
+                  } else if (type==="targets") {
+                    const newSubs = rows.map((row,i)=>{
+                      const rep = REPS.find(r=>r.name.toLowerCase().includes((row["Rep Name"]||"").toLowerCase().slice(0,5)));
+                      return {id:`ts_imp_${Date.now()}_${i}`,repId:rep?.id||null,repName:row["Rep Name"]||"",region:row["Region"]||"",quarter:row["Quarter"]||"Q1 FY26",clients:[{clientCompany:row["Client Company"]||"",dealType:row["Deal Type"]||"Linear TV",targetAmount:parseCur(row["Target Amount"])}],totalTarget:parseCur(row["Target Amount"]),status:"Pending RH",submittedAt:TODAY,approvalLog:[]};
+                    });
+                    setTargetSubs(p=>[...p,...newSubs]);
+                    showToast(`✓ ${newSubs.length} target rows imported → pending RH approval`);
+                  } else if (type==="properties") {
+                    const grouped = {};
+                    rows.forEach(row=>{
+                      const name = row["Property Name"]||"";
+                      if(!grouped[name]) grouped[name]={id:`pr_imp_${Date.now()}`,name,type:row["Type"]||"",channel:row["Channel"]||"",quarter:row["Quarter"]||"Q1 FY26",totalValue:parseCur(row["Total Value"]),slots:[]};
+                      grouped[name].slots.push({id:`s_imp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,label:row["Slot Label"]||"Slot",value:parseCur(row["Slot Value"]),status:row["Status"]||"Available",clientCompany:row["Client Company"]||"",repId:null});
+                    });
+                    setProperties(p=>[...p,...Object.values(grouped)]);
+                    showToast(`✓ ${Object.values(grouped).length} properties imported`);
+                  } else {
+                    showToast(`${type} import noted — connect to your DB to persist`, "ok");
+                  }
+                  setImportData(null);
+                };
+
+                return (
                   <div>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div style={{fontSize:12,fontWeight:700,color:C.text}}>{importData.filename} · {importData.rows.length} rows detected</div>
-                      <div style={{display:"flex",gap:8}}>
-                        <button onClick={()=>setImportData(null)} className="btn btn-ghost" style={{fontSize:11}}>Cancel</button>
-                        <button className="btn btn-primary" style={{fontSize:11}} onClick={()=>{
-                          // Map CSV rows to deals
-                          const newDeals = importData.rows.map((row,i)=>{
-                            const repName = row["Rep Name"]||"";
-                            const rep = REPS.find(r=>r.name.toLowerCase().includes(repName.toLowerCase())) || REPS[0];
-                            return {
-                              id:`imp_${Date.now()}_${i}`,
-                              repId: rep.id,
-                              clientCompany: row["Client Company"]||row["client_name"]||"Unknown",
-                              contactName: row["Contact Name"]||"",
-                              designation: row["Designation"]||"",
-                              phone: row["Phone"]||"",
-                              email: row["Email"]||"",
-                              dealType: row["Deal Type"]||"Linear TV",
-                              outcome: row["Stage"]||"Needs Callback",
-                              amount: Number(row["Expected Amount"]||0),
-                              targetAmount: Number(row["Target Amount"]||0),
-                              region: row["Region"]||rep.region||"North",
-                              priority: row["Priority"]||"Regular",
-                              notes: row["Notes"]||"",
-                              nextStep: row["Next Step"]||"",
-                              nextStepDate: row["Next Step Date"]||null,
-                              lastContact: null,
-                              quarter: row["Quarter"]||"Q1 FY26",
-                              reqs:[],
-                            };
-                          });
-                          setDeals(p=>[...p,...newDeals]);
-                          setImportData(null);
-                          showToast(`${newDeals.length} deals imported successfully`);
-                        }}>Import {importData.rows.length} Deals →</button>
-                      </div>
+                    {/* Tab switcher */}
+                    <div style={{display:"flex",gap:0,marginBottom:20,borderBottom:`1px solid ${C.border}`,flexWrap:"wrap"}}>
+                      {tabs.map(t=>(
+                        <button key={t.id} onClick={()=>setImportTab(t.id)}
+                          style={{padding:"10px 18px",background:"transparent",border:"none",
+                            borderBottom:impTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
+                            color:impTab===t.id?C.accent:C.dim,cursor:"pointer",
+                            fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:impTab===t.id?700:400}}>
+                          {t.icon} {t.label}
+                        </button>
+                      ))}
                     </div>
-                    <div style={{overflowX:"auto",borderRadius:6,border:`1px solid ${C.border}`}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
-                        <thead><tr>{Object.keys(importData.rows[0]||{}).slice(0,6).map(h=><th key={h} style={{padding:"7px 10px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`,textTransform:"uppercase",letterSpacing:".05em",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                        <tbody>{importData.rows.slice(0,5).map((row,i)=>(
-                          <tr key={i} style={{borderBottom:`1px solid ${C.s2}`}}>{Object.values(row).slice(0,6).map((v,j)=><td key={j} style={{padding:"7px 10px",color:C.text,whiteSpace:"nowrap"}}>{String(v||"")}</td>)}</tr>
-                        ))}</tbody>
-                      </table>
-                      {importData.rows.length>5&&<div style={{padding:"8px 12px",fontSize:11,color:C.dim,textAlign:"center"}}>...and {importData.rows.length-5} more rows</div>}
+
+                    {tabs.filter(t=>t.id===impTab).map(tab=>(
+                      <div key={tab.id}>
+                        <div style={{fontSize:12,color:C.dim,marginBottom:16}}>{tab.desc} — {TEMPLATES[tab.id]?.length} columns</div>
+
+                        {/* Step 1: Download template */}
+                        <div className="card" style={{padding:"16px 20px",marginBottom:14}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                            <div>
+                              <div className="sans" style={{fontWeight:700,marginBottom:3}}>Step 1 — Download Template</div>
+                              <div style={{fontSize:11,color:C.dim}}>Columns: {TEMPLATES[tab.id]?.join(" · ")}</div>
+                            </div>
+                            <button onClick={()=>downloadTemplate(tab.id)}
+                              style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                              ↓ Download CSV
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Step 2: Upload */}
+                        <div className="card" style={{padding:"16px 20px",marginBottom:14}}>
+                          <div className="sans" style={{fontWeight:700,marginBottom:8}}>Step 2 — Upload Filled File</div>
+                          <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Accepts .csv or .xlsx — first row must be column headers</div>
+                          <label style={{display:"flex",alignItems:"center",justifyContent:"center",gap:10,background:C.s2,border:`2px dashed ${C.border}`,borderRadius:8,padding:"24px 20px",cursor:"pointer",transition:"border-color .15s"}}
+                            onMouseOver={e=>e.currentTarget.style.borderColor=C.accent}
+                            onMouseOut={e=>e.currentTarget.style.borderColor=C.border}>
+                            <input type="file" accept=".csv,.xlsx" style={{display:"none"}} onChange={e=>{const f=e.target.files[0];if(f)processUpload(f,tab.id);e.target.value="";}}/>
+                            <span style={{fontSize:24}}>📁</span>
+                            <div>
+                              <div style={{fontWeight:700,fontSize:13}}>Click to choose file</div>
+                              <div style={{fontSize:11,color:C.dim,marginTop:2}}>CSV or Excel (.xlsx)</div>
+                            </div>
+                          </label>
+                        </div>
+
+                        {/* Step 3: Preview + confirm */}
+                        {importData && importData.type===tab.id && (
+                          <div className="card" style={{padding:"16px 20px",borderLeft:`3px solid ${C.green}`}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                              <div>
+                                <div className="sans" style={{fontWeight:700}}>{importData.filename}</div>
+                                <div style={{fontSize:11,color:C.dim,marginTop:2}}>{importData.rows.length} rows ready to import</div>
+                              </div>
+                              <div style={{display:"flex",gap:8}}>
+                                <button onClick={()=>setImportData(null)} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✕ Cancel</button>
+                                <button onClick={commitImport}
+                                  style={{background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:4,padding:"6px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                  ✓ Import {importData.rows.length} rows →
+                                </button>
+                              </div>
+                            </div>
+                            {/* Preview table */}
+                            <div style={{overflowX:"auto",borderRadius:5,border:`1px solid ${C.border}`}}>
+                              <table style={{width:"100%",borderCollapse:"collapse",fontSize:11}}>
+                                <thead><tr>
+                                  {Object.keys(importData.rows[0]||{}).slice(0,7).map(h=>(
+                                    <th key={h} style={{padding:"6px 10px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                                  ))}
+                                  {Object.keys(importData.rows[0]||{}).length>7&&<th style={{padding:"6px 10px",background:C.s2,color:C.muted,fontSize:10}}>+{Object.keys(importData.rows[0]).length-7} more</th>}
+                                </tr></thead>
+                                <tbody>
+                                  {importData.rows.slice(0,5).map((row,i)=>(
+                                    <tr key={i} style={{borderBottom:`1px solid ${C.s2}`}}>
+                                      {Object.values(row).slice(0,7).map((v,j)=>(
+                                        <td key={j} style={{padding:"7px 10px",color:C.text,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(v)}</td>
+                                      ))}
+                                      {Object.values(row).length>7&&<td style={{padding:"7px 10px",color:C.muted}}>…</td>}
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                              {importData.rows.length>5&&<div style={{padding:"8px 12px",fontSize:11,color:C.dim,background:C.s2}}>…and {importData.rows.length-5} more rows</div>}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+
+                    {/* Current stats */}
+                    <div style={{marginTop:20,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
+                      {[
+                        {label:"Deals in system",    val:deals.length,           color:C.accent},
+                        {label:"Revenue entries",    val:revenueEntries.length,  color:C.green},
+                        {label:"Target submissions", val:targetSubs.length,      color:C.blue},
+                        {label:"Properties/IPs",     val:(properties||[]).length,color:C.purple},
+                        {label:"Tasks",              val:tasks.length,           color:C.orange},
+                        {label:"Meetings logged",    val:meetings.length,        color:C.dim},
+                      ].map(s=>(
+                        <div key={s.label} style={{background:C.surface,border:`1px solid ${s.color}33`,borderRadius:7,padding:"10px 14px"}}>
+                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>{s.label}</div>
+                          <div className="sans" style={{fontSize:20,fontWeight:800,color:s.color}}>{s.val}</div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                )}
-              </div>
-
-              {/* Current deal count */}
-              <div style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div style={{fontSize:12,color:C.dim}}>Current deals in system</div>
-                <div className="sans" style={{fontSize:20,fontWeight:700,color:C.accent}}>{deals.length}</div>
-              </div>
+                );
+              })()}
             </div>
           )}
 
@@ -5079,7 +6284,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {[{label:"TOTAL PENDING",value:pending.length,color:C.orange},{label:"OVERDUE (>2D)",value:pending.filter(d=>daysSince(d.awaitingApprovalSince||TODAY)>=2).length,color:C.red},{label:"TOTAL VALUE",value:fmtR(pending.reduce((s,d)=>s+(d.amount||0),0)),color:C.accent}].map(k=>(<div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div><div className="sans" style={{fontSize:24,fontWeight:700,color:k.color}}>{k.value}</div></div>))}
               </div>
               {pending.length===0&&<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ No pending approvals</div>}
-              {pending.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Amount","Waiting For","Days","Stage","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{pending.map(d=>{const rep=REPS.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:dw>=2?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=dw>=2?`${C.red}04`:"transparent"}><td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{d.awaitingApproval}</span></td><td style={{padding:"10px 14px",color:dw>=2?C.red:C.dim,fontWeight:dw>=2?700:400}}>{dw}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"10px 14px",whiteSpace:"nowrap"}}><button onClick={()=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:null,awaitingApprovalSince:null}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Approve</button></td></tr>);})}</tbody></table></div>}
+              {pending.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Amount","Waiting For","Days","Stage","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{pending.map(d=>{const rep=REPS.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:dw>=2?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=dw>=2?`${C.red}04`:"transparent"}><td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{d.awaitingApproval}</span></td><td style={{padding:"10px 14px",color:dw>=2?C.red:C.dim,fontWeight:dw>=2?700:400}}>{dw}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"10px 14px",whiteSpace:"nowrap"}}><button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()} style={{background:canApprove(d)?`${C.green}22`:C.s3,border:"none",color:canApprove(d)?C.green:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{canApprove(d)?"Approve →":"🔒 Locked"}</button></td></tr>);})}</tbody></table></div>}
             </div>);
           })()}
 
@@ -5119,7 +6324,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div key={d.id} style={{background:C.surface,border:`1px solid ${dw>=2?C.red+"44":C.border}`,borderLeft:`3px solid ${dw>=2?C.red:C.orange}`,borderRadius:8,padding:"14px 18px",marginBottom:10}}>
                   <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                     <div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span className="sans" style={{fontSize:15,fontWeight:700}}>{d.clientCompany}</span><span style={{background:`${dw>=2?C.red:C.orange}22`,color:dw>=2?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{dw}d → {d.awaitingApproval}</span></div><div style={{fontSize:11,color:C.dim}}>{rep?.name} · {d.region}</div>{d.nextStep&&<div style={{fontSize:11,color:C.text,marginTop:5}}>Next: {d.nextStep}</div>}</div>
-                    <div style={{textAlign:"right"}}><div className="sans" style={{fontSize:16,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><button onClick={()=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:null,awaitingApprovalSince:null}:x))} style={{marginTop:6,background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✓ Resolved</button></div>
+                    <div style={{textAlign:"right"}}><div className="sans" style={{fontSize:16,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()} style={{marginTop:6,background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✓ Resolved</button></div>
                   </div>
                 </div>
               );})}
@@ -5169,6 +6374,75 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ══════════════ DIGI OPS VIEWS ══════════════ */}
+          {/* ═══ DIGI OPS — TV + DIGITAL DEALS ═══ */}
+          {view==="digi-tv-deals" && isDigiOps && (
+            <div className="fin">
+              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>TV + DIGITAL DEALS</div>
+              <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Integrated deals combining TV FCT with digital components</div>
+              {(()=>{
+                const tvDigiDeals = deals.filter(d=>d.dealType==="Integrated Package"||d.dealType==="Brand Solutions");
+                if(!tvDigiDeals.length) return <div style={{textAlign:"center",padding:50,color:C.muted}}>No TV+Digital integrated deals yet.</div>;
+                return tvDigiDeals.map(d=>{
+                  const rep = REPS.find(r=>r.id===d.repId);
+                  const sc  = oColor(d.outcome);
+                  return (
+                    <div key={d.id} className="card" style={{padding:"14px 18px",marginBottom:10}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                        <div>
+                          <div className="sans" style={{fontWeight:700,fontSize:14,marginBottom:3}}>{d.clientCompany}</div>
+                          <div style={{fontSize:11,color:C.dim}}>{rep?.name} · {d.region} · {d.dealType}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div className="sans" style={{fontSize:18,fontWeight:800,color:C.green}}>{fmtR(d.amount)}</div>
+                          <span style={{background:`${sc}22`,color:sc,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:700}}>{d.outcome}</span>
+                        </div>
+                      </div>
+                      <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
+                        {["TV FCT","Digital Video","Social","OTT","Display"].map(comp=>(
+                          <span key={comp} style={{background:`${C.blue}12`,color:C.blue,padding:"2px 9px",borderRadius:8,fontSize:10,border:`1px dashed ${C.blue}33`}}>{comp}</span>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                });
+              })()}
+            </div>
+          )}
+
+          {/* ═══ DIGI OPS — DIGITAL PROJECTS ═══ */}
+          {view==="digi-projects" && isDigiOps && (
+            <div className="fin">
+              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>DIGITAL PROJECTS</div>
+              <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Active digital production projects and campaigns</div>
+              {(()=>{
+                const projects = [
+                  {id:"dp1",name:"Havells Digital Campaign",client:"Havells India",type:"Social + OTT",status:"In Progress",dueDate:D3,assignedTo:"Digi Ops",budget:1500000},
+                  {id:"dp2",name:"Berger Paints Microsite",client:"Berger Paints",type:"Website",status:"Pending",dueDate:D7,assignedTo:"Digi Ops",budget:800000},
+                  {id:"dp3",name:"ITC Programmatic Run",client:"ITC Limited",type:"Programmatic",status:"Live",dueDate:TODAY,assignedTo:"Digi Ops",budget:600000},
+                ];
+                const statusC = s => s==="Live"?C.green:s==="In Progress"?C.blue:s==="Pending"?C.orange:C.dim;
+                return projects.map(p=>(
+                  <div key={p.id} className="card" style={{padding:"14px 18px",marginBottom:10,borderLeft:`3px solid ${statusC(p.status)}`}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:8}}>
+                      <div>
+                        <div className="sans" style={{fontWeight:700,fontSize:14}}>{p.name}</div>
+                        <div style={{fontSize:11,color:C.dim,marginTop:2}}>{p.client} · {p.type}</div>
+                      </div>
+                      <div style={{textAlign:"right"}}>
+                        <span style={{background:`${statusC(p.status)}22`,color:statusC(p.status),padding:"2px 9px",borderRadius:8,fontSize:11,fontWeight:700}}>{p.status}</span>
+                        <div className="sans" style={{fontSize:14,fontWeight:700,color:C.accent,marginTop:4}}>{fmtR(p.budget)}</div>
+                      </div>
+                    </div>
+                    <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                      <span style={{fontSize:10,color:C.dim}}>Due: {p.dueDate}</span>
+                      <span style={{fontSize:10,color:C.dim}}>Assigned: {p.assignedTo}</span>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          )}
+
           {view==="digi-deals" && isDigiOps && (()=>{
             const digiDeals=deals.filter(d=>d.quarter===filterQ&&(d.dealType==="Digital"||d.dealType==="Integrated Package"||(d.reqs||[]).some(r=>r.dept==="Digital"))).sort((a,b)=>b.amount-a.amount);
             const blocked=digiDeals.filter(d=>d.awaitingApproval==="Digital");
@@ -5198,7 +6472,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             return(<div className="fin">
               <div style={{marginBottom:16}}><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>ESCALATIONS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>Deals waiting on Digital team</div></div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>{[{l:"PENDING",v:digiBlocked.length,c:C.orange},{l:"OVERDUE (>2D)",v:digiBlocked.filter(d=>daysSince(d.awaitingApprovalSince||TODAY)>=2).length,c:C.red},{l:"VALUE",v:fmtR(digiBlocked.reduce((s,d)=>s+(d.amount||0),0)),c:C.accent}].map(k=>(<div key={k.l} className="card" style={{padding:13,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:24,fontWeight:700,color:k.c}}>{k.v}</div></div>))}</div>
-              {digiBlocked.length===0?<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ Nothing waiting on Digital right now</div>:digiBlocked.map(d=>{const rep=REPS.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<div key={d.id} style={{background:C.surface,border:`1px solid ${dw>=2?C.red+"44":C.border}`,borderLeft:`3px solid ${dw>=2?C.red:C.orange}`,borderRadius:8,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span className="sans" style={{fontSize:14,fontWeight:700}}>{d.clientCompany}</span><span style={{background:`${dw>=2?C.red:C.orange}22`,color:dw>=2?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{dw}d waiting</span></div><div style={{fontSize:11,color:C.dim,marginBottom:4}}>{rep?.name} · {d.region}</div>{d.nextStep&&<div style={{fontSize:11,color:C.text}}>Context: {d.nextStep}</div>}</div><div style={{textAlign:"right",display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}><div className="sans" style={{fontSize:15,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span><button onClick={()=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:null,awaitingApprovalSince:null}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✓ Resolved</button></div></div>);})}
+              {digiBlocked.length===0?<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ Nothing waiting on Digital right now</div>:digiBlocked.map(d=>{const rep=REPS.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<div key={d.id} style={{background:C.surface,border:`1px solid ${dw>=2?C.red+"44":C.border}`,borderLeft:`3px solid ${dw>=2?C.red:C.orange}`,borderRadius:8,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span className="sans" style={{fontSize:14,fontWeight:700}}>{d.clientCompany}</span><span style={{background:`${dw>=2?C.red:C.orange}22`,color:dw>=2?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{dw}d waiting</span></div><div style={{fontSize:11,color:C.dim,marginBottom:4}}>{rep?.name} · {d.region}</div>{d.nextStep&&<div style={{fontSize:11,color:C.text}}>Context: {d.nextStep}</div>}</div><div style={{textAlign:"right",display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}><div className="sans" style={{fontSize:15,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span><button onClick={()=>{
+                                const nextApprover = d.amount >= 50000000 ? "CXO" : null;
+                                setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:nextApprover,awaitingApprovalSince:nextApprover?TODAY:null}:x));
+                                showToast(nextApprover ? `Approved → forwarded to CXO` : "Deal approved ✓");
+                              }} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                {d.amount >= 50000000 ? "Approve → CXO" : "✓ Approve"}
+                              </button></div></div>);})}
             </div>);
           })()}
 
@@ -6147,6 +7427,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <ROCard
                     result={roResults[roActiveDoc]}
                     onExport={()=>roExportSingle(roResults[roActiveDoc])}
+                    onPushToPipeline={roPushToPipeline}
                   />
                 </div>
               )}
@@ -6515,8 +7796,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {label:"Designation",key:"designation",type:"text",ph:"e.g. VP Marketing"},
                 {label:"Phone",key:"phone",type:"text",ph:"Mobile"},
                 {label:"Email",key:"email",type:"text",ph:"email@company.com"},
-                {label:"Target Amount (Rs) *",key:"targetAmount",type:"number",ph:"0"},
-                {label:"Expected Amount (Rs)",key:"amount",type:"number",ph:"0"},
+                {label:"Target Amount (Rs) * — what you're going after",key:"targetAmount",type:"number",ph:"e.g. 5000000"},
+                {label:"Expected (Rs) — likely close amount (leave blank = same as target)",key:"amount",type:"number",ph:"auto-filled from target"},
                 {label:"Next Step",key:"nextStep",type:"text",ph:"Action item"},
                 {label:"Next Step Date",key:"nextStepDate",type:"date",ph:""},
               ].map(f=>(
@@ -6548,9 +7829,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div>
                 <div className="sans" style={{fontSize:16,fontWeight:700}}>LOG MEETING</div>
                 <div style={{fontSize:11,color:C.dim,marginTop:2}}>{TODAY} · Today's Meetings</div>
-              </div>
-              <div style={{fontSize:11,padding:"4px 10px",borderRadius:4,background:new Date().getHours()>=12?`${C.orange}22`:`${C.green}22`,color:new Date().getHours()>=12?C.orange:C.green,fontWeight:700}}>
-                {new Date().getHours()>=12?"⚠ After 12pm — will flag late":"✓ Before 12pm"}
               </div>
             </div>
             <div style={{height:1,background:C.border,margin:"12px 0"}} />
@@ -6844,8 +8122,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                     )}
                     {logForm.calendarPlatform && logForm.calendarPlatform !== "none" && (
-                      <div style={{marginTop:6,padding:"6px 10px",background:`${C.orange}10`,border:`1px solid ${C.orange}33`,borderRadius:5,fontSize:11,color:C.orange}}>
-                        ⚠ Calendar integration not yet live — invites will not be sent automatically until deployed with OAuth.
+                      <div style={{marginTop:6,padding:"6px 10px",background:`${C.blue}10`,border:`1px solid ${C.blue}33`,borderRadius:5,fontSize:11,color:C.blue}}>
+                        📅 Calendar event will be created when running on Replit deployment (requires Google OAuth). Meeting is still logged to CRM now.
                       </div>
                     )}
 
@@ -6898,6 +8176,25 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <button className="btn btn-primary" onClick={grantException}>GRANT EXCEPTION</button>
             </div>
             <div style={{marginTop:12,fontSize:10,color:C.muted,textAlign:"center"}}>Logged as: {user_role?.name||"Admin"} ({user_role?.role}) · {new Date().toLocaleString("en-IN")} · Sent to HR</div>
+          </div>
+        </div>
+      )}
+
+      {/* NOTE MODAL */}
+      {noteModal && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}
+          onClick={e=>{if(e.target===e.currentTarget)setNoteModal(null);}}>
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:24,width:380,boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
+            <div className="sans" style={{fontWeight:700,fontSize:15,marginBottom:14}}>{noteModal.title}</div>
+            <textarea autoFocus rows={3} value={noteModalVal} onChange={e=>setNoteModalVal(e.target.value)}
+              onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();noteModal.onSubmit(noteModalVal||noteModal.placeholder);setNoteModal(null);}}}
+              style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace",resize:"none",outline:"none"}}
+              placeholder={noteModal.placeholder}/>
+            <div style={{display:"flex",gap:8,marginTop:12,justifyContent:"flex-end"}}>
+              <button onClick={()=>setNoteModal(null)} style={{padding:"7px 16px",background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+              <button onClick={()=>{noteModal.onSubmit(noteModalVal||noteModal.placeholder);setNoteModal(null);}}
+                style={{padding:"7px 18px",background:C.accent,border:"none",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:700}}>Submit</button>
+            </div>
           </div>
         </div>
       )}
