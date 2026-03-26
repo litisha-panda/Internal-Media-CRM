@@ -5665,13 +5665,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             // Summary stats across all approved/pending subs for this quarter
             const qSubs      = mySubs.filter(s=>s.quarter===filterQ);
-            const approvedSub  = qSubs.find(s=>s.status==="Approved");
-            const pendingSub   = qSubs.find(s=>s.status!=="Approved"&&s.status!=="Rejected");
-            const activeSub    = approvedSub || pendingSub;
-            const totalTarget  = activeSub ? activeSub.totalTarget : 0;
-            const totalAchieved= activeSub ? activeSub.clients.reduce((sum,cl)=>{
+            const allActiveSubs = qSubs.filter(s=>s.status!=="Rejected");
+            const activeSub     = allActiveSubs.length > 0; // boolean — used to show/hide summary
+            const totalTarget   = allActiveSubs.reduce((s,sub)=>s+sub.totalTarget,0);
+            const totalAchieved = allActiveSubs.flatMap(sub=>sub.clients).reduce((sum,cl)=>{
               return sum + revenueEntries.filter(e=>e.repId===myRepId&&e.clientCompany===cl.clientCompany&&e.quarter===filterQ).reduce((s,e)=>s+(e.amount||0),0);
-            },0) : 0;
+            },0);
             const pct = totalTarget>0 ? Math.round((totalAchieved/totalTarget)*100) : 0;
             const pctColor = pct>=80?C.green:pct>=50?C.accent:C.red;
 
@@ -5701,12 +5700,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* Summary stats row */}
                 {activeSub && (
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
-                    {[
-                      {label:"TOTAL TARGET",   value:fmtR(totalTarget),   color:C.accent},
-                      {label:"ACHIEVED",        value:fmtR(totalAchieved), color:pctColor},
-                      {label:"% COMPLETE",      value:`${pct}%`,           color:pctColor},
-                    ].map(s=>(
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                    {(()=>{
+                      const shortfall = Math.max(0, totalTarget - totalAchieved);
+                      const sfColor   = shortfall===0 ? C.green : C.red;
+                      return [
+                        {label:"TOTAL TARGET", value:fmtR(totalTarget),   color:C.accent},
+                        {label:"ACHIEVED",      value:fmtR(totalAchieved), color:pctColor},
+                        {label:"SHORTFALL",     value:fmtR(shortfall),     color:sfColor},
+                        {label:"% COMPLETE",    value:`${pct}%`,           color:pctColor},
+                      ];
+                    })().map(s=>(
                       <div key={s.label} className="card" style={{padding:"12px 16px"}}>
                         <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:4}}>{s.label}</div>
                         <div className="sans" style={{fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div>
@@ -5772,43 +5776,55 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* Current quarter client target vs achieved */}
                 {(()=>{
-                  const approvedSub = mySubs.find(s=>s.quarter===filterQ&&s.status==="Approved");
-                  const pendingSub  = mySubs.find(s=>s.quarter===filterQ&&s.status!=="Approved"&&s.status!=="Rejected");
-                  const displaySub  = approvedSub || pendingSub;
-                  if(!displaySub) return null;
+                  // Collect ALL non-rejected subs for this quarter (approved + pending)
+                  const activeSubs = mySubs.filter(s=>s.quarter===filterQ&&s.status!=="Rejected");
+                  if(!activeSubs.length) return null;
+                  // Flatten clients, tagging each with their parent sub's status
+                  const allClients = activeSubs.flatMap(sub=>
+                    sub.clients.map(cl=>({...cl, subStatus:sub.status, approvalLog:sub.approvalLog||[]}))
+                  );
+                  // Overall status badge: show the most advanced status
+                  const overallStatus = activeSubs.find(s=>s.status==="Approved")?.status || activeSubs[0]?.status;
                   return (
                     <div style={{marginBottom:20}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                         <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{filterQ} · Client Targets</div>
-                        <span style={{background:`${statusColor(displaySub.status)}22`,color:statusColor(displaySub.status),padding:"2px 10px",borderRadius:8,fontSize:10,fontWeight:700}}>{displaySub.status}</span>
+                        <span style={{background:`${statusColor(overallStatus)}22`,color:statusColor(overallStatus),padding:"2px 10px",borderRadius:8,fontSize:10,fontWeight:700}}>{overallStatus}</span>
                       </div>
                       <div className="card" style={{overflow:"hidden"}}>
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead><tr>
-                            {["Client","Deal Type","Target","Achieved","Progress"].map(h=>(
+                            {["Client","Deal Type","Target","Achieved","Shortfall","Progress"].map(h=>(
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>
                             ))}
                           </tr></thead>
                           <tbody>
-                            {displaySub.clients.map((cl,i)=>{
+                            {allClients.map((cl,i)=>{
                               const achieved = revenueEntries
                                 .filter(e=>e.repId===myRepId&&e.clientCompany===cl.clientCompany&&e.quarter===filterQ)
                                 .reduce((s,e)=>s+(e.amount||0),0);
                               const pct = cl.targetAmount>0?Math.min(100,Math.round((achieved/cl.targetAmount)*100)):0;
                               const pc = pct>=100?C.green:pct>=60?C.accent:C.red;
+                              const shortfall = Math.max(0, cl.targetAmount - achieved);
+                              const isPending = cl.subStatus!=="Approved" && achieved===0;
                               return (
                                 <tr key={i} style={{borderBottom:`1px solid ${C.s2}`}}>
                                   <td style={{padding:"10px 14px",fontWeight:700}}>{cl.clientCompany}</td>
                                   <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{cl.dealType}</span></td>
                                   <td style={{padding:"10px 14px",color:C.dim}}>{fmtR(cl.targetAmount)}</td>
-                                  <td style={{padding:"10px 14px",fontWeight:700,color:pc}}>{achieved>0?fmtR(achieved):"—"}</td>
-                                  <td style={{padding:"10px 14px",minWidth:100}}>
-                                    <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                      <div style={{flex:1,height:4,background:C.s3,borderRadius:2,overflow:"hidden"}}>
-                                        <div style={{height:"100%",width:`${pct}%`,background:pc,borderRadius:2}}/>
+                                  <td style={{padding:"10px 14px",fontWeight:700,color:achieved>0?pc:C.muted}}>{achieved>0?fmtR(achieved):"—"}</td>
+                                  <td style={{padding:"10px 14px",color:shortfall===0?C.green:C.red,fontWeight:700}}>{achieved>0?fmtR(shortfall):"—"}</td>
+                                  <td style={{padding:"10px 14px",minWidth:140}}>
+                                    {isPending ? (
+                                      <span style={{background:`${C.orange}18`,color:C.orange,padding:"3px 9px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>⏳ Awaiting Approval</span>
+                                    ) : (
+                                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                        <div style={{flex:1,height:4,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                                          <div style={{height:"100%",width:`${pct}%`,background:pc,borderRadius:2}}/>
+                                        </div>
+                                        <span style={{fontSize:10,color:pc,fontWeight:700,minWidth:30}}>{pct}%</span>
                                       </div>
-                                      <span style={{fontSize:10,color:pc,fontWeight:700,minWidth:30}}>{pct}%</span>
-                                    </div>
+                                    )}
                                   </td>
                                 </tr>
                               );
@@ -5816,12 +5832,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           </tbody>
                         </table>
                       </div>
-                      {/* Prior approvals log */}
-                      {displaySub.approvalLog.length>0&&(
+                      {/* Prior approvals log across all subs */}
+                      {activeSubs.flatMap(s=>s.approvalLog||[]).length>0&&(
                         <div style={{display:"flex",gap:4,flexWrap:"wrap",marginTop:8}}>
-                          {displaySub.approvalLog.map((log,i)=>(
-                            <span key={i} style={{background:`${C.green}12`,color:C.green,padding:"1px 8px",borderRadius:6,fontSize:10}}>✓ {log.by}: {log.note}</span>
-                          ))}
+                          {activeSubs.flatMap(s=>(s.approvalLog||[]).map((log,i)=>(
+                            <span key={`${s.id}_${i}`} style={{background:`${C.green}12`,color:C.green,padding:"1px 8px",borderRadius:6,fontSize:10}}>✓ {log.by}: {log.note}</span>
+                          )))}
                         </div>
                       )}
                     </div>
