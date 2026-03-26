@@ -2590,11 +2590,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               </div>
             ))}
             <div style={{flex:1}} />
-            <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`}}>
-              <div style={{fontSize:9,color:C.dim,marginBottom:4,letterSpacing:".08em",fontWeight:700}}>DAILY DEADLINE</div>
-              <div className="sans" style={{fontSize:12,fontWeight:700,color:countdown.includes("passed")?C.red:C.accent,lineHeight:1.2}}>{countdown.includes("passed")?"Deadline passed":countdown}</div>
-              <div style={{fontSize:10,color:C.dim,marginTop:3}}>Weekly: Sat 11:30 PM</div>
-            </div>
           </div>
         )}
 
