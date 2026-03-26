@@ -2140,14 +2140,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       ]},
     ];
 
-    // ── SALES STRATEGY (view-only, monthly plan) ──
+    // ── SALES STRATEGY (same dashboard as NSH) ──
     if (isStrategy) return [
-      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("nsh-rh-plan","NSH's Plan","◎"), N("nsh-regional-plan","Rep's Plan","◎")] },
+      { label:"PLANNING",    items:[
+        N("my-plan","Overview","◎"),
+        N("nsh-myplan","NSH's Plan","◎"),
+        N("nsh-rh-plan","RH's Plan","◎"),
+        N("nsh-regional-plan","Rep's Plans","◎"),
+      ]},
       { label:"COMMAND",     items:[
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
         N("target-approvals","Target Approvals","◎",targetSubs.filter(t=>t.status==="Pending Strategy").length||null),
+        N("revenue-log","Revenue Log","◈"),
         N("escalations","Escalations","▲",escBadge),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
@@ -2160,14 +2166,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       ]},
     ];
 
-    // ── CRO (view-only, approvals) ──
+    // ── CRO (same dashboard as NSH, no log meeting) ──
     if (isCRORole) return [
-      { label:"PLANNING",    items:[N("nsh-rh-plan","NSH's Plan","◎"), N("nsh-regional-plan","Rep's Plan","◎")] },
+      { label:"PLANNING",    items:[
+        N("my-plan","Overview","◎"),
+        N("nsh-myplan","NSH's Plan","◎"),
+        N("nsh-rh-plan","RH's Plan","◎"),
+        N("nsh-regional-plan","Rep's Plans","◎"),
+      ]},
       { label:"COMMAND",     items:[
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
         N("target-approvals","Target Approvals","◎",targetSubs.filter(t=>t.status==="Pending CRO").length||null),
+        N("revenue-log","Revenue Log","◈"),
         N("escalations","Escalations","▲",escBadge),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
@@ -3314,7 +3326,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH WAR ROOM ═══ */}
-          {view==="warroom" && isNSH && (()=>{
+          {view==="warroom" && isNSHDashboard && (()=>{
             const allD = deals.filter(d=>qMatch(d.quarter));
             const totT = allD.reduce((s,d)=>s+(d.targetAmount||0),0);
             const totC = allD.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
@@ -3705,7 +3717,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ WAR ROOM ═══ */}
-          {view==="warroom" && !isRH && !isNSH && (
+          {view==="warroom" && !isRH && !isNSHDashboard && (
             <div className="fin">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                 <div>
@@ -7529,8 +7541,92 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               NSH VIEWS
           ════════════════════════════════════════════ */}
 
+          {/* ═══ NSH MY PLAN (read-only for CRO / Strategy) ═══ */}
+          {view==="nsh-myplan" && isNSHDashboard && (()=>{
+            const nshPlansToday  = (plans||[]).filter(p=>(!p.repId)&&p.date===TODAY);
+            const nshPlansTmrw   = (plans||[]).filter(p=>(!p.repId)&&p.date===TOMORROW);
+            const nshMeetings    = (meetings||[]).filter(m=>!m.repId).slice().sort((a,b)=>b.date?.localeCompare(a.date||"")||0);
+            const recentMonths   = [...new Set(nshMeetings.map(m=>m.date?.slice(0,7)))].sort().reverse().slice(0,4);
+
+            const allToday  = (plans||[]).filter(p=>p.date===TODAY);
+            const allTmrw   = (plans||[]).filter(p=>p.date===TOMORROW);
+            const totalMeetings = (meetings||[]).length;
+
+            return (
+              <div className="fin">
+                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>NSH'S PLAN</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:20}}>National Sales Head planned meetings — read-only view</div>
+
+                {/* Summary stat cards */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                  {[
+                    {label:"NSH Planned Today",   val:nshPlansToday.length,  color:C.accent},
+                    {label:"NSH Planned Tomorrow", val:nshPlansTmrw.length,   color:C.blue},
+                    {label:"Org-wide Today",       val:allToday.length,       color:C.green},
+                    {label:"Total Org Meetings",   val:totalMeetings,         color:C.orange},
+                  ].map(({label,val,color})=>(
+                    <div key={label} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px"}}>
+                      <div className="sans" style={{fontSize:22,fontWeight:800,color}}>{val}</div>
+                      <div style={{fontSize:10,color:C.dim,marginTop:4}}>{label}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* NSH Today and Tomorrow */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
+                  {[{label:"TODAY",list:nshPlansToday},{label:"TOMORROW",list:nshPlansTmrw}].map(({label,list})=>(
+                    <div key={label} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                      <div style={{background:C.s2,padding:"8px 14px",borderBottom:`1px solid ${C.border}`,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <span style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em"}}>{label}</span>
+                        <span style={{fontSize:11,color:C.accent,fontWeight:700}}>{list.length} meetings</span>
+                      </div>
+                      <div style={{padding:12,minHeight:60}}>
+                        {list.length===0&&<div style={{textAlign:"center",fontSize:11,color:C.muted,padding:"18px 0"}}>Nothing planned by NSH</div>}
+                        {list.map(p=>(
+                          <div key={p.id} style={{padding:"8px 10px",background:C.s2,borderRadius:6,marginBottom:6,borderLeft:`3px solid ${C.accent}`}}>
+                            <div style={{fontSize:12,fontWeight:600,color:C.text}}>{p.clientAgencyName}</div>
+                            <div style={{fontSize:10,color:C.dim,marginTop:2}}>{p.time||"—"} · {p.pitchType||"Meeting"} · {p.meetingType||"Physical"}</div>
+                            {p.agenda&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>{p.agenda}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* NSH Recent Meeting History */}
+                <div style={{height:1,background:C.border,marginBottom:16}} />
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:12}}>NSH MEETING HISTORY</div>
+                {recentMonths.length===0&&<div style={{textAlign:"center",color:C.muted,fontSize:11,padding:40}}>No meetings logged by NSH yet.</div>}
+                {recentMonths.map(ym=>{
+                  const ms = nshMeetings.filter(m=>m.date?.startsWith(ym));
+                  const [yr,mo] = ym.split("-");
+                  const label = new Date(parseInt(yr),parseInt(mo)-1,1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
+                  return (
+                    <div key={ym} style={{marginBottom:14}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"5px 10px",background:C.s2,borderRadius:5,borderLeft:`3px solid ${C.accent}`}}>
+                        <span className="sans" style={{fontWeight:700,fontSize:12}}>{label}</span>
+                        <span style={{marginLeft:"auto",fontSize:10,color:C.dim}}>{ms.length} meetings</span>
+                      </div>
+                      {ms.map(m=>(
+                        <div key={m.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"8px 12px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,marginBottom:5}}>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:12,fontWeight:600,color:C.text}}>{m.clientCompany}</div>
+                            <div style={{fontSize:10,color:C.dim,marginTop:2}}>{m.date} · {m.pitchType||"—"}</div>
+                            {m.discussion&&<div style={{fontSize:10,color:C.muted,marginTop:2}}>{m.discussion}</div>}
+                          </div>
+                          <span style={{background:m.outcome==="Proposal Accepted"?`${C.green}22`:`${C.blue}18`,color:m.outcome==="Proposal Accepted"?C.green:C.blue,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{m.outcome||m.status}</span>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+
           {/* ═══ NSH RH PLAN ═══ */}
-          {view==="nsh-rh-plan" && isNSH && (()=>{
+          {view==="nsh-rh-plan" && isNSHDashboard && (()=>{
             const regions = ["National","North","South","East","West"];
             return (
               <div className="fin">
@@ -7585,7 +7681,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH REGIONAL PLAN ═══ */}
-          {view==="nsh-regional-plan" && isNSH && (()=>{
+          {view==="nsh-regional-plan" && isNSHDashboard && (()=>{
             const regions = ["National","North","South","East","West"];
             const [selRegion, setSelRegion] = [nshRegion, setNshRegion];
             const displayRegions = selRegion==="all" ? regions : [selRegion];
@@ -7664,7 +7760,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH RH SCORECARD ═══ */}
-          {view==="nsh-rh-scorecard" && isNSH && (()=>{
+          {view==="nsh-rh-scorecard" && isNSHDashboard && (()=>{
             const RH_USERS=USER_ROLES.filter(u=>u.role==="REGION HEAD");
             return (
               <div className="fin">
@@ -7715,7 +7811,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH RH PIPELINE ═══ */}
-          {view==="nsh-rh-pipeline" && isNSH && (()=>{
+          {view==="nsh-rh-pipeline" && isNSHDashboard && (()=>{
             const regions=["National","North","South","East","West"];
             return (
               <div className="fin">
@@ -7762,7 +7858,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH RH TARGETS ═══ */}
-          {view==="nsh-rh-targets" && isNSH && (()=>{
+          {view==="nsh-rh-targets" && isNSHDashboard && (()=>{
             const regions=["National","North","South","East","West"];
             const totT=deals.filter(d=>qMatch(d.quarter)).reduce((s,d)=>s+(d.targetAmount||0),0);
             const totC=deals.filter(d=>qMatch(d.quarter)&&d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
@@ -7811,7 +7907,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH RH TASKS ═══ */}
-          {view==="nsh-rh-tasks" && isNSH && (()=>{
+          {view==="nsh-rh-tasks" && isNSHDashboard && (()=>{
             const rhTasks=tasks.filter(t=>t.dept==="NSH"||t.assignedToUserId?.startsWith("rh_"));
             return (
               <div className="fin">
@@ -7848,7 +7944,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH RH HR ═══ */}
-          {view==="nsh-rh-hr" && isNSH && (
+          {view==="nsh-rh-hr" && isNSHDashboard && (
             <div className="fin">
               <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>RH HR REPORTS</div>
               <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Absence records for all team members</div>
@@ -7873,7 +7969,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           )}
 
           {/* ═══ NSH REP SCORECARD ═══ */}
-          {view==="nsh-rep-scorecard" && isNSH && (()=>{
+          {view==="nsh-rep-scorecard" && isNSHDashboard && (()=>{
             const regions=["all","National","North","South","East","West"];
             const filterDeals=nshRegion==="all"?deals.filter(d=>qMatch(d.quarter)):deals.filter(d=>d.region===nshRegion&&qMatch(d.quarter));
             return (
@@ -7926,7 +8022,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH REP PIPELINE ═══ */}
-          {view==="nsh-rep-pipeline" && isNSH && (()=>{
+          {view==="nsh-rep-pipeline" && isNSHDashboard && (()=>{
             const regions=["all","National","North","South","East","West"];
             const fd=nshRegion==="all"?deals.filter(d=>qMatch(d.quarter)&&d.outcome!=="Not Interested"):deals.filter(d=>d.region===nshRegion&&qMatch(d.quarter)&&d.outcome!=="Not Interested");
             return (
@@ -7959,7 +8055,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH REP TARGETS ═══ */}
-          {view==="nsh-rep-targets" && isNSH && (()=>{
+          {view==="nsh-rep-targets" && isNSHDashboard && (()=>{
             const regions=["all","National","North","South","East","West"];
             const fReps=nshRegion==="all"?REPS:REPS.filter(r=>r.region===nshRegion);
             return (
@@ -7994,7 +8090,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH REP TASKS ═══ */}
-          {view==="nsh-rep-tasks" && isNSH && (()=>{
+          {view==="nsh-rep-tasks" && isNSHDashboard && (()=>{
             const regions=["all","National","North","South","East","West"];
             const fReps=nshRegion==="all"?REPS.map(r=>r.id):REPS.filter(r=>r.region===nshRegion).map(r=>r.id);
             const fTasks=tasks.filter(t=>fReps.includes(t.repId));
@@ -8036,7 +8132,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH REP HR ═══ */}
-          {view==="nsh-rep-hr" && isNSH && (()=>{
+          {view==="nsh-rep-hr" && isNSHDashboard && (()=>{
             const regions=["all","National","North","South","East","West"];
             const fAbs=nshRegion==="all"?absenceReports:absenceReports.filter(r=>r.region===nshRegion);
             return (
