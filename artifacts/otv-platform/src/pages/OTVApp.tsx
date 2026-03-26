@@ -2100,7 +2100,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("warroom","War Room","⬡",rhEscBadge),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","My Targets","◎"),
-        N("target-approvals","Target Approvals","◎",targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length||null),
+        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length||null),
         N("my-tasks","My Tasks","✓"),
         N("rh-escalations","Escalations","▲",rhEscBadge),
         N("internal-requests","Internal Requests","⬆",irBadge),
