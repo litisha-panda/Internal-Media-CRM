@@ -1,6 +1,9 @@
 // @ts-nocheck
 import { useState, useRef, useEffect, useMemo } from "react";
 
+// Route all Claude API calls through the API server proxy (key stays server-side)
+const CLAUDE_PROXY_URL = `${window.location.protocol}//${window.location.hostname}:8080/api/claude`;
+
 const REGIONS = ["North", "South", "East", "West", "National"];
 const DEAL_TYPES = ["Linear TV", "Digital", "Sponsorship", "Branded Content", "Integrated Package"];
 const CONTACT_LEVELS = ["C-Suite / Owner", "VP / GM", "Marketing Head", "Brand Manager", "Agency Lead", "Junior/Exec"];
@@ -541,11 +544,11 @@ async function roCallAPI(msgs) {
   _roAbortCtrl = new AbortController();
   const tid = setTimeout(() => { if (_roAbortCtrl) _roAbortCtrl.abort(); }, 120000);
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    const resp = await fetch(CLAUDE_PROXY_URL, {
       method: "POST",
       signal: _roAbortCtrl.signal,
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:16000, system:RO_PROMPT, messages:msgs })
+      body: JSON.stringify({ model:"claude-opus-4-5", max_tokens:16000, system:RO_PROMPT, messages:msgs })
     });
     if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
     const data = await resp.json();
@@ -1995,11 +1998,11 @@ ${meeting.addMeetLink ? "Add Google Meet video conferencing link." : ""}
 Use the primary calendar. Return the event ID and Meet link if created.`
         : `I need to create a calendar event titled "${title}" on ${meeting.nextMeetingDate} from ${startTime} to ${endH}:${String(sm).padStart(2,"0")} IST. Attendees: ${attendees.join(", ")}. Description: ${desc}. Please create this event.`;
 
-      const resp = await fetch("https://api.anthropic.com/v1/messages", {
+      const resp = await fetch(CLAUDE_PROXY_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-opus-4-5",
           max_tokens: 1024,
           messages: [{ role: "user", content: calPrompt }],
           mcp_servers: meeting.calendarPlatform === "google"
