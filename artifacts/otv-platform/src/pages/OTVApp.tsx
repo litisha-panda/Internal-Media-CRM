@@ -908,8 +908,7 @@ function LoginScreen({ onLogin }) {
 
                 {/* Admin quick-login — bottom, subtle */}
                 <button
-                  onClick={() => { setLoading(true); setTimeout(()=>{ onLogin({ name:"Admin", email:"admin@odishatv.com" }); setLoading(false); }, 300); }}
-                  disabled={loading}
+                  onClick={() => onLogin({ name:"Admin", email:"admin@odishatv.com", role:"admin" })}
                   style={{ width:"100%", marginTop:10, background:"transparent", border:"1px solid #1e2d3d44", borderRadius:6, padding:"8px 16px", color:"#7d8590", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", letterSpacing:".04em" }}>
                   ⚙ Admin access
                 </button>
@@ -990,7 +989,7 @@ export default function OTVApp() {
   const [meetings, setMeetings]       = usePersistedState("otv_meetings", SEED_MEETINGS);
   const [deals, setDeals]             = usePersistedState("otv_deals",    SEED_DEALS);
 
-  const handleLogin  = (user) => { setLoginUser(user); setLoggedIn(true); setSection("home"); };
+  const handleLogin  = (user) => { setLoginUser(user); setLoggedIn(true); setSection(user?.role === "admin" ? "crm" : "home"); };
   const handleLogout = ()     => { setLoggedIn(false); setLoginUser(null); setSection("home"); };
   const handleSelect = (s)    => setSection(s);
   const handleBack   = ()     => setSection("home");
@@ -1240,6 +1239,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     slaHours:           { RH: 24, NSH: 48, CXO: 72, default: 48 },
     inactivityDaysRisk: 7,
     inactivityDaysEscalate: 14,
+    webhookUrl: "",
   });
 
   // ── DEAL INACTIVITY ENFORCEMENT — runs on load and when adminConfig changes ──
@@ -1310,6 +1310,20 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [importTab, setImportTab]                       = useState("deals");
+
+  // Global search
+  const [globalSearch, setGlobalSearch] = useState("");
+  const [searchOpen, setSearchOpen]     = useState(false);
+  const searchRef                       = useRef(null);
+
+  // Mobile responsive
+  const [windowW, setWindowW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
+  useEffect(() => {
+    const onResize = () => setWindowW(window.innerWidth);
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, []);
+  const isMobile = windowW < 768;
 
   // Hoisted parseCurrency — usable everywhere in CROApp
   const parseCurrency = v => {
@@ -1432,6 +1446,17 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     showToast("All ROs exported");
   };
 
+  // ── PUSH NOTIFICATIONS — fire-and-forget webhook to Zapier/Make/Slack ──
+  const pushNotification = (event) => {
+    const url = adminConfig?.webhookUrl?.trim();
+    if (!url) return;
+    fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ source: "OTV CRM", timestamp: new Date().toISOString(), ...event }),
+    }).catch(() => {});
+  };
+
   // HR ENGINE — simulates EOD auto-fire
   // In production this runs server-side at 23:59 daily via cron
   const fireAbsenceReport = (rep, date) => {
@@ -1471,8 +1496,20 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       }
     });
     if (count === 0) showToast("All reps compliant — logged + planned ✓");
-    else showToast(`EOD: ${count} absence report${count!==1?"s":""} sent to HR`);
+    else {
+      showToast(`EOD: ${count} absence report${count!==1?"s":""} sent to HR`);
+      pushNotification({ event: "eod_absence", count, date: TODAY, message: `EOD check: ${count} absence report${count!==1?"s":""} generated for ${TODAY}` });
+    }
   };
+
+  // EOD auto-run — fires automatically when clock hits 11:30 PM (client-side)
+  const eodFiredRef = useRef(false);
+  useEffect(() => {
+    if (countdown === "11:30 PM passed" && !eodFiredRef.current) {
+      eodFiredRef.current = true;
+      runEODCheck();
+    }
+  }, [countdown]);
 
   // ONLY Litisha can grant exception
   const grantException = () => {
@@ -1568,21 +1605,60 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       return {...rep,closed,pipe,meetings:rm.length,seniorM,senPct,risk,attOk,cPct,coverage:rep.target>0?Math.round(((closed+pipe)/rep.target)*100):0};
     }).sort((a,b)=>b.cPct-a.cPct), [deals, meetings, att, filterQ, user_role]);
 
-  const updateOutcome = (id, outcome) => setDeals(p=>p.map(d => {
-    if (d.id !== id) return d;
+  // Global search results — across deals, meetings, tasks
+  const searchResults = useMemo(() => {
+    const q = globalSearch.trim().toLowerCase();
+    if (q.length < 2) return [];
+    const out = [];
+    deals.filter(d =>
+      d.clientCompany?.toLowerCase().includes(q) ||
+      d.contactName?.toLowerCase().includes(q) ||
+      d.notes?.toLowerCase().includes(q)
+    ).slice(0, 5).forEach(d => out.push({ type:"deal", label:d.clientCompany, sub:`${d.outcome} · ${fmtR(d.amount)}`, action:()=>{ setView("pipeline"); setGlobalSearch(""); setSearchOpen(false); } }));
+    meetings.filter(m =>
+      m.clientCompany?.toLowerCase().includes(q) ||
+      m.discussion?.toLowerCase().includes(q) ||
+      m.contactName?.toLowerCase().includes(q)
+    ).slice(0, 3).forEach(m => out.push({ type:"meeting", label:m.clientCompany, sub:`${m.date} · ${(m.discussion||"").slice(0,55)}`, action:()=>{ setView("activity"); setGlobalSearch(""); setSearchOpen(false); } }));
+    tasks.filter(t =>
+      t.clientCompany?.toLowerCase().includes(q) ||
+      t.title?.toLowerCase().includes(q)
+    ).slice(0, 3).forEach(t => out.push({ type:"task", label:t.title, sub:t.clientCompany, action:()=>{ setView("war-room"); setGlobalSearch(""); setSearchOpen(false); } }));
+    return out.slice(0, 8);
+  }, [globalSearch, deals, meetings, tasks]);
+
+  const updateOutcome = (id, outcome) => {
     const closed = outcome === "Proposal Accepted";
-    const entry  = closed && d.awaitingApproval ? [{
-      at: TODAY, by: user_role?.name||"Manager", role: user_role?.role||"",
-      action: "Closed", from: d.awaitingApproval, to: null, note: "Deal closed — approval cleared",
-    }] : [];
-    return {
-      ...d, outcome, lastContact: TODAY,
-      awaitingApproval:      closed ? null : d.awaitingApproval,
-      awaitingApprovalSince: closed ? null : d.awaitingApprovalSince,
-      atRisk: closed ? false : d.atRisk,
-      auditLog: [...(d.auditLog||[]), ...entry],
-    };
-  }));
+    setDeals(p => p.map(d => {
+      if (d.id !== id) return d;
+      const entry  = closed && d.awaitingApproval ? [{
+        at: TODAY, by: user_role?.name||"Manager", role: user_role?.role||"",
+        action: "Closed", from: d.awaitingApproval, to: null, note: "Deal closed — approval cleared",
+      }] : [];
+      return {
+        ...d, outcome, lastContact: TODAY,
+        awaitingApproval:      closed ? null : d.awaitingApproval,
+        awaitingApprovalSince: closed ? null : d.awaitingApprovalSince,
+        atRisk: closed ? false : d.atRisk,
+        auditLog: [...(d.auditLog||[]), ...entry],
+      };
+    }));
+    // Revenue auto-stub — create PO Pending entry when deal is won
+    if (closed) {
+      const deal = deals.find(d => d.id === id);
+      if (deal) {
+        const stub = {
+          id: `re${Date.now()}`, repId: deal.repId, clientCompany: deal.clientCompany,
+          dealType: deal.dealType, amount: deal.amount, invoiceRef: "PO Pending",
+          date: TODAY, quarter: deal.quarter || filterQ,
+          notes: `Auto-stub: deal closed by ${user_role?.name||"manager"}. Confirm PO amount when received.`,
+        };
+        setRevenueEntries(p => [stub, ...p]);
+        pushNotification({ event: "deal_closed", client: deal.clientCompany, amount: deal.amount, rep: deal.repName, message: `Deal won: ${deal.clientCompany} — ${fmtR(deal.amount)}` });
+        showToast(`Revenue entry created for ${deal.clientCompany} — confirm PO amount in Revenue Log`);
+      }
+    }
+  };
   const updateReq     = (dealId, reqIdx, status) => setDeals(p=>p.map(d=>d.id===dealId?{...d,reqs:d.reqs.map((r,i)=>i===reqIdx?{...r,status}:r)}:d));
 
   const handleAddDeal = () => {
@@ -1948,6 +2024,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     const d = deals.find(x => x.id === dealId);
     const next = d ? getApprovalChainNext(d.awaitingApproval, d.amount) : null;
     showToast(next ? `Approved → forwarded to ${next}` : "Deal fully approved ✓");
+    if (d) pushNotification({ event: next ? "deal_approval_advanced" : "deal_fully_approved", client: d.clientCompany, amount: d.amount, approvedBy: user_role?.name, next, message: next ? `${d.clientCompany} approval forwarded to ${next}` : `${d.clientCompany} fully approved — ${fmtR(d.amount)}` });
   };
 
   const rejectDeal = (dealId, note = "") => {
@@ -2174,6 +2251,46 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           <span style={{color:C.muted}}>|</span>
           <span className="sans" style={{fontSize:11,fontWeight:700,color:C.dim,letterSpacing:2,textTransform:"uppercase"}}>{section==="ro"?"RO Management":section==="crm"?"CRM":"CRO Platform"}</span>
         </div>
+
+        {/* ── GLOBAL SEARCH ── */}
+        {!isMobile && (
+          <div ref={searchRef} style={{position:"relative",flex:1,maxWidth:320,margin:"0 16px"}}>
+            <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+              <span style={{position:"absolute",left:9,color:C.dim,fontSize:13,pointerEvents:"none"}}>⌕</span>
+              <input
+                value={globalSearch}
+                onChange={e=>{setGlobalSearch(e.target.value);setSearchOpen(true);}}
+                onFocus={()=>setSearchOpen(true)}
+                onBlur={()=>setTimeout(()=>setSearchOpen(false),150)}
+                placeholder="Search deals, clients, meetings…"
+                style={{width:"100%",background:C.s2,border:`1px solid ${globalSearch?C.accent:C.border}`,borderRadius:6,padding:"5px 10px 5px 28px",fontSize:11,color:C.text,fontFamily:"'DM Mono',monospace",outline:"none",transition:"border-color .15s"}}
+              />
+              {globalSearch && <button onClick={()=>{setGlobalSearch("");setSearchOpen(false);}} style={{position:"absolute",right:7,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:13,lineHeight:1}}>×</button>}
+            </div>
+            {searchOpen && searchResults.length > 0 && (
+              <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,zIndex:500,boxShadow:"0 8px 32px rgba(0,0,0,.5)",overflow:"hidden"}}>
+                {searchResults.map((r,i)=>(
+                  <div key={i} onMouseDown={r.action}
+                    style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",borderBottom:i<searchResults.length-1?`1px solid ${C.border}`:"none",transition:"background .1s"}}
+                    onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                    onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                    <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,
+                      background: r.type==="deal"?`${C.accent}22`:r.type==="meeting"?`${C.blue}22`:`${C.green}22`,
+                      color: r.type==="deal"?C.accent:r.type==="meeting"?C.blue:C.green,
+                      whiteSpace:"nowrap"}}>
+                      {r.type==="deal"?"DEAL":r.type==="meeting"?"MTG":"TASK"}
+                    </span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontSize:12,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</div>
+                      <div style={{fontSize:10,color:C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.sub}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         <div style={{display:"flex",alignItems:"center",gap:10}}>
           <select value={filterQ} onChange={e=>setFilterQ(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px"}}>{QUARTERS.map(q=><option key={q}>{q}</option>)}</select>
           {user_role.canView==="all" && <select value={filterRegion} onChange={e=>setFilterRegion(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px"}}><option>All</option>{REGIONS.map(r=><option key={r}>{r}</option>)}</select>}
@@ -2224,32 +2341,45 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         </div>
       </div>
 
-      <div style={{display:"flex",flex:1,overflow:"hidden"}}>
-        {/* SIDEBAR — sectioned by role */}
-        <div style={{width:182,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"6px 0 0",flexShrink:0,display:"flex",flexDirection:"column",overflowY:"auto"}}>
-          {navSections.map((sec,si) => (
-            <div key={si} style={{marginBottom:2}}>
-              <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",padding:si===0?"6px 14px 3px":"10px 14px 3px"}}>{sec.label}</div>
-              {sec.items.map(n => (
-                <button key={n.id} onClick={()=>setView(n.id)}
-                  style={{width:"100%",padding:"8px 14px",background:view===n.id?`${C.accent}12`:"transparent",border:"none",borderLeft:view===n.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===n.id?C.accent:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:view===n.id?600:400,letterSpacing:".03em",textAlign:"left",transition:"all .1s"}}>
-                  <span style={{fontSize:12,opacity:.75}}>{n.icon}</span>
-                  <span style={{flex:1}}>{n.label}</span>
-                  {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:8,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 3px"}}>{n.badge}</span>}
-                </button>
-              ))}
-            </div>
-          ))}
-          <div style={{flex:1}} />
-          <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`}}>
-            <div style={{fontSize:9,color:C.dim,marginBottom:4,letterSpacing:".08em",fontWeight:700}}>DAILY DEADLINE</div>
-            <div className="sans" style={{fontSize:12,fontWeight:700,color:countdown.includes("passed")?C.red:C.accent,lineHeight:1.2}}>{countdown.includes("passed")?"Deadline passed":countdown}</div>
-            <div style={{fontSize:10,color:C.dim,marginTop:3}}>Weekly: Sat 11:30 PM</div>
+      <div style={{display:"flex",flex:1,overflow:"hidden",flexDirection: isMobile ? "column" : "row"}}>
+        {/* SIDEBAR — vertical on desktop, horizontal tab bar on mobile */}
+        {isMobile ? (
+          <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,display:"flex",overflowX:"auto",flexShrink:0,padding:"4px 8px",gap:2}}>
+            {navSections.flatMap(sec => sec.items).map(n => (
+              <button key={n.id} onClick={()=>setView(n.id)}
+                style={{flexShrink:0,padding:"6px 10px",background:view===n.id?`${C.accent}18`:"transparent",border:"none",borderBottom:view===n.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===n.id?C.accent:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:view===n.id?600:400,whiteSpace:"nowrap",transition:"all .1s"}}>
+                <span style={{fontSize:11}}>{n.icon}</span>
+                <span>{n.label}</span>
+                {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:8,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 3px"}}>{n.badge}</span>}
+              </button>
+            ))}
           </div>
-        </div>
+        ) : (
+          <div style={{width:182,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"6px 0 0",flexShrink:0,display:"flex",flexDirection:"column",overflowY:"auto"}}>
+            {navSections.map((sec,si) => (
+              <div key={si} style={{marginBottom:2}}>
+                <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",padding:si===0?"6px 14px 3px":"10px 14px 3px"}}>{sec.label}</div>
+                {sec.items.map(n => (
+                  <button key={n.id} onClick={()=>setView(n.id)}
+                    style={{width:"100%",padding:"8px 14px",background:view===n.id?`${C.accent}12`:"transparent",border:"none",borderLeft:view===n.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===n.id?C.accent:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:view===n.id?600:400,letterSpacing:".03em",textAlign:"left",transition:"all .1s"}}>
+                    <span style={{fontSize:12,opacity:.75}}>{n.icon}</span>
+                    <span style={{flex:1}}>{n.label}</span>
+                    {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:8,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 3px"}}>{n.badge}</span>}
+                  </button>
+                ))}
+              </div>
+            ))}
+            <div style={{flex:1}} />
+            <div style={{padding:"10px 14px",borderTop:`1px solid ${C.border}`}}>
+              <div style={{fontSize:9,color:C.dim,marginBottom:4,letterSpacing:".08em",fontWeight:700}}>DAILY DEADLINE</div>
+              <div className="sans" style={{fontSize:12,fontWeight:700,color:countdown.includes("passed")?C.red:C.accent,lineHeight:1.2}}>{countdown.includes("passed")?"Deadline passed":countdown}</div>
+              <div style={{fontSize:10,color:C.dim,marginTop:3}}>Weekly: Sat 11:30 PM</div>
+            </div>
+          </div>
+        )}
 
         {/* MAIN */}
-        <div style={{flex:1,overflow:"auto",padding:20}}>
+        <div style={{flex:1,overflow:"auto",padding: isMobile ? 12 : 20}}>
 
           {/* ═══ MY PLAN ═══ */}
           {view==="my-plan" && (()=>{
@@ -5952,6 +6082,33 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   </div>
                 ))}
+              </div>
+
+              {/* Push Notifications — Webhook */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
+                <div className="sans" style={{fontWeight:700,marginBottom:6}}>Push Notifications</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Paste a webhook URL (Zapier, Make, Slack) to receive automatic alerts for absences, deal wins, and SLA breaches. Leave blank to disable.</div>
+                <div style={{display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                  <input
+                    type="url"
+                    value={adminConfig.webhookUrl||""}
+                    onChange={e=>setAdminConfig(p=>({...p,webhookUrl:e.target.value}))}
+                    placeholder="https://hooks.zapier.com/hooks/catch/..."
+                    style={{flex:1,minWidth:260,padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}
+                  />
+                  <button onClick={()=>{
+                    const url=adminConfig.webhookUrl?.trim();
+                    if(!url){showToast("No webhook URL configured","err");return;}
+                    fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:"OTV CRM",event:"test",message:"Webhook test from OTV CRM System Config",timestamp:new Date().toISOString()})})
+                      .then(()=>showToast("Test ping sent ✓"))
+                      .catch(()=>showToast("Webhook call failed — check URL","err"));
+                  }} style={{padding:"7px 14px",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,borderRadius:5,color:C.accent,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
+                    Send Test Ping
+                  </button>
+                </div>
+                <div style={{marginTop:10,fontSize:10,color:C.muted}}>
+                  Triggers: EOD absence reports · Deal won · Approval breaches SLA
+                </div>
               </div>
 
               {/* Audit log summary */}
