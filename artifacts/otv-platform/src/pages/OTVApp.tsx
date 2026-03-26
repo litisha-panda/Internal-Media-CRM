@@ -5954,66 +5954,91 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 ))}
               </div>
 
-              {/* KPIs */}
-              {(() => {
-                const myRepId = user_role?.repId;
-                const visReports = isRep ? absenceReports.filter(r=>r.repId===myRepId) : absenceReports;
+              {/* ── MANAGER: Personal HR page (no automated EOD tracking) ── */}
+              {(!isRep && !isAdmin) && (()=>{
+                const myMeetings  = meetings.filter(m=>m.date?.startsWith(TODAY.slice(0,7)));
+                const myPlansToday= (plans||[]).filter(p=>(!p.repId)&&p.date===TODAY);
+                const totalMeetings = meetings.length;
                 return (
-                  <div style={{display:"grid",gridTemplateColumns:isRep?"repeat(2,1fr)":"repeat(4,1fr)",gap:10,marginBottom:16}}>
-                    {(isRep ? [
-                      {label:"MY ABSENCES",   value:visReports.filter(r=>r.markedAs==="Absent").length,      color:C.red},
-                      {label:"EXCEPTIONS",    value:visReports.filter(r=>r.exception==="Overridden").length, color:C.green},
-                    ] : [
-                      {label:"TOTAL ABSENCES",     value:absenceReports.filter(r=>r.markedAs==="Absent").length,      color:C.red},
-                      {label:"EXCEPTIONS GRANTED", value:absenceReports.filter(r=>r.exception==="Overridden").length, color:C.orange},
-                      {label:"PENDING REVIEW",     value:absenceReports.filter(r=>r.status==="Sent to HR"&&r.markedAs==="Absent").length, color:C.blue},
-                      {label:"REPORTS SENT",       value:absenceReports.length,                                       color:C.dim},
-                    ]).map(k=>(
-                      <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
-                        <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:4,textTransform:"uppercase"}}>{k.label}</div>
-                        <div className="sans" style={{fontSize:22,fontWeight:700,color:k.color}}>{k.value}</div>
+                  <div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
+                      {[
+                        {label:"MEETINGS THIS MONTH", value:myMeetings.length,   color:C.accent},
+                        {label:"PLANNED TODAY",        value:myPlansToday.length, color:C.blue},
+                        {label:"TOTAL MEETINGS",        value:totalMeetings,       color:C.green},
+                      ].map(k=>(
+                        <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
+                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:4,textTransform:"uppercase"}}>{k.label}</div>
+                          <div className="sans" style={{fontSize:22,fontWeight:700,color:k.color}}>{k.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{padding:"14px 18px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,marginBottom:14}}>
+                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
+                        <span style={{fontSize:20}}>🛡️</span>
+                        <div>
+                          <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:4}}>Manager Attendance Policy</div>
+                          <div style={{fontSize:12,color:C.dim,lineHeight:1.6}}>Automated EOD absence checks apply to <strong>Sales Reps only</strong>. Your attendance and activity is verified by your reporting manager and is not subject to the 11:30 PM daily auto-report.<br/>For leave records, disciplinary notes, or HR file access, contact HR directly at <span style={{color:C.accent}}>{HR_EMAIL}</span>.</div>
+                        </div>
                       </div>
-                    ))}
+                    </div>
+                    <div style={{padding:"12px 16px",background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:7,fontSize:12,color:C.dim}}>
+                      Your team's HR data is available under <strong style={{color:C.text}}>Team's HR Reports</strong> in the sidebar.
+                    </div>
                   </div>
                 );
               })()}
 
-              {/* Unlogged today — management only */}
-              {!isRep && REPS.filter(r=>!att[TODAY]?.[r.id]).length>0&&(
-                <div style={{marginBottom:14}}>
-                  <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",marginBottom:8,textTransform:"uppercase"}}>Today — Not Logged</div>
-                  {REPS.filter(r=>!att[TODAY]?.[r.id]).map(rep=>{
-                    const filed=absenceReports.find(r=>r.repId===rep.id&&r.date===TODAY);
-                    return(
-                      <div key={rep.id} style={{display:"flex",alignItems:"center",gap:10,background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:5,padding:"9px 14px",marginBottom:5}}>
-                        <div style={{flex:1}}><span className="sans" style={{fontWeight:700}}>{rep.name}</span><span style={{color:C.dim,fontSize:11}}> · {rep.role} · {rep.region}</span></div>
-                        {filed
-                          ?<span className="pill" style={{background:`${C.red}22`,color:C.red,fontSize:10}}>Report Sent</span>
-                          :<span className="pill" style={{background:`${C.orange}22`,color:C.orange,fontSize:10}}>EOD Pending</span>}
-                        {canGrantException&&filed&&filed.markedAs==="Absent"&&(
-                          <button className="btn" style={{fontSize:10,padding:"3px 10px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{setExceptionModal({reportId:filed.id,repName:rep.name});setExceptionReason("");}}>Grant Exception</button>
-                        )}
-                        {canGrantException&&!filed&&(
-                          <button className="btn" style={{fontSize:10,padding:"3px 10px",background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`}} onClick={()=>fireAbsenceReport(rep,TODAY)}>Fire Report</button>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* Absence log table */}
-              {(() => {
+              {/* ── REP: Own absence records ── */}
+              {isRep && (()=>{
                 const myRepId = user_role?.repId;
-                const visReports = isRep ? absenceReports.filter(r=>r.repId===myRepId) : absenceReports;
-                if (!visReports.length) return null;
+                const visReports = absenceReports.filter(r=>r.repId===myRepId);
                 return (
                   <div>
-                    <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:8,textTransform:"uppercase"}}>{isRep?"My Absence History":"All Absence Reports"}</div>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
+                      {[
+                        {label:"MY ABSENCES",  value:visReports.filter(r=>r.markedAs==="Absent").length,      color:C.red},
+                        {label:"EXCEPTIONS",   value:visReports.filter(r=>r.exception==="Overridden").length, color:C.green},
+                      ].map(k=>(
+                        <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
+                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:4,textTransform:"uppercase"}}>{k.label}</div>
+                          <div className="sans" style={{fontSize:22,fontWeight:700,color:k.color}}>{k.value}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {visReports.length===0
+                      ? <div style={{textAlign:"center",padding:40,color:C.muted,fontSize:12}}>No absence records on file.</div>
+                      : (
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",padding:"8px 14px",background:C.s2,borderBottom:`1px solid ${C.border}`}}>MY ABSENCE LOG</div>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>{["Date","Generated","Status","Exception"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                            <tbody>{visReports.map(r=>(
+                              <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
+                                <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.generatedAt}</td>
+                                <td style={{padding:"9px 14px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
+                                <td style={{padding:"9px 14px"}}>{r.exception?<div><span style={{background:`${C.green}22`,color:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>Overridden by {r.exceptionBy}</span><div style={{fontSize:10,color:C.dim,marginTop:2}}>{r.exceptionReason}</div></div>:<span style={{color:C.muted,fontSize:11}}>—</span>}</td>
+                              </tr>
+                            ))}</tbody>
+                          </table>
+                        </div>
+                      )}
+                  </div>
+                );
+              })()}
+
+              {/* ── ADMIN absence log table (full org view) ── */}
+              {isAdmin && (()=>{
+                const visReports = absenceReports;
+                if (!visReports.length) return <div style={{textAlign:"center",padding:40,color:C.muted}}>No absence records.</div>;
+                return (
+                  <div>
+                    <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:8,textTransform:"uppercase"}}>All Absence Reports — Admin View</div>
                     <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr>
-                          {(isRep?["Date","Generated","Status","Exception"]:["Rep","Date","Generated","Status","Exception","Action"]).map(h=>(
+                          {["Rep","Region","Date","Generated","Status","Exception","Action"].map(h=>(
                             <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                           ))}
                         </tr></thead>
@@ -6022,7 +6047,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}}
                               onMouseOver={e=>e.currentTarget.style.background=C.s2}
                               onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                              {!isRep&&<td style={{padding:"9px 14px"}}><div style={{fontWeight:600}}>{r.repName}</div><div style={{fontSize:10,color:C.dim}}>{r.region}</div></td>}
+                              <td style={{padding:"9px 14px"}}><div style={{fontWeight:600}}>{r.repName}</div></td>
+                              <td style={{padding:"9px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.region}</span></td>
                               <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
                               <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.generatedAt}</td>
                               <td style={{padding:"9px 14px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
@@ -6031,11 +6057,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   ?<div><span style={{background:`${C.green}22`,color:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>by {r.exceptionBy}</span><div style={{fontSize:10,color:C.dim,marginTop:2,maxWidth:180,whiteSpace:"normal"}}>{r.exceptionReason}</div></div>
                                   :<span style={{color:C.muted,fontSize:11}}>—</span>}
                               </td>
-                              {!isRep&&<td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
-                                {canGrantException&&r.markedAs==="Absent"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{setExceptionModal({reportId:r.id,repName:r.repName});setExceptionReason("");}}>Grant Exception</button>}
-                                {canGrantException&&r.exception==="Overridden"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,marginLeft:4}} onClick={()=>revokeException(r.id)}>Revoke</button>}
-                                {!canGrantException&&r.markedAs==="Absent"&&<span style={{fontSize:10,color:C.muted}}>No access</span>}
-                              </td>}
+                              <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
+                                {r.markedAs==="Absent"&&!r.exception&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{setExceptionModal({reportId:r.id,repName:r.repName});setExceptionReason("");}}>Grant Exception</button>}
+                                {r.exception==="Overridden"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,marginLeft:4}} onClick={()=>revokeException(r.id)}>Revoke</button>}
+                              </td>
                             </tr>
                           ))}
                         </tbody>
@@ -6044,8 +6069,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 );
               })()}
-
-              {!canGrantException&&!isRep&&<div style={{marginTop:12,padding:"10px 14px",background:`${C.orange}08`,border:`1px solid ${C.orange}33`,borderRadius:5,fontSize:11,color:C.orange}}>⚠ Logged in as {user_role.name} ({user_role.role}). Only Admin or CXO can grant or revoke exceptions.</div>}
             </div>
           )}
 
@@ -7957,29 +7980,67 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           })()}
 
           {/* ═══ NSH RH HR ═══ */}
-          {view==="nsh-rh-hr" && isNSHDashboard && (
-            <div className="fin">
-              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>RH HR REPORTS</div>
-              <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Absence records for all team members</div>
-              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                  <thead><tr>{["Rep","Region","Date","Status","Exception"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {absenceReports.length===0&&<tr><td colSpan={5} style={{padding:24,textAlign:"center",color:C.muted,fontSize:12}}>No absence records</td></tr>}
-                    {absenceReports.map(r=>(
-                      <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                        <td style={{padding:"9px 14px",fontWeight:600}}>{r.repName}</td>
-                        <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.region}</td>
-                        <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
-                        <td style={{padding:"9px 14px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
-                        <td style={{padding:"9px 14px"}}>{r.exception?<span style={{color:C.green,fontSize:11}}>{r.exception} · {r.exceptionBy}</span>:<span style={{color:C.muted}}>—</span>}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+          {view==="nsh-rh-hr" && isNSHDashboard && (()=>{
+            const REGIONS = ["North","South","East","West","National"];
+            const rhUsers = USER_ROLES.filter(u=>u.role==="REGION HEAD");
+            return (
+              <div className="fin">
+                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>RH'S HR REPORTS</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Absence summary per Region Head's team · all regions</div>
+
+                {/* Region summary cards */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:20}}>
+                  {REGIONS.map(reg=>{
+                    const rh   = rhUsers.find(u=>u.region===reg);
+                    const reps = REPS.filter(r=>r.region===reg);
+                    const rAbs = absenceReports.filter(a=>reps.map(r=>r.id).includes(a.repId));
+                    const absent = rAbs.filter(a=>a.markedAs==="Absent").length;
+                    const exc    = rAbs.filter(a=>a.exception==="Overridden").length;
+                    return (
+                      <div key={reg} style={{background:C.surface,border:`1px solid ${absent>0?C.red:C.border}`,borderTop:`2px solid ${absent>0?C.red:C.green}`,borderRadius:8,padding:"12px 14px"}}>
+                        <div className="sans" style={{fontWeight:700,fontSize:13,marginBottom:2}}>{reg}</div>
+                        <div style={{fontSize:10,color:C.dim,marginBottom:8}}>{rh?.name||"RH"} · {reps.length} reps</div>
+                        <div style={{fontSize:10,color:C.red,fontWeight:700}}>{absent} absent</div>
+                        <div style={{fontSize:10,color:C.green}}>{exc} exception{exc!==1?"s":""}</div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Per-region breakdown */}
+                {REGIONS.map(reg=>{
+                  const reps = REPS.filter(r=>r.region===reg);
+                  const rAbs = absenceReports.filter(a=>reps.map(r=>r.id).includes(a.repId));
+                  if (!rAbs.length) return null;
+                  const rh = rhUsers.find(u=>u.region===reg);
+                  return (
+                    <div key={reg} style={{marginBottom:16}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"6px 12px",background:C.s2,borderRadius:6,borderLeft:`3px solid ${C.accent}`}}>
+                        <span className="sans" style={{fontWeight:700,fontSize:13}}>{reg}</span>
+                        <span style={{fontSize:10,color:C.dim}}>RH: {rh?.name||"—"}</span>
+                        <span style={{marginLeft:"auto",fontSize:10,color:C.dim}}>{rAbs.length} records · {rAbs.filter(a=>a.markedAs==="Absent").length} absent</span>
+                      </div>
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,overflow:"hidden"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead><tr>{["Rep","Date","Status","Exception"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                          <tbody>{rAbs.map(r=>(
+                            <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                              <td style={{padding:"8px 12px",fontWeight:600}}>{r.repName}</td>
+                              <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{r.date}</td>
+                              <td style={{padding:"8px 12px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
+                              <td style={{padding:"8px 12px"}}>{r.exception?<span style={{color:C.green,fontSize:11}}>Overridden · {r.exceptionBy}</span>:<span style={{color:C.muted}}>—</span>}</td>
+                            </tr>
+                          ))}</tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })}
+
+                {absenceReports.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted,fontSize:12}}>No absence records across all regions.</div>}
               </div>
-            </div>
-          )}
+            );
+          })()}
 
           {/* ═══ NSH REP SCORECARD ═══ */}
           {view==="nsh-rep-scorecard" && isNSHDashboard && (()=>{
