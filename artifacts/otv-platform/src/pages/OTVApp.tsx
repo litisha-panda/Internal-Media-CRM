@@ -5102,6 +5102,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 };
                 return (
                   <div>
+                    {/* ── OVERVIEW: only when no drilldown is active ── */}
+                    {!targetDrilldown && <div>
                     {/* 4 Summary stat cards — consistent across all roles */}
                     <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
                       {[
@@ -5166,6 +5168,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         );
                       })}
                     </div>
+                    </div>}
                     {/* ── DRILLDOWN LEVEL 2: Rep → Client List ── */}
                     {targetDrilldown && nshRepDrill && (()=>{
                       const tile    = TILES.find(t=>t.key===targetDrilldown.key);
