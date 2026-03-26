@@ -2263,7 +2263,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
     // ── REGION HEAD ──
     if (isRH) return [
-      { label:"PLANNING",    items:[N("my-plan","My Plan","◎")] },
+      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("rh-team-plan","Team's Plan","◎")] },
       { label:"MY CRM",      items:[
         N("warroom","War Room","⬡",rhEscBadge),
         N("pipeline","Revenue Tracker","◈"),
@@ -2275,7 +2275,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("hr","My HR Report","⊘"),
       ]},
       { label:"TEAM'S CRM",  items:[
-        N("rh-team-plan","Team's Plan","◎"),
         N("rh-team-targets","Team's Targets","◈"),
         N("rh-team-tasks","Team's Tasks","✓"),
         N("rh-team-hr","Team's HR Reports","⊘"),
