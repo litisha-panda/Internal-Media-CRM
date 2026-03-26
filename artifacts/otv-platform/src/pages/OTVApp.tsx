@@ -2106,11 +2106,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("my-tasks","My Tasks","✓"),
         N("rh-escalations","Escalations","▲",rhEscBadge),
         N("internal-requests","Internal Requests","⬆",irBadge),
-        N("hr","HR Reports","⊘"),
+        N("hr","My HR Report","⊘"),
       ]},
       { label:"TEAM'S CRM",  items:[
         N("rh-team-targets","Team's Targets","◈"),
         N("rh-team-tasks","Team's Tasks","✓"),
+        N("rh-team-hr","Team's HR Reports","⊘"),
       ]},
       { label:"LEADERBOARD", items:[
         N("lb-team","My Region","◇"),
@@ -2131,12 +2132,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("escalations","Escalations","▲",escBadge),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        N("hr","HR Reports","⊘",hrBadge),
+        N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"TEAM",        items:[
         N("nsh-rh-scorecard","All Region Heads","◇"),
         N("nsh-rep-scorecard","All Sales Reps","◇"),
         N("leaderboard","Leaderboard","◇"),
+      ]},
+      { label:"HR",          items:[
+        N("nsh-rh-hr","RH's HR Reports","⊘"),
+        N("nsh-rep-hr","Sales Reps' HR Reports","⊘"),
       ]},
     ];
 
@@ -2157,12 +2162,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("escalations","Escalations","▲",escBadge),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        N("hr","HR Reports","⊘",hrBadge),
+        N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"TEAM",        items:[
         N("nsh-rh-scorecard","All Region Heads","◇"),
         N("nsh-rep-scorecard","All Sales Reps","◇"),
         N("leaderboard","Leaderboard","◇"),
+      ]},
+      { label:"HR",          items:[
+        N("nsh-rh-hr","RH's HR Reports","⊘"),
+        N("nsh-rep-hr","Sales Reps' HR Reports","⊘"),
       ]},
     ];
 
@@ -2183,12 +2192,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("escalations","Escalations","▲",escBadge),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        N("hr","HR Reports","⊘",hrBadge),
+        N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"TEAM",        items:[
         N("nsh-rh-scorecard","All Region Heads","◇"),
         N("nsh-rep-scorecard","All Sales Reps","◇"),
         N("leaderboard","Leaderboard","◇"),
+      ]},
+      { label:"HR",          items:[
+        N("nsh-rh-hr","RH's HR Reports","⊘"),
+        N("nsh-rep-hr","Sales Reps' HR Reports","⊘"),
       ]},
     ];
 
