@@ -2070,7 +2070,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
   // ── SECTIONED NAV BUILDER ──
   const N = (id,label,icon,badge=null) => ({id,label,icon,badge});
   const getSidebarSections = () => {
-    if (section === "ro") return [{ label:"RO", items:[N("ro-parser","RO Parser","↑"), N("ro-management","RO Management","≡")] }];
+    if (section === "ro") return [];
 
     const irBadge      = internalReqs.filter(r=>r.status!=="Done"&&r.raisedBy===activeUser).length||null;
     const irInboxBadge  = internalReqs.filter(r=>r.status!=="Done"&&["NSH","Sales Strategy","CRO","Branding Team","Content Team","Digital","Finance","Legal"].includes(r.dept)).length||null;
@@ -2085,10 +2085,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("tasks","Tasks","✓",myRepTaskBadge),
         N("internal-requests","Internal Requests","⬆",irBadge),
         N("hr","HR Reports","⊘"),
-      ]},
-      { label:"RO",          items:[
-        N("ro-parser","RO Parser","↑"),
-        N("ro-management","RO Management","≡",savedROs.length||null),
       ]},
       { label:"LEADERBOARD", items:[
         N("lb-team","My Team","◇"),
