@@ -24,8 +24,3 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
-
-[userenv]
-
-[userenv.shared]
-ZOHO_CRM_BASE_URL = "https://crmsandbox.zoho.in/crm/broadcast/v2"
