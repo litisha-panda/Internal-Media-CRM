@@ -2099,6 +2099,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       { label:"MY CRM",      items:[
         N("warroom","War Room","⬡",rhEscBadge),
         N("pipeline","Revenue Tracker","◈"),
+        N("revenue-log","Revenue Log","◈"),
         N("targets","My Targets","◎"),
         N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length||null),
         N("my-tasks","My Tasks","✓"),
@@ -2125,6 +2126,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
         N("target-approvals","Target Approvals","◎",targetSubs.filter(t=>t.status==="Pending NSH").length||null),
+        N("revenue-log","Revenue Log","◈"),
         N("escalations","Escalations","▲",escBadge),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
@@ -3083,65 +3085,68 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Client</button>
                 </div>
 
-                {/* Single region summary tile */}
-                <div style={{background:C.surface,border:`2px solid ${sc}`,borderRadius:10,padding:"18px 22px",marginBottom:20}}>
-                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:10,textTransform:"uppercase"}}>Region Total · {rhRegion} · {filterQ}</div>
-                  <div style={{display:"flex",gap:24,flexWrap:"wrap",alignItems:"flex-end"}}>
-                    {[["TARGET",fmtR(rhT),C.text],["CLOSED",fmtR(rhC),C.green],["PIPELINE",fmtR(rhP),C.accent],["GAP",fmtR(Math.max(0,rhT-rhC)),rhC>=rhT?C.green:C.red]].map(([l,v,c])=>(
-                      <div key={l}><div style={{fontSize:9,color:C.dim,marginBottom:2,letterSpacing:".06em"}}>{l}</div><div className="sans" style={{fontSize:20,fontWeight:700,color:c}}>{v}</div></div>
-                    ))}
-                    <div style={{marginLeft:"auto",textAlign:"right"}}><div className="sans" style={{fontSize:48,fontWeight:800,color:sc,lineHeight:1}}>{rhPct}%</div><div style={{fontSize:10,color:C.dim}}>achieved</div></div>
-                  </div>
-                  <div style={{marginTop:12,height:6,background:C.s3,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(rhPct,100)}%`,background:sc,borderRadius:3}} /></div>
+                {/* 4 Summary stat cards — consistent with Sales Rep view */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                  {(()=>{
+                    const sf = Math.max(0, rhT - rhC);
+                    return [
+                      {label:"TOTAL TARGET",  value:fmtR(rhT),   color:C.accent,  sub:rhRegion+" region"},
+                      {label:"ACHIEVED",       value:fmtR(rhC),   color:C.green,   sub:"Closed deals"},
+                      {label:"SHORTFALL",      value:fmtR(sf),    color:sf===0?C.green:C.red, sub:sf===0?"On target":"Gap to close"},
+                      {label:"% COMPLETE",     value:`${rhPct}%`, color:sc,        sub:"vs target"},
+                    ];
+                  })().map(card=>(
+                    <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                      <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color,marginBottom:2}}>{card.value}</div>
+                      <div style={{fontSize:9,color:C.muted}}>{card.sub}</div>
+                    </div>
+                  ))}
+                </div>
+                {/* Progress bar */}
+                <div style={{height:5,background:C.s3,borderRadius:3,overflow:"hidden",marginBottom:20}}>
+                  <div style={{height:"100%",width:`${Math.min(rhPct,100)}%`,background:sc,borderRadius:3}}/>
                 </div>
 
-                {/* Client table sorted by biggest gap first */}
+                {/* Client table — consistent columns with Sales Rep */}
                 <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>
-                  All Clients · Sorted by Gap (needs most attention first)
+                  All Clients · Sorted by Shortfall (highest first)
                 </div>
                 <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                     <thead><tr>
-                      {["Client","Assigned Rep","Target","Achieved","In Pipeline","Gap","Achieve %","Stage"].map(h=>(
+                      {["Client","Sales Rep","Deal Type","Target","Achieved","Shortfall","Stage"].map(h=>(
                         <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                       ))}
                     </tr></thead>
                     <tbody>
-                      {clientRows.length===0&&<tr><td colSpan={8} style={{padding:28,textAlign:"center",color:C.muted,fontSize:12}}>No deals for {filterQ} yet.</td></tr>}
-                      {clientRows.map(d=>{
-                        const pipAmt = !["Proposal Accepted","Not Interested"].includes(d.outcome)?d.amount:0;
-                        return (
-                          <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:d.gap>0&&d.ach===0?`${C.red}04`:"transparent"}}
-                            onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                            onMouseOut={e=>e.currentTarget.style.background=d.gap>0&&d.ach===0?`${C.red}04`:"transparent"}>
-                            <td style={{padding:"10px 14px"}}>
-                              <div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>
-                              {d.contactName&&<div style={{fontSize:10,color:C.dim}}>{d.contactName}</div>}
-                            </td>
-                            <td style={{padding:"10px 14px"}}>
-                              <div style={{fontWeight:600,fontSize:12}}>{d.rep?.name||"—"}</div>
-                              <div style={{fontSize:10,color:C.dim}}>{d.rep?.region}</div>
-                            </td>
-                            <td style={{padding:"10px 14px",color:C.dim,fontWeight:600}}>{fmtR(d.targetAmount)}</td>
-                            <td style={{padding:"10px 14px",color:d.ach>0?C.green:C.muted,fontWeight:d.ach>0?700:400}}>{d.ach>0?fmtR(d.ach):"—"}</td>
-                            <td style={{padding:"10px 14px",color:pipAmt>0?C.accent:C.muted}}>{pipAmt>0?fmtR(pipAmt):"—"}</td>
-                            <td style={{padding:"10px 14px",color:d.gap===0?C.green:C.red,fontWeight:700}}>
-                              {d.gap===0?"✓ On target":fmtR(d.gap)}
-                            </td>
-                            <td style={{padding:"10px 14px"}}>
-                              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                                <div style={{width:50,height:5,background:C.s3,borderRadius:3,overflow:"hidden"}}>
-                                  <div style={{height:"100%",width:`${Math.min(d.pct,100)}%`,background:d.pct>=80?C.green:d.pct>=50?C.accent:C.red}} />
-                                </div>
-                                <span style={{color:d.pct>=80?C.green:d.pct>=50?C.accent:C.red,fontWeight:700,fontSize:11}}>{d.pct}%</span>
-                              </div>
-                            </td>
-                            <td style={{padding:"10px 14px"}}>
-                              <span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span>
-                            </td>
-                          </tr>
-                        );
-                      })}
+                      {clientRows.length===0&&<tr><td colSpan={7} style={{padding:28,textAlign:"center",color:C.muted,fontSize:12}}>No deals for {filterQ} yet.</td></tr>}
+                      {clientRows.map(d=>(
+                        <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}}
+                          onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                          onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                          <td style={{padding:"10px 14px"}}>
+                            <div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>
+                            {d.contactName&&<div style={{fontSize:10,color:C.dim}}>{d.contactName}</div>}
+                          </td>
+                          <td style={{padding:"10px 14px"}}>
+                            <div style={{fontWeight:600,fontSize:12}}>{d.rep?.name||"—"}</div>
+                          </td>
+                          <td style={{padding:"10px 14px"}}>
+                            <span style={{background:C.s3,color:C.dim,padding:"2px 6px",borderRadius:4,fontSize:10}}>{d.dealType||"—"}</span>
+                          </td>
+                          <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
+                          <td style={{padding:"10px 14px",color:d.ach>0?C.green:C.muted,fontWeight:d.ach>0?700:400}}>
+                            {d.ach>0?fmtR(d.ach):"—"}{d.ach>0&&<div style={{fontSize:9,color:C.dim}}>{d.pct}%</div>}
+                          </td>
+                          <td style={{padding:"10px 14px",color:d.gap===0?C.green:C.red,fontWeight:700}}>
+                            {d.gap===0?"✓":fmtR(d.gap)}
+                          </td>
+                          <td style={{padding:"10px 14px"}}>
+                            <span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span>
+                          </td>
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>
@@ -4699,19 +4704,25 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 };
                 return (
                   <div>
-                    {/* Master tile */}
-                    <div style={{background:C.surface,border:`2px solid ${sc}`,borderRadius:10,padding:"18px 22px",marginBottom:16}}>
-                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:10,textTransform:"uppercase"}}>Total Organisation · {filterQ}</div>
-                      <div style={{display:"flex",gap:24,flexWrap:"wrap",alignItems:"flex-end"}}>
-                        {[["TARGET",fmtR(mT),C.text],["CLOSED",fmtR(mC),C.green],["PIPELINE",fmtR(mP),C.accent],["FORECAST",fmtR(mF),sc],["GAP",fmtR(mG),mG===0?C.green:C.red]].map(([l,v,c])=>(
-                          <div key={l}><div style={{fontSize:9,color:C.dim,marginBottom:2,letterSpacing:".06em"}}>{l}</div><div className="sans" style={{fontSize:20,fontWeight:700,color:c}}>{v}</div></div>
-                        ))}
-                        <div style={{marginLeft:"auto",textAlign:"right"}}><div className="sans" style={{fontSize:48,fontWeight:800,color:sc,lineHeight:1}}>{mFP}%</div><div style={{fontSize:10,color:C.dim}}>forecast · {mCP}% closed</div></div>
-                      </div>
-                      <div style={{marginTop:12,height:6,background:C.s3,borderRadius:3,overflow:"hidden",position:"relative"}}>
-                        <div style={{position:"absolute",left:0,height:"100%",width:`${Math.min(mCP,100)}%`,background:C.green,borderRadius:3}} />
-                        <div style={{position:"absolute",left:`${mCP}%`,height:"100%",width:`${Math.min(mFP-mCP,100-mCP)}%`,background:`${C.accent}99`}} />
-                      </div>
+                    {/* 4 Summary stat cards — consistent across all roles */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+                      {[
+                        {label:"TOTAL TARGET",value:fmtR(mT),  color:C.accent,  sub:"Organisation · "+filterQ},
+                        {label:"ACHIEVED",    value:fmtR(mC),  color:C.green,   sub:"Closed deals"},
+                        {label:"SHORTFALL",   value:fmtR(mG),  color:mG===0?C.green:C.red, sub:mG===0?"On target":"Gap to close"},
+                        {label:"% COMPLETE",  value:`${mCP}%`, color:sc,        sub:`Forecast ${mFP}%`},
+                      ].map(card=>(
+                        <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                          <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color,marginBottom:2}}>{card.value}</div>
+                          <div style={{fontSize:9,color:C.muted}}>{card.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {/* Progress bar */}
+                    <div style={{height:5,background:C.s3,borderRadius:3,overflow:"hidden",position:"relative",marginBottom:16}}>
+                      <div style={{position:"absolute",left:0,height:"100%",width:`${Math.min(mCP,100)}%`,background:C.green,borderRadius:3}} />
+                      <div style={{position:"absolute",left:`${mCP}%`,height:"100%",width:`${Math.min(mFP-mCP,100-mCP)}%`,background:`${C.accent}99`}} />
                     </div>
                     {/* Region tiles */}
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:10}}>
@@ -5929,6 +5940,29 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                    isStrategy?"Review NSH-approved targets for strategic alignment.":
                    "Final CRO sign-off on targets cleared by Sales Strategy."}
                 </div>
+
+                {/* Summary count cards */}
+                {(()=>{
+                  const scope = isRH ? targetSubs.filter(t=>t.region===rhRegion) : targetSubs;
+                  const totalVal = scope.reduce((s,t)=>s+(t.targetAmount||0),0);
+                  const approvedCt = scope.filter(t=>t.status==="Approved").length;
+                  return (
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                      {[
+                        {label:"PENDING AT MY LEVEL", value:myPending.length,        color:myPending.length>0?C.orange:C.green, sub:"Awaiting your review"},
+                        {label:"APPROVED",            value:approvedCt,              color:C.green,  sub:"Fully cleared"},
+                        {label:"TOTAL IN PIPELINE",   value:scope.length,            color:C.accent, sub:"All submissions"},
+                        {label:"TOTAL TARGET VALUE",  value:fmtR(totalVal),          color:C.text,   sub:"Across all submissions"},
+                      ].map(card=>(
+                        <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                          <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color,marginBottom:2}}>{card.value}</div>
+                          <div style={{fontSize:9,color:C.muted}}>{card.sub}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* Pending approvals */}
                 {myPending.length===0 ? (
