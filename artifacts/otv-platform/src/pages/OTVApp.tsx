@@ -5954,51 +5954,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 ))}
               </div>
 
-              {/* ── MANAGER: Personal HR page (no automated EOD tracking) ── */}
-              {(!isRep && !isAdmin) && (()=>{
-                const myMeetings  = meetings.filter(m=>m.date?.startsWith(TODAY.slice(0,7)));
-                const myPlansToday= (plans||[]).filter(p=>(!p.repId)&&p.date===TODAY);
-                const totalMeetings = meetings.length;
-                return (
-                  <div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
-                      {[
-                        {label:"MEETINGS THIS MONTH", value:myMeetings.length,   color:C.accent},
-                        {label:"PLANNED TODAY",        value:myPlansToday.length, color:C.blue},
-                        {label:"TOTAL MEETINGS",        value:totalMeetings,       color:C.green},
-                      ].map(k=>(
-                        <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
-                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:4,textTransform:"uppercase"}}>{k.label}</div>
-                          <div className="sans" style={{fontSize:22,fontWeight:700,color:k.color}}>{k.value}</div>
-                        </div>
-                      ))}
-                    </div>
-                    <div style={{padding:"14px 18px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,marginBottom:14}}>
-                      <div style={{display:"flex",gap:10,alignItems:"flex-start"}}>
-                        <span style={{fontSize:20}}>🛡️</span>
-                        <div>
-                          <div style={{fontSize:13,fontWeight:600,color:C.text,marginBottom:4}}>Manager Attendance Policy</div>
-                          <div style={{fontSize:12,color:C.dim,lineHeight:1.6}}>Automated EOD absence checks apply to <strong>Sales Reps only</strong>. Your attendance and activity is verified by your reporting manager and is not subject to the 11:30 PM daily auto-report.<br/>For leave records, disciplinary notes, or HR file access, contact HR directly at <span style={{color:C.accent}}>{HR_EMAIL}</span>.</div>
-                        </div>
-                      </div>
-                    </div>
-                    <div style={{padding:"12px 16px",background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:7,fontSize:12,color:C.dim}}>
-                      Your team's HR data is available under <strong style={{color:C.text}}>Team's HR Reports</strong> in the sidebar.
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* ── REP: Own absence records ── */}
-              {isRep && (()=>{
-                const myRepId = user_role?.repId;
-                const visReports = absenceReports.filter(r=>r.repId===myRepId);
+              {/* ── PERSONAL: Own absence records (all non-admin roles) ── */}
+              {!isAdmin && (()=>{
+                const myRepId  = user_role?.repId ?? null;
+                const visReports = myRepId != null
+                  ? absenceReports.filter(r=>r.repId===myRepId)
+                  : [];
                 return (
                   <div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
                       {[
-                        {label:"MY ABSENCES",  value:visReports.filter(r=>r.markedAs==="Absent").length,      color:C.red},
-                        {label:"EXCEPTIONS",   value:visReports.filter(r=>r.exception==="Overridden").length, color:C.green},
+                        {label:"MY ABSENCES", value:visReports.filter(r=>r.markedAs==="Absent").length,      color:C.red},
+                        {label:"EXCEPTIONS",  value:visReports.filter(r=>r.exception==="Overridden").length, color:C.green},
                       ].map(k=>(
                         <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
                           <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:4,textTransform:"uppercase"}}>{k.label}</div>
@@ -6007,7 +5974,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       ))}
                     </div>
                     {visReports.length===0
-                      ? <div style={{textAlign:"center",padding:40,color:C.muted,fontSize:12}}>No absence records on file.</div>
+                      ? <div style={{textAlign:"center",padding:40,color:C.muted,border:`1px dashed ${C.border}`,borderRadius:8,fontSize:12}}>No absence records on file.</div>
                       : (
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",padding:"8px 14px",background:C.s2,borderBottom:`1px solid ${C.border}`}}>MY ABSENCE LOG</div>
