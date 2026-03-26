@@ -584,24 +584,6 @@ function LoginScreen({ onLogin }) {
   const [err, setErr]         = useState("");
   const [loading, setLoading] = useState(false);
 
-  const DEMO_ACCOUNTS = [
-    { label:"Litisha (CEO)",       email:"litisha@odishatv.com",   role:"CEO",            color:"#a855f7" },
-    { label:"Jaggi (MD)",          email:"jaggi@odishatv.com",     role:"MD",             color:"#be185d" },
-    { label:"Darpan (CRO)",        email:"darpan@odishatv.com",    role:"CRO",            color:"#10b981" },
-    { label:"Sales Head (NSH)",    email:"saleshead@odishatv.com", role:"SALES HEAD",     color:"#0891b2" },
-    { label:"Sachin (Strategy)",   email:"sachin@odishatv.com",    role:"SALES STRATEGY", color:"#f0a500" },
-    { label:"Digi Ops",            email:"digiops@odishatv.com",   role:"DIGI OPS",       color:"#2d7dd2" },
-    { label:"RH – National",       email:"rhn@odishatv.com",       role:"REGION HEAD",    color:"#7c3aed" },
-    { label:"RH – North",          email:"rhnorth@odishatv.com",   role:"REGION HEAD",    color:"#7c3aed" },
-    { label:"Arjun (Sales Rep)",   email:"arjun@odishatv.com",     role:"SALES REP",      color:"#60a5fa" },
-    { label:"Vikram (Sales Rep)",  email:"vikram@odishatv.com",    role:"SALES REP",      color:"#60a5fa" },
-  ];
-
-  const handleDemo = (account) => {
-    setLoading(true);
-    setTimeout(() => { onLogin({ name: account.label, email: account.email }); setLoading(false); }, 600);
-  };
-
   const googleReady           = useRef(false);
   const hiddenGoogleBtn       = useRef(null);
 
@@ -657,7 +639,7 @@ function LoginScreen({ onLogin }) {
 
   function handleZohoClick() {
     setErr(""); setLoading(true);
-    const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/, "");
+    const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/g, "");
     const scope = "AaaServer.profile.Read";
     const authUrl = `https://accounts.zoho.in/oauth/v2/auth?response_type=token&client_id=${ZOHO_CLIENT_ID}&scope=${encodeURIComponent(scope)}&redirect_uri=${encodeURIComponent(redirectUri)}&access_type=online&prompt=consent`;
     const popup = window.open(authUrl, "zoho-login", "width=560,height=660,left=300,top=80");
@@ -699,6 +681,20 @@ function LoginScreen({ onLogin }) {
     }, 500);
   }
 
+
+  const DEMO_ACCOUNTS = [
+    { label:"Litisha (CEO)",       email:"litisha@odishatv.com",    role:"CEO",            color:"#a855f7" },
+    { label:"Jaggi (MD)",          email:"jaggi@odishatv.com",      role:"MD",             color:"#be185d" },
+    { label:"Darpan (CRO)",        email:"darpan@odishatv.com",     role:"CRO",            color:"#065f46" },
+    { label:"Sales Head (NSH)",    email:"saleshead@odishatv.com",  role:"SALES HEAD",     color:"#0891b2" },
+    { label:"Sachin (Strategy)",   email:"sachin@odishatv.com",     role:"SALES STRATEGY", color:"#7c2d12" },
+    { label:"Digi Ops",            email:"digiops@odishatv.com",    role:"DIGI OPS",       color:"#1e40af" },
+    { label:"RH – National",       email:"rhn@odishatv.com",        role:"REGION HEAD",    color:"#7c3aed" },
+    { label:"RH – North",          email:"rhnorth@odishatv.com",    role:"REGION HEAD",    color:"#7c3aed" },
+    { label:"Arjun (Sales Rep)",   email:"arjun@odishatv.com",      role:"SALES REP",      color:"#2563eb" },
+    { label:"Vikram (Sales Rep)",  email:"vikram@odishatv.com",     role:"SALES REP",      color:"#2563eb" },
+  ];
+
   const handleEmail = async (e) => {
     e.preventDefault(); setErr("");
     if (!email.trim()) { setErr("Email is required"); return; }
@@ -720,11 +716,18 @@ function LoginScreen({ onLogin }) {
         localStorage.setItem("otv_crm_users", JSON.stringify([...stored, newUser]));
         onLogin({ name: newUser.name, email: newUser.email });
       }
-    } catch(_) {
+    } catch(err) {
       setErr("Login error — try again."); setLoading(false);
     }
   };
 
+  const handleDemo = (account) => {
+    setLoading(true);
+    setTimeout(() => {
+      onLogin({ name: account.label, email: account.email });
+      setLoading(false);
+    }, 600);
+  };
 
   return (
     <div style={{ fontFamily:"'DM Mono','JetBrains Mono',monospace", background:"#080a0f", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
@@ -765,24 +768,21 @@ function LoginScreen({ onLogin }) {
                 <div style={{ display:"flex", flexDirection:"column", gap:10, marginBottom:20 }}>
                   <button
                     onClick={handleGoogleClick}
-                    disabled={loading}
-                    style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", color:"#3c4043", border:"1px solid #dadce0", borderRadius:6, padding:"10px 16px", cursor:loading?"wait":"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"box-shadow .15s", opacity:loading?0.7:1 }}
+                    style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", color:"#3c4043", border:"1px solid #dadce0", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"box-shadow .15s" }}
                     onMouseOver={e=>e.currentTarget.style.boxShadow="0 1px 6px rgba(0,0,0,.3)"}
                     onMouseOut={e=>e.currentTarget.style.boxShadow="none"}
                   >
                     <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
-                    {loading ? "Signing in…" : "Continue with Google"}
+                    Continue with Google
                   </button>
-                  <div ref={hiddenGoogleBtn} style={{ position:"absolute", opacity:0, pointerEvents:"none", width:1, height:1, overflow:"hidden" }} />
                   <button
                     onClick={handleZohoClick}
-                    disabled={loading}
-                    style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:loading?"wait":"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"opacity .15s", opacity:loading?0.7:1 }}
+                    style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", transition:"opacity .15s" }}
                     onMouseOver={e=>e.currentTarget.style.opacity=".88"}
                     onMouseOut={e=>e.currentTarget.style.opacity="1"}
                   >
                     <svg width="18" height="18" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="4" fill="#e42527"/><text x="50%" y="58%" dominantBaseline="middle" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="bold" fontFamily="sans-serif">Z</text></svg>
-                    {loading ? "Signing in…" : "Continue with Zoho"}
+                    Continue with Zoho
                   </button>
                 </div>
 
@@ -798,13 +798,22 @@ function LoginScreen({ onLogin }) {
                   Continue with Email
                 </button>
 
-                {/* QUICK DEMO */}
+                {/* DEMO ACCOUNTS */}
                 <div style={{ marginTop:24 }}>
                   <div style={{ fontSize:10, color:"#7d8590", fontWeight:700, letterSpacing:".08em", textTransform:"uppercase", marginBottom:10, textAlign:"center" }}>Quick Demo — Sign in as</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
-                    {DEMO_ACCOUNTS.map(a => (
+                    {[
+                      { label:"Litisha (CXO)",        email:"litisha@odishatv.com",    role:"CXO",            color:"#a855f7" },
+                      { label:"Darpan (CRO)",          email:"darpan@odishatv.com",     role:"CRO",            color:"#f0a500" },
+                      { label:"GK (Nat. Sales Head)",  email:"gk@odishatv.com",         role:"SALES HEAD",     color:"#2d7dd2" },
+                      { label:"Sachin (Strategy)",     email:"sachin@odishatv.com",     role:"SALES STRATEGY", color:"#16c784" },
+                      { label:"Biswa (Digital)",       email:"biswa@odishatv.com",      role:"DIGITAL",        color:"#60a5fa" },
+                      { label:"Sameer (Operations)",   email:"sameer@odishatv.com",     role:"SALES ANALYSIS", color:"#f97316" },
+                      { label:"Arjun (Sales Rep)",     email:"arjun@odishatv.com",      role:"SALES REP",      color:"#7d8590" },
+                      { label:"Priya (Sales Rep)",     email:"priya@odishatv.com",      role:"SALES REP",      color:"#7d8590" },
+                    ].map(a => (
                       <button key={a.email}
-                        onClick={() => handleDemo(a)}
+                        onClick={() => { setLoading(true); setTimeout(() => { onLogin({ name: a.label, email: a.email }); setLoading(false); }, 400); }}
                         disabled={loading}
                         style={{ background:"#0d1117", border:`1px solid ${a.color}33`, borderRadius:6, padding:"8px 10px", cursor:"pointer", textAlign:"left", transition:"border-color .15s, background .15s" }}
                         onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background="#131920"; }}
@@ -815,6 +824,7 @@ function LoginScreen({ onLogin }) {
                     ))}
                   </div>
                 </div>
+
 
               </>
             )}
@@ -866,7 +876,6 @@ function LoginScreen({ onLogin }) {
     </div>
   );
 }
-
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
 // ── Persistent state hook — reads from localStorage on init, writes on every change ──
