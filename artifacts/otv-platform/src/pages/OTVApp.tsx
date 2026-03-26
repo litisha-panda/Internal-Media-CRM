@@ -894,8 +894,7 @@ function LoginScreen({ onLogin }) {
                       { label:"CRO",                  email:"darpan@odishatv.com",      color:"#f0a500" },
                     ].map(a => (
                       <button key={a.email}
-                        onClick={() => { setLoading(true); setTimeout(()=>{ onLogin({ name:a.label, email:a.email }); setLoading(false); }, 300); }}
-                        disabled={loading}
+                        onClick={() => onLogin({ name:a.label, email:a.email })}
                         style={{ background:"#0d1117", border:`1px solid ${a.color}33`, borderRadius:6, padding:"8px 10px", cursor:"pointer", textAlign:"left", transition:"border-color .15s, background .15s" }}
                         onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background="#131920"; }}
                         onMouseOut={e=>{ e.currentTarget.style.borderColor=`${a.color}33`; e.currentTarget.style.background="#0d1117"; }}>
@@ -1308,6 +1307,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     USER_ROLES.filter(u=>u.id!=="admin").map(u=>({...u}))
   );
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
+  const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
+  const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
   const [revForm, setRevForm]                           = useState({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [importTab, setImportTab]                       = useState("deals");
 
@@ -2084,8 +2085,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("ro-management","RO Management","≡",savedROs.length||null),
       ]},
       { label:"LEADERBOARD", items:[
-        N("leaderboard","Leaderboard","◇"),
-        N("rep-team","My Team","◇"),
+        N("lb-team","My Team","◇"),
+        N("lb-region","By Region","◇"),
+        N("lb-all","All Sales Reps","◇"),
       ]},
     ];
 
@@ -4072,9 +4074,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           )}
 
           {/* ═══ LEADERBOARD ═══ */}
-          {view==="leaderboard" && (()=>{
+          {(view==="leaderboard"||view==="lb-team"||view==="lb-region"||view==="lb-all") && (()=>{
             const medals = ["🥇","🥈","🥉"];
             const myRegion = user_role?.region;
+            // For Sales Rep, tab is driven by sidebar view; for others, by lbTab state
+            const effectiveLbTab = view==="lb-team"?"team":view==="lb-region"?"region":view==="lb-all"?"all":lbTab;
+            const showTabBar = view==="leaderboard"; // only non-rep roles use the internal tab switcher
 
             // Filter sets per tab
             const teamReps   = repScores.filter(r => myRegion ? r.region===myRegion : true);
@@ -4143,26 +4148,28 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>LEADERBOARD</div>
                 <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Activity, compliance and target performance — no revenue figures shown</div>
 
-                {/* Tab switcher */}
-                <div style={{display:"flex",gap:0,marginBottom:16,borderBottom:`1px solid ${C.border}`}}>
-                  {[
-                    {id:"team",   label:"My Team",          sub:myRegion||"All"},
-                    {id:"region", label:"By Region",        sub:"Aggregated"},
-                    {id:"all",    label:"All Sales Reps",   sub:"Company-wide"},
-                  ].map(t=>(
-                    <button key={t.id} onClick={()=>setLbTab(t.id)}
-                      style={{padding:"10px 20px",background:"transparent",border:"none",
-                        borderBottom:lbTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
-                        color:lbTab===t.id?C.accent:C.dim,cursor:"pointer",
-                        fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:lbTab===t.id?700:400,textAlign:"left"}}>
-                      <div>{t.label}</div>
-                      <div style={{fontSize:9,color:C.muted,marginTop:1}}>{t.sub}</div>
-                    </button>
-                  ))}
-                </div>
+                {/* Tab switcher — only for non-rep roles that use internal tab state */}
+                {showTabBar && (
+                  <div style={{display:"flex",gap:0,marginBottom:16,borderBottom:`1px solid ${C.border}`}}>
+                    {[
+                      {id:"team",   label:"My Team",          sub:myRegion||"All"},
+                      {id:"region", label:"By Region",        sub:"Aggregated"},
+                      {id:"all",    label:"All Sales Reps",   sub:"Company-wide"},
+                    ].map(t=>(
+                      <button key={t.id} onClick={()=>setLbTab(t.id)}
+                        style={{padding:"10px 20px",background:"transparent",border:"none",
+                          borderBottom:effectiveLbTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
+                          color:effectiveLbTab===t.id?C.accent:C.dim,cursor:"pointer",
+                          fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:effectiveLbTab===t.id?700:400,textAlign:"left"}}>
+                        <div>{t.label}</div>
+                        <div style={{fontSize:9,color:C.muted,marginTop:1}}>{t.sub}</div>
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* ── MY TEAM TAB ── */}
-                {lbTab==="team" && (
+                {effectiveLbTab==="team" && (
                   <div>
                     {teamReps.length===0 && <div style={{textAlign:"center",padding:40,color:C.muted}}>No reps in your team.</div>}
                     {teamReps.map((rep,rank)=><RepCard key={rep.id} rep={rep} rank={rank}/>)}
@@ -4170,7 +4177,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 )}
 
                 {/* ── BY REGION TAB ── */}
-                {lbTab==="region" && (
+                {effectiveLbTab==="region" && (
                   <div>
                     {regionRows.map((g,rank)=>{
                       const sc = g.avgCPct>=80?C.green:g.avgCPct>=50?C.accent:C.red;
@@ -4210,7 +4217,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 )}
 
                 {/* ── ALL SALES REPS TAB ── */}
-                {lbTab==="all" && (
+                {effectiveLbTab==="all" && (
                   <div>
                     {allReps.length===0 && <div style={{textAlign:"center",padding:40,color:C.muted}}>No rep data.</div>}
                     {allReps.map((rep,rank)=><RepCard key={rep.id} rep={rep} rank={rank}/>)}
@@ -5656,13 +5663,34 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const dealTypes = ["Linear TV","Digital","Integrated Package","Sponsorship","Brand Solutions","Branded Content"];
             const statusColor = s => s==="Approved"?C.green:s==="Pending RH"||s==="Pending NSH"||s==="Pending Strategy"||s==="Pending CRO"?C.orange:s==="Rejected"?C.red:C.dim;
 
+            // Summary stats across all approved/pending subs for this quarter
+            const qSubs      = mySubs.filter(s=>s.quarter===filterQ);
+            const approvedSub  = qSubs.find(s=>s.status==="Approved");
+            const pendingSub   = qSubs.find(s=>s.status!=="Approved"&&s.status!=="Rejected");
+            const activeSub    = approvedSub || pendingSub;
+            const totalTarget  = activeSub ? activeSub.totalTarget : 0;
+            const totalAchieved= activeSub ? activeSub.clients.reduce((sum,cl)=>{
+              return sum + revenueEntries.filter(e=>e.repId===myRepId&&e.clientCompany===cl.clientCompany&&e.quarter===filterQ).reduce((s,e)=>s+(e.amount||0),0);
+            },0) : 0;
+            const pct = totalTarget>0 ? Math.round((totalAchieved/totalTarget)*100) : 0;
+            const pctColor = pct>=80?C.green:pct>=50?C.accent:C.red;
+
             return (
               <div className="fin">
-                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>MY TARGETS</div>
-                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Submit your client-wise targets for approval. Once CRO approves, they become your official quota.</div>
+                {/* Header row: title + Add Client button top-right */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY TARGETS</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>Submit your client-wise targets for approval. Once CRO approves, they become your official quota.</div>
+                  </div>
+                  <button onClick={()=>{ setAddClientForm({clientCompany:"",dealType:"Linear TV",targetAmount:""}); setAddClientModalOpen(true); }}
+                    style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:7,padding:"9px 18px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                    + Add Client
+                  </button>
+                </div>
 
                 {/* Approval chain indicator */}
-                <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:20,flexWrap:"wrap"}}>
+                <div style={{display:"flex",alignItems:"center",gap:0,marginTop:14,marginBottom:16,flexWrap:"wrap"}}>
                   {["You","Region Head","NSH","Sales Strategy","CRO → Approved"].map((s,i)=>(
                     <div key={s} style={{display:"flex",alignItems:"center"}}>
                       <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"4px 10px",fontSize:10,color:C.accent,fontWeight:600,whiteSpace:"nowrap"}}>{s}</div>
@@ -5671,39 +5699,76 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   ))}
                 </div>
 
-                {/* New submission form */}
-                <div className="card" style={{padding:"16px 18px",marginBottom:20}}>
-                  <div className="sans" style={{fontWeight:700,fontSize:13,marginBottom:12}}>New Target Submission — {filterQ}</div>
-                  {newClients.map((row,idx)=>(
-                    <div key={idx} style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr auto",gap:8,marginBottom:8,alignItems:"center"}}>
-                      <input value={row.clientCompany} placeholder="Client name"
-                        onChange={e=>setNewClients(p=>p.map((r,i)=>i===idx?{...r,clientCompany:e.target.value}:r))}
-                        style={{padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                      <select value={row.dealType} onChange={e=>setNewClients(p=>p.map((r,i)=>i===idx?{...r,dealType:e.target.value}:r))}
-                        style={{padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                        {dealTypes.map(d=><option key={d}>{d}</option>)}
-                      </select>
-                      <input value={row.targetAmount} placeholder="Amount ₹" type="text"
-                        onChange={e=>setNewClients(p=>p.map((r,i)=>i===idx?{...r,targetAmount:e.target.value}:r))}
-                        style={{padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                      <button onClick={()=>setNewClients(p=>p.filter((_,i)=>i!==idx))} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"6px 10px",cursor:"pointer",fontSize:12}}>✕</button>
-                    </div>
-                  ))}
-                  <div style={{display:"flex",gap:8,marginTop:8}}>
-                    <button onClick={()=>setNewClients(p=>[...p,{clientCompany:"",dealType:"Linear TV",targetAmount:""}])}
-                      style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Add Client</button>
-                    <button onClick={()=>{
-                      const clients = newClients.filter(r=>r.clientCompany.trim()&&r.targetAmount);
-                      if(!clients.length){alert("Add at least one client with a target");return;}
-                      const parsed = clients.map(r=>({...r,targetAmount:parseCurrency(r.targetAmount)}));
-                      const total  = parsed.reduce((s,r)=>s+r.targetAmount,0);
-                      const sub    = {id:`ts${Date.now()}`,repId:myRepId,repName:user_role?.name||"",region:user_role?.region||"",quarter:filterQ,clients:parsed,totalTarget:total,status:"Pending RH",submittedAt:TODAY,approvalLog:[]};
-                      setTargetSubs(p=>[sub,...p]);
-                      setNewClients([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
-                      showToast("Targets submitted → Region Head for approval ✓");
-                    }} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:4,padding:"6px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Submit for Approval →</button>
+                {/* Summary stats row */}
+                {activeSub && (
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:20}}>
+                    {[
+                      {label:"TOTAL TARGET",   value:fmtR(totalTarget),   color:C.accent},
+                      {label:"ACHIEVED",        value:fmtR(totalAchieved), color:pctColor},
+                      {label:"% COMPLETE",      value:`${pct}%`,           color:pctColor},
+                    ].map(s=>(
+                      <div key={s.label} className="card" style={{padding:"12px 16px"}}>
+                        <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:4}}>{s.label}</div>
+                        <div className="sans" style={{fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div>
+                      </div>
+                    ))}
                   </div>
-                </div>
+                )}
+
+                {/* Add Client Modal */}
+                {addClientModalOpen && (
+                  <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}} onClick={e=>{if(e.target===e.currentTarget)setAddClientModalOpen(false);}}>
+                    <div style={{background:C.s1,border:`1px solid ${C.border}`,borderRadius:12,padding:"28px 28px 24px",width:480,maxWidth:"95vw",boxShadow:"0 24px 60px rgba(0,0,0,.5)"}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
+                        <div className="sans" style={{fontWeight:700,fontSize:15}}>Add Client Target — {filterQ}</div>
+                        <button onClick={()=>setAddClientModalOpen(false)} style={{background:"none",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                        <div>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>CLIENT NAME</div>
+                          <input value={addClientForm.clientCompany} placeholder="e.g. Havells India"
+                            onChange={e=>setAddClientForm(p=>({...p,clientCompany:e.target.value}))}
+                            style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}/>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>DEAL TYPE</div>
+                          <select value={addClientForm.dealType} onChange={e=>setAddClientForm(p=>({...p,dealType:e.target.value}))}
+                            style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
+                            {dealTypes.map(d=><option key={d}>{d}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>TARGET AMOUNT (₹)</div>
+                          <input value={addClientForm.targetAmount} placeholder="e.g. 50L or 5000000"
+                            onChange={e=>setAddClientForm(p=>({...p,targetAmount:e.target.value}))}
+                            style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}/>
+                        </div>
+                      </div>
+                      <div style={{marginTop:22,display:"flex",gap:10,justifyContent:"flex-end"}}>
+                        <button onClick={()=>setAddClientModalOpen(false)} style={{padding:"9px 18px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                        <button onClick={()=>{
+                          const {clientCompany,dealType,targetAmount} = addClientForm;
+                          if(!clientCompany.trim()||!targetAmount){showToast("Fill in client name and target amount","err");return;}
+                          const amt = parseCurrency(targetAmount);
+                          const newEntry = {clientCompany:clientCompany.trim(),dealType,targetAmount:amt};
+                          // Find existing pending sub for this quarter to append, or create new one
+                          const existingSub = mySubs.find(s=>s.quarter===filterQ&&s.status==="Pending RH");
+                          if(existingSub){
+                            const updated = {...existingSub, clients:[...existingSub.clients,newEntry], totalTarget:existingSub.totalTarget+amt};
+                            setTargetSubs(p=>p.map(s=>s.id===existingSub.id?updated:s));
+                          } else {
+                            const sub = {id:`ts${Date.now()}`,repId:myRepId,repName:user_role?.name||"",region:user_role?.region||"",quarter:filterQ,clients:[newEntry],totalTarget:amt,status:"Pending RH",submittedAt:TODAY,approvalLog:[]};
+                            setTargetSubs(p=>[sub,...p]);
+                          }
+                          setAddClientModalOpen(false);
+                          showToast(`${clientCompany.trim()} added → submitted for approval ✓`);
+                        }} style={{padding:"9px 22px",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:6,color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                          Submit for Approval →
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Current quarter client target vs achieved */}
                 {(()=>{
