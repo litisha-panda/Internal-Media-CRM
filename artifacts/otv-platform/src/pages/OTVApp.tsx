@@ -3578,6 +3578,84 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   ))}
                 </div>
 
+                {/* ── DYNAMIC ANALYSIS ── */}
+                {(()=>{
+                  const activeD  = allD.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome));
+                  const closedD  = allD.filter(d=>d.outcome==="Proposal Accepted");
+
+                  // National-level signals
+                  const staleNational  = activeD.filter(d=>daysSince(d.lastContact)>=7);
+                  const bigStale       = staleNational.filter(d=>d.targetAmount>=5000000);
+                  const overdueNational= allD.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Proposal Accepted");
+                  const closingSoon    = activeD.filter(d=>["Very Interested","Interested – Needs Revision"].includes(d.outcome)&&d.nextStepDate&&d.nextStepDate<=TOMORROW);
+                  const pendingNSH     = targetSubs.filter(t=>t.status==="Pending NSH");
+                  const blockedDeals   = allD.filter(d=>d.awaitingApproval&&d.outcome!=="Proposal Accepted");
+
+                  // Region-level analysis
+                  const GEOS = ["North","South","East","West","Odisha"];
+                  const regionAnalysis = GEOS.map(reg=>{
+                    const rd  = allD.filter(d=>d.region===reg);
+                    const rT  = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
+                    const rC  = rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                    const rPct= rT>0?Math.round((rC/rT)*100):null;
+                    const hasDigital = rd.some(d=>d.dealType==="Digital"&&d.outcome!=="Not Interested");
+                    return {reg, rT, rC, rPct, hasDigital, count:rd.length};
+                  });
+                  const laggingRegions  = regionAnalysis.filter(r=>r.rPct!==null&&r.rPct<40);
+                  const noDigitalRegions= regionAnalysis.filter(r=>r.count>0&&!r.hasDigital);
+
+                  // Rep-level signals
+                  const repPcts = REPS.map(r=>{
+                    const rd=allD.filter(d=>d.repId===r.id);
+                    const t=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
+                    const c=rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                    return {name:r.name,region:r.region,pct:t>0?Math.round((c/t)*100):null};
+                  }).filter(r=>r.pct!==null);
+                  const laggingReps = repPcts.filter(r=>r.pct<30);
+
+                  // Forecast vs target gap
+                  const fcastGapSevere = gap > totT * 0.3; // >30% gap to forecast
+
+                  const insights: {priority:"critical"|"warning"|"good", text:string}[] = [];
+
+                  // Critical
+                  if(bigStale.length>0)       insights.push({priority:"critical", text:`${bigStale.length} high-value deal${bigStale.length>1?"s":""} (₹50L+) with no contact in 7+ days — ${bigStale.slice(0,3).map(d=>d.clientCompany).join(", ")}${bigStale.length>3?" +more":""}.`});
+                  if(fcastGapSevere)           insights.push({priority:"critical", text:`Forecast gap of ${fmtR(gap)} (${Math.round((gap/totT)*100)}% of target) — aggressive recovery actions required this week.`});
+                  if(laggingRegions.length>0)  insights.push({priority:"critical", text:`${laggingRegions.map(r=>`${r.reg} (${r.rPct}%)`).join(", ")} ${laggingRegions.length===1?"region is":"regions are"} significantly below target — escalate to Region Head.`});
+                  if(blockedDeals.length>0)    insights.push({priority:"critical", text:`${blockedDeals.length} deal${blockedDeals.length>1?"s":""} blocked awaiting approval — ${blockedDeals.slice(0,2).map(d=>d.clientCompany).join(", ")}. Unblock immediately.`});
+
+                  // Warning
+                  if(staleNational.length>0)   insights.push({priority:"warning",  text:`${staleNational.length} active deal${staleNational.length>1?"s":""} with no contact in 7+ days across all regions.`});
+                  if(overdueNational.length>0)  insights.push({priority:"warning",  text:`${overdueNational.length} overdue next step${overdueNational.length>1?"s":""} organisation-wide — reps need to action today.`});
+                  if(pendingNSH.length>0)       insights.push({priority:"warning",  text:`${pendingNSH.length} target submission${pendingNSH.length>1?"s":""} pending your approval.`});
+                  if(laggingReps.length>0)      insights.push({priority:"warning",  text:`${laggingReps.map(r=>`${r.name}/${r.region} (${r.pct}%)`).join(", ")} ${laggingReps.length===1?"is":"are"} well below 30% — flag to RH for coaching.`});
+                  if(noDigitalRegions.length>0) insights.push({priority:"warning",  text:`${noDigitalRegions.map(r=>r.reg).join(", ")} ${noDigitalRegions.length===1?"region has":"regions have"} no Digital deals in pipeline — push for cross-sell.`});
+
+                  // Good
+                  if(closingSoon.length>0)      insights.push({priority:"good",     text:`${closingSoon.length} deal${closingSoon.length>1?"s":""} likely to close this week — ${closingSoon.slice(0,3).map(d=>d.clientCompany).join(", ")}.`});
+                  if(closePct>=80)               insights.push({priority:"good",     text:`Organisation at ${closePct}% of target — strong performance. Focus on pipeline hygiene to protect the number.`});
+                  if(insights.filter(i=>i.priority==="critical").length===0&&insights.filter(i=>i.priority==="warning").length===0) insights.push({priority:"good", text:"No critical issues nationally. All regions active, approvals clear, reps on track."});
+
+                  const pIcon   = {critical:"🔴",warning:"🟡",good:"🟢"};
+                  const pBorder = {critical:C.red,warning:C.orange,good:C.green};
+                  return (
+                    <div style={{marginBottom:20}}>
+                      <div style={{height:1,background:C.border,marginBottom:16}} />
+                      <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>
+                        DYNAMIC ANALYSIS · National Intelligence
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {insights.map((ins,i)=>(
+                          <div key={i} style={{background:C.surface,border:`1px solid ${pBorder[ins.priority]}44`,borderLeft:`3px solid ${pBorder[ins.priority]}`,borderRadius:7,padding:"10px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+                            <span style={{fontSize:13,flexShrink:0}}>{pIcon[ins.priority]}</span>
+                            <div style={{fontSize:12,color:C.text,lineHeight:1.5}}>{ins.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* ── HIGH RISK DEALS ── */}
                 <div style={{height:1,background:C.border,marginBottom:16}} />
                 <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>
