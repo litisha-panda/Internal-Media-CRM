@@ -2095,7 +2095,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
     // ── REGION HEAD ──
     if (isRH) return [
-      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("rh-team-plan","Team's Plan","◎")] },
+      { label:"PLANNING",    items:[N("my-plan","My Plan","◎")] },
       { label:"MY CRM",      items:[
         N("warroom","War Room","⬡",rhEscBadge),
         N("pipeline","Revenue Tracker","◈"),
@@ -2106,10 +2106,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("internal-requests","Internal Requests","⬆",irBadge),
         N("hr","HR Reports","⊘"),
       ]},
-      { label:"MY TEAM",     items:[
-        N("rh-team-plan","Team's Plan","◎"),
-        N("team","Team Scorecard","◇"),
-        N("leaderboard","Leaderboard","◇"),
+      { label:"TEAM'S CRM",  items:[
+        N("rh-team-targets","Team's Targets","◈"),
+        N("rh-team-tasks","Team's Tasks","✓"),
+      ]},
+      { label:"LEADERBOARD", items:[
+        N("lb-team","My Region","◇"),
+        N("lb-region","All Regions","◇"),
+        N("lb-all","All Sales Reps","◇"),
       ]},
     ];
 
@@ -2925,6 +2929,50 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     );
                   })}
                 </div>
+
+                {/* ── DYNAMIC ANALYSIS ── */}
+                {(()=>{
+                  const staleDeals   = rhDeals.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7);
+                  const overdueSteps = rhDeals.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Proposal Accepted");
+                  const highRiskBig  = rhDeals.filter(d=>d.amount>=5000000&&!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=5);
+                  const repPcts      = myReps.map(r=>{
+                    const rd=rhDeals.filter(d=>d.repId===r.id);
+                    const t=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
+                    const c=rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                    return {name:r.name,pct:t>0?Math.round((c/t)*100):null};
+                  }).filter(r=>r.pct!==null);
+                  const laggingReps  = repPcts.filter(r=>r.pct<40);
+                  const pendingApps  = targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH");
+                  const closingSoon  = rhDeals.filter(d=>["Very Interested","Interested – Needs Revision"].includes(d.outcome)&&d.nextStepDate&&d.nextStepDate<=TOMORROW);
+
+                  const insights: {priority:"critical"|"warning"|"good", text:string}[] = [];
+                  if(staleDeals.length>0) insights.push({priority:"critical",  text:`${staleDeals.length} active deal${staleDeals.length>1?"s":""} with no contact in 7+ days — ${staleDeals.slice(0,2).map(d=>d.clientCompany).join(", ")}${staleDeals.length>2?" +more":""}.`});
+                  if(highRiskBig.length>0) insights.push({priority:"critical",  text:`${highRiskBig.length} high-value deal${highRiskBig.length>1?"s":""} (₹50L+) going cold — ${highRiskBig.slice(0,2).map(d=>d.clientCompany).join(", ")}.`});
+                  if(overdueSteps.length>0) insights.push({priority:"warning",   text:`${overdueSteps.length} overdue next step${overdueSteps.length>1?"s":""} — reps need follow-ups today.`});
+                  if(laggingReps.length>0)  insights.push({priority:"warning",   text:`${laggingReps.map(r=>`${r.name} (${r.pct}%)`).join(", ")} significantly below target — needs coaching.`});
+                  if(pendingApps.length>0)  insights.push({priority:"warning",   text:`${pendingApps.length} target submission${pendingApps.length>1?"s":""} awaiting your approval.`});
+                  if(closingSoon.length>0)  insights.push({priority:"good",      text:`${closingSoon.length} deal${closingSoon.length>1?"s":""} poised to close this week — ${closingSoon.slice(0,2).map(d=>d.clientCompany).join(", ")}.`});
+                  if(insights.length===0)   insights.push({priority:"good",      text:"All deals active, no stale contacts, reps on track. Strong position."});
+
+                  const pIcon = {critical:"🔴",warning:"🟡",good:"🟢"};
+                  const pBorder = {critical:C.red,warning:C.orange,good:C.green};
+                  return (
+                    <div style={{marginBottom:20}}>
+                      <div style={{height:1,background:C.border,marginBottom:16}} />
+                      <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>
+                        DYNAMIC ANALYSIS · What needs your attention
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
+                        {insights.map((ins,i)=>(
+                          <div key={i} style={{background:C.surface,border:`1px solid ${pBorder[ins.priority]}44`,borderLeft:`3px solid ${pBorder[ins.priority]}`,borderRadius:7,padding:"10px 14px",display:"flex",gap:10,alignItems:"flex-start"}}>
+                            <span style={{fontSize:13,flexShrink:0}}>{pIcon[ins.priority]}</span>
+                            <div style={{fontSize:12,color:C.text,lineHeight:1.5}}>{ins.text}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── SECTION B: TEAM OVERVIEW ── */}
                 <div style={{height:1,background:C.border,marginBottom:16}} />
