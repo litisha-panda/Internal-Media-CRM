@@ -3089,10 +3089,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>WAR ROOM</div>
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}</div>
                   </div>
-                  <div style={{display:"flex",gap:8}}>
-                    {canLogMeeting && <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>}
-                    <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
-                  </div>
                 </div>
 
                 {/* ── SECTION A: MY ACTIONABLES ── */}
@@ -3564,8 +3560,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>National overview · {filterQ} · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}</div>
                   </div>
                   <div style={{display:"flex",gap:8}}>
-                    {canLogMeeting && <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>}
-                    <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
                     <button className="btn btn-ghost" onClick={()=>{
                       const allD = deals.filter(d=>qMatch(d.quarter));
                       const totC = allD.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
@@ -3877,13 +3871,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>WAR ROOM</div>
                   <div style={{fontSize:11,color:C.dim,marginTop:2}}>{new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short",year:"numeric"})}</div>
                 </div>
-                {/* Management gets Log Meeting; reps should use My Plan */}
-                {!isRep && (
-                  <div style={{display:"flex",gap:8}}>
-                    {canLogMeeting && <button className="btn btn-ghost" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>}
-                    <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
-                  </div>
-                )}
               </div>
 
               {/* REP ACTION ITEMS — only for sales reps */}
