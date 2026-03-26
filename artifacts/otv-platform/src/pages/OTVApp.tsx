@@ -1209,7 +1209,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   }, [profileOpen]);
   const [addDealOpen, setAddDealOpen] = useState(false);
   const [logOpen, setLogOpen]     = useState(false);
-  const [targetDrilldown, setTargetDrilldown] = useState(null); // { key, label, color }
+  const [targetDrilldown, setTargetDrilldown] = useState(null); // { key, label, color, icon } — NSH region tile
+  const [nshRepDrill,    setNshRepDrill]      = useState(null); // rep id — NSH → region → rep drill
   const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
 
   const BLANK_DEAL = { clientCompany:"", repId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Needs Callback", amount:"", targetAmount:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", reqs:[], auditLog:[] };
@@ -4737,7 +4738,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         const tc=tFP>=100?C.green:tFP>=75?C.accent:tFP>=50?tile.color:C.red;
                         const risk=td.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
                         return (
-                          <div key={tile.key} onClick={()=>setTargetDrilldown(tile)}
+                          <div key={tile.key} onClick={()=>{setTargetDrilldown(tile);setNshRepDrill(null);}}
                             style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px",cursor:"pointer",transition:"border-color .15s,transform .1s"}}
                             onMouseOver={e=>{e.currentTarget.style.borderColor=tile.color;e.currentTarget.style.transform="translateY(-2px)";}}
                             onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)";}}>
@@ -4768,57 +4769,193 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         );
                       })}
                     </div>
-                    {/* Drilldown */}
-                    {targetDrilldown && (() => {
-                      const tile=TILES.find(t=>t.key===targetDrilldown.key);
-                      const td=getTileDeals(targetDrilldown.key);
-                      const tT=td.reduce((s,d)=>s+(d.targetAmount||0),0);
-                      const tC=td.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
-                      const tP=td.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
-                      const tG=Math.max(0,tT-tC);
+                    {/* ── DRILLDOWN LEVEL 2: Rep → Client List ── */}
+                    {targetDrilldown && nshRepDrill && (()=>{
+                      const tile    = TILES.find(t=>t.key===targetDrilldown.key);
+                      const repObj  = REPS.find(r=>r.id===nshRepDrill);
+                      const rd      = getTileDeals(targetDrilldown.key).filter(d=>d.repId===nshRepDrill);
+                      const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
+                      const rC=rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                      const rG=Math.max(0,rT-rC);
+                      const rPct=rT>0?Math.round((rC/rT)*100):0;
+                      const rsc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
                       return (
                         <div style={{marginTop:16}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-                            <button onClick={()=>setTargetDrilldown(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← Back</button>
-                            <div style={{width:28,height:28,borderRadius:6,background:`${tile.color}22`,border:`1px solid ${tile.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:tile.color,fontWeight:700}}>{tile.icon}</div>
-                            <div className="sans" style={{fontSize:15,fontWeight:700}}>{tile.label}</div>
-                            <div style={{fontSize:11,color:C.dim}}>{td.length} clients</div>
+                          {/* Breadcrumb */}
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
+                            <button onClick={()=>{setTargetDrilldown(null);setNshRepDrill(null);}} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← All Regions</button>
+                            <button onClick={()=>setNshRepDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← {tile?.label} Reps</button>
+                            <div className="sans" style={{fontSize:15,fontWeight:700}}>{repObj?.name}</div>
+                            <div style={{fontSize:11,color:C.dim}}>{repObj?.region} · {rd.length} client{rd.length!==1?"s":""}</div>
                           </div>
-                          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:14}}>
-                            {[["Target",fmtR(tT),C.blue],["Achieved",fmtR(tC),C.green],["Pipeline",fmtR(tP),C.accent],["Shortfall",fmtR(tG),tG===0?C.green:C.red],["Achieve %",`${tT>0?Math.round((tC/tT)*100):0}%`,tT>0&&tC>=tT?C.green:C.accent]].map(([l,v,c])=>(
-                              <div key={l} style={{background:C.surface,border:`1px solid ${C.border}`,borderTop:`2px solid ${c}`,borderRadius:7,padding:"10px 12px"}}>
-                                <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>{l}</div>
-                                <div className="sans" style={{fontSize:16,fontWeight:700,color:c}}>{v}</div>
+                          {/* 4 stat cards */}
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+                            {[
+                              {label:"TOTAL TARGET",value:fmtR(rT),  color:C.accent,  sub:repObj?.region},
+                              {label:"ACHIEVED",    value:fmtR(rC),  color:C.green,   sub:"Closed deals"},
+                              {label:"SHORTFALL",   value:fmtR(rG),  color:rG===0?C.green:C.red, sub:rG===0?"On target":"Gap to close"},
+                              {label:"% COMPLETE",  value:`${rPct}%`,color:rsc,       sub:"vs target"},
+                            ].map(card=>(
+                              <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                                <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                                <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color,marginBottom:2}}>{card.value}</div>
+                                <div style={{fontSize:9,color:C.muted}}>{card.sub}</div>
                               </div>
                             ))}
                           </div>
+                          <div style={{height:5,background:C.s3,borderRadius:3,overflow:"hidden",marginBottom:14}}>
+                            <div style={{height:"100%",width:`${Math.min(rPct,100)}%`,background:rsc,borderRadius:3}}/>
+                          </div>
+                          {/* Client table */}
                           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                              <thead><tr>{["Client","Rep","Type","Target","Achieved","Pipeline","Shortfall","Stage"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                              <thead><tr>{["Client","Deal Type","Target","Achieved","Shortfall","Stage"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                               <tbody>
-                                {td.length===0&&<tr><td colSpan={8} style={{padding:24,textAlign:"center",color:C.muted}}>No deals.</td></tr>}
-                                {td.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
-                                  const rep=REPS.find(r=>r.id===d.repId);
+                                {rd.length===0&&<tr><td colSpan={6} style={{padding:24,textAlign:"center",color:C.muted}}>No clients.</td></tr>}
+                                {rd.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Proposal Accepted"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Proposal Accepted"?a.amount:0))).map(d=>{
                                   const ach=d.outcome==="Proposal Accepted"?d.amount:0;
-                                  const pip=!["Proposal Accepted","Not Interested"].includes(d.outcome)?d.amount:0;
                                   const sf=Math.max(0,(d.targetAmount||0)-ach);
                                   const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                   return (
                                     <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                                      <td style={{padding:"9px 12px"}}><div className="sans" style={{fontWeight:700,fontSize:13}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:5,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
-                                      <td style={{padding:"9px 12px",fontSize:11,color:C.dim}}>{rep?.name||"—"}</td>
-                                      <td style={{padding:"9px 12px"}}><span style={{background:C.s3,color:C.dim,padding:"2px 6px",borderRadius:4,fontSize:10}}>{d.dealType||"—"}</span></td>
-                                      <td style={{padding:"9px 12px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
-                                      <td style={{padding:"9px 12px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
-                                      <td style={{padding:"9px 12px",color:pip>0?C.accent:C.muted}}>{pip>0?fmtR(pip):"—"}</td>
-                                      <td style={{padding:"9px 12px",color:sf===0?C.green:C.red,fontWeight:600}}>{sf===0?"✓":fmtR(sf)}</td>
-                                      <td style={{padding:"9px 12px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
+                                      <td style={{padding:"10px 14px"}}>
+                                        <div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>
+                                        {d.contactName&&<div style={{fontSize:10,color:C.dim}}>{d.contactName}</div>}
+                                        {d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:5,fontSize:9,fontWeight:700,marginTop:2,display:"inline-block"}}>TOP 5</span>}
+                                      </td>
+                                      <td style={{padding:"10px 14px"}}><span style={{background:C.s3,color:C.dim,padding:"2px 6px",borderRadius:4,fontSize:10}}>{d.dealType||"—"}</span></td>
+                                      <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
+                                      <td style={{padding:"10px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>
+                                        {ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}
+                                      </td>
+                                      <td style={{padding:"10px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
+                                      <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
                                     </tr>
                                   );
                                 })}
                               </tbody>
                             </table>
                           </div>
+                        </div>
+                      );
+                    })()}
+
+                    {/* ── DRILLDOWN LEVEL 1: Region → Rep Tiles ── */}
+                    {targetDrilldown && !nshRepDrill && (() => {
+                      const tile     = TILES.find(t=>t.key===targetDrilldown.key);
+                      const td       = getTileDeals(targetDrilldown.key);
+                      const tT=td.reduce((s,d)=>s+(d.targetAmount||0),0);
+                      const tC=td.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                      const tG=Math.max(0,tT-tC);
+                      const tPct=tT>0?Math.round((tC/tT)*100):0;
+                      const tsc=tPct>=80?C.green:tPct>=50?C.accent:C.red;
+                      // Geographic regions: drill to rep tiles; deal-type tiles: flat list
+                      const isGeoTile = ["North","South","West","East","Odisha"].includes(targetDrilldown.key);
+                      const regionReps = isGeoTile ? REPS.filter(r=>r.region===targetDrilldown.key) : [];
+                      return (
+                        <div style={{marginTop:16}}>
+                          {/* Back + header */}
+                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
+                            <button onClick={()=>{setTargetDrilldown(null);setNshRepDrill(null);}} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← All Regions</button>
+                            <div style={{width:28,height:28,borderRadius:6,background:`${tile?.color}22`,border:`1px solid ${tile?.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:tile?.color,fontWeight:700}}>{tile?.icon}</div>
+                            <div className="sans" style={{fontSize:15,fontWeight:700}}>{tile?.label}</div>
+                            <div style={{fontSize:11,color:C.dim}}>{td.length} deal{td.length!==1?"s":""}</div>
+                          </div>
+                          {/* 4 stat cards for this region */}
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+                            {[
+                              {label:"TOTAL TARGET",value:fmtR(tT),  color:C.accent,  sub:tile?.label+" region"},
+                              {label:"ACHIEVED",    value:fmtR(tC),  color:C.green,   sub:"Closed deals"},
+                              {label:"SHORTFALL",   value:fmtR(tG),  color:tG===0?C.green:C.red, sub:tG===0?"On target":"Gap to close"},
+                              {label:"% COMPLETE",  value:`${tPct}%`,color:tsc,       sub:"vs target"},
+                            ].map(card=>(
+                              <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                                <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                                <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color,marginBottom:2}}>{card.value}</div>
+                                <div style={{fontSize:9,color:C.muted}}>{card.sub}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{height:5,background:C.s3,borderRadius:3,overflow:"hidden",marginBottom:16}}>
+                            <div style={{height:"100%",width:`${Math.min(tPct,100)}%`,background:tsc,borderRadius:3}}/>
+                          </div>
+
+                          {/* Geographic: Rep tiles; Deal-type: flat client list */}
+                          {isGeoTile ? (
+                            <>
+                              <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>Sales Reps — click to view clients</div>
+                              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
+                                {regionReps.map(rep=>{
+                                  const rd=td.filter(d=>d.repId===rep.id);
+                                  const rT2=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
+                                  const rC2=rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
+                                  const rP2=rd.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
+                                  const rPct2=rT2>0?Math.round((rC2/rT2)*100):0;
+                                  const sc2=rPct2>=80?C.green:rPct2>=50?C.accent:C.red;
+                                  const rAtRisk=rd.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
+                                  return (
+                                    <div key={rep.id} onClick={()=>setNshRepDrill(rep.id)}
+                                      style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px",cursor:"pointer",transition:"border-color .15s,transform .1s"}}
+                                      onMouseOver={e=>{e.currentTarget.style.borderColor=sc2;e.currentTarget.style.transform="translateY(-2px)";}}
+                                      onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)";}}>
+                                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
+                                        <div>
+                                          <div className="sans" style={{fontWeight:700,fontSize:14,marginBottom:2}}>{rep.name}</div>
+                                          <div style={{fontSize:10,color:C.dim}}>{rep.role} · {rd.length} client{rd.length!==1?"s":""}</div>
+                                        </div>
+                                        <div style={{textAlign:"right"}}>
+                                          <div className="sans" style={{fontSize:26,fontWeight:800,color:sc2,lineHeight:1}}>{rPct2}%</div>
+                                          <div style={{fontSize:9,color:C.dim}}>achieved</div>
+                                        </div>
+                                      </div>
+                                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
+                                        {[["Target",fmtR(rT2)],["Closed",fmtR(rC2)],["Pipeline",fmtR(rP2)],["Shortfall",fmtR(Math.max(0,rT2-rC2))]].map(([l,v])=>(
+                                          <div key={l} style={{background:C.s2,borderRadius:4,padding:"5px 8px"}}>
+                                            <div style={{fontSize:9,color:C.dim}}>{l}</div>
+                                            <div className="sans" style={{fontSize:13,fontWeight:700,color:l==="Closed"?C.green:l==="Shortfall"?(rT2-rC2<=0?C.green:C.red):C.text}}>{v}</div>
+                                          </div>
+                                        ))}
+                                      </div>
+                                      <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                                        <div style={{height:"100%",width:`${Math.min(rPct2,100)}%`,background:sc2}}/>
+                                      </div>
+                                      <div style={{display:"flex",justifyContent:"space-between",marginTop:6,alignItems:"center"}}>
+                                        {rAtRisk>0&&<span style={{background:`${C.red}22`,color:C.red,padding:"1px 6px",borderRadius:5,fontSize:9,fontWeight:700}}>{rAtRisk} at risk</span>}
+                                        <span style={{fontSize:9,color:C.dim,marginLeft:"auto"}}>View clients →</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </>
+                          ) : (
+                            /* Deal-type tiles: flat client list */
+                            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                                <thead><tr>{["Client","Rep","Deal Type","Target","Achieved","Shortfall","Stage"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                                <tbody>
+                                  {td.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No deals.</td></tr>}
+                                  {td.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
+                                    const rep=REPS.find(r=>r.id===d.repId);
+                                    const ach=d.outcome==="Proposal Accepted"?d.amount:0;
+                                    const sf=Math.max(0,(d.targetAmount||0)-ach);
+                                    const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                    return (
+                                      <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                        <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:5,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
+                                        <td style={{padding:"9px 14px",fontSize:11,color:C.dim}}>{rep?.name||"—"}</td>
+                                        <td style={{padding:"9px 14px"}}><span style={{background:C.s3,color:C.dim,padding:"2px 6px",borderRadius:4,fontSize:10}}>{d.dealType||"—"}</span></td>
+                                        <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
+                                        <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                        <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
+                                        <td style={{padding:"9px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
                         </div>
                       );
                     })()}
