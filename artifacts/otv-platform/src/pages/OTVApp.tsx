@@ -329,6 +329,82 @@ const SEED_PROPERTIES = [
 ];
 
 
+const IP_CATALOG = [
+  {
+    id:"ip1", name:"Odia Idol Season 3", type:"Music Reality Show", channel:"OTV", quarter:"Q1 FY26", airDates:"Apr – Jun 2026",
+    elements:[
+      {id:"ie1",  label:"Title Sponsor",                    rackRate:12000000, repId:5,    client:"Havells India",    closedAt:10500000, status:"Committed"},
+      {id:"ie2",  label:"Co-Presenter",                     rackRate:7000000,  repId:22,   client:"Asian Paints",     closedAt:null,     status:"In Discussion"},
+      {id:"ie3",  label:"Powered By",                       rackRate:5000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie4",  label:"Associate Sponsor – A",            rackRate:3000000,  repId:1,    client:"Daikin India",     closedAt:2800000,  status:"Committed"},
+      {id:"ie5",  label:"Associate Sponsor – B",            rackRate:3000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie6",  label:"Product Integration (Top 5 Ep.)",  rackRate:2000000,  repId:7,    client:"Maruti Suzuki",    closedAt:null,     status:"In Discussion"},
+      {id:"ie7",  label:"Product Integration (Finale)",     rackRate:2500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie8",  label:"On-Ground Auditions Sponsor",      rackRate:1500000,  repId:2,    client:"Berger Paints",    closedAt:1200000,  status:"Committed"},
+      {id:"ie9",  label:"Social Media Package",             rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+    ]
+  },
+  {
+    id:"ip2", name:"Tarang Music Awards 2026", type:"Award Show", channel:"Tarang TV", quarter:"Q1 FY26", airDates:"May 2026",
+    elements:[
+      {id:"ie10", label:"Title Sponsor",                    rackRate:10000000, repId:5,    client:"ITC Limited",      closedAt:null,     status:"In Discussion"},
+      {id:"ie11", label:"Co-Presenter",                     rackRate:6000000,  repId:22,   client:"HUL",              closedAt:5500000,  status:"Committed"},
+      {id:"ie12", label:"Best Playback Award Sponsor",      rackRate:2000000,  repId:23,   client:"Samsung India",    closedAt:1800000,  status:"Committed"},
+      {id:"ie13", label:"Best Debut Award Sponsor",         rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie14", label:"Red Carpet Partner",               rackRate:2500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie15", label:"Digital Streaming Sponsor",        rackRate:2000000,  repId:25,   client:"Airtel",           closedAt:null,     status:"In Discussion"},
+      {id:"ie16", label:"Trophy Partner",                   rackRate:2500000,  repId:24,   client:"Titan Company",    closedAt:2000000,  status:"Committed"},
+      {id:"ie17", label:"Social Media Package",             rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+    ]
+  },
+  {
+    id:"ip3", name:"Odia Film Awards (OFA) 2026", type:"Award Show", channel:"OTV", quarter:"Q2 FY26", airDates:"Jul 2026",
+    elements:[
+      {id:"ie18", label:"Title Sponsor",                    rackRate:8000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie19", label:"Co-Presenter",                     rackRate:5000000,  repId:14,   client:"Tata Steel",       closedAt:null,     status:"In Discussion"},
+      {id:"ie20", label:"Best Film Award Sponsor",          rackRate:2000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie21", label:"Best Director Award Sponsor",      rackRate:1500000,  repId:3,    client:"ITC Limited",      closedAt:1200000,  status:"Committed"},
+      {id:"ie22", label:"Best Actor Award Sponsor",         rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie23", label:"Best Actress Award Sponsor",       rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie24", label:"Digital Voting Partner",           rackRate:1000000,  repId:15,   client:"Reliance Jio",     closedAt:null,     status:"In Discussion"},
+      {id:"ie25", label:"Red Carpet Partner",               rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+    ]
+  },
+  {
+    id:"ip4", name:"Dance Odia Dance Season 4", type:"Dance Reality Show", channel:"OTV", quarter:"Q1 FY26", airDates:"Apr – May 2026",
+    elements:[
+      {id:"ie26", label:"Title Sponsor",                    rackRate:7000000,  repId:4,    client:"Reliance Retail",  closedAt:6000000,  status:"Committed"},
+      {id:"ie27", label:"Co-Presenter",                     rackRate:4000000,  repId:19,   client:"Flipkart",         closedAt:null,     status:"In Discussion"},
+      {id:"ie28", label:"Powered By",                       rackRate:2500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie29", label:"Associate Sponsor",                rackRate:2000000,  repId:20,   client:"Paytm",            closedAt:1700000,  status:"Committed"},
+      {id:"ie30", label:"Finale Night Sponsor",             rackRate:2500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie31", label:"Social Media Package",             rackRate:1000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+    ]
+  },
+  {
+    id:"ip5", name:"Tarang Cine Awards 2026", type:"Award Show", channel:"Tarang TV", quarter:"Q2 FY26", airDates:"Aug 2026",
+    elements:[
+      {id:"ie32", label:"Title Sponsor",                    rackRate:8000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie33", label:"Co-Presenter",                     rackRate:5000000,  repId:22,   client:"Samsung India",    closedAt:null,     status:"In Discussion"},
+      {id:"ie34", label:"Powered By",                       rackRate:3000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie35", label:"Star Performance Sponsor",         rackRate:2000000,  repId:25,   client:"Marico",           closedAt:1800000,  status:"Committed"},
+      {id:"ie36", label:"Digital Voting Partner",           rackRate:1000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie37", label:"Social Media Package",             rackRate:1000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+    ]
+  },
+  {
+    id:"ip6", name:"Super Singer Odia Season 2", type:"Kids Singing Reality", channel:"OTV", quarter:"Q1 FY26", airDates:"Apr – Jun 2026",
+    elements:[
+      {id:"ie38", label:"Title Sponsor",                    rackRate:5000000,  repId:26,   client:"Odisha Tourism",   closedAt:4500000,  status:"Committed"},
+      {id:"ie39", label:"Co-Presenter",                     rackRate:3500000,  repId:28,   client:"LIC India",        closedAt:null,     status:"In Discussion"},
+      {id:"ie40", label:"Powered By",                       rackRate:2500000,  repId:27,   client:"IDBI Bank",        closedAt:2000000,  status:"Committed"},
+      {id:"ie41", label:"Associate Sponsor",                rackRate:2000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+      {id:"ie42", label:"School Auditions Sponsor",         rackRate:1000000,  repId:29,   client:"BPCL",             closedAt:null,     status:"In Discussion"},
+      {id:"ie43", label:"Digital Package",                  rackRate:1000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
+    ]
+  },
+];
+
 const SEED_INTERNAL_REQS = [
   { id:"ir1", type:"Approval",     raisedBy:"rep_arjun", raisedByName:"Arjun Mishra", repId:1, dealId:"d7", clientCompany:"Daikin India",   dept:"NSH",            subject:"Discount approval — 12% off rate card",       details:"Client pushing for 12% off. Standard is 8%. Need NSH sign-off to close.",        status:"Pending", raisedAt:D3,    slaHours:48, resolvedAt:null, resolverNote:"" },
   { id:"ir2", type:"Support",      raisedBy:"rep_vikram", raisedByName:"Vikram Sen",   repId:5, dealId:"d1", clientCompany:"Havells India",  dept:"Sales Strategy", subject:"H2 sponsorship deck for Havells",               details:"Need a customised deck with Odia Idol + Tarang Music Awards for Havells CMO.",    status:"In Progress", raisedAt:D3, slaHours:48, resolvedAt:null, resolverNote:"" },
@@ -4177,78 +4253,103 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 })()}
 
                 {/* ── PROPERTIES / IPs TAB ── */}
-                {rtTab==="properties" && (
-                  <div>
-                    {(properties||[]).filter(p=>qMatch(p.quarter)).map(prop=>{
-                      const filled = prop.slots.filter(s=>s.status==="Committed").length;
-                      const inDisc = prop.slots.filter(s=>s.status==="In Discussion").length;
-                      const filledVal = prop.slots.filter(s=>s.status==="Committed").reduce((s,x)=>s+x.value,0);
-                      const fillPct = prop.totalValue>0?Math.round((filledVal/prop.totalValue)*100):0;
-                      const fillColor = fillPct>=80?C.green:fillPct>=50?C.accent:C.red;
-                      return (
-                        <div key={prop.id} className="card" style={{marginBottom:12,padding:"16px 18px"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
-                            <div>
-                              <div className="sans" style={{fontSize:15,fontWeight:700,marginBottom:3}}>{prop.name}</div>
-                              <div style={{fontSize:11,color:C.dim}}>{prop.type} · {prop.channel} · {prop.quarter}</div>
-                            </div>
-                            <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:16,fontWeight:700,color:fillColor}}>{fmtR(filledVal)} <span style={{fontSize:11,color:C.dim,fontWeight:400}}>/ {fmtR(prop.totalValue)}</span></div>
-                              <div style={{fontSize:10,color:C.dim,marginTop:2}}>{filled} committed · {inDisc} in discussion · {prop.slots.filter(s=>s.status==="Available").length} available</div>
-                              <div style={{marginTop:5,height:3,width:140,background:C.s3,borderRadius:2,marginLeft:"auto"}}><div style={{height:"100%",width:`${fillPct}%`,background:fillColor,borderRadius:2}}/></div>
-                            </div>
-                          </div>
-                          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-                            {prop.slots.map(slot=>{
-                              const slotColor = slot.status==="Committed"?C.green:slot.status==="In Discussion"?C.orange:C.muted;
-                              const rep = slot.repId?REPS.find(r=>r.id===slot.repId):null;
-                              return (
-                                <div key={slot.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:C.s2,borderRadius:6,border:`1px solid ${slotColor}33`}}>
-                                  <span style={{fontWeight:700,fontSize:12,minWidth:120}}>{slot.label}</span>
-                                  <span style={{color:C.accent,fontWeight:700,fontSize:12,minWidth:70}}>{fmtR(slot.value)}</span>
-                                  <span style={{background:`${slotColor}22`,color:slotColor,padding:"1px 8px",borderRadius:8,fontSize:10,fontWeight:700,minWidth:90,textAlign:"center"}}>{slot.status}</span>
-                                  <span style={{fontSize:11,color:C.dim,flex:1}}>{slot.clientCompany||"—"}{rep?` · ${rep.name}`:""}</span>
-                                  {slot.status==="Available"&&(
-                                    <button onClick={()=>{
-                                      const client = "TBD"; // Rep fills in via deal assignment
-                                      setProperties(p=>p.map(pr=>pr.id===prop.id?{...pr,slots:pr.slots.map(s=>s.id===slot.id?{...s,status:"In Discussion",clientCompany:client,repId:user_role?.repId||null}:s)}:pr));
-                                    }} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Assign</button>
-                                  )}
-                                  {/* Log contribution — any rep can log what they've brought */}
-                                  <button onClick={()=>{
-                                    const amtStr = "0"; const parsed = 0; // TODO: replace with inline input
-                                    if(!parsed){ showToast("Use Revenue Log to record slot contribution","ok"); return; }
-                                    // Store as revenue entry
-                                    const entry = {id:`re${Date.now()}`,repId:user_role?.repId||null,clientCompany:prop.name+" — "+slot.label,dealType:"IPs",amount:parsed,invoiceRef:"",date:TODAY,quarter:entryQ,notes:`IP contribution: ${prop.name} ${slot.label}`};
-                                    setRevenueEntries(p=>[entry,...p]);
-                                    showToast(`₹${(parsed/100000).toFixed(1)}L logged for ${slot.label} ✓`);
-                                  }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Log Contribution</button>
-                                  {slot.status==="In Discussion"&&(
-                                    <>
-                                      <button onClick={()=>setProperties(p=>p.map(pr=>pr.id===prop.id?{...pr,slots:pr.slots.map(s=>s.id===slot.id?{...s,status:"Committed"}:s)}:pr))}
-                                        style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark Committed</button>
-                                      <button onClick={()=>{showToast("Note feature coming soon","ok");}}
-                                        style={{background:C.s3,border:"none",color:C.dim,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Add Note</button>
-                                      <button onClick={()=>setProperties(p=>p.map(pr=>pr.id===prop.id?{...pr,slots:pr.slots.map(s=>s.id===slot.id?{...s,status:"Available",clientCompany:"",repId:null}:s)}:pr))}
-                                        style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Release</button>
-                                    </>
-                                  )}
-                                  {slot.status==="Committed"&&(
-                                    <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Approval",dept:"NSH",subject:`PO follow-up: ${prop.name} — ${slot.label}`,details:`${slot.clientCompany} committed to ${slot.label} slot. Need NSH to confirm PO receipt.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:user_role?.repId||null,dealId:null,clientCompany:slot.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("PO follow-up escalated → NSH ✓");}}
-                                      style={{background:`${C.orange}18`,border:"none",color:C.orange,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Escalate PO</button>
-                                  )}
+                {rtTab==="properties" && (()=>{
+                  const visibleIPs = IP_CATALOG.filter(ip=>qMatch(ip.quarter));
+                  // Role gate: who can see the actual "closed at" price for an element
+                  const canSeeClosedAt = (elem) =>
+                    isRH || isNSH || isCRORole || isStrategy || isAdmin ||
+                    (isRep && elem.repId === user_role?.repId);
+                  const stColor = s => s==="Committed"?C.green:s==="In Discussion"?C.orange:C.muted;
+                  return (
+                    <div>
+                      {visibleIPs.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No IPs scheduled for {filterQ}.</div>}
+                      {visibleIPs.map(ip=>{
+                        const totalRack   = ip.elements.reduce((s,e)=>s+e.rackRate,0);
+                        const committed   = ip.elements.filter(e=>e.status==="Committed");
+                        const inDisc      = ip.elements.filter(e=>e.status==="In Discussion");
+                        const available   = ip.elements.filter(e=>e.status==="Available");
+                        const committedVal= committed.reduce((s,e)=>s+e.rackRate,0);
+                        const discVal     = inDisc.reduce((s,e)=>s+e.rackRate,0);
+                        const soldPct     = totalRack>0?Math.round((committedVal/totalRack)*100):0;
+                        const pipelinePct = totalRack>0?Math.round((discVal/totalRack)*100):0;
+                        const hdrColor    = soldPct>=80?C.green:soldPct>=50?C.accent:C.red;
+                        return (
+                          <div key={ip.id} className="card" style={{marginBottom:14,padding:"16px 18px"}}>
+                            {/* IP header */}
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:12}}>
+                              <div>
+                                <div className="sans" style={{fontSize:15,fontWeight:700,marginBottom:3}}>{ip.name}</div>
+                                <div style={{fontSize:11,color:C.dim}}>{ip.type} · {ip.channel} · {ip.airDates}</div>
+                              </div>
+                              <div style={{textAlign:"right"}}>
+                                <div style={{fontSize:11,color:C.dim,marginBottom:3}}>Rack Value: <span style={{color:C.text,fontWeight:700}}>{fmtR(totalRack)}</span></div>
+                                <div style={{fontSize:10,color:C.dim}}>
+                                  <span style={{color:C.green,fontWeight:700}}>{committed.length} committed</span>
+                                  {" · "}
+                                  <span style={{color:C.orange,fontWeight:700}}>{inDisc.length} in discussion</span>
+                                  {" · "}
+                                  <span style={{color:C.muted}}>{available.length} available</span>
                                 </div>
-                              );
-                            })}
+                              </div>
+                            </div>
+                            {/* Progress bar: committed (green) + pipeline (accent) */}
+                            <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",position:"relative",marginBottom:14}}>
+                              <div style={{position:"absolute",left:0,height:"100%",width:`${Math.min(soldPct,100)}%`,background:C.green,borderRadius:2}}/>
+                              <div style={{position:"absolute",left:`${soldPct}%`,height:"100%",width:`${Math.min(pipelinePct,100-soldPct)}%`,background:`${C.accent}88`,borderRadius:2}}/>
+                            </div>
+                            {/* Elements table */}
+                            <div style={{background:C.s2,borderRadius:6,overflow:"hidden"}}>
+                              <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                                <thead>
+                                  <tr>
+                                    {["Element","Rack Rate","Status","Client","Sales Rep","Closed At"].map((h,hi)=>(
+                                      <th key={h} style={{padding:"8px 12px",background:C.s3,color:hi===5&&!canSeeClosedAt({repId:null})?C.s3:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>
+                                        {hi===5 && !isRH && !isNSH && !isCRORole && !isStrategy && !isAdmin ? "Closed At 🔒" : h}
+                                      </th>
+                                    ))}
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {ip.elements.map((elem,ei)=>{
+                                    const rep = elem.repId?REPS.find(r=>r.id===elem.repId):null;
+                                    const sc  = stColor(elem.status);
+                                    const see = canSeeClosedAt(elem);
+                                    return (
+                                      <tr key={elem.id} style={{borderBottom:`1px solid ${C.border}`,background:ei%2===0?"transparent":C.s2+"44"}}
+                                        onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                                        onMouseOut={e=>e.currentTarget.style.background=ei%2===0?"transparent":C.s2+"44"}>
+                                        <td style={{padding:"10px 12px",fontWeight:600,color:C.text}}>{elem.label}</td>
+                                        <td style={{padding:"10px 12px",fontWeight:700,color:C.accent,whiteSpace:"nowrap"}}>{fmtR(elem.rackRate)}</td>
+                                        <td style={{padding:"10px 12px"}}>
+                                          <span style={{background:`${sc}22`,color:sc,padding:"2px 8px",borderRadius:8,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{elem.status}</span>
+                                        </td>
+                                        <td style={{padding:"10px 12px",color:elem.client?C.text:C.muted,fontSize:11}}>{elem.client||"—"}</td>
+                                        <td style={{padding:"10px 12px",color:rep?C.dim:C.muted,fontSize:11}}>{rep?rep.name:"—"}</td>
+                                        <td style={{padding:"10px 12px",whiteSpace:"nowrap"}}>
+                                          {elem.status==="Available" ? (
+                                            <span style={{color:C.muted,fontSize:11}}>—</span>
+                                          ) : see ? (
+                                            elem.closedAt!=null ? (
+                                              <span style={{color:C.green,fontWeight:700}}>{fmtR(elem.closedAt)}
+                                                {elem.closedAt<elem.rackRate&&<span style={{color:C.red,fontSize:10,marginLeft:5}}>({Math.round((1-elem.closedAt/elem.rackRate)*100)}% off rack)</span>}
+                                              </span>
+                                            ) : <span style={{color:C.orange,fontSize:11}}>Pending close</span>
+                                          ) : (
+                                            <span style={{color:C.muted,fontSize:11,fontStyle:"italic"}}>Confidential</span>
+                                          )}
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                              </table>
+                            </div>
                           </div>
-                        </div>
-                      );
-                    })}
-                    {!(properties||[]).filter(p=>qMatch(p.quarter)).length&&(
-                      <div style={{textAlign:"center",padding:40,color:C.muted}}>No properties defined for {filterQ}. Add them via Import Data.</div>
-                    )}
-                  </div>
-                )}
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
 
                 {/* ── ACTIVE DEALS TAB ── */}
                 {/* ── BRAND SOLUTIONS TAB ── */}
