@@ -5217,7 +5217,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </select>
                       </div>
                       <div>
-                        <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Directed to *</div>
+                        <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Who do you need it from? *</div>
                         <select value={irForm.dept} onChange={e=>setIrForm(f=>({...f,dept:e.target.value}))}
                           style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
                           {["NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
