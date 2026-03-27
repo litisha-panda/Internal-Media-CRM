@@ -1466,6 +1466,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [addDealOpen, setAddDealOpen] = useState(false);
   const [logOpen, setLogOpen]     = useState(false);
   const [viewMeetingId, setViewMeetingId] = useState<string|null>(null);
+  const [meetingEditMode, setMeetingEditMode] = useState(false);
+  const [meetingEditForm, setMeetingEditForm] = useState<any>({});
   const [targetDrilldown, setTargetDrilldown] = useState(null); // { key, label, color, icon } — NSH region tile
   const [nshRepDrill,    setNshRepDrill]      = useState(null); // rep id — NSH → region → rep drill
   const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
@@ -10241,78 +10243,177 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       {viewMeetingId && (()=>{
         const vm = meetings.find(m=>m.id===viewMeetingId);
         if (!vm) return null;
-        const statusColor = vm.status==="Closed"?C.green:vm.status==="Positive"?C.blue:vm.status==="Follow-up Needed"?C.orange:C.dim;
+        const ef = meetingEditMode ? meetingEditForm : vm;
+        const statusColor = (ef.status||vm.status||"")===("Closed")?C.green:(ef.status||vm.status||"")===("Positive")?C.blue:(ef.status||vm.status||"")===("Follow-up Needed")?C.orange:C.dim;
+        const canEdit = isRep ? vm.repId===user_role?.repId : true;
+        const setEf = (patch) => setMeetingEditForm(f=>({...f,...patch}));
+        const closeMeetingModal = () => { setViewMeetingId(null); setMeetingEditMode(false); setMeetingEditForm({}); };
+        const startEdit = () => { setMeetingEditForm({...vm}); setMeetingEditMode(true); };
+        const saveEdit = () => {
+          if (!meetingEditForm.discussion?.trim()) { alert("What Happened is required"); return; }
+          setMeetings(p=>p.map(m=>m.id===viewMeetingId?{...m,...meetingEditForm}:m));
+          setMeetingEditMode(false);
+          showToast("Meeting updated ✓");
+        };
         return (
-          <div className="overlay" onClick={()=>setViewMeetingId(null)}>
-            <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:520,maxHeight:"85vh",overflowY:"auto"}}>
+          <div className="overlay" onClick={closeMeetingModal}>
+            <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:560,maxHeight:"88vh",overflowY:"auto"}}>
               {/* Header */}
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
                 <div>
-                  <div className="sans" style={{fontSize:17,fontWeight:700,color:C.text}}>{vm.clientCompany}</div>
-                  <div style={{fontSize:11,color:C.dim,marginTop:2}}>
-                    {vm.date} · {vm.loggedAt||"—"} &nbsp;·&nbsp; {vm.meetingType||"Physical"}
-                    {vm.pitchType&&<>&nbsp;·&nbsp; <span style={{color:C.accent}}>{vm.pitchType}</span></>}
+                  {meetingEditMode
+                    ? <input value={ef.clientCompany||""} onChange={e=>setEf({clientCompany:e.target.value})} className="sans" style={{fontSize:17,fontWeight:700,color:C.text,background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 8px",width:220}} />
+                    : <div className="sans" style={{fontSize:17,fontWeight:700,color:C.text}}>{vm.clientCompany}</div>
+                  }
+                  <div style={{fontSize:11,color:C.dim,marginTop:4,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                    {meetingEditMode
+                      ? <input type="date" value={ef.date||""} onChange={e=>setEf({date:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim}} />
+                      : <span>{vm.date}</span>
+                    }
+                    {meetingEditMode
+                      ? <input type="time" value={ef.loggedAt||""} onChange={e=>setEf({loggedAt:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim,width:90}} />
+                      : <span>{vm.loggedAt||"—"}</span>
+                    }
+                    {meetingEditMode
+                      ? <select value={ef.meetingType||"Physical"} onChange={e=>setEf({meetingType:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim}}>
+                          {["Physical","Online","Phone Call"].map(t=><option key={t}>{t}</option>)}
+                        </select>
+                      : <span>{vm.meetingType||"Physical"}</span>
+                    }
+                    {meetingEditMode
+                      ? <select value={ef.pitchType||""} onChange={e=>setEf({pitchType:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.accent}}>
+                          <option value="">No pitch type</option>
+                          {["Linear TV","IPs","Digital","Media Solutions","Integrated Packages","FCT","Generic"].map(t=><option key={t}>{t}</option>)}
+                        </select>
+                      : vm.pitchType&&<span style={{color:C.accent}}>{vm.pitchType}</span>
+                    }
                   </div>
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  <span style={{background:`${statusColor}22`,color:statusColor,padding:"3px 10px",borderRadius:5,fontSize:11,fontWeight:700}}>{vm.status||"Done"}</span>
-                  <button onClick={()=>setViewMeetingId(null)} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+                  {meetingEditMode
+                    ? <select value={ef.status||"Meeting Done"} onChange={e=>setEf({status:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 8px",color:statusColor,fontWeight:700}}>
+                        {MEETING_STATUS.map(s=><option key={s}>{s}</option>)}
+                      </select>
+                    : <span style={{background:`${statusColor}22`,color:statusColor,padding:"3px 10px",borderRadius:5,fontSize:11,fontWeight:700}}>{vm.status||"Done"}</span>
+                  }
+                  <button onClick={closeMeetingModal} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
                 </div>
               </div>
 
               {/* Contact row */}
-              {(vm.contactName||vm.phone)&&(
-                <div style={{background:C.s2,borderRadius:6,padding:"8px 12px",marginBottom:14,display:"flex",gap:16,flexWrap:"wrap",fontSize:11,color:C.dim}}>
-                  {vm.contactName&&<span>🧑 {vm.contactName}</span>}
-                  {vm.phone&&<span>📱 {vm.phone}</span>}
-                  {vm.repName&&<span>👤 Rep: {vm.repName}</span>}
+              <div style={{background:C.s2,borderRadius:6,padding:"8px 12px",marginBottom:14}}>
+                <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:11,color:C.dim,alignItems:"center"}}>
+                  {meetingEditMode
+                    ? <>
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          <span>🧑</span>
+                          <input value={ef.contactName||""} onChange={e=>setEf({contactName:e.target.value})} placeholder="Contact name" style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 8px",width:140}} />
+                        </div>
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          <span>📱</span>
+                          <input value={ef.phone||""} onChange={e=>setEf({phone:e.target.value})} placeholder="Phone" style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 8px",width:120}} />
+                        </div>
+                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                          <span>🎯</span>
+                          <select value={ef.contactLevel||""} onChange={e=>setEf({contactLevel:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px"}}>
+                            <option value="">Contact level…</option>
+                            {["C-Suite / Owner","VP / GM","Junior/Exec","Agency"].map(l=><option key={l}>{l}</option>)}
+                          </select>
+                        </div>
+                      </>
+                    : <>
+                        {vm.contactName&&<span>🧑 {vm.contactName}</span>}
+                        {vm.phone&&<span>📱 {vm.phone}</span>}
+                        {vm.contactLevel&&<span>🎯 {vm.contactLevel}</span>}
+                        {vm.repName&&<span>👤 Rep: {vm.repName}</span>}
+                      </>
+                  }
                 </div>
-              )}
+              </div>
 
               {/* What happened */}
-              {vm.discussion&&(
-                <div style={{marginBottom:14}}>
-                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>What Happened</div>
-                  <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.discussion}</div>
-                </div>
-              )}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>What Happened {meetingEditMode&&<span style={{color:C.red,fontWeight:400}}>*</span>}</div>
+                {meetingEditMode
+                  ? <textarea rows={3} value={ef.discussion||""} onChange={e=>setEf({discussion:e.target.value})} placeholder="What was discussed, how the client reacted..." style={{width:"100%",fontSize:12,resize:"vertical"}} />
+                  : <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.discussion||<span style={{color:C.muted}}>Not recorded</span>}</div>
+                }
+              </div>
 
               {/* Client feedback */}
-              {vm.clientFeedback&&(
-                <div style={{marginBottom:14}}>
-                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Client Feedback</div>
-                  <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.clientFeedback}</div>
-                </div>
-              )}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Client Feedback</div>
+                {meetingEditMode
+                  ? <textarea rows={2} value={ef.clientFeedback||""} onChange={e=>setEf({clientFeedback:e.target.value})} placeholder="Positive, hesitant, needs approval..." style={{width:"100%",fontSize:12,resize:"vertical"}} />
+                  : vm.clientFeedback
+                      ? <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.clientFeedback}</div>
+                      : <div style={{fontSize:11,color:C.muted}}>—</div>
+                }
+              </div>
 
               {/* Next steps */}
-              {vm.nextSteps&&(
-                <div style={{marginBottom:14}}>
-                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Next Steps</div>
-                  <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:`${C.orange}11`,border:`1px solid ${C.orange}33`,borderRadius:6,padding:"10px 12px"}}>{vm.nextSteps}</div>
-                </div>
-              )}
+              <div style={{marginBottom:12}}>
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Next Steps {meetingEditMode&&<span style={{color:C.red,fontWeight:400}}>*</span>}</div>
+                {meetingEditMode
+                  ? <input value={ef.nextSteps||""} onChange={e=>setEf({nextSteps:e.target.value})} placeholder="What is the clear next action?" style={{width:"100%",fontSize:12}} />
+                  : vm.nextSteps
+                      ? <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:`${C.orange}11`,border:`1px solid ${C.orange}33`,borderRadius:6,padding:"10px 12px"}}>{vm.nextSteps}</div>
+                      : <div style={{fontSize:11,color:C.muted}}>—</div>
+                }
+              </div>
 
               {/* Follow-up & next meeting */}
-              {(vm.followUpDate||vm.nextMeetingDate)&&(
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
-                  {vm.followUpDate&&(
-                    <div style={{background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"10px 12px"}}>
-                      <div style={{fontSize:10,color:C.blue,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>📞 Follow-up</div>
-                      <div style={{fontSize:13,fontWeight:600,color:C.text}}>{vm.followUpDate}</div>
-                    </div>
-                  )}
-                  {vm.nextMeetingDate&&(
-                    <div style={{background:`${C.green}11`,border:`1px solid ${C.green}33`,borderRadius:6,padding:"10px 12px"}}>
-                      <div style={{fontSize:10,color:C.green,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>📅 Next Meeting</div>
-                      <div style={{fontSize:13,fontWeight:600,color:C.text}}>{vm.nextMeetingDate}</div>
-                    </div>
-                  )}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+                <div>
+                  <div style={{fontSize:10,color:C.blue,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>📞 Follow-up Date</div>
+                  {meetingEditMode
+                    ? <input type="date" value={ef.followUpDate||""} onChange={e=>setEf({followUpDate:e.target.value})} style={{width:"100%",fontSize:12}} />
+                    : vm.followUpDate
+                        ? <div style={{fontSize:13,fontWeight:600,color:C.text,background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"8px 12px"}}>{vm.followUpDate}</div>
+                        : <div style={{fontSize:11,color:C.muted}}>Not set</div>
+                  }
+                </div>
+                <div>
+                  <div style={{fontSize:10,color:C.green,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>📅 Next Meeting Date</div>
+                  {meetingEditMode
+                    ? <input type="date" value={ef.nextMeetingDate||""} onChange={e=>setEf({nextMeetingDate:e.target.value})} style={{width:"100%",fontSize:12}} />
+                    : vm.nextMeetingDate
+                        ? <div style={{fontSize:13,fontWeight:600,color:C.text,background:`${C.green}11`,border:`1px solid ${C.green}33`,borderRadius:6,padding:"8px 12px"}}>{vm.nextMeetingDate}</div>
+                        : <div style={{fontSize:11,color:C.muted}}>Not set</div>
+                  }
+                </div>
+              </div>
+
+              {/* Notes */}
+              {meetingEditMode&&(
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Additional Notes</div>
+                  <textarea rows={2} value={ef.notes||""} onChange={e=>setEf({notes:e.target.value})} placeholder="Any other context or remarks..." style={{width:"100%",fontSize:12,resize:"vertical"}} />
+                </div>
+              )}
+              {!meetingEditMode&&vm.notes&&(
+                <div style={{marginBottom:12}}>
+                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Notes</div>
+                  <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.notes}</div>
                 </div>
               )}
 
-              <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
-                <button className="btn btn-ghost" onClick={()=>setViewMeetingId(null)}>Close</button>
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
+                <div>
+                  {meetingEditMode&&<span style={{fontSize:10,color:C.muted}}>Fields marked * are required</span>}
+                </div>
+                <div style={{display:"flex",gap:8}}>
+                  {meetingEditMode
+                    ? <>
+                        <button className="btn btn-ghost" style={{fontSize:12}} onClick={()=>{setMeetingEditMode(false);setMeetingEditForm({});}}>Cancel</button>
+                        <button className="btn btn-primary" style={{fontSize:12}} onClick={saveEdit}>Save Changes</button>
+                      </>
+                    : <>
+                        {canEdit&&<button className="btn btn-ghost" style={{fontSize:12}} onClick={startEdit}>✏️ Edit</button>}
+                        <button className="btn btn-ghost" onClick={closeMeetingModal}>Close</button>
+                      </>
+                  }
+                </div>
               </div>
             </div>
           </div>
