@@ -5281,13 +5281,25 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const effectiveLbTab = view==="lb-team"?"team":view==="lb-region"?"region":view==="lb-all"?"all":lbTab;
             const showTabBar = view==="leaderboard"; // only non-rep roles use the internal tab switcher
 
+            // ── Always rank ALL reps for the leaderboard (activity + target% only, no revenue amounts) ──
+            const lbAllReps = REPS.map(rep => {
+              const rd      = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
+              const closed  = rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+d.amount,0);
+              const rm      = meetings.filter(m=>m.repId===rep.id);
+              const seniorM = rm.filter(m=>["C-Suite / Owner","VP / GM","Marketing Head","Brand Manager"].includes(m.contactLevel)).length;
+              const risk    = rd.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
+              const attOk   = att[TODAY]?.[rep.id];
+              const cPct    = rep.target>0?Math.round((closed/rep.target)*100):0;
+              return {...rep, closed, meetings:rm.length, seniorM, risk, attOk, cPct};
+            }).sort((a,b)=>b.cPct-a.cPct);
+
             // Filter sets per tab
-            const teamReps   = repScores.filter(r => myRegion ? r.region===myRegion : true);
-            const allReps    = repScores;
+            const teamReps   = lbAllReps.filter(r => myRegion ? r.region===myRegion : true);
+            const allReps    = lbAllReps;
 
             // Region rollup for Region tab
             const regionMap  = {};
-            repScores.forEach(r => {
+            lbAllReps.forEach(r => {
               if (!regionMap[r.region]) regionMap[r.region] = {region:r.region, reps:0, meetings:0, seniorM:0, risk:0, attOk:0, cPct:0};
               const g = regionMap[r.region];
               g.reps++;
@@ -5305,10 +5317,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               avgCPct:     g.reps ? Math.round(g.cPct/g.reps) : 0,
             })).sort((a,b) => b.avgCPct - a.avgCPct);
 
+            const myRepId = isRep ? user_role?.repId : null;
             const RepCard = ({rep, rank}) => {
-              const sc = rep.cPct>=80?C.green:rep.cPct>=50?C.accent:C.red;
+              const sc     = rep.cPct>=80?C.green:rep.cPct>=50?C.accent:C.red;
+              const isMe   = rep.id === myRepId;
               return (
-                <div className="card" style={{padding:"14px 16px",marginBottom:8}}>
+                <div className="card" style={{padding:"14px 16px",marginBottom:8,border:isMe?`1px solid ${C.accent}66`:undefined,background:isMe?`${C.accent}05`:undefined}}>
                   <div style={{display:"flex",alignItems:"center",gap:12}}>
                     <div style={{width:32,height:32,borderRadius:"50%",background:rank<3?`${[C.accent,C.blue,C.green][rank]}33`:C.s3,display:"flex",alignItems:"center",justifyContent:"center",fontSize:rank<3?17:12,fontWeight:800,color:rank<3?[C.accent,C.blue,C.green][rank]:C.dim,flexShrink:0}}>
                       {rank<3?medals[rank]:`#${rank+1}`}
@@ -5316,6 +5330,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{flex:1,minWidth:0}}>
                       <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                         <span className="sans" style={{fontWeight:700,fontSize:14}}>{rep.name}</span>
+                        {isMe&&<span style={{background:`${C.accent}22`,color:C.accent,fontSize:9,fontWeight:700,padding:"1px 7px",borderRadius:8}}>YOU</span>}
                         <span style={{fontSize:11,color:C.dim}}>{rep.region}</span>
                       </div>
                       <div style={{fontSize:10,color:C.dim,marginTop:2}}>{rep.role}</div>
