@@ -6182,7 +6182,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {(isRep||isRH) && req.status==="Pending" && (
                           <button onClick={()=>{setEditIrId(req.id);setIrForm({type:req.type||"Send Proposal",dept:req.dept||"NSH",subject:req.subject||"",details:req.details||"",clientCompany:req.clientCompany||""});}} style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✎ Edit</button>
                         )}
-                        {(isRep||isRH) && req.status!=="Done" && (
+                        {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && (
                           <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
                         )}
                       </div>
