@@ -3160,9 +3160,24 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                           }:d));
                                         }
                                       }
+                                      // Auto-create calendar plans from follow-up / next-meeting / action due date
+                                      const repIdForPlan = myRepId || (REPS[0]?.id);
+                                      const ts = Date.now();
+                                      const newAutoPlans: any[] = [];
+                                      if (act && bywhen) {
+                                        newAutoPlans.push({id:`p_ns_${ts}`,repId:repIdForPlan,date:bywhen,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`${act}${frm?" → "+frm:""}`,pitchType:"",meetingType:"Task",needsMeet:false,status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"next-step",assignedDept:frm||""});
+                                      }
+                                      if (nm) {
+                                        newAutoPlans.push({id:`p_nxt_${ts+1}`,repId:repIdForPlan,date:nm,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Next meeting with ${p.clientAgencyName}`,pitchType:p.pitchType||"",meetingType:p.meetingType||"Physical",needsMeet:false,status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"next-meeting"});
+                                      }
+                                      if (fu) {
+                                        newAutoPlans.push({id:`p_fu_${ts+2}`,repId:repIdForPlan,date:fu,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow-up: ${ns||"Check in with client"}`,pitchType:p.pitchType||"",meetingType:"Call",needsMeet:false,status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"});
+                                      }
+                                      if (newAutoPlans.length > 0) setPlans(q=>[...q,...newAutoPlans]);
                                       setAtt(q=>({...q,[TODAY]:{...(q[TODAY]||{}),[(myRepId||REPS[0]?.id)]:true}}));
                                       setInlineLogPlan(null);
-                                      showToast(act&&frm?"Meeting logged + task created ✓":"Meeting logged ✓");
+                                      const planCount = (act&&bywhen?1:0)+(nm?1:0)+(fu?1:0);
+                                      showToast((act&&frm?"Meeting logged + task created ✓":"Meeting logged ✓")+(planCount>0?` · ${planCount} calendar entry added`:""));
                                     }}>Log Meeting ✓</button>
                                   </div>
                                 </div>
