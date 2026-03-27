@@ -1899,7 +1899,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     tasks.filter(t =>
       t.clientCompany?.toLowerCase().includes(q) ||
       t.title?.toLowerCase().includes(q)
-    ).slice(0, 3).forEach(t => out.push({ type:"task", label:t.title, sub:t.clientCompany, action:()=>{ setView("war-room"); setGlobalSearch(""); setSearchOpen(false); } }));
+    ).slice(0, 3).forEach(t => out.push({ type:"task", label:t.title, sub:t.clientCompany, action:()=>{ setView("tasks"); setGlobalSearch(""); setSearchOpen(false); } }));
     return out.slice(0, 8);
   }, [globalSearch, deals, meetings, tasks]);
 
@@ -2743,7 +2743,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             {searchOpen && searchResults.length > 0 && (
               <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,zIndex:500,boxShadow:"0 8px 32px rgba(0,0,0,.5)",overflow:"hidden"}}>
                 {searchResults.map((r,i)=>(
-                  <div key={i} onMouseDown={r.action}
+                  <div key={i} onMouseDown={e=>{e.preventDefault();r.action();}}
                     style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",borderBottom:i<searchResults.length-1?`1px solid ${C.border}`:"none",transition:"background .1s"}}
                     onMouseOver={e=>e.currentTarget.style.background=C.s2}
                     onMouseOut={e=>e.currentTarget.style.background="transparent"}>
