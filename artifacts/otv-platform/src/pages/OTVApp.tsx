@@ -1961,6 +1961,19 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const loggedAt = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     const clientCompany = deal?.clientCompany || logForm.clientAgencyName || "";
 
+    // Helper: map neededFrom dept name → assignedToUserId for that person's task list
+    const getNeededFromUserId = (neededFrom: string, repId: number): string|null => {
+      const north=[1,7,8,9,10], south=[2,6,11,12,13], east=[3,14,15,16,17], west=[4,18,19,20,21], national=[5,22,23,24,25], central=[26,27,28,29,30];
+      const repRegion = north.includes(repId)?"North":south.includes(repId)?"South":east.includes(repId)?"East":west.includes(repId)?"West":national.includes(repId)?"National":central.includes(repId)?"Central":null;
+      const rhByRegion:Record<string,string> = {North:"rh_north",South:"rh_south",East:"rh_east",West:"rh_west",National:"rh_national",Central:"rh_central"};
+      if (neededFrom==="Region Head") return rhByRegion[repRegion||""]||null;
+      if (neededFrom==="NSH")            return "sales_head";
+      if (neededFrom==="CXO")            return "admin";
+      if (neededFrom==="Sales Strategy") return "sales_strategy";
+      if (neededFrom==="CRO")            return "sales_analysis";
+      return null;
+    };
+
     // Build a summary of next steps for the meeting record
     const nextStepsSummary = (logForm.nextStepItems||[])
       .filter(i=>i.action)
@@ -1981,23 +1994,25 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       outcome: logForm.status === "Closed" ? "Proposal Accepted" : logForm.status || "Needs Callback",
     }, ...p]);
 
-    // Auto-create tasks for each action item that has a neededFrom dept/person
+    // Auto-create tasks for each action item — routed to the right person's task list
+    const repIdInt = parseInt(logForm.repId);
     const newTasks = (logForm.nextStepItems||[])
       .filter(i => i.action && i.neededFrom && i.neededFrom !== "Self" && i.neededFrom !== "Client")
       .map(i => ({
         id: `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        assignedTo: null,           // assigned to dept, not a specific rep
+        assignedTo: null,
+        assignedToUserId: getNeededFromUserId(i.neededFrom, repIdInt),
         assignedDept: i.neededFrom,
-        repId: parseInt(logForm.repId),
+        repId: repIdInt,
         clientCompany,
         title: i.action,
-        description: `${i.remarks ? i.remarks+" — " : ""}Raised from meeting log by ${rep?.name} on ${TODAY}`,
+        description: `${i.remarks ? i.remarks+" — " : ""}Raised from meeting log by ${rep?.name} on ${TODAY}. Client: ${clientCompany}.`,
         priority: "High",
         status: "Open",
         dueDate: i.dueDate || TOMORROW,
         createdAt: TODAY,
-        assignedBy: user_role?.id || activeUser,
-        assignedByName: user_role?.name || "Manager",
+        assignedBy: activeUser,
+        assignedByName: user_role?.name || "Sales Rep",
         fromMeetingLog: true,
       }));
 
@@ -2249,22 +2264,35 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     }, ...p]);
 
     // Auto-create tasks from next step items
+    const repIdIntC = parseInt(updatedForm.repId);
+    const getNeededFromUserIdC = (neededFrom: string, repId: number): string|null => {
+      const north=[1,7,8,9,10], south=[2,6,11,12,13], east=[3,14,15,16,17], west=[4,18,19,20,21], national=[5,22,23,24,25], central=[26,27,28,29,30];
+      const repRegion = north.includes(repId)?"North":south.includes(repId)?"South":east.includes(repId)?"East":west.includes(repId)?"West":national.includes(repId)?"National":central.includes(repId)?"Central":null;
+      const rhByRegion:Record<string,string> = {North:"rh_north",South:"rh_south",East:"rh_east",West:"rh_west",National:"rh_national",Central:"rh_central"};
+      if (neededFrom==="Region Head") return rhByRegion[repRegion||""]||null;
+      if (neededFrom==="NSH")            return "sales_head";
+      if (neededFrom==="CXO")            return "admin";
+      if (neededFrom==="Sales Strategy") return "sales_strategy";
+      if (neededFrom==="CRO")            return "sales_analysis";
+      return null;
+    };
     const newTasks = (updatedForm.nextStepItems||[])
       .filter(i => i.action && i.neededFrom && i.neededFrom !== "Self" && i.neededFrom !== "Client")
       .map(i => ({
         id: `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
         assignedTo: null,
+        assignedToUserId: getNeededFromUserIdC(i.neededFrom, repIdIntC),
         assignedDept: i.neededFrom,
-        repId: parseInt(updatedForm.repId),
+        repId: repIdIntC,
         clientCompany,
         title: i.action,
-        description: `${i.remarks ? i.remarks+" — " : ""}Raised from meeting log by ${rep?.name} on ${TODAY}`,
+        description: `${i.remarks ? i.remarks+" — " : ""}Raised from meeting log by ${rep?.name} on ${TODAY}. Client: ${clientCompany}.`,
         priority: "High",
         status: "Open",
         dueDate: i.dueDate || TOMORROW,
         createdAt: TODAY,
-        assignedBy: user_role?.id || activeUser,
-        assignedByName: user_role?.name || "Manager",
+        assignedBy: activeUser,
+        assignedByName: user_role?.name || "Sales Rep",
         fromMeetingLog: true,
       }));
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
