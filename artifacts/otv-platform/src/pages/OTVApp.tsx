@@ -3246,7 +3246,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                         style={{background:p.status==="Done"?`${C.green}18`:p.status==="Cancelled"?`${C.red}10`:`${C.accent}14`,borderRadius:3,padding:"2px 4px",marginBottom:2,cursor:"pointer"}}
                                         title={`${p.time} · ${p.clientAgencyName}${p.agenda?" · "+p.agenda:""}`}>
                                         <div style={{fontSize:7,color:C.dim,lineHeight:1}}>{p.time}</div>
-                                        <div style={{fontSize:8,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.3}}>{p.clientAgencyName}</div>
+                                        <div style={{fontSize:8,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:p.autoCreatedFrom==="follow-up"?C.blue:p.autoCreatedFrom==="next-meeting"?C.green:p.autoCreatedFrom==="next-step"?C.orange:C.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.3}}>
+                                          {p.autoCreatedFrom==="follow-up"?"Follow up meeting":p.autoCreatedFrom==="next-meeting"?"Next meeting":p.autoCreatedFrom==="next-step"?(p.agenda||p.clientAgencyName):p.clientAgencyName}
+                                        </div>
                                       </div>
                                     ))}
                                     {dayPlans.length>3&&<div style={{fontSize:7,color:C.dim,textAlign:"center"}}>+{dayPlans.length-3} more</div>}
