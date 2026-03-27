@@ -3401,14 +3401,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {weeks.map((week, wi) => (
                           <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
                             {week.map((date, di) => {
-                              if (!date) return <div key={di} style={{background:C.s2,borderRadius:6,opacity:.3,minHeight:88}} />;
+                              if (!date) return <div key={di} style={{background:C.s2,borderRadius:6,opacity:.3,minHeight:120}} />;
                               const dayPlans = allPlans.filter(p=>(myRepId?p.repId===myRepId:true)&&p.date===date);
                               const isToday = date===TODAY;
                               const isTmrw  = date===TOMORROW;
                               const isPast  = date<TODAY;
                               return (
                                 <div key={date} onClick={()=>setCalDayView(date)}
-                                  style={{background:isToday?`${C.accent}08`:C.surface,border:`1px solid ${isToday?C.accent:isTmrw?C.blue:C.border}`,borderRadius:6,minHeight:88,display:"flex",flexDirection:"column",cursor:"pointer",transition:"border-color .1s"}}
+                                  style={{background:isToday?`${C.accent}08`:C.surface,border:`1px solid ${isToday?C.accent:isTmrw?C.blue:C.border}`,borderRadius:6,minHeight:120,display:"flex",flexDirection:"column",cursor:"pointer",transition:"border-color .1s"}}
                                   onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;}}
                                   onMouseOut={e=>{e.currentTarget.style.borderColor=isToday?C.accent:isTmrw?C.blue:C.border;}}>
                                   {/* Day number row */}
@@ -3419,18 +3419,23 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   </div>
                                   {/* Up to 3 meeting chips */}
                                   <div style={{flex:1,padding:"3px 4px",overflow:"hidden"}}>
-                                    {dayPlans.slice(0,3).map(p=>(
+                                    {dayPlans.slice(0,4).map(p=>(
                                       <div key={p.id}
                                         onClick={e=>{e.stopPropagation();if(p.status!=="Done"){planInlineState[1](p.id);}}}
                                         style={{background:p.status==="Done"?`${C.green}18`:p.status==="Cancelled"?`${C.red}10`:`${C.accent}14`,borderRadius:3,padding:"2px 4px",marginBottom:2,cursor:"pointer"}}
                                         title={`${p.time} · ${p.clientAgencyName}${p.agenda?" · "+p.agenda:""}`}>
-                                        <div style={{fontSize:7,color:C.dim,lineHeight:1}}>{p.time}</div>
+                                        <div style={{fontSize:7,color:C.dim,lineHeight:1,display:"flex",gap:3,alignItems:"center"}}>
+                                          {p.time}
+                                          {p.autoCreatedFrom==="follow-up"&&<span style={{color:C.blue,fontWeight:700}}>📞</span>}
+                                          {p.autoCreatedFrom==="next-meeting"&&<span style={{color:C.green,fontWeight:700}}>📅</span>}
+                                          {p.autoCreatedFrom==="next-step"&&<span style={{color:C.orange,fontWeight:700}}>⚡</span>}
+                                        </div>
                                         <div style={{fontSize:8,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:p.autoCreatedFrom==="follow-up"?C.blue:p.autoCreatedFrom==="next-meeting"?C.green:p.autoCreatedFrom==="next-step"?C.orange:C.text,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.3}}>
-                                          {p.autoCreatedFrom==="follow-up"?"Follow up meeting":p.autoCreatedFrom==="next-meeting"?"Next meeting":p.autoCreatedFrom==="next-step"?(p.agenda||p.clientAgencyName):p.clientAgencyName}
+                                          {p.clientAgencyName}
                                         </div>
                                       </div>
                                     ))}
-                                    {dayPlans.length>3&&<div style={{fontSize:7,color:C.dim,textAlign:"center"}}>+{dayPlans.length-3} more</div>}
+                                    {dayPlans.length>4&&<div style={{fontSize:7,color:C.dim,textAlign:"center"}}>+{dayPlans.length-4} more</div>}
                                   </div>
                                 </div>
                               );
