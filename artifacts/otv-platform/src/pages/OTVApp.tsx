@@ -2042,12 +2042,55 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       showToast("New pipeline entry created from meeting log");
     }
 
+    // Auto-create calendar plan for next meeting date
+    if (logForm.nextMeetingDate) {
+      setPlans(p => [...p, {
+        id: `p_nxt_${Date.now()}`,
+        repId: parseInt(logForm.repId),
+        date: logForm.nextMeetingDate,
+        time: logForm.nextMeetingTime || "10:00",
+        clientAgencyName: clientCompany,
+        contactName: logForm.contactName || "",
+        phone: logForm.mobile || "",
+        agenda: logForm.nextAgenda || `Next meeting with ${clientCompany}`,
+        pitchType: logForm.pitchType || "",
+        meetingType: logForm.meetingType || "Physical",
+        needsMeet: false,
+        status: "Planned",
+        loggedMeetingId: null,
+        isUnplanned: false,
+        autoCreatedFrom: "next-meeting",
+      }]);
+    }
+    // Auto-create calendar plan for follow-up date
+    if (logForm.followUpDate) {
+      setPlans(p => [...p, {
+        id: `p_fu_${Date.now() + 1}`,
+        repId: parseInt(logForm.repId),
+        date: logForm.followUpDate,
+        time: "10:00",
+        clientAgencyName: clientCompany,
+        contactName: logForm.contactName || "",
+        phone: logForm.mobile || "",
+        agenda: `Follow-up: ${nextStepsSummary || logForm.nextSteps || "Check in with client"}`,
+        pitchType: logForm.pitchType || "",
+        meetingType: "Call",
+        needsMeet: false,
+        status: "Planned",
+        loggedMeetingId: null,
+        isUnplanned: false,
+        autoCreatedFrom: "follow-up",
+      }]);
+    }
+
     setAtt(p => ({ ...p, [TODAY]: { ...(p[TODAY]||{}), [parseInt(logForm.repId)]: true } }));
     setLogForm(BLANK_LOG);
     setLogOpen(false);
     const taskMsg  = newTasks.length      ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
     const irMsgL   = newIRsFromLog.length ? ` · ${newIRsFromLog.length} request${newIRsFromLog.length>1?"s":""} raised` : "";
-    showToast((late ? "Logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsgL);
+    const planMsg  = (logForm.nextMeetingDate ? 1 : 0) + (logForm.followUpDate ? 1 : 0);
+    const planMsgStr = planMsg > 0 ? ` · ${planMsg} calendar entry added` : "";
+    showToast((late ? "Logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsgL + planMsgStr);
   };
 
   // ─── CALENDAR INTEGRATION ────────────────────────────────────────────────────
@@ -2219,13 +2262,56 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       } : d));
     }
 
+    // Auto-create calendar plan for next meeting date
+    if (updatedForm.nextMeetingDate) {
+      setPlans(p => [...p, {
+        id: `p_nxt_${Date.now()}`,
+        repId: parseInt(updatedForm.repId),
+        date: updatedForm.nextMeetingDate,
+        time: updatedForm.nextMeetingTime || "10:00",
+        clientAgencyName: clientCompany,
+        contactName: updatedForm.contactName || "",
+        phone: updatedForm.mobile || "",
+        agenda: updatedForm.nextAgenda || `Next meeting with ${clientCompany}`,
+        pitchType: updatedForm.pitchType || "",
+        meetingType: updatedForm.meetingType || "Physical",
+        needsMeet: false,
+        status: "Planned",
+        loggedMeetingId: null,
+        isUnplanned: false,
+        autoCreatedFrom: "next-meeting",
+      }]);
+    }
+    // Auto-create calendar plan for follow-up date
+    if (updatedForm.followUpDate) {
+      setPlans(p => [...p, {
+        id: `p_fu_${Date.now() + 1}`,
+        repId: parseInt(updatedForm.repId),
+        date: updatedForm.followUpDate,
+        time: "10:00",
+        clientAgencyName: clientCompany,
+        contactName: updatedForm.contactName || "",
+        phone: updatedForm.mobile || "",
+        agenda: `Follow-up: ${nextStepsSummary || updatedForm.nextSteps || "Check in with client"}`,
+        pitchType: updatedForm.pitchType || "",
+        meetingType: "Call",
+        needsMeet: false,
+        status: "Planned",
+        loggedMeetingId: null,
+        isUnplanned: false,
+        autoCreatedFrom: "follow-up",
+      }]);
+    }
+
     setAtt(p => ({ ...p, [TODAY]: { ...(p[TODAY]||{}), [parseInt(updatedForm.repId)]: true } }));
     setLogForm(BLANK_LOG);
     setLogOpen(false);
     const taskMsg = newTasks.length ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
     const irMsg   = newIRs.length   ? ` · ${newIRs.length} request${newIRs.length>1?"s":""} raised`  : "";
-    if (calResult?.meetLink) showToast(`Meeting logged + Calendar event created ✓` + taskMsg + irMsg);
-    else showToast((late ? "Meeting logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsg);
+    const planMsg2 = (updatedForm.nextMeetingDate ? 1 : 0) + (updatedForm.followUpDate ? 1 : 0);
+    const planMsgStr2 = planMsg2 > 0 ? ` · ${planMsg2} calendar entry added` : "";
+    if (calResult?.meetLink) showToast(`Meeting logged + Calendar event created ✓` + taskMsg + irMsg + planMsgStr2);
+    else showToast((late ? "Meeting logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsg + planMsgStr2);
   };
 
   // ── ROLE CONSTANTS ──
@@ -2849,6 +2935,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {p.agenda&&<div style={{fontSize:10,color:C.dim}}>{p.agenda}</div>}
                                 </div>
                                 {p.pitchType&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>{p.pitchType}</span>}
+                                {p.autoCreatedFrom==="follow-up"&&<span style={{background:`${C.blue}22`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>📞 Follow-up</span>}
+                                {p.autoCreatedFrom==="next-meeting"&&<span style={{background:`${C.green}22`,color:C.green,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>📅 Next Mtg</span>}
                                 <span style={{background:p.status==="Done"?`${C.green}22`:p.status==="Cancelled"?`${C.red}22`:C.s3,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.dim,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>{p.status==="Planned"?"Tap to log":p.status}</span>
                                 {p.status!=="Done"&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
                               </div>
@@ -6047,6 +6135,43 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   ))}
                 </div>
               )}
+
+              {/* FOLLOW-UP REMINDERS */}
+              {(()=>{
+                const fuPlans = (plans||[]).filter(p =>
+                  p.autoCreatedFrom === "follow-up" &&
+                  p.status !== "Done" && p.status !== "Cancelled" &&
+                  p.date >= TODAY &&
+                  (user_role.canView==="all" ? true : user_role.canView==="region" ? REPS.find(r=>r.id===p.repId)?.region===user_role.region : p.repId===user_role.repId)
+                ).sort((a,b)=>a.date>b.date?1:-1).slice(0,10);
+                if (!fuPlans.length) return null;
+                return (
+                  <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:8,padding:"12px 16px",marginBottom:18}}>
+                    <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>📞 Upcoming Follow-ups ({fuPlans.length})</div>
+                    {fuPlans.map(p=>{
+                      const rep = REPS.find(r=>r.id===p.repId);
+                      const isOverdue = p.date < TODAY;
+                      const isToday   = p.date === TODAY;
+                      return (
+                        <div key={p.id} style={{background:C.s2,borderRadius:5,padding:"10px 14px",marginBottom:6,borderLeft:`3px solid ${isOverdue?C.red:isToday?C.orange:C.blue}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
+                            <div>
+                              {rep&&<span className="sans" style={{fontWeight:700}}>{rep.name}</span>}
+                              {rep&&<span style={{color:C.dim,fontSize:12}}> → </span>}
+                              <span style={{fontWeight:600}}>{p.clientAgencyName}</span>
+                              {p.contactName&&<span style={{color:C.dim,fontSize:12}}> · {p.contactName}</span>}
+                            </div>
+                            <span style={{fontSize:11,color:isOverdue?C.red:isToday?C.orange:C.blue,fontWeight:600}}>
+                              {isOverdue?"⚠ Overdue · ":isToday?"Today · ":""}{p.date}
+                            </span>
+                          </div>
+                          {p.agenda&&<div style={{fontSize:11,color:C.dim,marginTop:4}}>{p.agenda}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* MEETING LOG — day by day */}
               {meetings.length === 0 && (
