@@ -1448,6 +1448,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // My Plan calendar state — must be at component level (React hooks rule)
   const [calWeekOffset, setCalWeekOffset] = useState(0);
   const [calDayView, setCalDayView]       = useState<string|null>(null); // date string "YYYY-MM-DD"
+  const [myPlanTab,  setMyPlanTab]        = useState<"plan"|"log">("plan"); // My Plan sub-tabs
   const [addPlanFor, setAddPlanFor]       = useState(null);
   const [planForm, setPlanForm]           = useState({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false});
   const planInlineState                   = useState(null); // [inlineLogPlan, setInlineLogPlan]
@@ -2949,6 +2950,77 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   </div>
                 </div>
+
+                {/* ── Sub-tabs ── */}
+                <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
+                  {([["plan","📅 Plan"],["log","📋 Meeting Log"]] as [string,string][]).map(([id,label])=>(
+                    <button key={id} onClick={()=>setMyPlanTab(id as "plan"|"log")}
+                      style={{background:"none",border:"none",borderBottom:`2px solid ${myPlanTab===id?C.accent:"transparent"}`,padding:"6px 14px",fontSize:12,fontWeight:myPlanTab===id?700:400,color:myPlanTab===id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginBottom:-1,transition:"color .15s"}}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+
+                {/* ── MEETING LOG TAB ── */}
+                {myPlanTab==="log" && (()=>{
+                  const myMeetings = meetings
+                    .filter(m=>myRepId?m.repId===myRepId:true)
+                    .sort((a,b)=>b.date>a.date?1:-1);
+                  const outcomeColor = (o) => o?.includes("Accepted")?C.green:o?.includes("Interested")?C.blue:o?.includes("Concern")||o?.includes("Objection")?C.orange:o?.includes("Not")||o?.includes("Lost")?C.red:C.dim;
+                  if (!myMeetings.length) return (
+                    <div style={{textAlign:"center",padding:60,color:C.muted,fontSize:12}}>No meetings logged yet. Use the Plan tab to log your first meeting.</div>
+                  );
+                  return (
+                    <div>
+                      <div style={{marginBottom:10,fontSize:11,color:C.dim}}>{myMeetings.length} meetings logged</div>
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead>
+                            <tr>
+                              {["Date","Client","Contact","Outcome","Discussion / Notes","Next Step"].map(h=>(
+                                <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",letterSpacing:".06em",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {myMeetings.map(m=>(
+                              <tr key={m.id}
+                                style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}
+                                onClick={()=>setViewMeetingId(m.id)}
+                                onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                                onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
+                                  <div style={{fontSize:12,fontWeight:600,color:m.date===TODAY?C.accent:C.text}}>{m.date===TODAY?"Today":m.date}</div>
+                                  {m.loggedAt&&<div style={{fontSize:10,color:C.dim}}>logged {m.loggedAt}</div>}
+                                  {m.late&&<div style={{fontSize:9,color:C.orange,fontWeight:700}}>LATE</div>}
+                                </td>
+                                <td style={{padding:"10px 14px"}}>
+                                  <div style={{fontWeight:600,fontSize:12}}>{m.clientCompany||"—"}</div>
+                                </td>
+                                <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>
+                                  <div>{m.contactName||"—"}</div>
+                                  {m.contactLevel&&<div style={{fontSize:9,color:C.muted}}>{m.contactLevel}</div>}
+                                </td>
+                                <td style={{padding:"10px 14px"}}>
+                                  <span style={{background:`${outcomeColor(m.outcome)}18`,color:outcomeColor(m.outcome),padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{m.outcome||"—"}</span>
+                                </td>
+                                <td style={{padding:"10px 14px",maxWidth:260,fontSize:11,color:C.dim,lineHeight:1.4}}>
+                                  {(m.discussion||"").slice(0,100)}{m.discussion?.length>100?"…":""}
+                                </td>
+                                <td style={{padding:"10px 14px",fontSize:11,color:C.text,maxWidth:200,lineHeight:1.4}}>
+                                  {m.nextStep||"—"}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* ── PLAN TAB content ── */}
+                {myPlanTab==="plan" && <>
 
                 {/* Compliance strip */}
                 <div style={{background:todayLogged&&tmrwPlanned?`${C.green}08`:`${C.red}06`,border:`1px solid ${todayLogged&&tmrwPlanned?C.green:C.red}44`,borderRadius:7,padding:"8px 14px",marginBottom:16,display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}}>
