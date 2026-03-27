@@ -2054,6 +2054,31 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       showToast("New pipeline entry created from meeting log");
     }
 
+    // Auto-create calendar plans for each next-step item that has a due date
+    const stepPlans = (logForm.nextStepItems||[]).filter(i=>i.action&&i.dueDate);
+    if (stepPlans.length) {
+      stepPlans.forEach((item, idx) => {
+        setPlans(p => [...p, {
+          id: `p_ns_${Date.now()}_${idx}`,
+          repId: parseInt(logForm.repId),
+          date: item.dueDate,
+          time: "10:00",
+          clientAgencyName: clientCompany,
+          contactName: logForm.contactName || "",
+          phone: "",
+          agenda: `${item.action}${item.neededFrom ? ` → ${item.neededFrom}` : ""}`,
+          pitchType: "",
+          meetingType: "Task",
+          needsMeet: false,
+          status: "Planned",
+          loggedMeetingId: null,
+          isUnplanned: false,
+          autoCreatedFrom: "next-step",
+          assignedDept: item.neededFrom || "",
+        }]);
+      });
+    }
+
     // Auto-create calendar plan for next meeting date
     if (logForm.nextMeetingDate) {
       setPlans(p => [...p, {
@@ -2272,6 +2297,31 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         awaitingApprovalSince: approvalItem ? TODAY : d.awaitingApprovalSince,
         auditLog: [...(d.auditLog||[]), ...auditEntry],
       } : d));
+    }
+
+    // Auto-create calendar plans for each next-step item that has a due date
+    const stepPlansC = (updatedForm.nextStepItems||[]).filter(i=>i.action&&i.dueDate);
+    if (stepPlansC.length) {
+      stepPlansC.forEach((item, idx) => {
+        setPlans(p => [...p, {
+          id: `p_ns_${Date.now()}_${idx}`,
+          repId: parseInt(updatedForm.repId),
+          date: item.dueDate,
+          time: "10:00",
+          clientAgencyName: clientCompany,
+          contactName: updatedForm.contactName || "",
+          phone: "",
+          agenda: `${item.action}${item.neededFrom ? ` → ${item.neededFrom}` : ""}`,
+          pitchType: "",
+          meetingType: "Task",
+          needsMeet: false,
+          status: "Planned",
+          loggedMeetingId: null,
+          isUnplanned: false,
+          autoCreatedFrom: "next-step",
+          assignedDept: item.neededFrom || "",
+        }]);
+      });
     }
 
     // Auto-create calendar plan for next meeting date
@@ -2915,6 +2965,47 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     );
                   }
                   return null;
+                })()}
+
+                {/* DUE DATE ALERTS */}
+                {(()=>{
+                  const repTasks = tasks.filter(t =>
+                    (t.repId===myRepId||t.assignedTo===myRepId) && t.status!=="Done"
+                  );
+                  const stepDuePlans = (plans||[]).filter(p =>
+                    p.repId===myRepId && p.autoCreatedFrom==="next-step" && p.status!=="Done"
+                  );
+                  const overdue   = [...repTasks.filter(t=>t.dueDate&&t.dueDate<TODAY), ...stepDuePlans.filter(p=>p.date<TODAY)];
+                  const dueToday  = [...repTasks.filter(t=>t.dueDate===TODAY), ...stepDuePlans.filter(p=>p.date===TODAY)];
+                  const dueTmrw   = [...repTasks.filter(t=>t.dueDate===TOMORROW), ...stepDuePlans.filter(p=>p.date===TOMORROW)];
+                  if (!overdue.length && !dueToday.length && !dueTmrw.length) return null;
+                  const renderItem = (item, urgency) => {
+                    const title   = item.title || item.agenda || "—";
+                    const dept    = item.assignedDept || item.neededFrom || "";
+                    const client  = item.clientCompany || item.clientAgencyName || "";
+                    const clr     = urgency==="overdue"?C.red:urgency==="today"?C.orange:C.blue;
+                    return (
+                      <div key={item.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"7px 12px",background:C.s2,borderRadius:5,marginBottom:4,borderLeft:`3px solid ${clr}`}}>
+                        <div style={{flex:1}}>
+                          <div style={{fontSize:12,fontWeight:600,color:C.text}}>{title}</div>
+                          {(client||dept)&&<div style={{fontSize:10,color:C.dim}}>{client}{client&&dept?" · ":""}{dept&&`→ ${dept}`}</div>}
+                        </div>
+                        <span style={{fontSize:10,fontWeight:700,color:clr,whiteSpace:"nowrap"}}>
+                          {urgency==="overdue"?"⚠ OVERDUE":urgency==="today"?"Due TODAY":"Due TOMORROW"}
+                        </span>
+                      </div>
+                    );
+                  };
+                  return (
+                    <div style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                      <div style={{fontSize:10,fontWeight:700,color:C.orange,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>
+                        ⏰ Action Item Due Dates ({overdue.length+dueToday.length+dueTmrw.length})
+                      </div>
+                      {overdue.map(i=>renderItem(i,"overdue"))}
+                      {dueToday.map(i=>renderItem(i,"today"))}
+                      {dueTmrw.map(i=>renderItem(i,"tomorrow"))}
+                    </div>
+                  );
                 })()}
 
                 {/* TODAY + TOMORROW cards */}
@@ -6178,6 +6269,46 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </span>
                           </div>
                           {p.agenda&&<div style={{fontSize:11,color:C.dim,marginTop:4}}>{p.agenda}</div>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
+
+              {/* ACTION ITEM DUE DATE ALERTS */}
+              {(()=>{
+                const visReps = (user_role.canView==="all" ? REPS : user_role.canView==="region" ? REPS.filter(r=>r.region===user_role.region) : REPS.filter(r=>r.id===user_role.repId)).map(r=>r.id);
+                const dueTasks = tasks.filter(t => visReps.includes(t.repId) && t.status!=="Done" && t.dueDate);
+                const stepDuePlansWR = (plans||[]).filter(p => visReps.includes(p.repId) && p.autoCreatedFrom==="next-step" && p.status!=="Done");
+                const all = [
+                  ...dueTasks.filter(t=>t.dueDate<TODAY).map(t=>({...t, _urgency:"overdue"})),
+                  ...stepDuePlansWR.filter(p=>p.date<TODAY).map(p=>({...p, title:p.agenda, _urgency:"overdue"})),
+                  ...dueTasks.filter(t=>t.dueDate===TODAY).map(t=>({...t, _urgency:"today"})),
+                  ...stepDuePlansWR.filter(p=>p.date===TODAY).map(p=>({...p, title:p.agenda, _urgency:"today"})),
+                  ...dueTasks.filter(t=>t.dueDate===TOMORROW).map(t=>({...t, _urgency:"tomorrow"})),
+                  ...stepDuePlansWR.filter(p=>p.date===TOMORROW).map(p=>({...p, title:p.agenda, _urgency:"tomorrow"})),
+                ];
+                if (!all.length) return null;
+                return (
+                  <div style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:8,padding:"12px 16px",marginBottom:18}}>
+                    <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>⏰ Action Item Due Dates ({all.length})</div>
+                    {all.slice(0,12).map((item,i)=>{
+                      const clr = item._urgency==="overdue"?C.red:item._urgency==="today"?C.orange:C.blue;
+                      const rep = REPS.find(r=>r.id===(item.repId||item.assignedTo));
+                      return (
+                        <div key={item.id||i} style={{background:C.s2,borderRadius:5,padding:"8px 12px",marginBottom:4,borderLeft:`3px solid ${clr}`,display:"flex",gap:10,alignItems:"flex-start"}}>
+                          <div style={{flex:1}}>
+                            <div style={{fontSize:12,fontWeight:600,color:C.text}}>{item.title||"—"}</div>
+                            <div style={{fontSize:10,color:C.dim}}>
+                              {rep&&<span>{rep.name} · </span>}
+                              {(item.clientCompany||item.clientAgencyName)&&<span>{item.clientCompany||item.clientAgencyName}</span>}
+                              {(item.assignedDept||item.neededFrom)&&<span> → {item.assignedDept||item.neededFrom}</span>}
+                            </div>
+                          </div>
+                          <span style={{fontSize:10,fontWeight:700,color:clr,whiteSpace:"nowrap"}}>
+                            {item._urgency==="overdue"?"⚠ OVERDUE":item._urgency==="today"?"Due TODAY":"Due TOMORROW"}
+                          </span>
                         </div>
                       );
                     })}
