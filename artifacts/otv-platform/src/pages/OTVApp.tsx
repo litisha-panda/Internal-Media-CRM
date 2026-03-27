@@ -1977,7 +1977,20 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     showToast("Exception revoked — marked Absent again");
   };
   const user_role = USER_ROLES.find(u=>u.id===activeUser) || USER_ROLES.find(u=>u.id==="admin") || USER_ROLES[0];
-  const canGrantException = ["ADMIN","CXO","CEO","CRO"].includes(user_role?.role); // can grant HR exceptions
+  const canGrantException = ["ADMIN","CXO","CEO","CRO"].includes(user_role?.role);
+
+  // Maps an IR dept string → the assignedToUserId of the right person to task
+  const deptToUserId = (dept: string): string => {
+    const rhByRegion: Record<string,string> = {North:"rh_north",South:"rh_south",East:"rh_east",West:"rh_west",National:"rh_national",Central:"rh_central"};
+    const repRegion = user_role?.region || (deals as any[]).find((d: any)=>d.repId===user_role?.repId)?.region;
+    if (dept==="Region Head")    return rhByRegion[repRegion||""] || "rh_north";
+    if (dept==="NSH")            return "sales_head";
+    if (dept==="CXO")            return "admin";
+    if (dept==="Sales Strategy") return "sales_strategy";
+    if (dept==="Digital")        return "digi_ops";
+    if (dept==="CRO")            return "sales_analysis";
+    return "admin"; // Finance, Legal, HR, Branding, Content → admin
+  };
 
   // Auto-fill repId when log meeting modal opens for a Sales Rep
   useEffect(()=>{
@@ -6011,10 +6024,32 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
                       <button onClick={()=>{
                         if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
-                        const newReq={id:`ir${Date.now()}`,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),raisedBy:activeUser,raisedByName:user_role?.name||"",repId:user_role?.repId||null,dealId:null,clientCompany:irForm.clientCompany.trim(),status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};
+                        const irId = `ir${Date.now()}`;
+                        const newReq={id:irId,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),raisedBy:activeUser,raisedByName:user_role?.name||"",repId:user_role?.repId||null,dealId:null,clientCompany:irForm.clientCompany.trim(),status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};
                         setInternalReqs(p=>[newReq,...p]);
+                        // Auto-create a Task assigned to the "dept" person
+                        const assigneeId = deptToUserId(irForm.dept);
+                        const assigneeName = USER_ROLES.find(u=>u.id===assigneeId)?.name || irForm.dept;
+                        const newTask = {
+                          id:`t${Date.now()+1}`,
+                          title:`[IR] ${irForm.subject.trim()}`,
+                          assignedToUserId: assigneeId,
+                          assignedTo: null,
+                          assignedBy: activeUser,
+                          assignedByName: user_role?.name || "",
+                          assignedDept: irForm.dept,
+                          clientCompany: irForm.clientCompany.trim(),
+                          description: "Requested by " + (user_role?.name||"Sales Rep") + (irForm.clientCompany ? " for " + irForm.clientCompany.trim() : "") + ": " + (irForm.details.trim()||irForm.subject.trim()),
+                          priority: "High",
+                          status: "Open",
+                          dueDate: TOMORROW,
+                          createdAt: TODAY,
+                          repId: user_role?.repId||null,
+                          irId,
+                        };
+                        setTasks(p=>[...p, newTask]);
                         setIrFormOpen(false);setIrForm(BLANK_IR_FORM);
-                        showToast(`Request raised → ${irForm.dept} ✓`);
+                        showToast(`Request raised → ${assigneeName} · Task created ✓`);
                       }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                         Submit Request →
                       </button>
