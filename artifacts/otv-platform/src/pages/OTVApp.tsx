@@ -1422,6 +1422,95 @@ function HomeScreen({ user, onSelect, onLogout }) {
   );
 }
 
+// ─── VIRTUAL TOUR DATA ───────────────────────────────────────────────────────
+const TOUR_DATA = {
+  rep: {
+    welcome:{ title:"Welcome to OTV CRM", subtitle:"Your personal sales command centre", bullets:["📅 Plan & log client meetings from My Plan","💼 Track every deal in the Revenue Tracker","✅ Manage action items in Tasks","📤 Submit proposals via Internal Requests"] },
+    steps:[
+      {title:"My Plan — Your Daily Home", desc:"Start every morning here. Today's planned meetings appear in the left panel with time, client name, agenda, and any deal blockers. Tomorrow's plan sits right below.", nav:"my-plan"},
+      {title:"Planning a Meeting", desc:"Click '+ Add' next to TODAY or TOMORROW to schedule a client meeting. Set the client name, time, agenda, pitch type, and meeting type (physical / online / call).", nav:"my-plan"},
+      {title:"Logging a Meeting", desc:"After the meeting, tap its entry to expand the log form. Fill in what happened, client feedback, and outcome. This instantly updates your War Room status so your RH can see you've been active.", nav:"my-plan"},
+      {title:"Follow-up & Next Meeting Dates", desc:"Inside the log form, set a Follow-up Date (📞) and/or Next Meeting Date (📅). These auto-create entries in your calendar so nothing slips through the cracks.", nav:"my-plan"},
+      {title:"Calendar View", desc:"Switch to the Calendar tab on My Plan for a weekly view. Each cell shows chips with time, type label, client name, and agenda — so you can spot a busy day vs a free one instantly. Click any future cell to plan a meeting.", nav:"my-plan", tip:"Chips are colour-coded: blue = follow-up call, green = scheduled meeting, orange = action item."},
+      {title:"Revenue Tracker (Pipeline)", desc:"Track every deal — client, deal type (FCT / IPs / Digital / Integrated / Media Solutions), amount, quarter, and outcome. Update this after every meeting so your RH has an accurate picture.", nav:"pipeline"},
+      {title:"Adding & Updating Deals", desc:"Click '+ Add Deal' to create a new pipeline entry. Fill in client, deal type, quarter, and target amount. As the deal progresses, update the outcome (Very Interested → Proposal Accepted → Committed).", nav:"pipeline", tip:"Deal types: FCT = air-time, IPs = integrated properties, Media Solutions = branded content. Ask your RH if unsure."},
+      {title:"My Targets", desc:"View your quarterly revenue target and current progress. When your RH asks you to submit targets, use the '+ Submit Target' form here and it flows to them for approval.", nav:"target-submit"},
+      {title:"Tasks", desc:"Action items assigned to you or self-created. Use '+ Create Task' to track anything — calls to make, proposals to send, approvals to chase. Set due dates so nothing is forgotten.", nav:"tasks"},
+      {title:"Internal Requests", desc:"Need a custom rate card, a creative brief, or pricing approval from NSH? Raise an Internal Request here, tag the right department, and track its status end-to-end.", nav:"internal-requests"},
+      {title:"War Room", desc:"Your personal alert centre. Clients with no contact in 14+ days show as at-risk, and overdue follow-ups surface here. Check this when you're between meetings.", nav:"warroom"},
+      {title:"HR Reports", desc:"Your attendance and exception log. If you're visiting a client off-site or working from a different location, mark it here before 11:30 PM each day.", nav:"hr"},
+      {title:"You're all set! 🎉", desc:"Daily rhythm: Morning → My Plan → Log meetings as you go → Update pipeline after each call → End of day → Check calendar for tomorrow. Tap '?' in the top bar anytime to replay this tour.", nav:"my-plan"},
+    ]
+  },
+  rh: {
+    welcome:{ title:"Welcome, Region Head!", subtitle:"Your regional sales command centre", bullets:["⬡ War Room — live team activity & at-risk alerts","📋 Team's Plan — all rep meetings at a glance","✓ Approve targets, assign tasks, escalate deals","◇ Leaderboard — track rep performance weekly"] },
+    steps:[
+      {title:"My Plan", desc:"Plan and log your own client meetings here — just like a Sales Rep. NSH can see your activity in real time, so keep this updated.", nav:"my-plan"},
+      {title:"Team's Plan", desc:"See every rep's planned and logged meetings for today and tomorrow at a glance. Perfect for your morning team stand-up — you can see instantly who is active and who has nothing planned.", nav:"rh-team-plan"},
+      {title:"War Room — Your Command View", desc:"The most important screen for you. See which reps are active today, which clients haven't been contacted in 14+ days (at-risk), and who has overdue follow-ups. Red alerts need immediate action from you or the rep.", nav:"warroom"},
+      {title:"Revenue Tracker", desc:"Full pipeline for your region — all reps, all deals, all stages. Filter by rep or deal type. You can update outcomes here if a rep hasn't logged the result of a meeting yet.", nav:"pipeline"},
+      {title:"My Targets", desc:"Your own quarterly revenue target and progress against actuals. This includes the aggregate of all your reps' pipeline.", nav:"targets"},
+      {title:"Target Approvals", desc:"When reps in your region submit quarterly targets, they land here for your review. Approve or Reject each one with a note — approved targets flow up to NSH automatically.", nav:"target-approvals"},
+      {title:"My Tasks & Assigning Tasks", desc:"Manage your own action items and assign tasks to reps. '+ Assign Task' lets you create a task for any rep in your region with a due date. Overdue tasks surface in the War Room.", nav:"my-tasks"},
+      {title:"Escalations", desc:"Deals from your region waiting on NSH approval that have crossed the SLA (2+ days). Follow up with NSH or brief your rep on the delay from this screen.", nav:"rh-escalations"},
+      {title:"Leaderboard — My Region", desc:"Individual rep performance: target vs actual, deal count, and meeting frequency. Use this during weekly reviews to spot who needs support and who is outperforming.", nav:"lb-team"},
+      {title:"You're all set! 🎉", desc:"Daily rhythm: Morning → War Room + Team's Plan → Assign tasks to lagging reps. Weekly → Target Approvals + Leaderboard review. Tap '?' anytime to replay this tour.", nav:"my-plan"},
+    ]
+  },
+  nsh: {
+    welcome:{ title:"Welcome, National Sales Head!", subtitle:"Full national revenue visibility", bullets:["⬡ National War Room — all regions at a glance","✦ Approve target proposals from Region Heads","◈ Full pipeline — filter by region, rep, or deal type","◇ Region Head and Sales Rep scorecards"] },
+    steps:[
+      {title:"My Plan", desc:"Log your own senior client meetings here. As NSH you meet key accounts and agency heads directly — keep this updated so your team can see your activity too.", nav:"my-plan"},
+      {title:"RH's Plan", desc:"See all Region Heads' planned and logged meetings for the day. Useful context before your morning reviews with them.", nav:"nsh-rh-plan"},
+      {title:"Rep's Plan", desc:"Drill into any individual Sales Rep's daily meeting activity across all regions. Useful for spotting low activity or follow-up patterns early.", nav:"nsh-regional-plan"},
+      {title:"National War Room", desc:"Your morning command view. All regions and all reps — active today, at-risk clients, overdue follow-ups. This screen tells you within seconds where attention is needed.", nav:"warroom"},
+      {title:"Revenue Tracker", desc:"Full national pipeline. Filter by region, rep, deal type, outcome, or quarter. The Committed and Proposal Accepted rows show your month's likely closures.", nav:"pipeline"},
+      {title:"Targets", desc:"Review national targets and progress by quarter. Drill into any region or rep to see where the gaps are.", nav:"targets"},
+      {title:"Target Approvals", desc:"Target proposals from Region Heads land here for NSH sign-off. Approve or Reject with a note — rejections are sent back to the RH with your feedback automatically.", nav:"target-approvals"},
+      {title:"My Tasks", desc:"Your own task board. '+ Create Task' creates a personal task. '+ Assign Task' sends a task to any RH or rep in the system with a due date and priority.", nav:"my-tasks"},
+      {title:"Internal Requests Inbox", desc:"Proposals raised by reps and RHs that need NSH clearance — custom pricing, large package approvals, strategy sign-offs. Respond directly from this inbox.", nav:"internal-requests"},
+      {title:"All Region Heads Scorecard", desc:"Performance scorecard for each Region Head — pipeline value, target progress, and team activity. Use this for your weekly RH reviews.", nav:"nsh-rh-scorecard"},
+      {title:"All Sales Reps", desc:"Drill to individual rep level across all regions. See deals, meeting frequency, target achievement, and task completion in one table.", nav:"nsh-rep-scorecard"},
+      {title:"You're all set! 🎉", desc:"Daily rhythm: Morning → War Room → Internal Requests inbox → Target Approvals. Weekly → All Region Heads scorecard + Revenue Tracker drill-down. Tap '?' anytime to replay this tour.", nav:"my-plan"},
+    ]
+  },
+  strategy: {
+    welcome:{ title:"Welcome, Sales Strategy!", subtitle:"National visibility with approval authority", bullets:["⬡ War Room — national activity monitoring","✦ Approve targets and strategic deal proposals","⬆ Internal Requests inbox — strategy clearances","◇ Region Heads and Sales Rep performance data"] },
+    steps:[
+      {title:"Overview (Planning)", desc:"The Overview tab shows the national planning view — NSH meetings, RH activity, and rep-level plans. Use it to gauge daily sales momentum across the organisation.", nav:"my-plan"},
+      {title:"War Room", desc:"National activity view — active reps, at-risk clients, and overdue follow-ups across all regions. Your morning health check.", nav:"warroom"},
+      {title:"Revenue Tracker", desc:"Full national pipeline. Filter by region, rep, deal type, or quarter to get any slice you need for analysis or presentations.", nav:"pipeline"},
+      {title:"Target Approvals", desc:"Target proposals that require Sales Strategy sign-off land here. Review, approve, or reject each one with a note.", nav:"target-approvals"},
+      {title:"Internal Requests Inbox", desc:"Custom deck requests, market data queries, and pricing clearances from reps and RHs land here for your team's action. Respond with status updates and attach outputs.", nav:"internal-requests"},
+      {title:"All Region Heads Scorecard", desc:"Scorecard for each RH — pipeline value, targets, and team activity. Useful for preparing strategic reviews and monthly presentations.", nav:"nsh-rh-scorecard"},
+      {title:"All Sales Reps", desc:"Individual rep performance across all regions — deals, meetings, targets, and tasks. Drill into any rep for a full picture.", nav:"nsh-rep-scorecard"},
+      {title:"You're all set! 🎉", desc:"Focus areas: Internal Requests inbox first thing → Target Approvals → Revenue Tracker for deal pattern analysis. Tap '?' anytime to replay this tour.", nav:"my-plan"},
+    ]
+  },
+  cro: {
+    welcome:{ title:"Welcome, CRO!", subtitle:"Board-level revenue intelligence", bullets:["⬡ National War Room — regional health at a glance","◈ Revenue Tracker — full pipeline by region & quarter","✦ Strategic deal approvals — final sign-off authority","◇ Region Heads and Sales Rep scorecards"] },
+    steps:[
+      {title:"Overview", desc:"The Overview tab shows national planning activity — NSH meetings, RH schedules, and rep-level plans. Use it to gauge daily sales momentum at a glance.", nav:"my-plan"},
+      {title:"National War Room", desc:"Your pulse check. At-risk clients, overdue follow-ups, and active rep counts across all regions. Open this every morning for a 30-second national health check.", nav:"warroom"},
+      {title:"Revenue Tracker", desc:"Full national pipeline — sort by amount, region, outcome, or quarter. The Committed and Proposal Accepted columns show your month's likely closures.", nav:"pipeline"},
+      {title:"Targets", desc:"National revenue targets and quarterly progress. Drill into any region or quarter to see where actuals are tracking against plan.", nav:"targets"},
+      {title:"Target Approvals", desc:"Final-level approval queue for CRO sign-off. Review and approve or reject strategic targets submitted by NSH or Region Heads.", nav:"target-approvals"},
+      {title:"All Region Heads", desc:"Scorecard view for each Region Head — pipeline value, target achievement, and team engagement. Your weekly performance review input.", nav:"nsh-rh-scorecard"},
+      {title:"All Sales Reps", desc:"Individual rep analytics — deals pipeline, meeting count, target achievement, and task completion. Useful for performance conversations with NSH.", nav:"nsh-rep-scorecard"},
+      {title:"You're all set! 🎉", desc:"Your rhythm: Morning → War Room (30 seconds). Weekly → Revenue Tracker + All Region Heads. Monthly → Targets review. Tap '?' anytime to replay this tour.", nav:"my-plan"},
+    ]
+  },
+  admin: {
+    welcome:{ title:"Welcome, Admin!", subtitle:"System access and configuration", bullets:["◎ Access Management — approve sign-ups & assign roles","✦ Approval Queue — review pending system requests","⬆ Import Data — bulk upload deals or meeting data","⚙ System Config — manage system-wide settings"] },
+    steps:[
+      {title:"Access Management", desc:"New user sign-up requests land here. Review each one, approve or reject, and assign the correct role (Sales Rep, Region Head, NSH, etc.) and region before they can log in.", nav:"admin-access"},
+      {title:"Approval Queue", desc:"Internal requests that need admin-level review — escalations, role override requests, or items that fall outside normal department routing.", nav:"admin-approvals"},
+      {title:"Import Data", desc:"Bulk upload deals or meeting data from a CSV or spreadsheet. Useful for onboarding new reps or migrating historical data into the system.", nav:"import"},
+      {title:"You're all set! 🎉", desc:"Your focus: keep Access Management clear (no pending sign-ups unreviewed) and Approval Queue actioned promptly. Tap '?' anytime to replay this tour.", nav:"admin-access"},
+    ]
+  },
+};
+
 function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlans, setWeeklyPlans, sharedMeetings, setSharedMeetings, sharedDeals, setSharedDeals }) {
   const [view, setView] = useState(section === "ro" ? "ro-parser" : (user?.email==="admin@odishatv.com" ? "admin-access" : "my-plan"));
   // Persist deals + meetings directly — no more sync bug
@@ -1531,6 +1620,25 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [meetingEditForm, setMeetingEditForm] = useState<any>({});
   const [targetDrilldown, setTargetDrilldown] = useState(null); // { key, label, color, icon } — NSH region tile
   const [nshRepDrill,    setNshRepDrill]      = useState(null); // rep id — NSH → region → rep drill
+  // ── VIRTUAL TOUR STATE ──
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [tourActive,  setTourActive]  = useState(false);
+  const [tourStep,    setTourStep]    = useState(0);
+  const [tourKey,     setTourKey]     = useState("rep");
+  // Auto-show welcome modal on first login per user
+  useEffect(() => {
+    const key = `otv_welcome_${activeUser}`;
+    if (!localStorage.getItem(key)) {
+      const tid = setTimeout(() => setShowWelcomeModal(true), 700);
+      return () => clearTimeout(tid);
+    }
+  }, [activeUser]);
+  // Auto-navigate when tour step changes
+  useEffect(() => {
+    if (!tourActive) return;
+    const step = (TOUR_DATA[tourKey]?.steps || [])[tourStep];
+    if (step?.nav) setView(step.nav);
+  }, [tourStep, tourActive, tourKey]);
   const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
 
   const BLANK_DEAL = { clientCompany:"", repId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Needs Callback", amount:"", targetAmount:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", reqs:[], auditLog:[] };
@@ -2497,6 +2605,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
   const isCEORole = false;
   const isMDRole  = false;
 
+  // ── TOUR HELPERS ──
+  const _tourKey = isRep?"rep":isRH?"rh":isNSH?"nsh":isStrategy?"strategy":isCRORole?"cro":isAdmin?"admin":"rep";
+  const currentTourData  = TOUR_DATA[_tourKey] || TOUR_DATA.rep;
+  const currentTourSteps = currentTourData.steps;
+  const startTour = () => {
+    setTourKey(_tourKey);
+    setTourStep(0);
+    setShowWelcomeModal(false);
+    setTourActive(true);
+    localStorage.setItem(`otv_welcome_${activeUser}`, "1");
+  };
+  const closeTour = () => { setTourActive(false); setTourStep(0); };
+  const openWelcome = () => { setTourActive(false); setShowWelcomeModal(true); };
+
   // ── APPROVAL HELPERS ──
   const APPROVAL_THRESHOLDS = {
     RH:   5000000,   // Deals > ₹50L need RH approval
@@ -2884,6 +3006,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           )}
           <div style={{width:1,height:20,background:C.border}} />
 
+          {/* Virtual Tour / Help button */}
+          <button onClick={openWelcome}
+            title="Virtual Tour & Help"
+            style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.dim,fontWeight:700,transition:"border-color .15s,color .15s",flexShrink:0}}
+            onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
+            onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>?</button>
+
           {/* Countdown — only reps + RHs have 11:30 PM obligation */}
           {(isRep || isRH) && <div style={{fontSize:11,fontWeight:700,color:countdown.includes("passed")?C.red:C.green,background:countdown.includes("passed")?`${C.red}12`:`${C.green}10`,border:`1px solid ${countdown.includes("passed")?C.red:C.green}33`,padding:"3px 10px",borderRadius:4,whiteSpace:"nowrap"}}>⏱ {countdown}</div>}
 
@@ -2918,6 +3047,107 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           </div>
         </div>
       </div>
+
+      {/* ── WELCOME MODAL ────────────────────────────────────────────────── */}
+      {showWelcomeModal && (()=>{
+        const wd = currentTourData.welcome;
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+            <div style={{background:C.surface,border:`1px solid ${C.accent}44`,borderRadius:16,maxWidth:460,width:"100%",padding:"36px 40px",boxShadow:"0 24px 80px rgba(0,0,0,.6)",position:"relative"}}>
+              {/* Close X */}
+              <button onClick={()=>{setShowWelcomeModal(false);localStorage.setItem(`otv_welcome_${activeUser}`,"1");}}
+                style={{position:"absolute",top:14,right:16,background:"none",border:"none",color:C.dim,fontSize:20,cursor:"pointer",lineHeight:1}}>×</button>
+              {/* OTV badge */}
+              <div style={{width:48,height:48,borderRadius:12,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,color:C.accent,marginBottom:20}}>OTV</div>
+              <div className="sans" style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:4}}>{wd.title}</div>
+              <div style={{fontSize:13,color:C.dim,marginBottom:24}}>{wd.subtitle}</div>
+              {/* Bullet highlights */}
+              <div style={{background:C.s2,borderRadius:10,padding:"16px 20px",marginBottom:28}}>
+                {wd.bullets.map((b,i)=>(
+                  <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:i<wd.bullets.length-1?10:0}}>
+                    <span style={{color:C.accent,marginTop:1,fontSize:14}}>{b.split(" ")[0]}</span>
+                    <span style={{fontSize:12,color:C.text,lineHeight:1.5}}>{b.split(" ").slice(1).join(" ")}</span>
+                  </div>
+                ))}
+              </div>
+              {/* Action buttons */}
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={startTour}
+                  style={{flex:1,background:C.accent,border:"none",color:"#000",borderRadius:8,padding:"12px 20px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",letterSpacing:.3}}>
+                  Start Tour →
+                </button>
+                <button onClick={()=>{setShowWelcomeModal(false);localStorage.setItem(`otv_welcome_${activeUser}`,"1");}}
+                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:8,padding:"12px 20px",fontSize:13,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                  Skip for now
+                </button>
+              </div>
+              <div style={{fontSize:10,color:C.muted,marginTop:14,textAlign:"center"}}>You can replay this tour anytime by clicking the <strong>?</strong> button in the top bar</div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── TOUR OVERLAY ─────────────────────────────────────────────────── */}
+      {tourActive && (()=>{
+        const steps = currentTourSteps;
+        const step  = steps[tourStep];
+        const total = steps.length;
+        const isLast = tourStep === total - 1;
+        const isFirst = tourStep === 0;
+        const pct = Math.round(((tourStep + 1) / total) * 100);
+        return (
+          <>
+            {/* Dark backdrop — does NOT block sidebar so nav still visible */}
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:8000,pointerEvents:"none"}} />
+            {/* Floating tooltip card */}
+            <div style={{position:"fixed",bottom:32,right:32,zIndex:8001,width:380,background:C.surface,border:`1px solid ${C.accent}55`,borderRadius:14,boxShadow:"0 20px 60px rgba(0,0,0,.7)",overflow:"hidden"}}>
+              {/* Progress bar */}
+              <div style={{height:3,background:C.s2}}>
+                <div style={{height:"100%",width:`${pct}%`,background:C.accent,transition:"width .3s"}} />
+              </div>
+              <div style={{padding:"20px 22px 18px"}}>
+                {/* Step counter */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                  <span style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>Step {tourStep+1} of {total}</span>
+                  <button onClick={closeTour} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer",lineHeight:1,padding:0}}>×</button>
+                </div>
+                {/* Title */}
+                <div className="sans" style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:8,lineHeight:1.3}}>{step.title}</div>
+                {/* Description */}
+                <div style={{fontSize:12,color:C.dim,lineHeight:1.7,marginBottom:step.tip?10:0}}>{step.desc}</div>
+                {/* Tip */}
+                {step.tip && (
+                  <div style={{background:`${C.accent}12`,border:`1px solid ${C.accent}30`,borderRadius:6,padding:"8px 12px",fontSize:11,color:C.accent,lineHeight:1.5}}>
+                    💡 {step.tip}
+                  </div>
+                )}
+              </div>
+              {/* Navigation */}
+              <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 22px",display:"flex",gap:8,alignItems:"center"}}>
+                <button onClick={()=>setTourStep(s=>Math.max(0,s-1))} disabled={isFirst}
+                  style={{background:"transparent",border:`1px solid ${isFirst?C.s3:C.border}`,borderRadius:6,padding:"6px 14px",color:isFirst?C.muted:C.dim,fontSize:11,cursor:isFirst?"default":"pointer",fontFamily:"'DM Mono',monospace"}}>
+                  ← Prev
+                </button>
+                {isLast ? (
+                  <button onClick={closeTour}
+                    style={{flex:1,background:C.accent,border:"none",color:"#000",borderRadius:6,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                    Done ✓
+                  </button>
+                ) : (
+                  <button onClick={()=>setTourStep(s=>Math.min(total-1,s+1))}
+                    style={{flex:1,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"8px 14px",fontSize:12,color:C.accent,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                    Next →
+                  </button>
+                )}
+                <button onClick={closeTour}
+                  style={{background:"transparent",border:"none",color:C.muted,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",padding:"6px 8px"}}>
+                  Skip all
+                </button>
+              </div>
+            </div>
+          </>
+        );
+      })()}
 
       <div style={{display:"flex",flex:1,overflow:"hidden",flexDirection: isMobile ? "column" : "row"}}>
         {/* SIDEBAR — vertical on desktop, horizontal tab bar on mobile */}
