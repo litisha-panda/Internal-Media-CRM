@@ -1453,7 +1453,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [rhRepDrill, setRhRepDrill]       = useState(null); // Region Head targets drilldown
   const [nshRHDrill,  setNshRHDrill]      = useState(null); // NSH drills into specific RH region
   const [nshRegion,   setNshRegion]       = useState("all"); // NSH rep-CRM region filter
-  const BLANK_TASK_FORM = {title:"",assignedTo:"",clientCompany:"",description:"",priority:"High",dueDate:TOMORROW};
+  const BLANK_TASK_FORM = {title:"",assignedTo:"",assignedToUserId:"",clientCompany:"",description:"",priority:"High",dueDate:TOMORROW};
   const [taskForm, setTaskForm]           = useState(BLANK_TASK_FORM);
   useEffect(() => {
     if (!profileOpen) return;
@@ -2484,7 +2484,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
   const rhRegion   = user_role?.region;
 
   const myRepTaskBadge = isRep
-    ? tasks.filter(t=>t.assignedTo===user_role?.repId&&t.status!=="Done").length||null
+    ? tasks.filter(t=>(t.assignedToUserId===activeUser||t.assignedTo===user_role?.repId)&&t.status!=="Done").length||null
     : tasks.filter(t=>t.status!=="Done").length||null;
 
   // ── SECTIONED NAV BUILDER ──
@@ -6581,7 +6581,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const taskEsc = tasks.filter(t =>
                   t.status !== "Done" &&
                   (t.dueDate < TODAY || t.status === "Overdue") &&
-                  (user_role.canView!=="self" ? true : t.assignedTo===myRepId)
+                  (user_role.canView!=="self" ? true : t.assignedTo===myRepId||t.assignedToUserId===activeUser)
                 );
 
                 const total = approvalEsc.length + reqEsc.length + taskEsc.length;
@@ -6932,7 +6932,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
               {(() => {
                 const myRepId=user_role?.repId;
-                const vis=isRep?tasks.filter(t=>t.assignedTo===myRepId):tasks;
+                const vis=isRep?tasks.filter(t=>t.assignedTo===myRepId||t.assignedToUserId===activeUser):tasks;
                 if(!vis.length) return <div style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:8,padding:32,textAlign:"center",color:C.dim,fontSize:12}}>{isRep?"No tasks assigned to you yet.":"No tasks yet. Assign one above."}</div>;
                 return (
                   <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
@@ -6944,14 +6944,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </tr></thead>
                       <tbody>
                         {vis.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(task=>{
-                          const rep=REPS.find(r=>r.id===task.assignedTo);
+                          const assignee=task.assignedToUserId?USER_ROLES.find(u=>u.id===task.assignedToUserId):REPS.find(r=>r.id===task.assignedTo);
+                          const rep=assignee||(task.assignedTo?REPS.find(r=>r.id===task.assignedTo):null);
                           const overdue=task.dueDate<TODAY&&task.status!=="Done";
                           const sc=task.status==="Done"?C.green:overdue?C.red:task.status==="In Progress"?C.blue:C.accent;
                           return (
                             <tr key={task.id} style={{borderBottom:`1px solid ${C.s2}`,background:overdue?`${C.red}04`:"transparent"}}
                               onMouseOver={e=>e.currentTarget.style.background=overdue?`${C.red}08`:C.s2}
                               onMouseOut={e=>e.currentTarget.style.background=overdue?`${C.red}04`:"transparent"}>
-                              {!isRep&&<td style={{padding:"10px 14px"}}><div style={{fontWeight:600,fontSize:12}}>{rep?.name||"—"}<br/>{task.assignedDept&&<span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,marginTop:2,display:"inline-block"}}>dept: {task.assignedDept}</span>}</div><div style={{fontSize:10,color:C.dim}}>{rep?.region}</div></td>}
+                              {!isRep&&<td style={{padding:"10px 14px"}}><div style={{fontWeight:600,fontSize:12}}>{rep?.name||task.assignedToName||"—"}</div><div style={{fontSize:10,color:C.dim}}>{rep?.region||(assignee&&(assignee as any).role!=="SALES REP"?(assignee as any).role:null)}</div>{task.assignedDept&&<span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,marginTop:2,display:"inline-block"}}>dept: {task.assignedDept}</span>}</td>}
                               <td style={{padding:"10px 14px"}}><div style={{fontWeight:600,fontSize:12}}>{task.title}</div>{task.description&&<div style={{fontSize:10,color:C.dim,marginTop:2,maxWidth:220,whiteSpace:"normal",lineHeight:1.4}}>{task.description}</div>}</td>
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{task.clientCompany||"—"}</td>
                               <td style={{padding:"10px 14px"}}><span style={{background:task.priority==="High"?`${C.red}18`:task.priority==="Medium"?`${C.orange}18`:`${C.green}18`,color:task.priority==="High"?C.red:task.priority==="Medium"?C.orange:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{task.priority}</span></td>
@@ -9548,11 +9549,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
       {/* ASSIGN TASK MODAL */}
       {taskModal && (() => {
-        const defaultAssignTo = isRep && user_role?.repId ? String(user_role.repId) : "";
-        const initForm = {...BLANK_TASK_FORM, assignedTo: taskForm.assignedTo || defaultAssignTo};
-        if (!taskForm.assignedTo && defaultAssignTo) {
-          // pre-fill on first open
-          setTimeout(()=>setTaskForm(p=>p.assignedTo?p:{...p,assignedTo:defaultAssignTo}),0);
+        const defaultAssignToUserId = isRep && user_role?.id ? user_role.id : "";
+        if (!taskForm.assignedToUserId && defaultAssignToUserId) {
+          // pre-fill on first open for reps (self)
+          setTimeout(()=>setTaskForm(p=>p.assignedToUserId?p:{...p,assignedToUserId:defaultAssignToUserId}),0);
         }
         return (
         <div className="overlay" onClick={()=>{setTaskModal(false);setTaskForm(BLANK_TASK_FORM);}}>
@@ -9562,9 +9562,23 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
               <div><label>{isRep ? "Assign to (defaults to yourself)" : "Assign to *"}</label>
-                <select value={taskForm.assignedTo} onChange={e=>setTaskForm(p=>({...p,assignedTo:e.target.value}))}>
-                  <option value="">Select rep</option>
-                  {REPS.map(r=><option key={r.id} value={r.id}>{r.id===user_role?.repId?"Me — "+r.name:r.name+" · "+r.region}</option>)}
+                <select value={taskForm.assignedToUserId} onChange={e=>setTaskForm(p=>({...p,assignedToUserId:e.target.value}))}>
+                  <option value="">— Select person —</option>
+                  <optgroup label="Leadership &amp; Strategy">
+                    {USER_ROLES.filter(u=>["ADMIN","SALES HEAD","SALES STRATEGY","CRO","DIGI OPS"].includes(u.role)).map(u=>(
+                      <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name} · {u.role}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Region Heads">
+                    {USER_ROLES.filter(u=>u.role==="REGION HEAD").map(u=>(
+                      <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name}</option>
+                    ))}
+                  </optgroup>
+                  <optgroup label="Sales Reps">
+                    {USER_ROLES.filter(u=>u.role==="SALES REP").map(u=>(
+                      <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name} · {u.region}</option>
+                    ))}
+                  </optgroup>
                 </select></div>
               <div><label>Task *</label><input placeholder="What needs to happen?" value={taskForm.title} onChange={e=>setTaskForm(p=>({...p,title:e.target.value}))} /></div>
               <div><label>Related Client (optional)</label><input placeholder="Which client is this about?" value={taskForm.clientCompany} onChange={e=>setTaskForm(p=>({...p,clientCompany:e.target.value}))} /></div>
@@ -9580,13 +9594,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
               <button className="btn btn-ghost" onClick={()=>{setTaskModal(false);setTaskForm(BLANK_TASK_FORM);}}>Cancel</button>
               <button className="btn btn-primary" onClick={()=>{
-                const assignTo = taskForm.assignedTo || (isRep&&user_role?.repId?String(user_role.repId):"");
-                if(!assignTo||!taskForm.title){showToast("Task title required","err");return;}
-                const rep=REPS.find(r=>r.id===parseInt(assignTo));
-                setTasks(p=>[{id:`t${Date.now()}`,...taskForm,assignedTo:parseInt(assignTo),repId:parseInt(assignTo),assignedBy:activeUser,assignedByName:user_role?.name||user.name,status:"Open",createdAt:TODAY},...p]);
+                const assignedUserId = taskForm.assignedToUserId || (isRep&&user_role?.id?user_role.id:"");
+                if(!assignedUserId||!taskForm.title){showToast("Task title and assignee required","err");return;}
+                const assignedUser = USER_ROLES.find(u=>u.id===assignedUserId);
+                const repId = assignedUser?.repId||null;
+                setTasks(p=>[{id:`t${Date.now()}`,...taskForm,assignedToUserId:assignedUserId,assignedToName:assignedUser?.name||"",assignedTo:repId,repId:repId,assignedBy:activeUser,assignedByName:user_role?.name||user.name,status:"Open",createdAt:TODAY},...p]);
                 setTaskModal(false);
                 setTaskForm(BLANK_TASK_FORM);
-                showToast(parseInt(assignTo)===user_role?.repId?"Task created for yourself":"Task assigned to "+rep?.name);
+                showToast(assignedUserId===activeUser?"Task created for yourself":"Task assigned to "+(assignedUser?.name||""));
               }}>{isRep?"Create Task":"Assign Task"}</button>
             </div>
           </div>
