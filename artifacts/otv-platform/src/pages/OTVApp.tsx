@@ -942,7 +942,7 @@ function LoginScreen({ onLogin }) {
     try {
       const parts = response.credential.split(".");
       const payload = JSON.parse(atob(parts[1].replace(/-/g, "+").replace(/_/g, "/")));
-      onLogin({ name: payload.name || payload.email, email: payload.email, picture: payload.picture });
+      onLogin({ name: payload.name || payload.email, email: payload.email, picture: payload.picture, provider:"google" });
     } catch (e) {
       setErr("Google sign-in failed. Please try email login.");
       setLoading(false);
@@ -997,7 +997,7 @@ function LoginScreen({ onLogin }) {
             });
             const profile = await resp.json();
             const displayName = profile.display_name || profile.given_name || profile.first_name || profile.email;
-            onLogin({ name: displayName, email: profile.email, picture: profile.picture });
+            onLogin({ name: displayName, email: profile.email, picture: profile.picture, provider:"zoho" });
           } catch (e) {
             setErr("Could not fetch Zoho profile. Please try again.");
             setLoading(false);
@@ -1242,7 +1242,7 @@ export default function OTVApp() {
   const [meetings, setMeetings]       = usePersistedState("otv_meetings", SEED_MEETINGS);
   const [deals, setDeals]             = usePersistedState("otv_deals",    SEED_DEALS);
 
-  const handleLogin  = (user) => { setLoginUser(user); setLoggedIn(true); setSection(user?.role === "admin" ? "crm" : "home"); };
+  const handleLogin  = (user) => { setLoginUser(user); setLoggedIn(true); setSection(user?.role === "admin" ? "crm" : "home"); if (user?.provider) setLoginProvider(user.provider); };
   const handleLogout = ()     => { setLoggedIn(false); setLoginUser(null); setSection("home"); };
   const handleSelect = (s)    => setSection(s);
   const handleBack   = ()     => setSection("home");
@@ -1450,7 +1450,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [calDayView, setCalDayView]       = useState<string|null>(null); // date string "YYYY-MM-DD"
   const [myPlanTab,  setMyPlanTab]        = useState<"plan"|"log">("plan"); // My Plan sub-tabs
   const [addPlanFor, setAddPlanFor]       = useState(null);
-  const [planForm, setPlanForm]           = useState({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false});
+  const [planForm, setPlanForm]           = useState({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
+  const [loginProvider, setLoginProvider] = useState<"google"|"zoho"|"demo">("demo");
   const planInlineState                   = useState(null); // [inlineLogPlan, setInlineLogPlan]
   const [rhRepDrill, setRhRepDrill]       = useState(null); // Region Head targets drilldown
   const [nshRHDrill,  setNshRHDrill]      = useState(null); // NSH drills into specific RH region
@@ -2927,10 +2928,34 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             const doAddPlan = (date) => {
               if (!pf.clientAgencyName.trim()) return;
-              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myRepId||(REPS[0]?.id),date,time:pf.time||"10:00",clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
-              setPf({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false});
+              const planTime = pf.time||"10:00";
+              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myRepId||(REPS[0]?.id),date,time:planTime,clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
+
+              // Calendar sync — open calendar in new tab
+              if (pf.syncToCalendar) {
+                const [hStr,mStr] = planTime.split(":");
+                const h = parseInt(hStr||"10"); const m = parseInt(mStr||"0");
+                const endH = String(h+1).padStart(2,"0"); const endM = String(m).padStart(2,"0");
+                const startH = String(h).padStart(2,"0");
+                const dateParts = date.replace(/-/g,""); // YYYYMMDD
+                const title = encodeURIComponent(`[OTV] Meeting: ${pf.clientAgencyName.trim()}`);
+                const details = encodeURIComponent(`Contact: ${pf.contactName.trim()}${pf.agenda?"\nAgenda: "+pf.agenda:""}`);
+                if (pf.calPlatform==="google") {
+                  const startDT = `${dateParts}T${startH}${endM}00`;
+                  const endDT   = `${dateParts}T${endH}${endM}00`;
+                  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}`,"_blank");
+                } else if (pf.calPlatform==="zoho") {
+                  window.open(`https://calendar.zoho.in/newevent?title=${title}&startdate=${date}&starttime=${startH}:${endM}&enddate=${date}&endtime=${endH}:${endM}&desc=${details}`,"_blank");
+                } else if (pf.calPlatform==="outlook") {
+                  const startISO = `${date}T${startH}:${endM}:00`;
+                  const endISO   = `${date}T${endH}:${endM}:00`;
+                  window.open(`https://outlook.office.com/calendar/deeplink/compose?subject=${title}&startdt=${encodeURIComponent(startISO)}&enddt=${encodeURIComponent(endISO)}&body=${details}`,"_blank");
+                }
+              }
+
+              setPf({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform});
               setAddPlanFor(null);
-              showToast("Meeting planned ✓");
+              showToast(pf.syncToCalendar?"Meeting planned ✓ · Calendar opening…":"Meeting planned ✓");
             };
 
             // Inline log state — which plan is being logged right now
@@ -3397,6 +3422,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const dvLabel = new Date(dvDate+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
                   const hours = Array.from({length:24},(_,i)=>i);
                   const planAtHour = (h) => dvPlans.filter(p=>{const ph=parseInt((p.time||"00:00").split(":")[0]);return ph===h;});
+                  const usedHours = new Set(dvPlans.map(p=>parseInt((p.time||"00:00").split(":")[0])));
                   return (
                     <div className="overlay" onClick={()=>setCalDayView(null)}>
                       <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:580,maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
@@ -3462,7 +3488,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                           <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
                                             {typeTag&&<span style={{fontSize:9,color:statusClr,fontWeight:700}}>{typeTag}</span>}
                                             {p.pitchType&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 5px",borderRadius:3,fontSize:9,fontWeight:600}}>{p.pitchType}</span>}
-                                            <span style={{background:`${statusClr}22`,color:statusClr,padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700}}>{p.status==="Planned"?"Tap to log":p.status}</span>
+                                            <span style={{background:`${statusClr}22`,color:statusClr,padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700}}>
+                                              {p.status==="Done"?"Done":p.status==="Cancelled"?"Cancelled":(p.date>TODAY?"📅 Upcoming":"Tap to log")}
+                                            </span>
                                           </div>
                                         </div>
                                       </div>
@@ -3472,13 +3500,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               </div>
                             );
                           })}
-                          {dvPlans.filter(p=>parseInt((p.time||"00:00").split(":")[0])<8||parseInt((p.time||"00:00").split(":")[0])>20).map(p=>(
-                            <div key={p.id} style={{background:`${C.accent}0a`,border:`1px solid ${C.accent}33`,borderRadius:4,padding:"6px 12px",margin:"4px 0",display:"flex",gap:8,alignItems:"center"}}>
-                              <span style={{fontSize:10,color:C.dim,fontFamily:"'DM Mono',monospace"}}>{p.time}</span>
-                              <span style={{fontSize:12,fontWeight:600,color:C.text}}>{p.clientAgencyName}</span>
-                              {p.agenda&&<span style={{fontSize:10,color:C.dim}}>{p.agenda}</span>}
-                            </div>
-                          ))}
                         </div>
 
                         {!dvIsPast&&(
@@ -3558,6 +3579,35 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <button key={pt} onClick={()=>setPf(p=>({...p,pitchType:pt}))} style={{padding:"3px 9px",fontSize:10,borderRadius:4,border:`1px solid ${pf.pitchType===pt?C.accent:C.border}`,background:pf.pitchType===pt?`${C.accent}18`:"transparent",color:pf.pitchType===pt?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{pt}</button>
                             ))}
                           </div>
+                        </div>
+
+                        {/* Calendar sync */}
+                        <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,marginTop:2}}>
+                          <div style={{display:"flex",alignItems:"center",gap:10}}>
+                            <button onClick={()=>setPf(p=>({...p,syncToCalendar:!p.syncToCalendar,calPlatform:p.calPlatform||(loginProvider==="zoho"?"zoho":loginProvider==="google"?"google":"google")}))}
+                              style={{width:16,height:16,borderRadius:3,border:`1px solid ${pf.syncToCalendar?"#4285F4":C.border}`,background:pf.syncToCalendar?"#4285F4":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10,flexShrink:0}}>
+                              {pf.syncToCalendar?"✓":""}
+                            </button>
+                            <span style={{fontSize:12,color:pf.syncToCalendar?C.text:C.dim,fontWeight:600}}>Also add to my calendar</span>
+                            {loginProvider==="google"&&!pf.syncToCalendar&&<span style={{fontSize:10,color:C.dim}}>(Google Calendar recommended)</span>}
+                            {loginProvider==="zoho"&&!pf.syncToCalendar&&<span style={{fontSize:10,color:C.dim}}>(Zoho Calendar recommended)</span>}
+                          </div>
+                          {pf.syncToCalendar&&(
+                            <div style={{marginTop:8,display:"flex",gap:6,flexWrap:"wrap"}}>
+                              {[
+                                {id:"google",  label:"Google Calendar", icon:"📅", color:"#4285F4"},
+                                {id:"zoho",    label:"Zoho Calendar",   icon:"📆", color:"#e42527"},
+                                {id:"outlook", label:"Outlook",          icon:"📧", color:"#0078D4"},
+                              ].map(cp=>(
+                                <button key={cp.id}
+                                  onClick={()=>setPf(p=>({...p,calPlatform:cp.id}))}
+                                  style={{padding:"5px 12px",fontSize:11,borderRadius:5,border:`1px solid ${pf.calPlatform===cp.id?cp.color:C.border}`,background:pf.calPlatform===cp.id?`${cp.color}18`:"transparent",color:pf.calPlatform===cp.id?cp.color:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
+                                  {cp.icon} {cp.label}
+                                </button>
+                              ))}
+                              <span style={{fontSize:10,color:C.muted,lineHeight:"28px",paddingLeft:4}}>Opens in new tab</span>
+                            </div>
+                          )}
                         </div>
 
                       </div>
