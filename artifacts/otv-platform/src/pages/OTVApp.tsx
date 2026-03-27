@@ -1548,6 +1548,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [revenueEntries, setRevenueEntries]             = usePersistedState("otv_revenueEntries", SEED_REVENUE_ENTRIES);
   const [targetSubTab, setTargetSubTab]                 = useState("mine");
   const [revTab, setRevTab]                             = useState("log");
+  const BLANK_IR_FORM = {type:"Approval",dept:"NSH",subject:"",details:"",clientCompany:""};
+  const [irFormOpen, setIrFormOpen]                     = useState(false);
+  const [irForm, setIrForm]                             = useState(BLANK_IR_FORM);
   const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", [
     {id:"pu1", name:"Ravi Kumar",  email:"ravi@odishatv.com",  requestedAt: "2026-03-20"},
     {id:"pu2", name:"Sonal Mehta", email:"sonal@odishatv.com", requestedAt: "2026-03-23"},
@@ -1980,6 +1983,21 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
 
+    // Auto-create internal requests from next step items (same as calendar path)
+    const newIRsFromLog = (logForm.nextStepItems||[])
+      .filter(i => i.action && i.neededFrom && !["Self","Client"].includes(i.neededFrom))
+      .map(i => ({
+        id: `ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+        type: i.neededFrom==="NSH"||i.neededFrom==="CXO" ? "Approval" : "Support",
+        dept: i.neededFrom, subject: i.action,
+        details: (i.remarks||"") + (clientCompany ? ` — Re: ${clientCompany}` : ""),
+        raisedBy: activeUser, raisedByName: user_role?.name||"",
+        repId: parseInt(logForm.repId)||null,
+        dealId: logForm.dealId||null, clientCompany,
+        status: "Pending", raisedAt: TODAY, slaHours: 48, resolvedAt: null, resolverNote: ""
+      }));
+    if (newIRsFromLog.length) setInternalReqs(p => [...newIRsFromLog, ...p]);
+
     // Update deal last contact, outcome, and next step
     const firstFollowUpItem = (logForm.nextStepItems||[]).find(i=>i.action);
     if (deal) {
@@ -2027,8 +2045,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     setAtt(p => ({ ...p, [TODAY]: { ...(p[TODAY]||{}), [parseInt(logForm.repId)]: true } }));
     setLogForm(BLANK_LOG);
     setLogOpen(false);
-    const taskMsg = newTasks.length ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
-    showToast((late ? "Logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg);
+    const taskMsg  = newTasks.length      ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
+    const irMsgL   = newIRsFromLog.length ? ` · ${newIRsFromLog.length} request${newIRsFromLog.length>1?"s":""} raised` : "";
+    showToast((late ? "Logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsgL);
   };
 
   // ─── CALENDAR INTEGRATION ────────────────────────────────────────────────────
@@ -4987,24 +5006,66 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>INTERNAL REQUESTS</div>
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>Approvals · Escalations · Support requests</div>
                   </div>
-                  <button className="btn btn-primary" onClick={()=>{
-                    // TODO: open inline IR form — for now use defaults
-                    const type   = "Approval";
-                    const dept   = "NSH";
-                    const subj   = "New Request";
-                    const detail = "";
-                    const newReq = {
-                      id:`ir${Date.now()}`,
-                      type, dept, subject:subj, details:detail||"",
-                      raisedBy:activeUser,
-                      raisedByName:user_role?.name||"",
-                      repId:user_role?.repId||null,
-                      dealId:null, clientCompany:"",
-                      status:"Pending", raisedAt:TODAY, slaHours:48, resolvedAt:null, resolverNote:""
-                    };
-                    setInternalReqs(p=>[newReq,...p]);
-                  }}>+ New Request</button>
+                  <button className="btn btn-primary" onClick={()=>{setIrFormOpen(p=>!p);setIrForm(BLANK_IR_FORM);}}>
+                    {irFormOpen?"✕ Cancel":"+ New Request"}
+                  </button>
                 </div>
+
+                {/* ── Inline New Request Form ── */}
+                {irFormOpen&&(
+                  <div style={{background:C.surface,border:`1px solid ${C.accent}44`,borderRadius:8,padding:"16px 18px",marginBottom:16}}>
+                    <div style={{fontSize:12,fontWeight:700,color:C.accent,marginBottom:12,letterSpacing:".06em"}}>NEW INTERNAL REQUEST</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                      <div>
+                        <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Request type *</div>
+                        <select value={irForm.type} onChange={e=>setIrForm(f=>({...f,type:e.target.value}))}
+                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                          {["Approval","Support","Creative","Escalation","Data Request"].map(t=><option key={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Directed to *</div>
+                        <select value={irForm.dept} onChange={e=>setIrForm(f=>({...f,dept:e.target.value}))}
+                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                          {["NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{marginBottom:10}}>
+                      <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Subject / What do you need? *</div>
+                      <input value={irForm.subject} onChange={e=>setIrForm(f=>({...f,subject:e.target.value}))}
+                        placeholder="e.g. Discount approval — 10% off rate card for Havells"
+                        style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                      <div>
+                        <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Client / Account (optional)</div>
+                        <input value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
+                          placeholder="e.g. Havells India"
+                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                      </div>
+                    </div>
+                    <div style={{marginBottom:14}}>
+                      <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Details / Context</div>
+                      <textarea value={irForm.details} onChange={e=>setIrForm(f=>({...f,details:e.target.value}))}
+                        rows={3} placeholder="Provide context — client budget, ask, deadline, any relevant background…"
+                        style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",resize:"vertical",boxSizing:"border-box"}}/>
+                    </div>
+                    <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                      <button onClick={()=>{setIrFormOpen(false);setIrForm(BLANK_IR_FORM);}}
+                        style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                      <button onClick={()=>{
+                        if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
+                        const newReq={id:`ir${Date.now()}`,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),raisedBy:activeUser,raisedByName:user_role?.name||"",repId:user_role?.repId||null,dealId:null,clientCompany:irForm.clientCompany.trim(),status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};
+                        setInternalReqs(p=>[newReq,...p]);
+                        setIrFormOpen(false);setIrForm(BLANK_IR_FORM);
+                        showToast(`Request raised → ${irForm.dept} ✓`);
+                      }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        Submit Request →
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {/* Summary pills */}
                 <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
@@ -5059,6 +5120,26 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
                             <button onClick={()=>{openNoteModal("Resolution Note", "Resolved", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
                           </>
+                        )}
+                        {/* Escalate: visible to rep/RH when the request is overdue */}
+                        {overdue && (isRep||isRH) && req.status!=="Done" && req.type!=="Escalation" && (
+                          <button onClick={()=>{
+                            const escalated = {
+                              id:`ir${Date.now()}`,
+                              type:"Escalation",
+                              dept: req.dept==="NSH"?"CXO":req.dept==="Sales Strategy"?"NSH":"NSH",
+                              subject:`ESCALATION: ${req.subject}`,
+                              details:`Original request to ${req.dept} has breached SLA (${daysOld}d). Escalating for urgent action.\n\nOriginal: ${req.details||""}`,
+                              raisedBy:activeUser, raisedByName:user_role?.name||"",
+                              repId:user_role?.repId||req.repId||null,
+                              dealId:req.dealId||null, clientCompany:req.clientCompany||"",
+                              status:"Pending", raisedAt:TODAY, slaHours:24, resolvedAt:null, resolverNote:"",
+                            };
+                            setInternalReqs(p=>[escalated,...p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r)]);
+                            showToast(`Escalated to ${escalated.dept} ✓`);
+                          }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                            ↑ Escalate
+                          </button>
                         )}
                         {(isRep||isRH) && req.status!=="Done" && (
                           <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
