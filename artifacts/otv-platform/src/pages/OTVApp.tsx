@@ -3751,6 +3751,45 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     })}
                   </div>
                 )}
+
+                {/* ── TEAM PLAN: TODAY + TOMORROW ── */}
+                {(()=>{
+                  const rhTodayPlans = (plans||[]).filter(p=>myRepIds.includes(p.repId)&&p.date===TODAY);
+                  const rhTmrwPlans  = (plans||[]).filter(p=>myRepIds.includes(p.repId)&&p.date===TOMORROW);
+                  if(!rhTodayPlans.length&&!rhTmrwPlans.length) return null;
+                  const renderPlanRow = (p) => {
+                    const rep=REPS.find(r=>r.id===p.repId);
+                    return (
+                      <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:C.s2,borderRadius:5,marginBottom:5}}>
+                        <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent,flexShrink:0}}>{(rep?.name||"?")[0]}</div>
+                        <div style={{flex:1}}>
+                          <span style={{fontWeight:600,fontSize:12}}>{p.clientAgencyName}</span>
+                          <span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span>
+                          {p.time&&<span style={{color:C.muted,fontSize:10}}> @ {p.time}</span>}
+                        </div>
+                        {p.pitchType&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600}}>{p.pitchType}</span>}
+                        <span style={{background:p.status==="Done"?`${C.green}22`:`${C.blue}18`,color:p.status==="Done"?C.green:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600}}>{p.status}</span>
+                      </div>
+                    );
+                  };
+                  return (
+                    <div style={{marginTop:16}}>
+                      <div style={{height:1,background:C.border,marginBottom:16}}/>
+                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>TEAM PLAN · {rhTodayPlans.length} today · {rhTmrwPlans.length} tomorrow</div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+                        {[{label:"TODAY",list:rhTodayPlans},{label:"TOMORROW",list:rhTmrwPlans}].map(({label,list})=>(
+                          <div key={label} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,overflow:"hidden"}}>
+                            <div style={{padding:"6px 12px",background:C.s2,borderBottom:`1px solid ${C.border}`,fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{label} · {list.length} meeting{list.length!==1?"s":""}</div>
+                            <div style={{padding:"8px 10px",minHeight:40}}>
+                              {list.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:8}}>Nothing planned</div>}
+                              {list.map(renderPlanRow)}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
@@ -8842,15 +8881,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {displayRegions.map(region=>{
                   const rReps = REPS.filter(r=>r.region===region);
+                  const rRepIds = rReps.map(r=>r.id);
                   // Get today's deals with plans logged
                   const regionDeals = deals.filter(d=>d.region===region&&qMatch(d.quarter)&&d.outcome!=="Not Interested");
                   const todayMtgs   = meetings.filter(m=>REPS.find(r=>r.id===m.repId&&r.region===region)&&m.date===TODAY);
-                  const todayPlanned= (plans||[]).filter(p=>rReps.map(r=>r.id).includes(p.repId)&&p.date===TODAY);
+                  const todayPlanned= (plans||[]).filter(p=>rRepIds.includes(p.repId)&&p.date===TODAY);
+                  const tmrwPlanned = (plans||[]).filter(p=>rRepIds.includes(p.repId)&&p.date===TOMORROW);
                   return (
                     <div key={region} style={{marginBottom:18}}>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10,padding:"8px 14px",background:C.s2,borderRadius:7,borderLeft:`3px solid ${C.accent}`}}>
                         <span className="sans" style={{fontWeight:700,fontSize:13}}>{region}</span>
-                        <span style={{fontSize:10,color:C.dim}}>{rReps.length} reps · {todayPlanned.length} meetings today</span>
+                        <span style={{fontSize:10,color:C.dim}}>{rReps.length} reps · {todayPlanned.length} today · {tmrwPlanned.length} tomorrow</span>
                         <span style={{marginLeft:"auto",fontSize:11,color:C.green,fontWeight:600}}>
                           {fmtR(regionDeals.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0))} closed
                         </span>
@@ -8890,6 +8931,28 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           </tbody>
                         </table>
                       </div>
+
+                      {/* Tomorrow's planned meetings for this region */}
+                      {tmrwPlanned.length>0&&(
+                        <div style={{marginTop:8,background:C.surface,border:`1px solid ${C.accent}33`,borderRadius:7,overflow:"hidden"}}>
+                          <div style={{padding:"6px 12px",background:`${C.accent}08`,borderBottom:`1px solid ${C.accent}22`,fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>
+                            TOMORROW's PLANNED MEETINGS · {tmrwPlanned.length}
+                          </div>
+                          <div style={{padding:"8px 12px",display:"flex",flexWrap:"wrap",gap:6}}>
+                            {tmrwPlanned.map(p=>{
+                              const rep=REPS.find(r=>r.id===p.repId);
+                              return (
+                                <div key={p.id} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 10px",fontSize:11}}>
+                                  <span style={{fontWeight:600}}>{p.clientAgencyName}</span>
+                                  <span style={{color:C.dim}}> · {rep?.name}</span>
+                                  {p.time&&<span style={{color:C.muted}}> @ {p.time}</span>}
+                                  {p.pitchType&&<span style={{marginLeft:4,background:`${C.accent}18`,color:C.accent,padding:"0px 5px",borderRadius:3,fontSize:9,fontWeight:600}}>{p.pitchType}</span>}
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
