@@ -1427,7 +1427,7 @@ const TOUR_DATA = {
   rep: {
     welcome:{ title:"Welcome to OTV CRM", subtitle:"Your personal sales command centre", bullets:["📅 Plan & log client meetings from My Plan","💼 Track every deal in the Revenue Tracker","✅ Manage action items in Tasks","📤 Submit proposals via Internal Requests"] },
     steps:[
-      {title:"My Plan — Your Daily Home", desc:"Start every morning here. Today's planned meetings appear in the left panel with time, client name, agenda, and any deal blockers. Tomorrow's plan sits right below.", nav:"my-plan"},
+      {title:"My Plan — Your Daily Home", desc:"Start every morning here. Today's planned meetings appear in the left panel with time, client name, agenda, and any deal blockers.", nav:"my-plan"},
       {title:"Planning a Meeting", desc:"Click '+ Add' next to TODAY or TOMORROW to schedule a client meeting. Set the client name, time, agenda, pitch type, and meeting type (physical / online / call).", nav:"my-plan"},
       {title:"Logging a Meeting", desc:"After the meeting, tap its entry to expand the log form. Fill in what happened, client feedback, and outcome. This instantly updates your War Room status so your RH can see you've been active.", nav:"my-plan"},
       {title:"Follow-up & Next Meeting Dates", desc:"Inside the log form, set a Follow-up Date (📞) and/or Next Meeting Date (📅). These auto-create entries in your calendar so nothing slips through the cracks.", nav:"my-plan"},
