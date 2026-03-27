@@ -1209,18 +1209,76 @@ function LoginScreen({ onLogin }) {
 }
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
-// ── Persistent state hook — reads from localStorage on init, writes on every change, syncs across tabs ──
+// ── Shared server-synced state ─────────────────────────────────────────────
+// Reads/writes to the server DB so all users share the same data.
+// Falls back to localStorage when offline.
 function usePersistedState(key, initial) {
+  // 1. Initialize instantly from localStorage (no flash)
   const [state, setState] = useState(() => {
     try {
       const s = localStorage.getItem(key);
       return s ? JSON.parse(s) : initial;
     } catch { return initial; }
   });
+
+  // Track when we last wrote, to avoid polling overwriting in-progress edits
+  const lastWriteRef   = useRef<number>(0);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout>|null>(null);
+
+  // 2. On every state change: mirror to localStorage immediately,
+  //    then debounce-write to server after 1s
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
+    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+    pendingTimerRef.current = setTimeout(async () => {
+      try {
+        lastWriteRef.current = Date.now();
+        await fetch(`/api/state/${key}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ value: state }),
+        });
+      } catch { /* offline — localStorage still has it */ }
+    }, 1000);
+    return () => { if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current); };
   }, [key, state]);
-  // Sync changes made in other tabs / demo accounts
+
+  // 3. On mount: load from server (may override localStorage with newer shared data).
+  //    If server has nothing, migrate localStorage/seed to server.
+  // 4. Poll every 20s — only accept server value if it's newer than our last local write
+  useEffect(() => {
+    const load = async (isPoll = false) => {
+      try {
+        const res = await fetch(`/api/state/${key}`);
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.ok && data.value !== null) {
+          // On poll: skip if we wrote more recently (within 5s grace)
+          if (isPoll) {
+            const serverTs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+            if (lastWriteRef.current > serverTs - 5000) return;
+          }
+          setState(data.value);
+          try { localStorage.setItem(key, JSON.stringify(data.value)); } catch {}
+        } else if (!isPoll) {
+          // Server has no data yet — push local/seed data so other users see it
+          const localVal = state;
+          fetch(`/api/state/${key}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ value: localVal }),
+          }).catch(() => {});
+        }
+      } catch { /* offline */ }
+    };
+
+    load(false); // initial load
+    const interval = setInterval(() => load(true), 20000); // poll every 20s
+    return () => clearInterval(interval);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [key]);
+
+  // 5. Also sync across same-browser tabs (original behaviour)
   useEffect(() => {
     const onStorage = (e) => {
       if (e.key === key && e.newValue !== null) {
@@ -1230,6 +1288,7 @@ function usePersistedState(key, initial) {
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
   }, [key]);
+
   return [state, setState];
 }
 
