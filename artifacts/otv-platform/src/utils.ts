@@ -1,8 +1,8 @@
 export const C = {
-  bg:"#080a0f", surface:"#0d1117", s2:"#131920", s3:"#1a2332",
-  border:"#1e2d3d", accent:"#f0a500", green:"#16c784", red:"#ea3943",
-  blue:"#2d7dd2", purple:"#a855f7", orange:"#f97316", text:"#e6edf3",
-  dim:"#7d8590", muted:"#2a3a4d"
+  bg:"#f0f4f9", surface:"#ffffff", s2:"#e8eef7", s3:"#dde5f0",
+  border:"#c8d3e5", accent:"#c47d00", green:"#15803d", red:"#c92828",
+  blue:"#1d5db4", purple:"#7920e8", orange:"#c24000", text:"#18243a",
+  dim:"#4d5e78", muted:"#8a97ae"
 };
 
 export const fmt = (n: number): string => {

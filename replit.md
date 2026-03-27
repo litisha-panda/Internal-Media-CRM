@@ -48,6 +48,14 @@ Admin can change approval thresholds, SLA hours, inactivity escalation days from
 - API Server: Node.js, `artifacts/api-server/dist/index.mjs`, needs `DATABASE_URL` + `ANTHROPIC_API_KEY`
 - DB: Replit PostgreSQL, schema in `lib/db/src/schema/`, push with `cd lib/db && pnpm run push`
 
+## UI Theme — Light Mode ("Slate Day")
+
+The entire platform uses a soft light-mode palette defined in two places (must be kept in sync):
+- `OTVApp.tsx` line ~491: `const C = { ... }`
+- `artifacts/otv-platform/src/utils.ts` line 1: `export const C = { ... }`
+
+Current palette: `bg:#f0f4f9`, `surface:#ffffff`, `s2:#e8eef7`, `s3:#dde5f0`, `border:#c8d3e5`, `accent:#c47d00` (amber), `text:#18243a` (dark navy), `dim:#4d5e78`, `muted:#8a97ae`
+
 ## Key architectural notes
 
 - `usePersistedState` is the only state primitive — modifying it changes all sync behaviour
