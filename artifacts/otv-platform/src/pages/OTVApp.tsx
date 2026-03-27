@@ -1208,7 +1208,7 @@ function LoginScreen({ onLogin }) {
 }
 
 // ─── COMPONENT ────────────────────────────────────────────────────────────────
-// ── Persistent state hook — reads from localStorage on init, writes on every change ──
+// ── Persistent state hook — reads from localStorage on init, writes on every change, syncs across tabs ──
 function usePersistedState(key, initial) {
   const [state, setState] = useState(() => {
     try {
@@ -1219,6 +1219,16 @@ function usePersistedState(key, initial) {
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
   }, [key, state]);
+  // Sync changes made in other tabs / demo accounts
+  useEffect(() => {
+    const onStorage = (e) => {
+      if (e.key === key && e.newValue !== null) {
+        try { setState(JSON.parse(e.newValue)); } catch {}
+      }
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, [key]);
   return [state, setState];
 }
 
@@ -1562,6 +1572,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
+  const [editSubId, setEditSubId]                       = useState(null);
+  const [editSubClients, setEditSubClients]             = useState([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [importTab, setImportTab]                       = useState("deals");
 
@@ -6884,6 +6896,79 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   );
                 })()}
+
+                {/* REJECTED SUBMISSIONS — Edit & Resubmit */}
+                {qSubs.filter(s=>s.status==="Rejected").map(sub=>(
+                  <div key={sub.id} style={{marginBottom:20}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                      <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{filterQ} · Rejected Submission</div>
+                      {editSubId!==sub.id
+                        ? <button onClick={()=>{ setEditSubId(sub.id); setEditSubClients(sub.clients.map(c=>({...c,targetAmount:String(c.targetAmount)}))); }}
+                            style={{background:`${C.orange}18`,border:`1px solid ${C.orange}44`,color:C.orange,borderRadius:6,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                            ✏ Edit &amp; Resubmit
+                          </button>
+                        : <div style={{display:"flex",gap:8}}>
+                            <button onClick={()=>setEditSubId(null)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 14px",fontSize:11,cursor:"pointer",color:C.dim,fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                            <button onClick={()=>{
+                              const updated = editSubClients.map(c=>({...c,targetAmount:parseCurrency(String(c.targetAmount))}));
+                              const newTotal = updated.reduce((s,c)=>s+(c.targetAmount||0),0);
+                              setTargetSubs(p=>p.map(t=>t.id===sub.id?{
+                                ...t,
+                                clients: updated,
+                                totalTarget: newTotal,
+                                status: "Pending RH",
+                                approvalLog: [],
+                                submittedAt: TODAY,
+                              }:t));
+                              setEditSubId(null);
+                              showToast("Revised targets submitted for approval ✓");
+                            }} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:6,padding:"5px 16px",fontSize:11,cursor:"pointer",color:"#fff",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                              Resubmit →
+                            </button>
+                          </div>
+                      }
+                    </div>
+                    {/* Rejection reason from approval log */}
+                    {(sub.approvalLog||[]).length>0&&(
+                      <div style={{background:`${C.red}08`,border:`1px solid ${C.red}22`,borderRadius:6,padding:"8px 14px",marginBottom:10,display:"flex",gap:8,flexWrap:"wrap"}}>
+                        {(sub.approvalLog||[]).filter(l=>l.action==="Rejected"||l.note==="Rejected").map((l,i)=>(
+                          <span key={i} style={{fontSize:11,color:C.red}}>✗ {l.by}: {l.note} ({l.at})</span>
+                        ))}
+                        {(sub.approvalLog||[]).filter(l=>l.action!=="Rejected"&&l.note!=="Rejected").map((l,i)=>(
+                          <span key={i} style={{fontSize:11,color:C.green}}>✓ {l.by}: {l.note}</span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="card" style={{overflow:"hidden"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead><tr>
+                          {["Client","Deal Type","Target Amount",editSubId===sub.id?"New Amount":""].filter(Boolean).map(h=>(
+                            <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                          ))}
+                        </tr></thead>
+                        <tbody>
+                          {(editSubId===sub.id ? editSubClients : sub.clients).map((cl,i)=>(
+                            <tr key={i} style={{borderBottom:`1px solid ${C.s2}`}}>
+                              <td style={{padding:"10px 14px",fontWeight:700}}>{cl.clientCompany}</td>
+                              <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{cl.dealType}</span></td>
+                              <td style={{padding:"10px 14px",color:C.dim}}>{fmtR(sub.clients[i]?.targetAmount||cl.targetAmount)}</td>
+                              {editSubId===sub.id&&(
+                                <td style={{padding:"6px 14px"}}>
+                                  <input
+                                    value={editSubClients[i]?.targetAmount||""}
+                                    onChange={e=>setEditSubClients(p=>p.map((c,j)=>j===i?{...c,targetAmount:e.target.value}:c))}
+                                    placeholder="e.g. 50L"
+                                    style={{width:120,padding:"6px 10px",background:C.s2,border:`1px solid ${C.accent}55`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}
+                                  />
+                                </td>
+                              )}
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                ))}
 
                 {/* Past submissions (other quarters) */}
                 {mySubs.filter(s=>s.quarter!==filterQ).length>0&&(
