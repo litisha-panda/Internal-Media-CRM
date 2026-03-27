@@ -1427,18 +1427,18 @@ const TOUR_DATA = {
   rep: {
     welcome:{ title:"Welcome to OTV CRM", subtitle:"Your personal sales command centre", bullets:["📅 Plan & log client meetings from My Plan","💼 Track every deal in the Revenue Tracker","✅ Manage action items in Tasks","📤 Submit proposals via Internal Requests"] },
     steps:[
-      {title:"My Plan — Your Daily Home", desc:"Start every morning here. Today's planned meetings appear in the left panel with time, client name, agenda, and any deal blockers. Tomorrow's plan sits right next to it — plan ahead so your day is never empty.", nav:"my-plan"},
-      {title:"Planning a Meeting", desc:"Click '+ Add' next to TODAY or TOMORROW to schedule a client meeting. Set the client name, time, agenda, pitch type, and meeting type (physical / online / call).", nav:"my-plan"},
-      {title:"Logging a Meeting — and the 11:30 PM Rule", desc:"After the meeting, tap its entry to expand the log form. Fill in what happened, client feedback, and outcome. Important: you must log at least one meeting before 11:30 PM every working day. If nothing is logged by midnight, the system automatically marks you Absent for that day — this feeds directly into your HR attendance record.", nav:"my-plan", tip:"No meeting that day? Still log a brief office or client call entry so your attendance is captured."},
-      {title:"Follow-up & Next Meeting Dates", desc:"Inside the log form, set a Follow-up Date (📞) and/or Next Meeting Date (📅). These auto-create entries in your calendar so nothing slips through the cracks.", nav:"my-plan"},
-      {title:"Calendar View", desc:"Switch to the Calendar tab on My Plan for a weekly view. Each cell shows chips with time, type label, client name, and agenda — so you can spot a busy day vs a free one instantly. Click any future cell to plan a meeting.", nav:"my-plan", tip:"Chips are colour-coded: blue = follow-up call, green = scheduled meeting, orange = action item."},
-      {title:"Revenue Tracker (Pipeline)", desc:"Track every deal — client, deal type (FCT / IPs / Digital / Integrated / Media Solutions), amount, quarter, and outcome. Update this after every meeting so your RH has an accurate picture.", nav:"pipeline"},
-      {title:"Adding & Updating Deals", desc:"Click '+ Add Deal' to create a new pipeline entry. Fill in client, deal type, quarter, and target amount. As the deal progresses, update the outcome (Very Interested → Proposal Accepted → Committed).", nav:"pipeline", tip:"Deal types: FCT = air-time, IPs = integrated properties, Media Solutions = branded content. Ask your RH if unsure."},
-      {title:"My Targets", desc:"View your quarterly revenue target and current progress. When your RH asks you to submit targets, use the '+ Submit Target' form here and it flows to them for approval.", nav:"target-submit"},
-      {title:"Tasks", desc:"Action items assigned to you or self-created. Use '+ Create Task' to track anything — calls to make, proposals to send, approvals to chase. Set due dates so nothing is forgotten.", nav:"tasks"},
-      {title:"Internal Requests", desc:"Need a custom rate card, a creative brief, or pricing approval from NSH? Raise an Internal Request here, tag the right department, and track its status end-to-end.", nav:"internal-requests"},
-      {title:"War Room", desc:"Your personal alert centre. Clients with no contact in 14+ days show as at-risk, and overdue follow-ups surface here. Check this when you're between meetings.", nav:"warroom"},
-      {title:"HR Reports & Attendance", desc:"Your attendance record lives here. The system auto-marks you Present if you log a meeting, or Absent if nothing is logged by 11:30 PM. If you're out on client visits, WFH, or on leave, submit an Exception Request here before 11:30 PM — your RH approves it and your record is corrected. Never let the day end without either logging a meeting or raising an exception.", nav:"hr", tip:"Exceptions: Client Visit, WFH, On Leave, Field Work. Your RH gets an instant notification to approve."},
+      {title:"My Plan — Your Daily Home", desc:"Start every morning here. Today's planned meetings appear in the left panel with time, client name, agenda, and any deal blockers. Tomorrow's plan sits right next to it — plan ahead so your day is never empty.", nav:"my-plan", target:"my-plan"},
+      {title:"Planning a Meeting", desc:"Click '+ Add' next to TODAY or TOMORROW to schedule a client meeting. Set the client name, time, agenda, pitch type, and meeting type (physical / online / call).", nav:"my-plan", target:"content-area"},
+      {title:"Logging a Meeting — and the 11:30 PM Rule", desc:"After the meeting, tap its entry to expand the log form. Fill in what happened, client feedback, and outcome. Important: you must log at least one meeting before 11:30 PM every working day. If nothing is logged by midnight, the system automatically marks you Absent for that day — this feeds directly into your HR attendance record.", nav:"my-plan", target:"content-area", tip:"No meeting that day? Still log a brief office or client call entry so your attendance is captured."},
+      {title:"Follow-up & Next Meeting Dates", desc:"Inside the log form, set a Follow-up Date (📞) and/or Next Meeting Date (📅). These auto-create entries in your calendar so nothing slips through the cracks.", nav:"my-plan", target:"content-area"},
+      {title:"Calendar View", desc:"Switch to the Calendar tab on My Plan for a weekly view. Each cell shows chips with time, type label, client name, and agenda — so you can spot a busy day vs a free one instantly. Click any future cell to plan a meeting.", nav:"my-plan", target:"content-area", tip:"Chips are colour-coded: blue = follow-up call, green = scheduled meeting, orange = action item."},
+      {title:"Revenue Tracker (Pipeline)", desc:"Track every deal — client, deal type (FCT / IPs / Digital / Integrated / Media Solutions), amount, quarter, and outcome. Update this after every meeting so your RH has an accurate picture.", nav:"pipeline", target:"pipeline"},
+      {title:"Adding & Updating Deals", desc:"Click '+ Add Deal' to create a new pipeline entry. Fill in client, deal type, quarter, and target amount. As the deal progresses, update the outcome (Very Interested → Proposal Accepted → Committed).", nav:"pipeline", target:"content-area", tip:"Deal types: FCT = air-time, IPs = integrated properties, Media Solutions = branded content. Ask your RH if unsure."},
+      {title:"My Targets", desc:"View your quarterly revenue target and current progress. When your RH asks you to submit targets, use the '+ Submit Target' form here and it flows to them for approval.", nav:"target-submit", target:"target-submit"},
+      {title:"Tasks", desc:"Action items assigned to you or self-created. Use '+ Create Task' to track anything — calls to make, proposals to send, approvals to chase. Set due dates so nothing is forgotten.", nav:"tasks", target:"tasks"},
+      {title:"Internal Requests", desc:"Need a custom rate card, a creative brief, or pricing approval from NSH? Raise an Internal Request here, tag the right department, and track its status end-to-end.", nav:"internal-requests", target:"internal-requests"},
+      {title:"War Room", desc:"Your personal alert centre. Clients with no contact in 14+ days show as at-risk, and overdue follow-ups surface here. Check this when you're between meetings.", nav:"warroom", target:"warroom"},
+      {title:"HR Reports & Attendance", desc:"Your attendance record lives here. The system auto-marks you Present if you log a meeting, or Absent if nothing is logged by 11:30 PM. If you're out on client visits, WFH, or on leave, submit an Exception Request here before 11:30 PM — your RH approves it and your record is corrected. Never let the day end without either logging a meeting or raising an exception.", nav:"hr", target:"hr", tip:"Exceptions: Client Visit, WFH, On Leave, Field Work. Your RH gets an instant notification to approve."},
       {title:"You're all set! 🎉", desc:"Daily rhythm: Morning → My Plan → Log meetings as you go → Update pipeline after each call → End of day → Check calendar for tomorrow. Tap '?' in the top bar anytime to replay this tour.", nav:"my-plan"},
     ]
   },
@@ -1633,11 +1633,25 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       return () => clearTimeout(tid);
     }
   }, [activeUser]);
-  // Auto-navigate when tour step changes
+  // Tour card dynamic positioning: track target element's bounding rect
+  const [tourTargetRect, setTourTargetRect] = useState<DOMRect|null>(null);
+  // Auto-navigate when tour step changes + compute target highlight rect
   useEffect(() => {
     if (!tourActive) return;
     const step = (TOUR_DATA[tourKey]?.steps || [])[tourStep];
     if (step?.nav) setView(step.nav);
+    // Slight delay so the view re-renders before we measure
+    const tid = setTimeout(() => {
+      if (!step?.target) { setTourTargetRect(null); return; }
+      const el = document.querySelector(`[data-tour="${step.target}"]`) as HTMLElement|null;
+      if (el) {
+        el.scrollIntoView({ behavior:"smooth", block:"nearest" });
+        setTourTargetRect(el.getBoundingClientRect());
+      } else {
+        setTourTargetRect(null);
+      }
+    }, 120);
+    return () => clearTimeout(tid);
   }, [tourStep, tourActive, tourKey]);
   const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
 
@@ -3108,15 +3122,81 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         const isLast = tourStep === total - 1;
         const isFirst = tourStep === 0;
         const pct = Math.round(((tourStep + 1) / total) * 100);
+
+        // ── Dynamic card positioning ──
+        const CARD_W = 390;
+        const GAP = 18;
+        const PAD = 16;
+        let cardStyle: React.CSSProperties = { bottom: 32, right: 32 }; // fallback
+        if (tourTargetRect) {
+          const W = window.innerWidth;
+          const H = window.innerHeight;
+          const spaceRight  = W - tourTargetRect.right;
+          const spaceLeft   = tourTargetRect.left;
+          const spaceBottom = H - tourTargetRect.bottom;
+          const spaceTop    = tourTargetRect.top;
+          if (spaceRight >= CARD_W + GAP) {
+            // Place card to the right
+            cardStyle = {
+              position:"fixed", left: tourTargetRect.right + GAP,
+              top: Math.max(PAD, Math.min(tourTargetRect.top, H - 350 - PAD)),
+              width: CARD_W,
+            };
+          } else if (spaceLeft >= CARD_W + GAP) {
+            // Place card to the left
+            cardStyle = {
+              position:"fixed", right: W - tourTargetRect.left + GAP,
+              top: Math.max(PAD, Math.min(tourTargetRect.top, H - 350 - PAD)),
+              width: CARD_W,
+            };
+          } else if (spaceBottom >= 300 + GAP) {
+            // Place card below
+            cardStyle = {
+              position:"fixed", top: tourTargetRect.bottom + GAP,
+              left: Math.max(PAD, Math.min(tourTargetRect.left, W - CARD_W - PAD)),
+              width: CARD_W,
+            };
+          } else if (spaceTop >= 300 + GAP) {
+            // Place card above
+            cardStyle = {
+              position:"fixed", bottom: H - tourTargetRect.top + GAP,
+              left: Math.max(PAD, Math.min(tourTargetRect.left, W - CARD_W - PAD)),
+              width: CARD_W,
+            };
+          } else {
+            // Center fallback
+            cardStyle = {
+              position:"fixed", bottom: 32, left: "50%",
+              transform:"translateX(-50%)", width: CARD_W,
+            };
+          }
+        }
+
         return (
           <>
-            {/* Dark backdrop — does NOT block sidebar so nav still visible */}
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.55)",zIndex:8000,pointerEvents:"none"}} />
-            {/* Floating tooltip card */}
-            <div style={{position:"fixed",bottom:32,right:32,zIndex:8001,width:380,background:C.surface,border:`1px solid ${C.accent}55`,borderRadius:14,boxShadow:"0 20px 60px rgba(0,0,0,.7)",overflow:"hidden"}}>
+            {/* Dark backdrop */}
+            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:8000,pointerEvents:"none"}} />
+            {/* Spotlight highlight ring around target */}
+            {tourTargetRect && (
+              <div style={{
+                position:"fixed",
+                left: tourTargetRect.left - 5,
+                top:  tourTargetRect.top  - 5,
+                width:  tourTargetRect.width  + 10,
+                height: tourTargetRect.height + 10,
+                border:`2px solid ${C.accent}`,
+                borderRadius:8,
+                boxShadow:`0 0 0 3px ${C.accent}44, 0 0 22px 4px ${C.accent}55`,
+                zIndex:8002,
+                pointerEvents:"none",
+                transition:"all .25s cubic-bezier(.4,0,.2,1)",
+              }} />
+            )}
+            {/* Floating tooltip card — dynamically positioned */}
+            <div style={{...cardStyle,position:"fixed",zIndex:8003,background:C.surface,border:`1px solid ${C.accent}55`,borderRadius:14,boxShadow:"0 20px 60px rgba(0,0,0,.7)",overflow:"hidden",transition:"top .25s,left .25s,right .25s,bottom .25s"}}>
               {/* Progress bar */}
               <div style={{height:3,background:C.s2}}>
-                <div style={{height:"100%",width:`${pct}%`,background:C.accent,transition:"width .3s"}} />
+                <div style={{height:"100%",width:`${pct}%`,background:C.accent,transition:"width .35s"}} />
               </div>
               <div style={{padding:"20px 22px 18px"}}>
                 {/* Step counter */}
@@ -3182,6 +3262,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",padding:si===0?"6px 14px 3px":"10px 14px 3px"}}>{sec.label}</div>
                 {sec.items.map(n => (
                   <button key={n.id} onClick={()=>setView(n.id)}
+                    data-tour={n.id}
                     style={{width:"100%",padding:"8px 14px",background:view===n.id?`${C.accent}12`:"transparent",border:"none",borderLeft:view===n.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===n.id?C.accent:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:view===n.id?600:400,letterSpacing:".03em",textAlign:"left",transition:"all .1s"}}>
                     <span style={{fontSize:12,opacity:.75}}>{n.icon}</span>
                     <span style={{flex:1}}>{n.label}</span>
@@ -3195,7 +3276,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         )}
 
         {/* MAIN */}
-        <div style={{flex:1,overflow:"auto",padding: isMobile ? 12 : 20}}>
+        <div data-tour="content-area" style={{flex:1,overflow:"auto",padding: isMobile ? 12 : 20}}>
 
           {/* ═══ MY PLAN ═══ */}
           {view==="my-plan" && (()=>{
