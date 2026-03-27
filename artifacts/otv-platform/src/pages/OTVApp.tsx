@@ -22,6 +22,7 @@ const TASK_PRIORITIES = ["High", "Medium", "Low"];
 const TASK_STATUSES   = ["Open", "In Progress", "Done", "Overdue"];
 
 const APPROVAL_TARGETS = [
+  "Region Head",
   "NSH",
   "Branding Team",
   "Content Team",
@@ -2003,7 +2004,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       .filter(i => i.action && i.neededFrom && !["Self","Client"].includes(i.neededFrom))
       .map(i => ({
         id: `ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        type: i.neededFrom==="NSH"||i.neededFrom==="CXO" ? "Approval" : "Support",
+        type: ["Region Head","NSH","CXO"].includes(i.neededFrom) ? "Approval" : "Support",
         dept: i.neededFrom, subject: i.action,
         details: (i.remarks||"") + (clientCompany ? ` — Re: ${clientCompany}` : ""),
         raisedBy: activeUser, raisedByName: user_role?.name||"",
@@ -2017,7 +2018,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const firstFollowUpItem = (logForm.nextStepItems||[]).find(i=>i.action);
     if (deal) {
       const approvalItem2 = (logForm.nextStepItems||[]).find(i =>
-        i.neededFrom && ["NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
+        i.neededFrom && ["Region Head","NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
       );
       setDeals(p => p.map(d => d.id === logForm.dealId ? {
         ...d,
@@ -2269,7 +2270,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       .filter(i => i.action && i.neededFrom && !["Self","Client"].includes(i.neededFrom))
       .map(i => ({
         id: `ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        type: i.neededFrom==="NSH"||i.neededFrom==="CXO" ? "Approval" : "Support",
+        type: ["Region Head","NSH","CXO"].includes(i.neededFrom) ? "Approval" : "Support",
         dept: i.neededFrom, subject: i.action,
         details: (i.remarks||"") + (clientCompany ? ` — ${clientCompany}` : ""),
         raisedBy: activeUser, raisedByName: user_role?.name||"",
@@ -2283,7 +2284,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     if (deal) {
       // Determine if any next step requires internal approval
       const approvalItem = (updatedForm.nextStepItems||[]).find(i =>
-        i.neededFrom && ["NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
+        i.neededFrom && ["Region Head","NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
       );
       const newAwaiting = approvalItem ? approvalItem.neededFrom : deal.awaitingApproval;
       const auditEntry  = approvalItem ? [{
@@ -3798,8 +3799,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const overdueInRegion = visibleDeals.filter(d=>
               d.nextStepDate && d.nextStepDate<TODAY && d.outcome!=="Proposal Accepted" && myRepIds.includes(d.repId)
             );
+            // Internal Requests directed to this RH from their reps
+            const rhIncomingIRs = internalReqs.filter(r=>
+              r.dept==="Region Head" &&
+              r.status!=="Done" && r.status!=="Withdrawn" &&
+              USER_ROLES.find(u=>u.id===r.raisedBy)?.region===rhRegion
+            );
 
-            const total = pendingApprovals.length + pendingTasks.length;
+            const total = pendingApprovals.length + pendingTasks.length + rhIncomingIRs.length;
 
             return (
               <div className="fin">
@@ -3808,11 +3815,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · Items directed to you that need a decision</div>
                 </div>
 
-                <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:18}}>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:18}}>
                   {[
-                    {label:"PENDING APPROVALS", value:pendingApprovals.length, color:C.orange},
-                    {label:"TASKS FOR YOU",      value:pendingTasks.length,     color:C.blue},
-                    {label:"OVERDUE IN REGION",  value:overdueInRegion.length,  color:C.red},
+                    {label:"REQUESTS TO YOU",   value:rhIncomingIRs.length,    color:C.accent},
+                    {label:"PENDING APPROVALS",  value:pendingApprovals.length, color:C.orange},
+                    {label:"TASKS FOR YOU",       value:pendingTasks.length,    color:C.blue},
+                    {label:"OVERDUE IN REGION",   value:overdueInRegion.length, color:C.red},
                   ].map(k=>(
                     <div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}>
                       <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div>
@@ -3826,6 +3834,38 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontSize:22,marginBottom:8}}>✓</div>
                     <div className="sans" style={{fontWeight:700,color:C.green,marginBottom:4}}>No escalations</div>
                     <div style={{fontSize:11,color:C.dim}}>All items in {rhRegion} are on track.</div>
+                  </div>
+                )}
+
+                {/* Incoming requests from reps directed to this RH */}
+                {rhIncomingIRs.length>0&&(
+                  <div style={{marginBottom:18}}>
+                    <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📥 Requests to You from Your Team</div>
+                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead><tr>{["Rep","Type","Subject","Client","Raised","Status","Action"].map(h=>(
+                          <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                        ))}</tr></thead>
+                        <tbody>
+                          {rhIncomingIRs.map(r=>(
+                            <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}}>
+                              <td style={{padding:"10px 14px",fontWeight:600,fontSize:12}}>{r.raisedByName}</td>
+                              <td style={{padding:"10px 14px"}}><span style={{background:`${C.accent}18`,color:C.accent,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.type}</span></td>
+                              <td style={{padding:"10px 14px",maxWidth:200,fontSize:12}}>{r.subject}</td>
+                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{r.clientCompany||"—"}</td>
+                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{r.raisedAt}</td>
+                              <td style={{padding:"10px 14px"}}><span style={{background:`${r.status==="Pending"?C.orange:r.status==="Overdue"?C.red:C.blue}18`,color:r.status==="Pending"?C.orange:r.status==="Overdue"?C.red:C.blue,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.status}</span></td>
+                              <td style={{padding:"10px 14px",whiteSpace:"nowrap",display:"flex",gap:4}}>
+                                <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress",resolverNote:"Acknowledged by "+user_role?.name}:x))}
+                                  style={{background:`${C.blue}18`,color:C.blue,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Accept</button>
+                                <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Resolved by "+user_role?.name}:x))}
+                                  style={{background:`${C.green}18`,color:C.green,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Done</button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
 
@@ -5314,7 +5354,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ INTERNAL REQUESTS ═══ */}
           {view==="internal-requests" && (() => {
             const IR_DEPTS = ["NSH","Sales Strategy","Branding Team","Content Team","Digital","Finance","Legal","CXO"];
-            const myReqs  = isRep||isRH ? internalReqs.filter(r=>r.raisedBy===activeUser) : internalReqs;
+            const myReqs  = isRep
+              ? internalReqs.filter(r=>r.raisedBy===activeUser)
+              : isRH
+                ? internalReqs.filter(r=>r.raisedBy===activeUser || (r.dept==="Region Head" && USER_ROLES.find(u=>u.id===r.raisedBy)?.region===rhRegion))
+                : internalReqs;
             const filtered = irStatusFilter==="all" ? myReqs : myReqs.filter(r=>r.status===irStatusFilter);
             const pending  = myReqs.filter(r=>r.status==="Pending"||r.status==="Overdue");
             const inprog   = myReqs.filter(r=>r.status==="In Progress");
@@ -5350,7 +5394,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Who do you need it from? *</div>
                         <select value={irForm.dept} onChange={e=>setIrForm(f=>({...f,dept:e.target.value}))}
                           style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                          {["NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
+                          {["Region Head","NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
                         </select>
                       </div>
                     </div>
@@ -10082,7 +10126,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Who do you need it from? *</div>
                 <select value={irForm.dept} onChange={e=>setIrForm(f=>({...f,dept:e.target.value}))}
                   style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                  {["NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
+                  {["Region Head","NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
                 </select>
               </div>
             </div>
