@@ -1446,6 +1446,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const importRef = useRef();
   // My Plan calendar state — must be at component level (React hooks rule)
   const [calWeekOffset, setCalWeekOffset] = useState(0);
+  const [calDayView, setCalDayView]       = useState<string|null>(null); // date string "YYYY-MM-DD"
   const [addPlanFor, setAddPlanFor]       = useState(null);
   const [planForm, setPlanForm]           = useState({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false});
   const planInlineState                   = useState(null); // [inlineLogPlan, setInlineLogPlan]
@@ -3262,9 +3263,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               const isTmrw  = date===TOMORROW;
                               const isPast  = date<TODAY;
                               return (
-                                <div key={date} onClick={()=>!isPast&&setAddPlanFor(date)}
-                                  style={{background:isToday?`${C.accent}08`:C.surface,border:`1px solid ${isToday?C.accent:isTmrw?C.blue:C.border}`,borderRadius:6,minHeight:88,display:"flex",flexDirection:"column",cursor:isPast?"default":"pointer",transition:"border-color .1s"}}
-                                  onMouseOver={e=>{if(!isPast)e.currentTarget.style.borderColor=C.accent;}}
+                                <div key={date} onClick={()=>setCalDayView(date)}
+                                  style={{background:isToday?`${C.accent}08`:C.surface,border:`1px solid ${isToday?C.accent:isTmrw?C.blue:C.border}`,borderRadius:6,minHeight:88,display:"flex",flexDirection:"column",cursor:"pointer",transition:"border-color .1s"}}
+                                  onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;}}
                                   onMouseOut={e=>{e.currentTarget.style.borderColor=isToday?C.accent:isTmrw?C.blue:C.border;}}>
                                   {/* Day number row */}
                                   <div style={{padding:"3px 6px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${isToday?C.accent+"33":C.s2}`}}>
@@ -3296,6 +3297,100 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     );
                   })()}
                 </div>
+
+                {/* DAY VIEW MODAL */}
+                {calDayView&&(()=>{
+                  const dvDate = calDayView;
+                  const dvPlans = allPlans.filter(p=>(myRepId?p.repId===myRepId:true)&&p.date===dvDate).sort((a,b)=>a.time.localeCompare(b.time));
+                  const dvIsPast = dvDate < TODAY;
+                  const dvLabel = new Date(dvDate+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
+                  const hours = [8,9,10,11,12,13,14,15,16,17,18,19,20];
+                  const planAtHour = (h) => dvPlans.filter(p=>{const ph=parseInt((p.time||"00:00").split(":")[0]);return ph===h;});
+                  const usedHours = new Set(dvPlans.map(p=>parseInt((p.time||"00:00").split(":")[0])));
+                  return (
+                    <div className="overlay" onClick={()=>setCalDayView(null)}>
+                      <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:580,maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
+                        {/* Header */}
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexShrink:0}}>
+                          <div>
+                            <div className="sans" style={{fontSize:16,fontWeight:700,color:C.text}}>{dvLabel}</div>
+                            <div style={{fontSize:11,color:C.dim,marginTop:2}}>
+                              {dvPlans.length===0?"No meetings — day is open":dvPlans.length===1?"1 meeting planned":`${dvPlans.length} meetings planned`}
+                            </div>
+                          </div>
+                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                            {!dvIsPast&&<button className="btn btn-primary" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>{setCalDayView(null);setAddPlanFor(dvDate);}}>+ Add Meeting</button>}
+                            <button onClick={()=>setCalDayView(null)} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+                          </div>
+                        </div>
+
+                        {/* Time slot grid */}
+                        <div style={{overflowY:"auto",flex:1}}>
+                          {hours.map(h=>{
+                            const slotPlans = planAtHour(h);
+                            const isOccupied = usedHours.has(h);
+                            const timeLabel = `${String(h).padStart(2,"0")}:00`;
+                            return (
+                              <div key={h} style={{display:"flex",gap:0,minHeight:48,borderBottom:`1px solid ${C.s2}`}}>
+                                {/* Hour label */}
+                                <div style={{width:48,flexShrink:0,padding:"6px 8px 0",fontSize:10,color:C.muted,fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{timeLabel}</div>
+                                {/* Slot content */}
+                                <div style={{flex:1,padding:"4px 8px",background:isOccupied?`${C.accent}05`:"transparent",cursor:(!dvIsPast&&!isOccupied)?"pointer":"default"}}
+                                  onClick={()=>{if(!dvIsPast&&!isOccupied){setCalDayView(null);setAddPlanFor(dvDate);}}}>
+                                  {slotPlans.length===0&&!dvIsPast&&(
+                                    <div style={{fontSize:10,color:C.s3,lineHeight:"38px",paddingLeft:4}}>Free</div>
+                                  )}
+                                  {slotPlans.map(p=>{
+                                    const statusClr = p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent;
+                                    const typeTag = p.autoCreatedFrom==="follow-up"?"📞 Follow-up":p.autoCreatedFrom==="next-meeting"?"📅 Next Mtg":p.autoCreatedFrom==="next-step"?"⚡ Action":null;
+                                    return (
+                                      <div key={p.id}
+                                        onClick={e=>{
+                                          e.stopPropagation();
+                                          if(p.status==="Done"){
+                                            const m=meetings.find(m=>m.id===p.loggedMeetingId)||meetings.find(m=>m.repId===myRepId&&(m.clientCompany||"").toLowerCase()===(p.clientAgencyName||"").toLowerCase()&&m.date===p.date);
+                                            if(m){setCalDayView(null);setViewMeetingId(m.id);}
+                                          } else {
+                                            setCalDayView(null);setInlineLogPlan(p.id);
+                                          }
+                                        }}
+                                        style={{background:p.status==="Done"?`${C.green}14`:`${C.accent}14`,border:`1px solid ${statusClr}44`,borderLeft:`3px solid ${statusClr}`,borderRadius:4,padding:"5px 10px",marginBottom:4,cursor:"pointer"}}>
+                                        <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"space-between"}}>
+                                          <div style={{flex:1,minWidth:0}}>
+                                            <div style={{fontSize:12,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.clientAgencyName}</div>
+                                            {p.agenda&&<div style={{fontSize:10,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.agenda}</div>}
+                                          </div>
+                                          <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
+                                            {typeTag&&<span style={{fontSize:9,color:statusClr,fontWeight:700}}>{typeTag}</span>}
+                                            {p.pitchType&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 5px",borderRadius:3,fontSize:9,fontWeight:600}}>{p.pitchType}</span>}
+                                            <span style={{background:`${statusClr}22`,color:statusClr,padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700}}>{p.status==="Planned"?"Tap to log":p.status}</span>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                          {dvPlans.filter(p=>parseInt((p.time||"00:00").split(":")[0])<8||parseInt((p.time||"00:00").split(":")[0])>20).map(p=>(
+                            <div key={p.id} style={{background:`${C.accent}0a`,border:`1px solid ${C.accent}33`,borderRadius:4,padding:"6px 12px",margin:"4px 0",display:"flex",gap:8,alignItems:"center"}}>
+                              <span style={{fontSize:10,color:C.dim,fontFamily:"'DM Mono',monospace"}}>{p.time}</span>
+                              <span style={{fontSize:12,fontWeight:600,color:C.text}}>{p.clientAgencyName}</span>
+                              {p.agenda&&<span style={{fontSize:10,color:C.dim}}>{p.agenda}</span>}
+                            </div>
+                          ))}
+                        </div>
+
+                        {!dvIsPast&&(
+                          <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`,flexShrink:0,textAlign:"center"}}>
+                            <button className="btn btn-ghost" style={{fontSize:11}} onClick={()=>{setCalDayView(null);setAddPlanFor(dvDate);}}>+ Add a meeting for this day</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* Plan modal */}
                 {addPlanFor&&(
