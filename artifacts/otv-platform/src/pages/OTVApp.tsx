@@ -2982,13 +2982,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const dueToday  = [...repTasks.filter(t=>t.dueDate===TODAY), ...autoDuePlans.filter(p=>p.date===TODAY)];
                   const dueTmrw   = [...repTasks.filter(t=>t.dueDate===TOMORROW), ...autoDuePlans.filter(p=>p.date===TOMORROW)];
                   if (!overdue.length && !dueToday.length && !dueTmrw.length) return null;
+                  const markItemDone = (item) => {
+                    if (repTasks.find(t=>t.id===item.id)) {
+                      setTasks(q=>q.map(t=>t.id===item.id?{...t,status:"Done"}:t));
+                    } else {
+                      setPlans(q=>q.map(p=>p.id===item.id?{...p,status:"Done"}:p));
+                    }
+                  };
                   const renderItem = (item, urgency) => {
                     const title   = item.title || item.agenda || "—";
-                    const dept    = item.assignedDept || item.neededFrom || "";
+                    const dept    = item.assignedDept || item.dept || item.neededFrom || "";
                     const client  = item.clientCompany || item.clientAgencyName || "";
                     const clr     = urgency==="overdue"?C.red:urgency==="today"?C.orange:C.blue;
                     return (
-                      <div key={item.id} style={{display:"flex",alignItems:"flex-start",gap:10,padding:"7px 12px",background:C.s2,borderRadius:5,marginBottom:4,borderLeft:`3px solid ${clr}`}}>
+                      <div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 12px",background:C.s2,borderRadius:5,marginBottom:4,borderLeft:`3px solid ${clr}`}}>
                         <div style={{flex:1}}>
                           <div style={{fontSize:12,fontWeight:600,color:C.text}}>{title}</div>
                           {(client||dept)&&<div style={{fontSize:10,color:C.dim}}>{client}{client&&dept?" · ":""}{dept&&`→ ${dept}`}</div>}
@@ -2996,6 +3003,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <span style={{fontSize:10,fontWeight:700,color:clr,whiteSpace:"nowrap"}}>
                           {urgency==="overdue"?"⚠ OVERDUE":urgency==="today"?"Due TODAY":"Due TOMORROW"}
                         </span>
+                        <button onClick={()=>markItemDone(item)} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"3px 10px",color:C.green,fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✓ Done</button>
                       </div>
                     );
                   };
