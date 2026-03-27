@@ -3049,7 +3049,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* DUE DATE ALERTS */}
                 {(()=>{
                   const repTasks = tasks.filter(t =>
-                    (t.repId===myRepId||t.assignedTo===myRepId) && t.status!=="Done"
+                    (t.repId===myRepId||t.assignedTo===myRepId||t.assignedToUserId===activeUser) && t.status!=="Done"
                   );
                   const autoDuePlans = (plans||[]).filter(p =>
                     p.repId===myRepId &&
@@ -4415,7 +4415,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const myOverdue = myDeals.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Proposal Accepted");
                 const myAtRisk  = myDeals.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&(d.atRisk||daysSince(d.lastContact)>=7));
                 const myBlocked = myDeals.filter(d=>d.awaitingApproval&&d.outcome!=="Proposal Accepted");
-                const myTasks_r = tasks.filter(t=>t.assignedTo===myRepId&&t.status!=="Done");
+                const myTasks_r = tasks.filter(t=>(t.assignedTo===myRepId||t.assignedToUserId===activeUser)&&t.status!=="Done");
                 const total = myOverdue.length+myAtRisk.length+myTasks_r.length+myBlocked.length;
                 if(!total) return <div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:"12px 16px",marginBottom:16,fontSize:12,color:C.green}}>✓ No action items. You're on track.</div>;
                 return (
@@ -7103,12 +7103,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </button>
               </div>
 
+              {(()=>{
+                const repId_s = user_role?.repId;
+                const myTaskSet = isRep
+                  ? tasks.filter(t=>t.assignedTo===repId_s||t.assignedToUserId===activeUser)
+                  : tasks;
+                return (
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:18}}>
                 {[
-                  {label:"OPEN",       value:tasks.filter(t=>t.status==="Open").length,                               color:C.blue},
-                  {label:"IN PROGRESS",value:tasks.filter(t=>t.status==="In Progress").length,                        color:C.accent},
-                  {label:"OVERDUE",    value:tasks.filter(t=>t.dueDate<TODAY&&t.status!=="Done").length,               color:C.red},
-                  {label:"DONE",       value:tasks.filter(t=>t.status==="Done").length,                                color:C.green},
+                  {label:"OPEN",       value:myTaskSet.filter(t=>t.status==="Open").length,                             color:C.blue},
+                  {label:"IN PROGRESS",value:myTaskSet.filter(t=>t.status==="In Progress").length,                      color:C.accent},
+                  {label:"OVERDUE",    value:myTaskSet.filter(t=>t.dueDate<TODAY&&t.status!=="Done").length,             color:C.red},
+                  {label:"DONE",       value:myTaskSet.filter(t=>t.status==="Done").length,                              color:C.green},
                 ].map(k=>(
                   <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
                     <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div>
@@ -7116,6 +7122,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 ))}
               </div>
+                );
+              })()}
 
               {(() => {
                 const myRepId=user_role?.repId;
