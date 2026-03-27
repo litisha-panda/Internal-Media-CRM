@@ -6849,12 +6849,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const dealTypes = ["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"];
             const statusColor = s => s==="Approved"?C.green:s==="Pending RH"||s==="Pending NSH"||s==="Pending Strategy"||s==="Pending CRO"?C.orange:s==="Rejected"?C.red:C.dim;
 
-            // Summary stats across all approved/pending subs for this quarter
-            const qSubs      = mySubs.filter(s=>qMatch(s.quarter));
+            // Summary stats — target only from APPROVED subs; achievement from revenue entries
+            const qSubs         = mySubs.filter(s=>qMatch(s.quarter));
             const allActiveSubs = qSubs.filter(s=>s.status!=="Rejected");
-            const activeSub     = allActiveSubs.length > 0; // boolean — used to show/hide summary
-            const totalTarget   = allActiveSubs.reduce((s,sub)=>s+sub.totalTarget,0);
-            const totalAchieved = allActiveSubs.flatMap(sub=>sub.clients).reduce((sum,cl)=>{
+            const approvedSubs  = qSubs.filter(s=>s.status==="Approved");
+            const activeSub     = allActiveSubs.length > 0; // used to show/hide section
+            // Target = only what CRO has approved (locked in)
+            const totalTarget   = approvedSubs.reduce((s,sub)=>s+sub.totalTarget,0);
+            // Achievement = revenue booked against approved clients
+            const totalAchieved = approvedSubs.flatMap(sub=>sub.clients).reduce((sum,cl)=>{
               return sum + revenueEntries.filter(e=>e.repId===myRepId&&e.clientCompany===cl.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             },0);
             const pct = totalTarget>0 ? Math.round((totalAchieved/totalTarget)*100) : 0;
