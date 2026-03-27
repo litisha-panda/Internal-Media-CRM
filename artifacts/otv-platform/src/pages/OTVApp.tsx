@@ -3860,6 +3860,27 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 )}
 
+                {/* ── NEW CLIENTS ADDED BY REPS ── */}
+                {(()=>{
+                  const newDeals = rhDeals.filter(d=>d.lastContact===TODAY||d.lastContact===TOMORROW).slice(0,5);
+                  if(!newDeals.length) return null;
+                  return (
+                    <div style={{marginTop:14}}>
+                      <div style={{fontSize:10,color:C.green,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NEW CLIENTS ADDED TODAY</div>
+                      {newDeals.map(d=>{
+                        const rep=REPS.find(r=>r.id===d.repId);
+                        return (
+                          <div key={d.id} style={{background:`${C.green}06`,border:`1px solid ${C.green}22`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                            <span style={{flex:1}}><strong>{d.clientCompany}</strong><span style={{color:C.dim,fontSize:11}}> · {rep?.name} · {d.dealType}</span></span>
+                            <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{d.outcome}</span>
+                            <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.targetAmount)}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
                 {/* ── TEAM PLAN: TODAY + TOMORROW ── */}
                 {(()=>{
                   const rhTodayPlans = (plans||[]).filter(p=>myRepIds.includes(p.repId)&&p.date===TODAY);
@@ -7650,29 +7671,70 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontWeight:700,color:C.green}}>No pending approvals at your level</div>
                   </div>
                 ) : myPending.map(sub=>{
-                  const rep = REPS.find(r=>r.id===sub.repId);
+                  const approvedClients = sub.clients.filter(cl=>(cl.clientStatus||"Pending")==="Approved");
+                  const rejectedClients = sub.clients.filter(cl=>(cl.clientStatus||"Pending")==="Rejected");
+                  const pendingClients  = sub.clients.filter(cl=>(cl.clientStatus||"Pending")==="Pending");
+                  const canForward = approvedClients.length > 0;
+                  const approvedTotal = approvedClients.reduce((s,c)=>s+(c.targetAmount||0),0);
+
+                  // helper: update a single client's status inside this submission
+                  const setClientStatus = (clientIdx, newStatus) => {
+                    setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,clients:t.clients.map((cl,i)=>i===clientIdx?{...cl,clientStatus:newStatus}:cl)}:t));
+                  };
+
                   return (
                     <div key={sub.id} className="card" style={{padding:"16px 18px",marginBottom:12,borderLeft:`3px solid ${C.orange}`}}>
+                      {/* Header */}
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10,flexWrap:"wrap",gap:8}}>
                         <div>
                           <div className="sans" style={{fontWeight:700,fontSize:14}}>{sub.repName} · {sub.region}</div>
                           <div style={{fontSize:11,color:C.dim}}>{sub.quarter} · Submitted {daysSince(sub.submittedAt)===0?"today":`${daysSince(sub.submittedAt)}d ago`}</div>
                         </div>
-                        <div className="sans" style={{fontSize:20,fontWeight:800,color:C.accent}}>{fmtR(sub.totalTarget)}</div>
-                      </div>
-                      {/* Client breakdown */}
-                      <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:12}}>
-                        {sub.clients.map((cl,i)=>(
-                          <div key={i} style={{display:"flex",justifyContent:"space-between",padding:"6px 10px",background:C.s2,borderRadius:5}}>
-                            <span style={{fontSize:12,fontWeight:600}}>{cl.clientCompany}</span>
-                            <div style={{display:"flex",gap:10,alignItems:"center"}}>
-                              <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:6,fontSize:10}}>{cl.dealType}</span>
-                              <span style={{fontSize:12,fontWeight:700,color:C.accent}}>{fmtR(cl.targetAmount)}</span>
-                            </div>
+                        <div style={{textAlign:"right"}}>
+                          <div className="sans" style={{fontSize:20,fontWeight:800,color:C.accent}}>{fmtR(sub.totalTarget)}</div>
+                          <div style={{fontSize:9,color:C.dim,marginTop:2}}>
+                            {approvedClients.length>0&&<span style={{color:C.green,marginRight:6}}>✓ {approvedClients.length} approved</span>}
+                            {rejectedClients.length>0&&<span style={{color:C.red,marginRight:6}}>✗ {rejectedClients.length} rejected</span>}
+                            {pendingClients.length>0&&<span style={{color:C.orange}}>{pendingClients.length} pending review</span>}
                           </div>
-                        ))}
+                        </div>
                       </div>
-                      {/* Prior approvals */}
+
+                      {/* Per-client rows with individual Approve / Reject */}
+                      <div style={{display:"flex",flexDirection:"column",gap:5,marginBottom:12}}>
+                        {sub.clients.map((cl,i)=>{
+                          const cs = cl.clientStatus || "Pending";
+                          return (
+                            <div key={i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"8px 10px",background:cs==="Approved"?`${C.green}0d`:cs==="Rejected"?`${C.red}0d`:C.s2,borderRadius:5,border:`1px solid ${cs==="Approved"?C.green+"44":cs==="Rejected"?C.red+"44":"transparent"}`}}>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:12,fontWeight:700,color:cs==="Approved"?C.green:cs==="Rejected"?C.red:C.text}}>{cl.clientCompany}</div>
+                                <div style={{display:"flex",gap:6,alignItems:"center",marginTop:2}}>
+                                  <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9}}>{cl.dealType||"—"}</span>
+                                  <span style={{fontSize:11,fontWeight:700,color:C.accent}}>{fmtR(cl.targetAmount)}</span>
+                                </div>
+                              </div>
+                              <div style={{display:"flex",gap:5,alignItems:"center",marginLeft:10,flexShrink:0}}>
+                                {cs==="Pending" ? (
+                                  <>
+                                    <button onClick={()=>setClientStatus(i,"Approved")}
+                                      style={{background:`${C.green}22`,border:`1px solid ${C.green}55`,color:C.green,borderRadius:4,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Approve</button>
+                                    <button onClick={()=>setClientStatus(i,"Rejected")}
+                                      style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✗ Reject</button>
+                                  </>
+                                ) : (
+                                  <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                                    <span style={{fontSize:11,fontWeight:700,color:cs==="Approved"?C.green:C.red}}>{cs==="Approved"?"✓ Approved":"✗ Rejected"}</span>
+                                    <button onClick={()=>setClientStatus(i,"Pending")}
+                                      style={{background:C.s3,border:"none",color:C.dim,borderRadius:4,padding:"3px 7px",fontSize:9,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Undo</button>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* Prior approvals log */}
                       {sub.approvalLog.length>0&&(
                         <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:10}}>
                           {sub.approvalLog.map((log,i)=>(
@@ -7680,27 +7742,44 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           ))}
                         </div>
                       )}
-                      {/* Action buttons */}
-                      <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                        <button onClick={()=>{
-                          setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,status:"Rejected",approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note:"Rejected"}]}:t));
-                          showToast("Target submission rejected");
-                        }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Reject</button>
-                        <button onClick={()=>{
-                          // approval note auto-logged
-                          const note = "Approved";
-                          setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,status:nextStep,approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note}]}:t));
-                          if(nextStep==="Approved"){
-                            // Push into deals as targetAmount
-                            sub.clients.forEach(cl=>{
-                              const existing = deals.find(d=>d.repId===sub.repId&&d.clientCompany===cl.clientCompany&&d.quarter===sub.quarter);
-                              if(existing) setDeals(p=>p.map(d=>d.id===existing.id?{...d,targetAmount:cl.targetAmount}:d));
-                            });
-                          }
-                          showToast(nextStep==="Approved"?"✓ Targets approved and pushed to deals!":"Approved → forwarded to "+(nextStep||""));
-                        }} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:4,padding:"6px 18px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                          {nextStep==="Approved"?"✓ Final Approve":"Approve → "+(nextStep||"")}
-                        </button>
+
+                      {/* Bottom action bar */}
+                      <div style={{display:"flex",gap:8,justifyContent:"space-between",alignItems:"center",borderTop:`1px solid ${C.s3}`,paddingTop:10}}>
+                        <div style={{fontSize:11,color:C.dim}}>
+                          {pendingClients.length>0
+                            ? `Review all clients before forwarding (${pendingClients.length} pending)`
+                            : canForward
+                              ? `Forwarding ${approvedClients.length} approved client${approvedClients.length!==1?"s":""} · ${fmtR(approvedTotal)}`
+                              : "All clients rejected — submit rejection"}
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={()=>{
+                            setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,status:"Rejected",approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note:"Submission rejected"}]}:t));
+                            showToast("Submission rejected");
+                          }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Reject All</button>
+                          <button
+                            disabled={!canForward||pendingClients.length>0}
+                            onClick={()=>{
+                              const approvedOnly = sub.clients.filter(cl=>(cl.clientStatus||"Pending")==="Approved");
+                              const newTotal = approvedOnly.reduce((s,c)=>s+(c.targetAmount||0),0);
+                              setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,
+                                clients: approvedOnly,
+                                totalTarget: newTotal,
+                                status: nextStep,
+                                approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note:`Approved ${approvedOnly.length} client${approvedOnly.length!==1?"s":""}`}]
+                              }:t));
+                              if(nextStep==="Approved"){
+                                approvedOnly.forEach(cl=>{
+                                  const existing = deals.find(d=>d.repId===sub.repId&&d.clientCompany===cl.clientCompany&&d.quarter===sub.quarter);
+                                  if(existing) setDeals(p=>p.map(d=>d.id===existing.id?{...d,targetAmount:cl.targetAmount}:d));
+                                });
+                              }
+                              showToast(nextStep==="Approved"?`✓ ${approvedOnly.length} targets approved!`:`Forwarded ${approvedOnly.length} clients → ${nextStep||""}`);
+                            }}
+                            style={{background:canForward&&pendingClients.length===0?"linear-gradient(135deg,#6366f1,#8b5cf6)":C.s3,border:"none",color:canForward&&pendingClients.length===0?"#fff":C.muted,borderRadius:4,padding:"6px 18px",fontSize:12,cursor:canForward&&pendingClients.length===0?"pointer":"not-allowed",fontFamily:"'DM Mono',monospace",fontWeight:700,transition:"all .15s"}}>
+                            {nextStep==="Approved"?"✓ Final Approve":pendingClients.length>0?`Review all first (${pendingClients.length} left)`:`Approve ${approvedClients.length} → ${nextStep||""}`}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
