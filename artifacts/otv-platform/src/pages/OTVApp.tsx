@@ -6997,12 +6997,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               const shortfall = Math.max(0, cl.targetAmount - achieved);
                               const isPending = cl.subStatus!=="Approved" && achieved===0;
                               return (
-                                <tr key={i} style={{borderBottom:`1px solid ${C.s2}`}}>
+                                <tr key={i} style={{borderBottom:`1px solid ${C.s2}`,opacity:isPending?0.7:1}}>
                                   <td style={{padding:"10px 14px",fontWeight:700}}>{cl.clientCompany}</td>
                                   <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{cl.dealType}</span></td>
-                                  <td style={{padding:"10px 14px",color:C.dim}}>{fmtR(cl.targetAmount)}</td>
-                                  <td style={{padding:"10px 14px",fontWeight:700,color:achieved>0?pc:C.muted}}>{achieved>0?fmtR(achieved):"—"}</td>
-                                  <td style={{padding:"10px 14px",color:shortfall===0?C.green:C.red,fontWeight:700}}>{achieved>0?fmtR(shortfall):"—"}</td>
+                                  <td style={{padding:"10px 14px",color:isPending?C.muted:C.dim}}>{isPending?"—":fmtR(cl.targetAmount)}</td>
+                                  <td style={{padding:"10px 14px",fontWeight:700,color:achieved>0?pc:C.muted}}>{isPending||achieved===0?"—":fmtR(achieved)}</td>
+                                  <td style={{padding:"10px 14px",color:shortfall===0?C.green:C.red,fontWeight:700}}>{isPending||achieved===0?"—":fmtR(shortfall)}</td>
                                   <td style={{padding:"10px 14px",minWidth:140}}>
                                     {isPending ? (
                                       <span style={{background:`${C.orange}18`,color:C.orange,padding:"3px 9px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>⏳ Awaiting Approval</span>
