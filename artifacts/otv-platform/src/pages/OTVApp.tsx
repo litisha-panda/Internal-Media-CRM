@@ -1558,7 +1558,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [revenueEntries, setRevenueEntries]             = usePersistedState("otv_revenueEntries", SEED_REVENUE_ENTRIES);
   const [targetSubTab, setTargetSubTab]                 = useState("mine");
   const [revTab, setRevTab]                             = useState("log");
-  const BLANK_IR_FORM = {type:"Approval",dept:"NSH",subject:"",details:"",clientCompany:""};
+  const BLANK_IR_FORM = {type:"Send Proposal",dept:"NSH",subject:"",details:"",clientCompany:""};
   const [irFormOpen, setIrFormOpen]                     = useState(false);
   const [irForm, setIrForm]                             = useState(BLANK_IR_FORM);
   const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", [
@@ -5213,7 +5213,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Request type *</div>
                         <select value={irForm.type} onChange={e=>setIrForm(f=>({...f,type:e.target.value}))}
                           style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                          {["Approval","Support","Creative","Escalation","Data Request"].map(t=><option key={t}>{t}</option>)}
+                          {["Send Proposal","Send FCT Grid","Send Revised Rate Card","Send Sponsorship Deck","Get Budget Approval","Arrange Senior Meeting","Get Rate Approval","Follow Up with Client","Share Digital Plan","Content / Script Needed","Legal / Contract Review","Get PO / Release","Other"].map(t=><option key={t}>{t}</option>)}
                         </select>
                       </div>
                       <div>
