@@ -1563,6 +1563,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const BLANK_IR_FORM = {type:"Send Proposal",dept:"NSH",subject:"",details:"",clientCompany:""};
   const [irFormOpen, setIrFormOpen]                     = useState(false);
   const [irForm, setIrForm]                             = useState(BLANK_IR_FORM);
+  const [editIrId, setEditIrId]                         = useState<string|null>(null);
   const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", [
     {id:"pu1", name:"Ravi Kumar",  email:"ravi@odishatv.com",  requestedAt: "2026-03-20"},
     {id:"pu2", name:"Sonal Mehta", email:"sonal@odishatv.com", requestedAt: "2026-03-23"},
@@ -5462,6 +5463,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                             ↑ Escalate
                           </button>
+                        )}
+                        {(isRep||isRH) && req.status==="Pending" && (
+                          <button onClick={()=>{setEditIrId(req.id);setIrForm({type:req.type||"Send Proposal",dept:req.dept||"NSH",subject:req.subject||"",details:req.details||"",clientCompany:req.clientCompany||""});}} style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✎ Edit</button>
                         )}
                         {(isRep||isRH) && req.status!=="Done" && (
                           <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
@@ -10040,6 +10044,63 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         );
       })()}
 
+
+      {/* EDIT INTERNAL REQUEST MODAL */}
+      {editIrId && (
+        <div className="overlay" onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}}>
+          <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:520}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+              <div className="sans" style={{fontSize:15,fontWeight:700}}>Edit Request</div>
+              <button onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              <div>
+                <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Request Type *</div>
+                <select value={irForm.type} onChange={e=>setIrForm(f=>({...f,type:e.target.value}))}
+                  style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                  {["Send Proposal","Send FCT Grid","Send Revised Rate Card","Send Sponsorship Deck","Get Budget Approval","Arrange Senior Meeting","Get Rate Approval","Follow Up with Client","Share Digital Plan","Content / Script Needed","Legal / Contract Review","Get PO / Release","Other"].map(t=><option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Who do you need it from? *</div>
+                <select value={irForm.dept} onChange={e=>setIrForm(f=>({...f,dept:e.target.value}))}
+                  style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                  {["NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
+                </select>
+              </div>
+            </div>
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Subject / What do you need? *</div>
+              <input value={irForm.subject} onChange={e=>setIrForm(f=>({...f,subject:e.target.value}))}
+                placeholder="e.g. Discount approval — 10% off rate card for Havells"
+                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Client / Account (optional)</div>
+              <input value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
+                placeholder="e.g. Havells India"
+                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{marginBottom:16}}>
+              <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Details / Context</div>
+              <textarea value={irForm.details} onChange={e=>setIrForm(f=>({...f,details:e.target.value}))}
+                rows={4} placeholder="Provide context — client budget, ask, deadline, any relevant background…"
+                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",resize:"vertical",boxSizing:"border-box"}}/>
+            </div>
+            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+              <button onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+              <button onClick={()=>{
+                if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
+                setInternalReqs(p=>p.map(r=>r.id===editIrId?{...r,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),clientCompany:irForm.clientCompany.trim()}:r));
+                setEditIrId(null);setIrForm(BLANK_IR_FORM);
+                showToast("Request updated ✓");
+              }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                Save Changes
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
           {/* EXCEPTION MODAL — Litisha only */}
       {exceptionModal && (
