@@ -2495,7 +2495,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     if (section === "ro") return [];
 
     const irBadge      = internalReqs.filter(r=>r.status!=="Done"&&r.raisedBy===activeUser).length||null;
-    const irInboxBadge  = internalReqs.filter(r=>r.status!=="Done"&&["NSH","Sales Strategy","CRO","Branding Team","Content Team","Digital","Finance","Legal"].includes(r.dept)).length||null;
+    const irInboxDept  = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":null;
+    const irInboxBadge = irInboxDept
+      ? internalReqs.filter(r=>r.status!=="Done"&&r.dept===irInboxDept).length||null
+      : internalReqs.filter(r=>r.status!=="Done"&&["NSH","Sales Strategy","CRO","Branding Team","Content Team","Digital","Finance","Legal"].includes(r.dept)).length||null;
 
     // ── SALES REP ──
     if (isRep) return [
@@ -5427,6 +5430,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ INTERNAL REQUESTS ═══ */}
           {view==="internal-requests" && (() => {
             const IR_DEPTS = ["NSH","Sales Strategy","Branding Team","Content Team","Digital","Finance","Legal","CXO"];
+            // Which dept "inbox" does the current user own?
+            const myInboxDept = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":null;
+            // Requests ADDRESSED TO the current user's department
+            const inboxReqs = myInboxDept ? internalReqs.filter(r=>r.dept===myInboxDept) : [];
             const myReqs  = isRep
               ? internalReqs.filter(r=>r.raisedBy===activeUser)
               : isRH
@@ -5534,6 +5541,54 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </button>
                   ))}
                 </div>
+
+                {/* ── 📥 Inbox: Requests addressed TO this user's dept ── */}
+                {myInboxDept && (
+                  <div style={{marginBottom:24}}>
+                    <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                      <div className="sans" style={{fontSize:13,fontWeight:700,color:C.accent,letterSpacing:".04em"}}>📥 REQUESTS TO YOU</div>
+                      <span style={{background:`${C.accent}22`,color:C.accent,borderRadius:10,padding:"1px 10px",fontSize:10,fontWeight:700}}>{inboxReqs.filter(r=>r.status!=="Done").length} open</span>
+                      <div style={{fontSize:10,color:C.dim}}>directed to {myInboxDept}</div>
+                    </div>
+                    {inboxReqs.length===0 && (
+                      <div style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:8,padding:"22px",textAlign:"center",color:C.muted,fontSize:12}}>No requests directed to you yet.</div>
+                    )}
+                    {inboxReqs.map(req=>{
+                      const daysOld = daysSince(req.raisedAt);
+                      const overdue = daysOld >= (req.slaHours/24) && req.status!=="Done";
+                      const sc = statusColor(overdue?"Overdue":req.status);
+                      const deal = deals.find(d=>d.id===req.dealId);
+                      return (
+                        <div key={req.id} className="card" style={{padding:"14px 18px",marginBottom:8,borderLeft:`3px solid ${sc}`,background:`${C.accent}04`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,flexWrap:"wrap",gap:8}}>
+                            <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                              <span style={{background:`${sc}22`,color:sc,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{overdue?"OVERDUE":req.status}</span>
+                              <span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:600}}>{req.type}</span>
+                              <span style={{background:C.s3,color:C.dim,padding:"2px 9px",borderRadius:8,fontSize:10}}>from {req.raisedByName||req.raisedBy}</span>
+                            </div>
+                            <span style={{fontSize:10,color:overdue?C.red:C.muted}}>{daysOld===0?"Today":`${daysOld}d ago`}{overdue?" — SLA breached":""}</span>
+                          </div>
+                          <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
+                          {req.clientCompany&&<div style={{fontSize:11,color:C.dim,marginBottom:4}}>Re: {req.clientCompany}{deal?` · ${fmtR(deal.amount)}`:""}</div>}
+                          {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.5}}>{req.details}</div>}
+                          {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:8}}>✓ {req.resolverNote}</div>}
+                          {req.status!=="Done" && (
+                            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                              {req.status!=="In Progress"&&(
+                                <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))}
+                                  style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
+                              )}
+                              <button onClick={()=>openNoteModal("Resolution Note","Resolved",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)))}
+                                style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark Done</button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    <div style={{borderBottom:`1px solid ${C.border}`,marginBottom:20,marginTop:8}}/>
+                    <div className="sans" style={{fontSize:12,fontWeight:700,color:C.dim,letterSpacing:".04em",marginBottom:12}}>ALL REQUESTS (SYSTEM-WIDE)</div>
+                  </div>
+                )}
 
                 {/* Request cards */}
                 {filtered.length===0 && <div style={{textAlign:"center",padding:50,color:C.muted}}>{irStatusFilter==="all"?"No requests yet. Hit + New Request to raise one.":"No requests with this status."}</div>}
