@@ -1462,6 +1462,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   }, [profileOpen]);
   const [addDealOpen, setAddDealOpen] = useState(false);
   const [logOpen, setLogOpen]     = useState(false);
+  const [viewMeetingId, setViewMeetingId] = useState<string|null>(null);
   const [targetDrilldown, setTargetDrilldown] = useState(null); // { key, label, color, icon } — NSH region tile
   const [nshRepDrill,    setNshRepDrill]      = useState(null); // rep id — NSH → region → rep drill
   const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
@@ -3032,8 +3033,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           return (
                             <div key={p.id} style={{marginBottom:8}}>
                               {/* Meeting chip — click to expand */}
-                              <div onClick={()=>p.status!=="Done"&&setInlineLogPlan(isOpen?null:p.id)}
-                                style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:p.status==="Done"?`${C.green}08`:isOpen?`${C.accent}10`:C.s2,borderRadius:6,border:`1px solid ${p.status==="Done"?C.green+"33":isOpen?C.accent+"55":C.border}`,cursor:p.status==="Done"?"default":"pointer",transition:"all .1s"}}>
+                              <div onClick={()=>{
+                                  if (p.status==="Done") {
+                                    const m = meetings.find(m=>m.id===p.loggedMeetingId) || meetings.find(m=>m.repId===myRepId && (m.clientCompany||"").toLowerCase()===(p.clientAgencyName||"").toLowerCase() && m.date===p.date);
+                                    if (m) setViewMeetingId(m.id);
+                                  } else { setInlineLogPlan(isOpen?null:p.id); }
+                                }}
+                                style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:p.status==="Done"?`${C.green}08`:isOpen?`${C.accent}10`:C.s2,borderRadius:6,border:`1px solid ${p.status==="Done"?C.green+"33":isOpen?C.accent+"55":C.border}`,cursor:"pointer",transition:"all .1s"}}>
                                 <span style={{fontSize:10,color:C.dim,whiteSpace:"nowrap"}}>🕐 {p.time}</span>
                                 <div style={{flex:1}}>
                                   <div style={{fontSize:12,fontWeight:600,color:C.text}}>{p.clientAgencyName}</div>
@@ -3140,8 +3146,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       if (!disc.trim()) { alert("Please fill in what happened"); return; }
                                       if (!ns.trim())  { alert("Next steps are required"); return; }
                                       const loggedAt = `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}`;
-                                      setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done"}:pl));
-                                      setMeetings(q=>[{id:`ml${Date.now()}`,repId:myRepId||(REPS[0]?.id),repName:REPS.find(r=>r.id===myRepId)?.name||"",region:REPS.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Proposal Accepted":"Needs Callback",isUnplanned:false},...q]);
+                                      const newMeetId = `ml${Date.now()}`;
+                                      setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done",loggedMeetingId:newMeetId}:pl));
+                                      setMeetings(q=>[{id:newMeetId,repId:myRepId||(REPS[0]?.id),repName:REPS.find(r=>r.id===myRepId)?.name||"",region:REPS.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Proposal Accepted":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
                                         setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:myRepId,assignedByName:REPS.find(r=>r.id===myRepId)?.name||""},...q]);
@@ -9847,6 +9854,88 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           </div>
         </div>
       )}
+
+      {/* MEETING DETAIL MODAL — view logged meeting */}
+      {viewMeetingId && (()=>{
+        const vm = meetings.find(m=>m.id===viewMeetingId);
+        if (!vm) return null;
+        const statusColor = vm.status==="Closed"?C.green:vm.status==="Positive"?C.blue:vm.status==="Follow-up Needed"?C.orange:C.dim;
+        return (
+          <div className="overlay" onClick={()=>setViewMeetingId(null)}>
+            <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:520,maxHeight:"85vh",overflowY:"auto"}}>
+              {/* Header */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                <div>
+                  <div className="sans" style={{fontSize:17,fontWeight:700,color:C.text}}>{vm.clientCompany}</div>
+                  <div style={{fontSize:11,color:C.dim,marginTop:2}}>
+                    {vm.date} · {vm.loggedAt||"—"} &nbsp;·&nbsp; {vm.meetingType||"Physical"}
+                    {vm.pitchType&&<>&nbsp;·&nbsp; <span style={{color:C.accent}}>{vm.pitchType}</span></>}
+                  </div>
+                </div>
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  <span style={{background:`${statusColor}22`,color:statusColor,padding:"3px 10px",borderRadius:5,fontSize:11,fontWeight:700}}>{vm.status||"Done"}</span>
+                  <button onClick={()=>setViewMeetingId(null)} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
+                </div>
+              </div>
+
+              {/* Contact row */}
+              {(vm.contactName||vm.phone)&&(
+                <div style={{background:C.s2,borderRadius:6,padding:"8px 12px",marginBottom:14,display:"flex",gap:16,flexWrap:"wrap",fontSize:11,color:C.dim}}>
+                  {vm.contactName&&<span>🧑 {vm.contactName}</span>}
+                  {vm.phone&&<span>📱 {vm.phone}</span>}
+                  {vm.repName&&<span>👤 Rep: {vm.repName}</span>}
+                </div>
+              )}
+
+              {/* What happened */}
+              {vm.discussion&&(
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>What Happened</div>
+                  <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.discussion}</div>
+                </div>
+              )}
+
+              {/* Client feedback */}
+              {vm.clientFeedback&&(
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Client Feedback</div>
+                  <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.clientFeedback}</div>
+                </div>
+              )}
+
+              {/* Next steps */}
+              {vm.nextSteps&&(
+                <div style={{marginBottom:14}}>
+                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Next Steps</div>
+                  <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:`${C.orange}11`,border:`1px solid ${C.orange}33`,borderRadius:6,padding:"10px 12px"}}>{vm.nextSteps}</div>
+                </div>
+              )}
+
+              {/* Follow-up & next meeting */}
+              {(vm.followUpDate||vm.nextMeetingDate)&&(
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
+                  {vm.followUpDate&&(
+                    <div style={{background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"10px 12px"}}>
+                      <div style={{fontSize:10,color:C.blue,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>📞 Follow-up</div>
+                      <div style={{fontSize:13,fontWeight:600,color:C.text}}>{vm.followUpDate}</div>
+                    </div>
+                  )}
+                  {vm.nextMeetingDate&&(
+                    <div style={{background:`${C.green}11`,border:`1px solid ${C.green}33`,borderRadius:6,padding:"10px 12px"}}>
+                      <div style={{fontSize:10,color:C.green,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>📅 Next Meeting</div>
+                      <div style={{fontSize:13,fontWeight:600,color:C.text}}>{vm.nextMeetingDate}</div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div style={{display:"flex",justifyContent:"flex-end",marginTop:8}}>
+                <button className="btn btn-ghost" onClick={()=>setViewMeetingId(null)}>Close</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
 
           {/* EXCEPTION MODAL — Litisha only */}
