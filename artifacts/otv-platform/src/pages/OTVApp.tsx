@@ -5363,9 +5363,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                       <div>
                         <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Client / Account (optional)</div>
-                        <input value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
-                          placeholder="e.g. Havells India"
-                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                        <select value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
+                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}>
+                          <option value="">— Select client —</option>
+                          {[...new Set(deals.filter(d=>myRepId?d.repId===myRepId:true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
+                        </select>
                       </div>
                     </div>
                     <div style={{marginBottom:14}}>
@@ -10077,9 +10079,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
             <div style={{marginBottom:10}}>
               <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Client / Account (optional)</div>
-              <input value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
-                placeholder="e.g. Havells India"
-                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+              <select value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
+                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}>
+                <option value="">— Select client —</option>
+                {[...new Set(deals.filter(d=>myRepId?d.repId===myRepId:true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
+              </select>
             </div>
             <div style={{marginBottom:16}}>
               <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Details / Context</div>
