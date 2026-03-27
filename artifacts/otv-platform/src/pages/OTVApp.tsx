@@ -3118,6 +3118,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {planList.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:"12px 0"}}>Nothing planned yet</div>}
                         {planList.map(p=>{
                           const isOpen = inlineLogPlan===p.id;
+                          const isFuture = p.date > TODAY && p.status !== "Done";
                           return (
                             <div key={p.id} style={{marginBottom:8}}>
                               {/* Meeting chip — click to expand */}
@@ -3125,9 +3126,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   if (p.status==="Done") {
                                     const m = meetings.find(m=>m.id===p.loggedMeetingId) || meetings.find(m=>m.repId===myRepId && (m.clientCompany||"").toLowerCase()===(p.clientAgencyName||"").toLowerCase() && m.date===p.date);
                                     if (m) setViewMeetingId(m.id);
+                                  } else if (isFuture) {
+                                    showToast(`This meeting is on ${p.date}. Come back on the day to log it.`);
                                   } else { setInlineLogPlan(isOpen?null:p.id); }
                                 }}
-                                style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:p.status==="Done"?`${C.green}08`:isOpen?`${C.accent}10`:C.s2,borderRadius:6,border:`1px solid ${p.status==="Done"?C.green+"33":isOpen?C.accent+"55":C.border}`,cursor:"pointer",transition:"all .1s"}}>
+                                style={{display:"flex",alignItems:"center",gap:8,padding:"8px 10px",background:p.status==="Done"?`${C.green}08`:isFuture?C.s2:isOpen?`${C.accent}10`:C.s2,borderRadius:6,border:`1px solid ${p.status==="Done"?C.green+"33":isFuture?C.border:isOpen?C.accent+"55":C.border}`,cursor:isFuture?"default":"pointer",transition:"all .1s",opacity:isFuture?0.8:1}}>
                                 <span style={{fontSize:10,color:C.dim,whiteSpace:"nowrap"}}>🕐 {p.time}</span>
                                 <div style={{flex:1}}>
                                   <div style={{fontSize:12,fontWeight:600,color:C.text}}>{p.clientAgencyName}</div>
@@ -3136,12 +3139,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 {p.pitchType&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>{p.pitchType}</span>}
                                 {p.autoCreatedFrom==="follow-up"&&<span style={{background:`${C.blue}22`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>📞 Follow-up</span>}
                                 {p.autoCreatedFrom==="next-meeting"&&<span style={{background:`${C.green}22`,color:C.green,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>📅 Next Mtg</span>}
-                                <span style={{background:p.status==="Done"?`${C.green}22`:p.status==="Cancelled"?`${C.red}22`:C.s3,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.dim,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>{p.status==="Planned"?"Tap to log":p.status}</span>
-                                {p.status!=="Done"&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
+                                <span style={{background:p.status==="Done"?`${C.green}22`:p.status==="Cancelled"?`${C.red}22`:isFuture?`${C.blue}18`:C.s3,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:isFuture?C.blue:C.dim,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>
+                                  {p.status==="Done"?"Done":p.status==="Cancelled"?"Cancelled":isFuture?"📅 Upcoming":"Tap to log"}
+                                </span>
+                                {p.status!=="Done"&&!isFuture&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
                               </div>
 
+                              {/* Info note for future meetings */}
+                              {isFuture&&isOpen&&(
+                                <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:5,padding:"8px 12px",marginTop:4,fontSize:11,color:C.blue}}>
+                                  📅 Meeting is scheduled for <strong>{p.date}</strong>. You can log the outcome after the meeting happens.
+                                </div>
+                              )}
+
                               {/* Inline log form */}
-                              {isOpen&&(()=>{
+                              {!isFuture&&isOpen&&(()=>{
                                 // Auto-detect if deal is closed
                                 const matchDealInline=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
                                 const isClosed = matchDealInline?.outcome==="Proposal Accepted";
