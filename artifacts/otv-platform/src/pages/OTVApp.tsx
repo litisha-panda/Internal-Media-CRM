@@ -1535,6 +1535,12 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [roMgmtViewRO, setRoMgmtViewRO]             = useState(null);
   const [roMgmtConfirmDelete, setRoMgmtConfirmDelete] = useState(null);
   const [properties, setProperties]                   = usePersistedState("otv_properties", SEED_PROPERTIES);
+  const [ipProposals, setIpProposals]                  = usePersistedState("otv_ipProposals", []);
+  const [ipPropOpen, setIpPropOpen]                    = useState<string|null>(null); // "ipId-elemId"
+  const [ipPropClient, setIpPropClient]                = useState("");
+  const [ipPropNote, setIpPropNote]                    = useState("");
+  const [ipPropValue, setIpPropValue]                  = useState("");
+  const [ipApprovalPrices, setIpApprovalPrices]        = useState<Record<string,string>>({});
   const [internalReqs, setInternalReqs]               = usePersistedState("otv_internalReqs", SEED_INTERNAL_REQS);
   const [irStatusFilter, setIrStatusFilter]            = useState("all");
   const [lbTab, setLbTab]                              = useState("team");
@@ -4255,24 +4261,77 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* ── PROPERTIES / IPs TAB ── */}
                 {rtTab==="properties" && (()=>{
                   const visibleIPs = IP_CATALOG.filter(ip=>qMatch(ip.quarter));
-                  // Role gate: who can see the actual "closed at" price for an element
-                  const canSeeClosedAt = (elem) =>
-                    isRH || isNSH || isCRORole || isStrategy || isAdmin ||
-                    (isRep && elem.repId === user_role?.repId);
+                  const canApprove  = isStrategy || isNSH || isCRORole || isAdmin;
                   const stColor = s => s==="Committed"?C.green:s==="In Discussion"?C.orange:C.muted;
+                  // Closed-at visible to: RH/NSH/CRO/Strategy/Admin, or the rep who owns the proposal/elem
+                  const canSeeCA = (ownRepId) =>
+                    isRH || isNSH || isCRORole || isStrategy || isAdmin ||
+                    (isRep && ownRepId === user_role?.repId);
+
+                  // Helper: get live proposals for one element
+                  const getEP = (ipId, elemId) => ipProposals.filter(p=>p.ipId===ipId&&p.elemId===elemId);
+
+                  // Submit a new proposal
+                  const submitProposal = (ip, elem) => {
+                    if (!ipPropClient.trim()) { showToast("Enter client name","err"); return; }
+                    const myRep = REPS.find(r=>r.id===user_role?.repId);
+                    const prop = {
+                      id: `ipr${Date.now()}`,
+                      ipId: ip.id, elemId: elem.id,
+                      repId: user_role?.repId, repName: myRep?.name||user_role?.name||"Rep",
+                      client: ipPropClient.trim(),
+                      proposedValue: parseCurrency(ipPropValue)||null,
+                      note: ipPropNote.trim(),
+                      proposedAt: TODAY,
+                      status: "Pending",
+                      closedAt: null, approvedBy: null, approvedAt: null,
+                    };
+                    setIpProposals(prev=>[...prev, prop]);
+                    setIpPropClient(""); setIpPropNote(""); setIpPropValue(""); setIpPropOpen(null);
+                    showToast(`Proposal submitted for ${elem.label} → awaiting Sales Strategy ✓`);
+                  };
+
+                  // Approve a proposal
+                  const approveProposal = (prop) => {
+                    const price = parseCurrency(ipApprovalPrices[prop.id]||"") || null;
+                    setIpProposals(prev=>prev.map(p=>p.id===prop.id
+                      ? {...p, status:"Approved", closedAt:price, approvedBy:activeUser, approvedAt:TODAY}
+                      : p));
+                    setIpApprovalPrices(prev=>{const n={...prev};delete n[prop.id];return n;});
+                    showToast(`${prop.client} approved for ${prop.repName} ✓`);
+                  };
+
+                  // Reject a proposal
+                  const rejectProposal = (prop) => {
+                    setIpProposals(prev=>prev.map(p=>p.id===prop.id ? {...p, status:"Rejected"} : p));
+                    showToast(`Proposal rejected`,"ok");
+                  };
+
                   return (
                     <div>
                       {visibleIPs.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No IPs scheduled for {filterQ}.</div>}
                       {visibleIPs.map(ip=>{
-                        const totalRack   = ip.elements.reduce((s,e)=>s+e.rackRate,0);
-                        const committed   = ip.elements.filter(e=>e.status==="Committed");
-                        const inDisc      = ip.elements.filter(e=>e.status==="In Discussion");
-                        const available   = ip.elements.filter(e=>e.status==="Available");
-                        const committedVal= committed.reduce((s,e)=>s+e.rackRate,0);
-                        const discVal     = inDisc.reduce((s,e)=>s+e.rackRate,0);
-                        const soldPct     = totalRack>0?Math.round((committedVal/totalRack)*100):0;
-                        const pipelinePct = totalRack>0?Math.round((discVal/totalRack)*100):0;
-                        const hdrColor    = soldPct>=80?C.green:soldPct>=50?C.accent:C.red;
+                        // Live per-element status (proposals override static)
+                        const liveElem = (elem) => {
+                          const ep = getEP(ip.id, elem.id);
+                          const approved = ep.filter(p=>p.status==="Approved");
+                          const pending  = ep.filter(p=>p.status==="Pending");
+                          const effStatus = approved.length>0?"Committed"
+                            : pending.length>0&&elem.status==="Available"?"In Discussion"
+                            : elem.status;
+                          return {ep, approved, pending, effStatus};
+                        };
+                        const totalRack    = ip.elements.reduce((s,e)=>s+e.rackRate,0);
+                        const committedVal = ip.elements.reduce((s,e)=>{
+                          const {effStatus}=liveElem(e); return effStatus==="Committed"?s+e.rackRate:s;},0);
+                        const discVal      = ip.elements.reduce((s,e)=>{
+                          const {effStatus}=liveElem(e); return effStatus==="In Discussion"?s+e.rackRate:s;},0);
+                        const committedCnt = ip.elements.filter(e=>liveElem(e).effStatus==="Committed").length;
+                        const discCnt      = ip.elements.filter(e=>liveElem(e).effStatus==="In Discussion").length;
+                        const availCnt     = ip.elements.filter(e=>liveElem(e).effStatus==="Available").length;
+                        const soldPct      = totalRack>0?Math.round((committedVal/totalRack)*100):0;
+                        const pipePct      = totalRack>0?Math.round((discVal/totalRack)*100):0;
+
                         return (
                           <div key={ip.id} className="card" style={{marginBottom:14,padding:"16px 18px"}}>
                             {/* IP header */}
@@ -4284,61 +4343,195 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <div style={{textAlign:"right"}}>
                                 <div style={{fontSize:11,color:C.dim,marginBottom:3}}>Rack Value: <span style={{color:C.text,fontWeight:700}}>{fmtR(totalRack)}</span></div>
                                 <div style={{fontSize:10,color:C.dim}}>
-                                  <span style={{color:C.green,fontWeight:700}}>{committed.length} committed</span>
+                                  <span style={{color:C.green,fontWeight:700}}>{committedCnt} committed</span>
                                   {" · "}
-                                  <span style={{color:C.orange,fontWeight:700}}>{inDisc.length} in discussion</span>
+                                  <span style={{color:C.orange,fontWeight:700}}>{discCnt} in discussion</span>
                                   {" · "}
-                                  <span style={{color:C.muted}}>{available.length} available</span>
+                                  <span style={{color:C.muted}}>{availCnt} available</span>
                                 </div>
                               </div>
                             </div>
-                            {/* Progress bar: committed (green) + pipeline (accent) */}
+                            {/* Progress bar */}
                             <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",position:"relative",marginBottom:14}}>
                               <div style={{position:"absolute",left:0,height:"100%",width:`${Math.min(soldPct,100)}%`,background:C.green,borderRadius:2}}/>
-                              <div style={{position:"absolute",left:`${soldPct}%`,height:"100%",width:`${Math.min(pipelinePct,100-soldPct)}%`,background:`${C.accent}88`,borderRadius:2}}/>
+                              <div style={{position:"absolute",left:`${soldPct}%`,height:"100%",width:`${Math.min(pipePct,100-soldPct)}%`,background:`${C.accent}88`,borderRadius:2}}/>
                             </div>
                             {/* Elements table */}
                             <div style={{background:C.s2,borderRadius:6,overflow:"hidden"}}>
                               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                                 <thead>
                                   <tr>
-                                    {["Element","Rack Rate","Status","Client","Sales Rep","Closed At"].map((h,hi)=>(
-                                      <th key={h} style={{padding:"8px 12px",background:C.s3,color:hi===5&&!canSeeClosedAt({repId:null})?C.s3:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>
-                                        {hi===5 && !isRH && !isNSH && !isCRORole && !isStrategy && !isAdmin ? "Closed At 🔒" : h}
+                                    {["Element","Rack Rate","Status","Client","Sales Rep","Closed At",""].map((h,hi)=>(
+                                      <th key={hi} style={{padding:"8px 12px",background:C.s3,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>
+                                        {hi===5 && isRep && !canApprove ? "Closed At 🔒" : h}
                                       </th>
                                     ))}
                                   </tr>
                                 </thead>
                                 <tbody>
                                   {ip.elements.map((elem,ei)=>{
-                                    const rep = elem.repId?REPS.find(r=>r.id===elem.repId):null;
-                                    const sc  = stColor(elem.status);
-                                    const see = canSeeClosedAt(elem);
+                                    const {ep, approved, pending, effStatus} = liveElem(elem);
+                                    const rejected = ep.filter(p=>p.status==="Rejected");
+                                    const sc  = stColor(effStatus);
+                                    const fk  = `${ip.id}-${elem.id}`;
+                                    const panelOpen = ipPropOpen===fk;
+                                    const myProposal = isRep ? ep.find(p=>p.repId===user_role?.repId) : null;
+                                    // Effective display values
+                                    const effClient  = approved.length>0 ? approved.map(p=>p.client).join(", ") : elem.client;
+                                    const effRepName = approved.length>0 ? approved.map(p=>p.repName).join(", ") : (elem.repId?REPS.find(r=>r.id===elem.repId)?.name:null);
+                                    const effClosedAt= approved.length>0 ? approved[0].closedAt : elem.closedAt;
+                                    const effRepId   = approved.length>0 ? approved[0].repId    : elem.repId;
+                                    const seeCA      = canSeeCA(effRepId);
+                                    // Pending visible to strategy or the proposing rep
+                                    const showPendingBadge = canApprove&&pending.length>0;
+                                    const canPropose = isRep && !myProposal && effStatus!=="Committed";
+                                    const rowBg = panelOpen?`${C.accent}08`:ei%2===0?"transparent":C.s2+"44";
+
                                     return (
-                                      <tr key={elem.id} style={{borderBottom:`1px solid ${C.border}`,background:ei%2===0?"transparent":C.s2+"44"}}
-                                        onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                                        onMouseOut={e=>e.currentTarget.style.background=ei%2===0?"transparent":C.s2+"44"}>
-                                        <td style={{padding:"10px 12px",fontWeight:600,color:C.text}}>{elem.label}</td>
-                                        <td style={{padding:"10px 12px",fontWeight:700,color:C.accent,whiteSpace:"nowrap"}}>{fmtR(elem.rackRate)}</td>
-                                        <td style={{padding:"10px 12px"}}>
-                                          <span style={{background:`${sc}22`,color:sc,padding:"2px 8px",borderRadius:8,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{elem.status}</span>
-                                        </td>
-                                        <td style={{padding:"10px 12px",color:elem.client?C.text:C.muted,fontSize:11}}>{elem.client||"—"}</td>
-                                        <td style={{padding:"10px 12px",color:rep?C.dim:C.muted,fontSize:11}}>{rep?rep.name:"—"}</td>
-                                        <td style={{padding:"10px 12px",whiteSpace:"nowrap"}}>
-                                          {elem.status==="Available" ? (
-                                            <span style={{color:C.muted,fontSize:11}}>—</span>
-                                          ) : see ? (
-                                            elem.closedAt!=null ? (
-                                              <span style={{color:C.green,fontWeight:700}}>{fmtR(elem.closedAt)}
-                                                {elem.closedAt<elem.rackRate&&<span style={{color:C.red,fontSize:10,marginLeft:5}}>({Math.round((1-elem.closedAt/elem.rackRate)*100)}% off rack)</span>}
-                                              </span>
-                                            ) : <span style={{color:C.orange,fontSize:11}}>Pending close</span>
-                                          ) : (
-                                            <span style={{color:C.muted,fontSize:11,fontStyle:"italic"}}>Confidential</span>
-                                          )}
-                                        </td>
-                                      </tr>
+                                      <React.Fragment key={elem.id}>
+                                        {/* Main element row */}
+                                        <tr style={{borderBottom:panelOpen?`1px solid ${C.accent}44`:`1px solid ${C.border}`,background:rowBg}}>
+                                          <td style={{padding:"10px 12px",fontWeight:600,color:C.text}}>{elem.label}</td>
+                                          <td style={{padding:"10px 12px",fontWeight:700,color:C.accent,whiteSpace:"nowrap"}}>{fmtR(elem.rackRate)}</td>
+                                          <td style={{padding:"10px 12px"}}>
+                                            <span style={{background:`${sc}22`,color:sc,padding:"2px 8px",borderRadius:8,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{effStatus}</span>
+                                            {pending.length>0&&effStatus!=="Committed"&&<span style={{marginLeft:5,background:`${C.orange}22`,color:C.orange,padding:"1px 6px",borderRadius:6,fontSize:9,fontWeight:700}}>{pending.length} proposal{pending.length!==1?"s":""}</span>}
+                                          </td>
+                                          <td style={{padding:"10px 12px",color:effClient?C.text:C.muted,fontSize:11}}>
+                                            {effClient||
+                                              (pending.length>0&&!canApprove&&myProposal&&myProposal.status==="Pending"
+                                                ? <span style={{color:C.orange,fontStyle:"italic"}}>Your proposal pending</span>
+                                                : "—")}
+                                          </td>
+                                          <td style={{padding:"10px 12px",color:effRepName?C.dim:C.muted,fontSize:11}}>{effRepName||"—"}</td>
+                                          <td style={{padding:"10px 12px",whiteSpace:"nowrap"}}>
+                                            {effStatus==="Available"&&!pending.length ? (
+                                              <span style={{color:C.muted,fontSize:11}}>—</span>
+                                            ) : seeCA ? (
+                                              effClosedAt!=null ? (
+                                                <span style={{color:C.green,fontWeight:700}}>{fmtR(effClosedAt)}
+                                                  {effClosedAt<elem.rackRate&&<span style={{color:C.red,fontSize:10,marginLeft:5}}>({Math.round((1-effClosedAt/elem.rackRate)*100)}% off)</span>}
+                                                </span>
+                                              ) : <span style={{color:C.orange,fontSize:11}}>Pending close</span>
+                                            ) : (
+                                              <span style={{color:C.muted,fontSize:11,fontStyle:"italic"}}>Confidential</span>
+                                            )}
+                                          </td>
+                                          {/* Action cell */}
+                                          <td style={{padding:"6px 12px",whiteSpace:"nowrap",textAlign:"right"}}>
+                                            {canPropose&&(
+                                              <button onClick={()=>{setIpPropOpen(panelOpen?null:fk);setIpPropClient("");setIpPropNote("");setIpPropValue("");}}
+                                                style={{background:panelOpen?C.s3:`${C.blue}18`,border:`1px solid ${panelOpen?C.border:C.blue}44`,color:panelOpen?C.dim:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                                {panelOpen?"✕ Cancel":"+ Propose"}
+                                              </button>
+                                            )}
+                                            {isRep&&myProposal&&myProposal.status==="Pending"&&(
+                                              <span style={{background:`${C.orange}15`,border:`1px solid ${C.orange}44`,color:C.orange,borderRadius:5,padding:"3px 10px",fontSize:10,fontWeight:700}}>⏳ Pending</span>
+                                            )}
+                                            {isRep&&myProposal&&myProposal.status==="Approved"&&(
+                                              <span style={{background:`${C.green}15`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"3px 10px",fontSize:10,fontWeight:700}}>✓ Approved</span>
+                                            )}
+                                            {isRep&&myProposal&&myProposal.status==="Rejected"&&(
+                                              <span style={{background:`${C.red}15`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"3px 10px",fontSize:10,fontWeight:700}}>✗ Rejected</span>
+                                            )}
+                                            {showPendingBadge&&(
+                                              <button onClick={()=>setIpPropOpen(panelOpen?null:fk)}
+                                                style={{background:panelOpen?C.s3:`${C.orange}18`,border:`1px solid ${panelOpen?C.border:C.orange}55`,color:panelOpen?C.dim:C.orange,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                                {panelOpen?"✕ Close":`Review ${pending.length}`}
+                                              </button>
+                                            )}
+                                          </td>
+                                        </tr>
+
+                                        {/* ── Expandable panel ── */}
+                                        {panelOpen&&(
+                                          <tr>
+                                            <td colSpan={7} style={{padding:0,borderBottom:`2px solid ${C.accent}33`}}>
+                                              <div style={{padding:"12px 18px",background:`${C.accent}05`}}>
+
+                                                {/* Rep proposal form */}
+                                                {canPropose&&(
+                                                  <div style={{marginBottom:canApprove?14:0}}>
+                                                    <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:8,letterSpacing:".05em"}}>PROPOSE A CLIENT FOR THIS ELEMENT</div>
+                                                    <div style={{display:"flex",gap:8,flexWrap:"wrap",alignItems:"flex-end"}}>
+                                                      <div style={{flex:"1 1 160px"}}>
+                                                        <div style={{fontSize:10,color:C.dim,marginBottom:3}}>Client name *</div>
+                                                        <input value={ipPropClient} onChange={e=>setIpPropClient(e.target.value)}
+                                                          placeholder="e.g. Godrej Consumer"
+                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                                                      </div>
+                                                      <div style={{flex:"1 1 120px"}}>
+                                                        <div style={{fontSize:10,color:C.dim,marginBottom:3}}>Proposed value (optional)</div>
+                                                        <input value={ipPropValue} onChange={e=>setIpPropValue(e.target.value)}
+                                                          placeholder={`e.g. ${(elem.rackRate/100000).toFixed(0)}L`}
+                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                                                      </div>
+                                                      <div style={{flex:"2 1 180px"}}>
+                                                        <div style={{fontSize:10,color:C.dim,marginBottom:3}}>Note</div>
+                                                        <input value={ipPropNote} onChange={e=>setIpPropNote(e.target.value)}
+                                                          placeholder="Budget confirmed / in discussion…"
+                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                                                      </div>
+                                                      <button onClick={()=>submitProposal(ip,elem)}
+                                                        style={{background:C.blue,border:"none",color:"#fff",borderRadius:5,padding:"6px 16px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap"}}>
+                                                        Submit →
+                                                      </button>
+                                                    </div>
+                                                  </div>
+                                                )}
+
+                                                {/* Strategy / management approval panel */}
+                                                {canApprove&&(pending.length>0||approved.length>0||rejected.length>0)&&(
+                                                  <div>
+                                                    <div style={{fontSize:11,fontWeight:700,color:C.dim,marginBottom:8,letterSpacing:".05em"}}>PROPOSALS</div>
+                                                    <div style={{display:"flex",flexDirection:"column",gap:6}}>
+                                                      {[...pending,...approved,...rejected].map(prop=>{
+                                                        const pRep = REPS.find(r=>r.id===prop.repId);
+                                                        const statusColor = prop.status==="Approved"?C.green:prop.status==="Rejected"?C.red:C.orange;
+                                                        return (
+                                                          <div key={prop.id} style={{display:"flex",gap:10,alignItems:"center",padding:"8px 12px",background:C.surface,borderRadius:6,border:`1px solid ${statusColor}33`,flexWrap:"wrap"}}>
+                                                            <div style={{flex:"1 1 200px"}}>
+                                                              <div style={{fontSize:12,fontWeight:700,color:C.text}}>{prop.client}</div>
+                                                              <div style={{fontSize:10,color:C.dim}}>{pRep?.name||prop.repName} · {prop.proposedAt}{prop.note?` · "${prop.note}"`:""}</div>
+                                                              {prop.proposedValue&&<div style={{fontSize:10,color:C.accent}}>Proposed: {fmtR(prop.proposedValue)}</div>}
+                                                            </div>
+                                                            <span style={{background:`${statusColor}18`,color:statusColor,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{prop.status}</span>
+                                                            {prop.status==="Approved"&&prop.closedAt&&(
+                                                              <span style={{fontSize:11,color:C.green,fontWeight:700}}>Closed: {fmtR(prop.closedAt)}</span>
+                                                            )}
+                                                            {prop.status==="Pending"&&canApprove&&(
+                                                              <>
+                                                                <input
+                                                                  value={ipApprovalPrices[prop.id]||""}
+                                                                  onChange={e=>setIpApprovalPrices(prev=>({...prev,[prop.id]:e.target.value}))}
+                                                                  placeholder={`Closed at (e.g. ${(elem.rackRate/100000).toFixed(0)}L)`}
+                                                                  style={{background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"4px 8px",color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace",width:140}}/>
+                                                                <button onClick={()=>approveProposal(prop)}
+                                                                  style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"4px 12px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                                                  Approve ✓
+                                                                </button>
+                                                                <button onClick={()=>rejectProposal(prop)}
+                                                                  style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:5,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                                                  Reject
+                                                                </button>
+                                                              </>
+                                                            )}
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                )}
+
+                                                {/* Empty state for strategy when no proposals yet */}
+                                                {canApprove&&ep.length===0&&(
+                                                  <div style={{color:C.muted,fontSize:11,fontStyle:"italic"}}>No proposals submitted yet for this element.</div>
+                                                )}
+                                              </div>
+                                            </td>
+                                          </tr>
+                                        )}
+                                      </React.Fragment>
                                     );
                                   })}
                                 </tbody>
