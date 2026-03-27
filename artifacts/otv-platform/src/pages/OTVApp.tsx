@@ -3395,9 +3395,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const dvPlans = allPlans.filter(p=>(myRepId?p.repId===myRepId:true)&&p.date===dvDate).sort((a,b)=>a.time.localeCompare(b.time));
                   const dvIsPast = dvDate < TODAY;
                   const dvLabel = new Date(dvDate+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
-                  const hours = [8,9,10,11,12,13,14,15,16,17,18,19,20];
+                  const hours = Array.from({length:24},(_,i)=>i);
                   const planAtHour = (h) => dvPlans.filter(p=>{const ph=parseInt((p.time||"00:00").split(":")[0]);return ph===h;});
-                  const usedHours = new Set(dvPlans.map(p=>parseInt((p.time||"00:00").split(":")[0])));
                   return (
                     <div className="overlay" onClick={()=>setCalDayView(null)}>
                       <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:580,maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
@@ -3426,10 +3425,19 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 {/* Hour label */}
                                 <div style={{width:48,flexShrink:0,padding:"6px 8px 0",fontSize:10,color:C.muted,fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{timeLabel}</div>
                                 {/* Slot content */}
-                                <div style={{flex:1,padding:"4px 8px",background:isOccupied?`${C.accent}05`:"transparent",cursor:(!dvIsPast&&!isOccupied)?"pointer":"default"}}
-                                  onClick={()=>{if(!dvIsPast&&!isOccupied){setCalDayView(null);setAddPlanFor(dvDate);}}}>
+                                <div style={{flex:1,padding:"4px 8px",background:isOccupied?`${C.accent}05`:"transparent",cursor:!dvIsPast?"pointer":"default",transition:"background .1s"}}
+                                  onMouseEnter={e=>{if(!dvIsPast)(e.currentTarget as HTMLDivElement).style.background=`${C.accent}0a`;}}
+                                  onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background=isOccupied?`${C.accent}05`:"transparent";}}
+                                  onClick={()=>{
+                                    if(!dvIsPast){
+                                      const preTime=`${String(h).padStart(2,"0")}:00`;
+                                      setPf(p=>({...p,time:preTime}));
+                                      setCalDayView(null);
+                                      setAddPlanFor(dvDate);
+                                    }
+                                  }}>
                                   {slotPlans.length===0&&!dvIsPast&&(
-                                    <div style={{fontSize:10,color:C.s3,lineHeight:"38px",paddingLeft:4}}>Free</div>
+                                    <div style={{fontSize:10,color:C.s3,lineHeight:"38px",paddingLeft:4,userSelect:"none"}}>+ click to add</div>
                                   )}
                                   {slotPlans.map(p=>{
                                     const statusClr = p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent;
