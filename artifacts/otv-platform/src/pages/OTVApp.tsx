@@ -1441,7 +1441,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const [tasks, setTasks]         = usePersistedState("otv_tasks", SEED_TASKS);
-  const [taskModal, setTaskModal] = useState(false);
+  const [taskModal, setTaskModal]       = useState(false);
+  const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [importData, setImportData] = useState(null);
   const importRef = useRef();
@@ -1940,6 +1941,12 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     }
   };
   const updateReq     = (dealId, reqIdx, status) => setDeals(p=>p.map(d=>d.id===dealId?{...d,reqs:d.reqs.map((r,i)=>i===reqIdx?{...r,status}:r)}:d));
+
+  const openSelfTask = () => {
+    setTaskForm({...BLANK_TASK_FORM, assignedToUserId: activeUser, dueDate: TOMORROW});
+    setSelfTaskMode(true);
+    setTaskModal(true);
+  };
 
   const openAddDeal = (prefillDealType?: string) => {
     setDealForm({...BLANK_DEAL, quarter: entryQ, repId: isRep ? String(user_role.repId) : "", dealType: prefillDealType || ""});
@@ -2585,6 +2592,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
         N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending NSH").length||null),
+        N("my-tasks","My Tasks","✓"),
         N("escalations","Escalations","▲",escBadge),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
@@ -8669,31 +8677,73 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {view==="my-tasks" && (isRH||isNSH) && (()=>{
             const myRepIds = isRH ? REPS.filter(r=>r.region===rhRegion).map(r=>r.id) : REPS.map(r=>r.id);
             const myActionTasks = tasks.filter(t=>t.dept==="NSH"&&t.status!=="Done"&&myRepIds.includes(t.repId));
-            const myAssignedTasks = tasks.filter(t=>t.assignedToUserId===activeUser&&t.status!=="Done");
-            const allMine = [...myActionTasks, ...myAssignedTasks.filter(t=>!myActionTasks.find(x=>x.id===t.id))];
+            const myAssignedTasks = tasks.filter(t=>t.assignedToUserId===activeUser);
+            const allMine = [...myAssignedTasks, ...myActionTasks.filter(t=>!myAssignedTasks.find(x=>x.id===t.id))];
+            const openCount=allMine.filter(t=>t.status!=="Done").length;
+            const doneCount=allMine.filter(t=>t.status==="Done").length;
             return (
               <div className="fin">
-                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>MY TASKS</div>
-                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Tasks directed to you that need action</div>
-                {allMine.length===0&&<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ No tasks pending for you right now.</div>}
-                <div style={{display:"flex",flexDirection:"column",gap:8}}>
-                  {allMine.map(t=>{
-                    const rep=REPS.find(r=>r.id===t.repId);
-                    const overdue=t.dueDate<TODAY;
-                    return (
-                      <div key={t.id} style={{background:C.surface,border:`1px solid ${overdue?C.red+"44":C.border}`,borderRadius:7,padding:"12px 16px",display:"flex",alignItems:"flex-start",gap:12}}>
-                        <div style={{flex:1}}>
-                          <div style={{fontWeight:700,marginBottom:3}}>{t.title}</div>
-                          <div style={{fontSize:11,color:C.dim}}>{t.clientCompany&&`${t.clientCompany} · `}{rep&&`from ${rep.name} · `}Due {t.dueDate}</div>
-                          {t.description&&<div style={{fontSize:11,color:C.text,marginTop:4,lineHeight:1.5}}>{t.description}</div>}
-                        </div>
-                        <div style={{display:"flex",flexDirection:"column",gap:5,alignItems:"flex-end"}}>
-                          <span style={{background:overdue?`${C.red}22`:`${C.orange}22`,color:overdue?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600}}>{overdue?"OVERDUE":t.priority}</span>
-                          <button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark Done</button>
-                        </div>
-                      </div>
-                    );
-                  })}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>MY TASKS</div>
+                    <div style={{fontSize:11,color:C.dim}}>{openCount} open · {doneCount} done · Tasks assigned to you or created by you</div>
+                  </div>
+                  <button className="btn btn-primary" onClick={openSelfTask}>+ Create Task</button>
+                </div>
+
+                {/* Summary cards */}
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+                  {[
+                    {label:"OPEN",       value:allMine.filter(t=>t.status==="Open").length,                      color:C.blue},
+                    {label:"IN PROGRESS",value:allMine.filter(t=>t.status==="In Progress").length,               color:C.accent},
+                    {label:"OVERDUE",    value:allMine.filter(t=>t.dueDate<TODAY&&t.status!=="Done").length,      color:C.red},
+                    {label:"DONE",       value:doneCount,                                                         color:C.green},
+                  ].map(k=>(
+                    <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div>
+                      <div className="sans" style={{fontSize:22,fontWeight:700,color:k.color}}>{k.value}</div>
+                    </div>
+                  ))}
+                </div>
+
+                {allMine.length===0&&<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ No tasks yet. Create one for yourself above.</div>}
+                <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                  {allMine.length>0&&<table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead><tr>
+                      {["Task","Client","From","Priority","Status","Due","Update"].map(h=>(
+                        <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                      ))}
+                    </tr></thead>
+                    <tbody>
+                      {allMine.sort((a,b)=>a.status==="Done"?1:b.status==="Done"?-1:a.dueDate>b.dueDate?1:-1).map(t=>{
+                        const assigner = t.assignedBy ? USER_ROLES.find(u=>u.id===t.assignedBy)||REPS.find(r=>r.id===t.assignedBy) : null;
+                        const fromLabel = t.assignedBy===activeUser ? "Me" : assigner?.name || t.assignedByName || "—";
+                        const overdue=t.dueDate<TODAY&&t.status!=="Done";
+                        const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
+                        return (
+                          <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:overdue?`${C.red}04`:"transparent",opacity:t.status==="Done"?.6:1}}
+                            onMouseOver={e=>e.currentTarget.style.background=overdue?`${C.red}08`:C.s2}
+                            onMouseOut={e=>e.currentTarget.style.background=overdue?`${C.red}04`:"transparent"}>
+                            <td style={{padding:"10px 14px"}}><div style={{fontWeight:700,textDecoration:t.status==="Done"?"line-through":"none"}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:2,maxWidth:220,whiteSpace:"normal",lineHeight:1.4}}>{t.description}</div>}</td>
+                            <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td>
+                            <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{fromLabel}</td>
+                            <td style={{padding:"10px 14px"}}><span style={{background:t.priority==="High"?`${C.red}18`:t.priority==="Medium"?`${C.orange}18`:`${C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span></td>
+                            <td style={{padding:"10px 14px"}}><span style={{background:`${sc}18`,color:sc,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{overdue?"OVERDUE":t.status}</span></td>
+                            <td style={{padding:"10px 14px",color:overdue?C.red:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{t.dueDate}</td>
+                            <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
+                              {t.status!=="Done"&&(
+                                <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
+                                  style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,marginRight:4}}>
+                                  {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
+                                </select>
+                              )}
+                              {t.status==="Done"&&<span style={{color:C.green,fontSize:11}}>✓ Done</span>}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>}
                 </div>
               </div>
             );
@@ -9994,37 +10044,46 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
       {/* ASSIGN TASK MODAL */}
       {taskModal && (() => {
-        const defaultAssignToUserId = isRep && user_role?.id ? user_role.id : "";
-        if (!taskForm.assignedToUserId && defaultAssignToUserId) {
-          // pre-fill on first open for reps (self)
-          setTimeout(()=>setTaskForm(p=>p.assignedToUserId?p:{...p,assignedToUserId:defaultAssignToUserId}),0);
+        const closeTaskModal = () => { setTaskModal(false); setSelfTaskMode(false); setTaskForm(BLANK_TASK_FORM); };
+        // Auto-fill self for reps (when not in selfTaskMode) so they default to themselves in the picker
+        if (!selfTaskMode && isRep && user_role?.id && !taskForm.assignedToUserId) {
+          setTimeout(()=>setTaskForm(p=>p.assignedToUserId?p:{...p,assignedToUserId:user_role.id}),0);
         }
+        const modalTitle = selfTaskMode ? "Create Task for Myself" : isRep ? "Create Task" : "Assign Task";
         return (
-        <div className="overlay" onClick={()=>{setTaskModal(false);setTaskForm(BLANK_TASK_FORM);}}>
+        <div className="overlay" onClick={closeTaskModal}>
           <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:500}}>
-            <div className="sans" style={{fontSize:16,fontWeight:700,marginBottom:16}}>
-              {isRep ? "Create Task" : "Assign Task"}
-            </div>
+            <div className="sans" style={{fontSize:16,fontWeight:700,marginBottom:4}}>{modalTitle}</div>
+            {selfTaskMode&&<div style={{fontSize:11,color:C.dim,marginBottom:14}}>This task will appear in your My Tasks</div>}
             <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              <div><label>{isRep ? "Assign to (defaults to yourself)" : "Assign to *"}</label>
-                <select value={taskForm.assignedToUserId} onChange={e=>setTaskForm(p=>({...p,assignedToUserId:e.target.value}))}>
-                  <option value="">— Select person —</option>
-                  <optgroup label="Leadership &amp; Strategy">
-                    {USER_ROLES.filter(u=>["ADMIN","SALES HEAD","SALES STRATEGY","CRO","DIGI OPS"].includes(u.role)).map(u=>(
-                      <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name} · {u.role}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Region Heads">
-                    {USER_ROLES.filter(u=>u.role==="REGION HEAD").map(u=>(
-                      <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name}</option>
-                    ))}
-                  </optgroup>
-                  <optgroup label="Sales Reps">
-                    {USER_ROLES.filter(u=>u.role==="SALES REP").map(u=>(
-                      <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name} · {u.region}</option>
-                    ))}
-                  </optgroup>
-                </select></div>
+              {/* Assignee — locked to self when selfTaskMode, or full picker otherwise */}
+              {selfTaskMode ? (
+                <div>
+                  <label>Assigned To</label>
+                  <input readOnly value={(user_role?.name||"Me")+" (You)"} style={{color:C.text,background:C.s2,cursor:"default"}} />
+                </div>
+              ) : (
+                <div><label>{isRep ? "Assign to (defaults to yourself)" : "Assign to *"}</label>
+                  <select value={taskForm.assignedToUserId} onChange={e=>setTaskForm(p=>({...p,assignedToUserId:e.target.value}))}>
+                    <option value="">— Select person —</option>
+                    <optgroup label="Leadership &amp; Strategy">
+                      {USER_ROLES.filter(u=>["ADMIN","SALES HEAD","SALES STRATEGY","CRO","DIGI OPS"].includes(u.role)).map(u=>(
+                        <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name} · {u.role}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Region Heads">
+                      {USER_ROLES.filter(u=>u.role==="REGION HEAD").map(u=>(
+                        <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name}</option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Sales Reps">
+                      {USER_ROLES.filter(u=>u.role==="SALES REP").map(u=>(
+                        <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name} · {u.region}</option>
+                      ))}
+                    </optgroup>
+                  </select>
+                </div>
+              )}
               <div><label>Task *</label><input placeholder="What needs to happen?" value={taskForm.title} onChange={e=>setTaskForm(p=>({...p,title:e.target.value}))} /></div>
               <div><label>Related Client (optional)</label><input placeholder="Which client is this about?" value={taskForm.clientCompany} onChange={e=>setTaskForm(p=>({...p,clientCompany:e.target.value}))} /></div>
               <div><label>Details</label><textarea rows={3} placeholder="Add context or instructions..." value={taskForm.description} onChange={e=>setTaskForm(p=>({...p,description:e.target.value}))} style={{resize:"none"}} /></div>
@@ -10037,17 +10096,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               </div>
             </div>
             <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
-              <button className="btn btn-ghost" onClick={()=>{setTaskModal(false);setTaskForm(BLANK_TASK_FORM);}}>Cancel</button>
+              <button className="btn btn-ghost" onClick={closeTaskModal}>Cancel</button>
               <button className="btn btn-primary" onClick={()=>{
                 const assignedUserId = taskForm.assignedToUserId || (isRep&&user_role?.id?user_role.id:"");
                 if(!assignedUserId||!taskForm.title){showToast("Task title and assignee required","err");return;}
                 const assignedUser = USER_ROLES.find(u=>u.id===assignedUserId);
                 const repId = assignedUser?.repId||null;
                 setTasks(p=>[{id:`t${Date.now()}`,...taskForm,assignedToUserId:assignedUserId,assignedToName:assignedUser?.name||"",assignedTo:repId,repId:repId,assignedBy:activeUser,assignedByName:user_role?.name||user.name,status:"Open",createdAt:TODAY},...p]);
-                setTaskModal(false);
-                setTaskForm(BLANK_TASK_FORM);
-                showToast(assignedUserId===activeUser?"Task created for yourself":"Task assigned to "+(assignedUser?.name||""));
-              }}>{isRep?"Create Task":"Assign Task"}</button>
+                closeTaskModal();
+                showToast(assignedUserId===activeUser?"✓ Task created for yourself":"Task assigned to "+(assignedUser?.name||""));
+              }}>{selfTaskMode?"Create Task":isRep?"Create Task":"Assign Task"}</button>
             </div>
           </div>
         </div>
