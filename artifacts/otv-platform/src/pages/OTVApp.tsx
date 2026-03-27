@@ -1941,15 +1941,18 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   };
   const updateReq     = (dealId, reqIdx, status) => setDeals(p=>p.map(d=>d.id===dealId?{...d,reqs:d.reqs.map((r,i)=>i===reqIdx?{...r,status}:r)}:d));
 
+  const openAddDeal = (prefillDealType?: string) => {
+    setDealForm({...BLANK_DEAL, quarter: entryQ, repId: isRep ? String(user_role.repId) : "", dealType: prefillDealType || ""});
+    setAddDealOpen(true);
+  };
+
   const handleAddDeal = () => {
     const parsedRepId = parseInt(dealForm.repId);
     if (!dealForm.clientCompany||!parsedRepId||!dealForm.targetAmount){showToast("Fill required fields (client, rep, target)","err");return;}
     if (!REPS.find(r=>r.id===parsedRepId)){showToast("Select a valid rep","err");return;}
     const rep=REPS.find(r=>r.id===parseInt(dealForm.repId));
-    // Auto-fill amount from targetAmount if blank
-    if(!dealForm.amount) setDealForm(p=>({...p,amount:p.targetAmount}));
-    setDeals(p=>[...p,{id:`d${Date.now()}`,...dealForm,repId:parseInt(dealForm.repId),repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:parseCurrency(dealForm.targetAmount),lastContact:null,reqs:[]}]);
-    setDealForm(BLANK_DEAL);setAddDealOpen(false);showToast("Deal added");
+    setDeals(p=>[...p,{id:`d${Date.now()}`,...dealForm,repId:parseInt(dealForm.repId),repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:parseCurrency(dealForm.targetAmount),lastContact:TODAY,reqs:[]}]);
+    setDealForm(BLANK_DEAL);setAddDealOpen(false);showToast("Deal added ✓");
   };
 
   const handleLogMeeting = () => {
@@ -3928,7 +3931,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY TARGETS — {rhRegion}</div>
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>{filterQ} · Region summary + client drill-down</div>
                   </div>
-                  <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Client</button>
+                  <button className="btn btn-primary" onClick={()=>openAddDeal()}>+ Add Client</button>
                 </div>
 
                 {/* 4 Summary stat cards — consistent with Sales Rep view */}
@@ -4712,7 +4715,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REVENUE TRACKER</div>
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>{isDigiOps?"Website · App · Social · Direct · Internal · Programmatic":"Linear TV · IPs · Digital · Media Solutions · Integrated Packages"}</div>
                   </div>
-                  <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Deal</button>
+                  <button className="btn btn-primary" onClick={()=>openAddDeal()}>+ Add Deal</button>
                 </div>
 
                 {/* Tab switcher */}
@@ -4789,7 +4792,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {d.awaitingApproval&&<span style={{background:`${C.orange}22`,color:C.orange,fontSize:10,padding:"1px 7px",borderRadius:6}}>⏳ {d.awaitingApproval}</span>}
                                   <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(d.repId),dealId:d.id,clientAgencyName:d.clientCompany,contactName:d.contactName||""}));setLogOpen(true);}}
                                     style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Meeting</button>
-                                  <button onClick={()=>setAddDealOpen(true)}
+                                  <button onClick={()=>openAddDeal(d.dealType)}
                                     style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>+ Deal</button>
                                   <button onClick={()=>{showToast("Note feature coming soon","ok");}}
                                     style={{background:C.s3,border:"none",color:C.dim,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Note</button>
@@ -5943,7 +5946,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
                 <div style={{display:"flex",gap:8,alignItems:"center"}}>
                   <span style={{fontSize:11,color:C.dim}}>Viewing as <span style={{color:C.accent}}>{user_role.name}</span></span>
-                  <button className="btn btn-primary" onClick={()=>setAddDealOpen(true)}>+ Add Client</button>
+                  <button className="btn btn-primary" onClick={()=>openAddDeal()}>+ Add Client</button>
                 </div>
               </div>
 
@@ -9991,7 +9994,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               ].map(f=>(
                 <div key={f.key}><label>{f.label}</label><input type={f.type} placeholder={f.ph} value={dealForm[f.key]||""} onChange={e=>setDealForm(p=>({...p,[f.key]:e.target.value}))} /></div>
               ))}
-              <div><label>Assign Rep *</label><select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{REPS.map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select></div>
+              <div><label>Assign Rep *</label>{isRep?(<input readOnly value={REPS.find(r=>r.id===parseInt(dealForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />):(<select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{REPS.map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select>)}</div>
               <div><label>Deal Type</label><select value={dealForm.dealType} onChange={e=>setDealForm(p=>({...p,dealType:e.target.value}))}><option value="">Select</option>{DEAL_TYPES.map(d=><option key={d}>{d}</option>)}</select></div>
               <div><label>Contact Level</label><select value={dealForm.contactLevel} onChange={e=>setDealForm(p=>({...p,contactLevel:e.target.value}))}><option value="">Select</option>{CONTACT_LEVELS.map(c=><option key={c}>{c}</option>)}</select></div>
               <div><label>Priority</label><select value={dealForm.priority} onChange={e=>setDealForm(p=>({...p,priority:e.target.value}))}><option>Top 5</option><option>Regular</option></select></div>
