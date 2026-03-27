@@ -2972,12 +2972,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const repTasks = tasks.filter(t =>
                     (t.repId===myRepId||t.assignedTo===myRepId) && t.status!=="Done"
                   );
-                  const stepDuePlans = (plans||[]).filter(p =>
-                    p.repId===myRepId && p.autoCreatedFrom==="next-step" && p.status!=="Done"
+                  const autoDuePlans = (plans||[]).filter(p =>
+                    p.repId===myRepId &&
+                    (p.autoCreatedFrom==="next-step" || p.autoCreatedFrom==="follow-up" || p.autoCreatedFrom==="next-meeting") &&
+                    p.status!=="Done" && p.status!=="Cancelled"
                   );
-                  const overdue   = [...repTasks.filter(t=>t.dueDate&&t.dueDate<TODAY), ...stepDuePlans.filter(p=>p.date<TODAY)];
-                  const dueToday  = [...repTasks.filter(t=>t.dueDate===TODAY), ...stepDuePlans.filter(p=>p.date===TODAY)];
-                  const dueTmrw   = [...repTasks.filter(t=>t.dueDate===TOMORROW), ...stepDuePlans.filter(p=>p.date===TOMORROW)];
+                  const overdue   = [...repTasks.filter(t=>t.dueDate&&t.dueDate<TODAY), ...autoDuePlans.filter(p=>p.date<TODAY)];
+                  const dueToday  = [...repTasks.filter(t=>t.dueDate===TODAY), ...autoDuePlans.filter(p=>p.date===TODAY)];
+                  const dueTmrw   = [...repTasks.filter(t=>t.dueDate===TOMORROW), ...autoDuePlans.filter(p=>p.date===TOMORROW)];
                   if (!overdue.length && !dueToday.length && !dueTmrw.length) return null;
                   const renderItem = (item, urgency) => {
                     const title   = item.title || item.agenda || "—";
@@ -3203,8 +3205,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     const cells = Array.from({length: totalCells}, (_, i) => {
                       const dayNum = i - firstDow + 1;
                       if (dayNum < 1 || dayNum > daysInMonth) return null;
-                      const d = new Date(ref.getFullYear(), ref.getMonth(), dayNum);
-                      return d.toISOString().split("T")[0];
+                      const y = ref.getFullYear();
+                      const m = String(ref.getMonth() + 1).padStart(2, "0");
+                      const dd = String(dayNum).padStart(2, "0");
+                      return `${y}-${m}-${dd}`;
                     });
                     const weeks = [];
                     for (let w = 0; w < cells.length / 7; w++) weeks.push(cells.slice(w*7, w*7+7));
@@ -6241,18 +6245,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
               )}
 
-              {/* FOLLOW-UP REMINDERS */}
+              {/* FOLLOW-UP & NEXT MEETING REMINDERS */}
               {(()=>{
                 const fuPlans = (plans||[]).filter(p =>
-                  p.autoCreatedFrom === "follow-up" &&
+                  (p.autoCreatedFrom === "follow-up" || p.autoCreatedFrom === "next-meeting") &&
                   p.status !== "Done" && p.status !== "Cancelled" &&
-                  p.date >= TODAY &&
                   (user_role.canView==="all" ? true : user_role.canView==="region" ? REPS.find(r=>r.id===p.repId)?.region===user_role.region : p.repId===user_role.repId)
                 ).sort((a,b)=>a.date>b.date?1:-1).slice(0,10);
                 if (!fuPlans.length) return null;
                 return (
                   <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:8,padding:"12px 16px",marginBottom:18}}>
-                    <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>📞 Upcoming Follow-ups ({fuPlans.length})</div>
+                    <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>📞 Follow-ups & Next Meetings ({fuPlans.length})</div>
                     {fuPlans.map(p=>{
                       const rep = REPS.find(r=>r.id===p.repId);
                       const isOverdue = p.date < TODAY;
@@ -6260,7 +6263,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       return (
                         <div key={p.id} style={{background:C.s2,borderRadius:5,padding:"10px 14px",marginBottom:6,borderLeft:`3px solid ${isOverdue?C.red:isToday?C.orange:C.blue}`}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
-                            <div>
+                            <div style={{display:"flex",alignItems:"center",gap:6,flexWrap:"wrap"}}>
+                              <span style={{background:p.autoCreatedFrom==="next-meeting"?`${C.green}22`:`${C.blue}22`,color:p.autoCreatedFrom==="next-meeting"?C.green:C.blue,fontSize:9,fontWeight:700,padding:"1px 6px",borderRadius:4,whiteSpace:"nowrap"}}>{p.autoCreatedFrom==="next-meeting"?"📅 Next Mtg":"📞 Follow-up"}</span>
                               {rep&&<span className="sans" style={{fontWeight:700}}>{rep.name}</span>}
                               {rep&&<span style={{color:C.dim,fontSize:12}}> → </span>}
                               <span style={{fontWeight:600}}>{p.clientAgencyName}</span>
