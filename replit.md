@@ -20,7 +20,8 @@ The `usePersistedState` hook in OTVApp.tsx syncs every collection to the server:
 
 Collections synced: `otv_deals`, `otv_tasks`, `otv_targetSubs`, `otv_meetings`, `otv_plans`,
 `otv_wplans`, `otv_internalReqs`, `otv_att`, `otv_absence`, `otv_revenueEntries`,
-`otv_ipProposals`, `otv_properties`, `otv_liveRoles`, `otv_pendingUsers`, `otv_adminConfig`, `otv_savedROs`
+`otv_ipProposals`, `otv_properties`, `otv_liveRoles`, `otv_pendingUsers`, `otv_adminConfig`,
+`otv_savedROs`, `otv_reps` (sales rep master, editable by Admin), `otv_masterClients` (client master list)
 
 ## What it does
 
@@ -41,6 +42,11 @@ Sales Rep → Region Head (RH) → National Sales Head (NSH) → Sales Strategy 
 ## Admin controls (no code needed)
 
 Admin can change approval thresholds, SLA hours, inactivity escalation days from the Admin panel.
+
+**Data Management screen** (Admin → DATA → Data Management):
+- **Sales Reps tab**: Add new reps, edit name/region/role/target inline, activate/deactivate without code. Changes are persisted in `otv_reps` and visible to all users instantly.
+- **Clients tab**: Add/edit/remove master client list. Stored in `otv_masterClients`.
+- **Bulk Import tab**: Upload CSV/Excel for deals, targets, revenue, properties (existing flow).
 
 ## Deployment
 

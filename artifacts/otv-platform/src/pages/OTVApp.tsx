@@ -1501,11 +1501,11 @@ const TOUR_DATA = {
     ]
   },
   admin: {
-    welcome:{ title:"Welcome, Admin!", subtitle:"System access and configuration", bullets:["◎ Access Management — approve sign-ups & assign roles","✦ Approval Queue — review pending system requests","⬆ Import Data — bulk upload deals or meeting data","⚙ System Config — manage system-wide settings"] },
+    welcome:{ title:"Welcome, Admin!", subtitle:"System access and configuration", bullets:["◎ Access Management — approve sign-ups & assign roles","✦ Approval Queue — review pending system requests","⬆ Data Management — add/edit reps, clients & bulk import","⚙ System Config — manage system-wide settings"] },
     steps:[
       {title:"Access Management", desc:"New user sign-up requests land here. Review each one, approve or reject, and assign the correct role (Sales Rep, Region Head, NSH, etc.) and region before they can log in.", nav:"admin-access"},
       {title:"Approval Queue", desc:"Internal requests that need admin-level review — escalations, role override requests, or items that fall outside normal department routing.", nav:"admin-approvals"},
-      {title:"Import Data", desc:"Bulk upload deals or meeting data from a CSV or spreadsheet. Useful for onboarding new reps or migrating historical data into the system.", nav:"import"},
+      {title:"Data Management", desc:"Add or edit sales reps, manage the client master list, and bulk-upload deals or meetings from CSV. Changes to reps and clients apply instantly for all users.", nav:"import"},
       {title:"You're all set! 🎉", desc:"Your focus: keep Access Management clear (no pending sign-ups unreviewed) and Approval Queue actioned promptly. Tap '?' anytime to replay this tour.", nav:"admin-access"},
     ]
   },
@@ -1759,6 +1759,19 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles",
     USER_ROLES.filter(u=>u.id!=="admin").map(u=>({...u}))
   );
+  const [reps, setReps]                                 = usePersistedState("otv_reps", REPS);
+  const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", [
+    {id:"mc1",company:"Reliance Retail",industry:"Retail",contact:"Sunita Sharma",phone:"9810001234",email:"sunita@relianceretail.com",region:"National"},
+    {id:"mc2",company:"ITC Foods",industry:"FMCG",contact:"Anil Varma",phone:"9820002345",email:"anil@itcfoods.com",region:"National"},
+    {id:"mc3",company:"HDFC Bank",industry:"Banking/Finance",contact:"Priya Mehta",phone:"9830003456",email:"priya@hdfcbank.com",region:"North"},
+    {id:"mc4",company:"Maruti Suzuki",industry:"Automobile",contact:"Arun Kapoor",phone:"9840004567",email:"arun@maruti.com",region:"North"},
+    {id:"mc5",company:"Apollo Hospitals",industry:"Healthcare",contact:"Ravi Krishnan",phone:"9850005678",email:"ravi@apollo.com",region:"South"},
+    {id:"mc6",company:"Asian Paints",industry:"Paints",contact:"Harsh Goenka",phone:"9860006789",email:"harsh@asianpaints.com",region:"National"},
+    {id:"mc7",company:"Tata Steel",industry:"Steel/Manufacturing",contact:"Ajay Tandon",phone:"9870007890",email:"ajay@tatasteel.com",region:"East"},
+    {id:"mc8",company:"Nestle India",industry:"FMCG",contact:"Priya Bhatt",phone:"9880008901",email:"priya@nestle.com",region:"West"},
+    {id:"mc9",company:"HUL",industry:"FMCG",contact:"Sanjiv Mehta",phone:"9890009012",email:"sanjiv@hul.com",region:"National"},
+    {id:"mc10",company:"Coca-Cola India",industry:"Beverages",contact:"Prasoon Joshi",phone:"9800010123",email:"prasoon@cocacola.com",region:"National"},
+  ]);
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
@@ -1766,6 +1779,15 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [editSubClients, setEditSubClients]             = useState([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [importTab, setImportTab]                       = useState("deals");
+  const [dmTab, setDmTab]                               = useState<"reps"|"clients"|"bulk">("reps");
+  const [repEditId, setRepEditId]                       = useState<number|null>(null);
+  const [repEditForm, setRepEditForm]                   = useState<any>({});
+  const [repAddMode, setRepAddMode]                     = useState(false);
+  const [repAddForm, setRepAddForm]                     = useState({name:"",region:"North",role:"Sales Executive",target:10000000,active:true});
+  const [clientEditId, setClientEditId]                 = useState<string|null>(null);
+  const [clientEditForm, setClientEditForm]             = useState<any>({});
+  const [clientAddMode, setClientAddMode]               = useState(false);
+  const [clientAddForm, setClientAddForm]               = useState({company:"",industry:"",contact:"",phone:"",email:"",region:"National"});
 
   // Global search
   const [globalSearch, setGlobalSearch] = useState("");
@@ -1860,7 +1882,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       return "Linear TV";
     })();
 
-    const rep  = REPS.find(r => r.region === "National") || REPS[0];
+    const rep  = reps.find(r => r.region === "National") || reps[0];
     const prefilled = {
       clientCompany:  roResult.client_name   || roResult.brand_name  || "",
       contactName:    roResult.contact_person || "",
@@ -1931,7 +1953,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // Simulate EOD run — 11:30 PM check: today logged AND tomorrow planned both required
   const runEODCheck = () => {
     let count = 0;
-    REPS.forEach(rep => {
+    reps.forEach(rep => {
       const todayLogged = meetings.some(m=>m.repId===rep.id&&m.date===TODAY);
       const tmrwPlanned = (plans_crm||plans||[]).some(p=>p.repId===rep.id&&p.date===TOMORROW&&p.status==="Planned");
       const bothDone = todayLogged && tmrwPlanned;
@@ -2065,7 +2087,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const closePct     = totalTarget>0?Math.round((totalClosed/totalTarget)*100):0;
   const fcastPct     = totalTarget>0?Math.round((forecast/totalTarget)*100):0;
 
-  const repScores = useMemo(() => REPS
+  const repScores = useMemo(() => reps
     .filter(r => user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId)
     .map(rep => {
       const rd      = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
@@ -2150,15 +2172,15 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const handleAddDeal = () => {
     const parsedRepId = parseInt(dealForm.repId);
     if (!dealForm.clientCompany||!parsedRepId||!dealForm.targetAmount){showToast("Fill required fields (client, rep, target)","err");return;}
-    if (!REPS.find(r=>r.id===parsedRepId)){showToast("Select a valid rep","err");return;}
-    const rep=REPS.find(r=>r.id===parseInt(dealForm.repId));
+    if (!reps.find(r=>r.id===parsedRepId)){showToast("Select a valid rep","err");return;}
+    const rep=reps.find(r=>r.id===parseInt(dealForm.repId));
     setDeals(p=>[...p,{id:`d${Date.now()}`,...dealForm,repId:parseInt(dealForm.repId),repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:parseCurrency(dealForm.targetAmount),lastContact:TODAY,reqs:[]}]);
     setDealForm(BLANK_DEAL);setAddDealOpen(false);showToast("Deal added ✓");
   };
 
   const handleLogMeeting = () => {
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
-    const rep  = REPS.find(r => r.id === parseInt(logForm.repId));
+    const rep  = reps.find(r => r.id === parseInt(logForm.repId));
     const deal = deals.find(d => d.id === logForm.dealId);
     const now  = new Date();
     const late = now.getHours() >= 23;
@@ -2362,7 +2384,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (!meeting.nextMeetingDate) { showToast("Set a meeting date first", "err"); return null; }
     setCalendarLoading(true);
     try {
-      const rep    = REPS.find(r => r.id === parseInt(meeting.repId));
+      const rep    = reps.find(r => r.id === parseInt(meeting.repId));
       const title  = `[OTV] ${rep?.name || "Sales"} × ${meeting.clientCompany || meeting.clientAgencyName} — ${meeting.pitchType || "Meeting"}`;
       const desc   = [
         meeting.nextAgenda ? `Agenda: ${meeting.nextAgenda}` : "",
@@ -2445,7 +2467,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       calResult = await createCalendarEvent(logForm);
     }
     const updatedForm = calResult ? { ...logForm, ...calResult } : logForm;
-    const rep  = REPS.find(r => r.id === parseInt(updatedForm.repId));
+    const rep  = reps.find(r => r.id === parseInt(updatedForm.repId));
     const deal = deals.find(d => d.id === updatedForm.dealId);
     const now  = new Date();
     const late = now.getHours() >= 23;
@@ -2913,7 +2935,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     if (isAdmin) return [
       { label:"ACCESS",    items:[N("admin-access","Access Management","◎",pendingUsers.length||null)] },
       { label:"APPROVALS", items:[N("admin-approvals","Approval Queue","✦",internalReqs.filter(r=>r.status==="Pending"||r.status==="Overdue").length||null)] },
-      { label:"DATA",      items:[N("import","Import Data","⬆"), N("admin-config","System Config","⚙")] },
+      { label:"DATA",      items:[N("import","Data Management","⬆"), N("admin-config","System Config","⚙")] },
     ];
 
     // Fallback — should never reach here but prevents blank screen
@@ -3351,7 +3373,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const doAddPlan = (date) => {
               if (!pf.clientAgencyName.trim()) return;
               const planTime = pf.time||"10:00";
-              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myRepId||(REPS[0]?.id),date,time:planTime,clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
+              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myRepId||(reps[0]?.id),date,time:planTime,clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -3710,10 +3732,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       const loggedAt = `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}`;
                                       const newMeetId = `ml${Date.now()}`;
                                       setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done",loggedMeetingId:newMeetId}:pl));
-                                      setMeetings(q=>[{id:newMeetId,repId:myRepId||(REPS[0]?.id),repName:REPS.find(r=>r.id===myRepId)?.name||"",region:REPS.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Proposal Accepted":"Needs Callback",isUnplanned:false},...q]);
+                                      setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Proposal Accepted":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
-                                        setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:myRepId,assignedByName:REPS.find(r=>r.id===myRepId)?.name||""},...q]);
+                                        setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:myRepId,assignedByName:reps.find(r=>r.id===myRepId)?.name||""},...q]);
                                         if(md) {
                                           // Route approval based on deal amount thresholds
                                           const amt = md.amount || 0;
@@ -3730,7 +3752,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                         }
                                       }
                                       // Auto-create calendar plans from follow-up / next-meeting / action due date
-                                      const repIdForPlan = myRepId || (REPS[0]?.id);
+                                      const repIdForPlan = myRepId || (reps[0]?.id);
                                       const ts = Date.now();
                                       const newAutoPlans: any[] = [];
                                       if (act && bywhen) {
@@ -3743,7 +3765,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                         newAutoPlans.push({id:`p_fu_${ts+2}`,repId:repIdForPlan,date:fu,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow-up: ${ns||"Check in with client"}`,pitchType:p.pitchType||"",meetingType:"Call",needsMeet:false,status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"});
                                       }
                                       if (newAutoPlans.length > 0) setPlans(q=>[...q,...newAutoPlans]);
-                                      setAtt(q=>({...q,[TODAY]:{...(q[TODAY]||{}),[(myRepId||REPS[0]?.id)]:true}}));
+                                      setAtt(q=>({...q,[TODAY]:{...(q[TODAY]||{}),[(myRepId||reps[0]?.id)]:true}}));
                                       setInlineLogPlan(null);
                                       const planCount = (act&&bywhen?1:0)+(nm?1:0)+(fu?1:0);
                                       showToast((act&&frm?"Meeting logged + task created ✓":"Meeting logged ✓")+(planCount>0?` · ${planCount} calendar entry added`:""));
@@ -4079,7 +4101,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ RH WAR ROOM (Region Head) ═══ */}
           {view==="warroom" && isRH && (()=>{
             const rhRegion = user_role?.region;
-            const myReps   = REPS.filter(r => r.region === rhRegion);
+            const myReps   = reps.filter(r => r.region === rhRegion);
             const myRepIds = myReps.map(r => r.id);
             const rhDeals  = visibleDeals;
 
@@ -4124,7 +4146,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                   {/* Approvals pending RH sign-off */}
                   {myApprovals.map(d=>{
-                    const rep = REPS.find(r=>r.id===d.repId);
+                    const rep = reps.find(r=>r.id===d.repId);
                     const dw  = daysSince(d.awaitingApprovalSince||TODAY);
                     return (
                       <div key={d.id} style={{background:`${C.orange}06`,border:`1px solid ${C.orange}33`,borderRadius:7,padding:"11px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -4143,7 +4165,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                   {/* Tasks created by reps needing NSH */}
                   {myTasks_rh.map(t=>{
-                    const rep = REPS.find(r=>r.id===t.repId);
+                    const rep = reps.find(r=>r.id===t.repId);
                     return (
                       <div key={t.id} style={{background:`${C.blue}06`,border:`1px solid ${C.blue}33`,borderRadius:7,padding:"11px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                         <span style={{color:C.blue,fontSize:13}}>📋</span>
@@ -4265,7 +4287,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div>
                     <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NO CONTACT 7+ DAYS — TEAM AT RISK</div>
                     {rhAtRisk.slice(0,4).map(d=>{
-                      const rep=REPS.find(r=>r.id===d.repId);
+                      const rep=reps.find(r=>r.id===d.repId);
                       return (
                         <div key={d.id} style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                           <span style={{flex:1}}><strong>{d.clientCompany}</strong><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span></span>
@@ -4285,7 +4307,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{marginTop:14}}>
                       <div style={{fontSize:10,color:C.green,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NEW CLIENTS ADDED TODAY</div>
                       {newDeals.map(d=>{
-                        const rep=REPS.find(r=>r.id===d.repId);
+                        const rep=reps.find(r=>r.id===d.repId);
                         return (
                           <div key={d.id} style={{background:`${C.green}06`,border:`1px solid ${C.green}22`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                             <span style={{flex:1}}><strong>{d.clientCompany}</strong><span style={{color:C.dim,fontSize:11}}> · {rep?.name} · {d.dealType}</span></span>
@@ -4304,7 +4326,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const rhTmrwPlans  = (plans||[]).filter(p=>myRepIds.includes(p.repId)&&p.date===TOMORROW);
                   if(!rhTodayPlans.length&&!rhTmrwPlans.length) return null;
                   const renderPlanRow = (p) => {
-                    const rep=REPS.find(r=>r.id===p.repId);
+                    const rep=reps.find(r=>r.id===p.repId);
                     return (
                       <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:C.s2,borderRadius:5,marginBottom:5}}>
                         <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent,flexShrink:0}}>{(rep?.name||"?")[0]}</div>
@@ -4357,7 +4379,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const ach = d.outcome==="Proposal Accepted"?d.amount:0;
                 const gap = Math.max(0,(d.targetAmount||0)-ach);
                 const pct = d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
-                const rep = REPS.find(r=>r.id===d.repId);
+                const rep = reps.find(r=>r.id===d.repId);
                 return {...d, ach, gap, pct, rep};
               })
               .sort((a,b)=>b.gap-a.gap); // worst gap first
@@ -4444,7 +4466,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ RH ESCALATIONS (Region Head — escalations directed to RH/NSH) ═══ */}
           {view==="rh-escalations" && isRH && (()=>{
             const rhRegion = user_role?.region;
-            const myRepIds = REPS.filter(r=>r.region===rhRegion).map(r=>r.id);
+            const myRepIds = reps.filter(r=>r.region===rhRegion).map(r=>r.id);
 
             // Deals awaiting NSH/RH approval from this region
             const pendingApprovals = visibleDeals.filter(d=>
@@ -4541,7 +4563,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         ))}</tr></thead>
                         <tbody>
                           {pendingApprovals.map(d=>{
-                            const rep=REPS.find(r=>r.id===d.repId);
+                            const rep=reps.find(r=>r.id===d.repId);
                             const dw=daysSince(d.awaitingApprovalSince);
                             return (
                               <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:dw>=APPROVAL_SLA_DAYS?`${C.red}04`:`${C.orange}04`}}
@@ -4579,7 +4601,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         ))}</tr></thead>
                         <tbody>
                           {pendingTasks.map(t=>{
-                            const rep=REPS.find(r=>r.id===t.repId);
+                            const rep=reps.find(r=>r.id===t.repId);
                             const overdue=t.dueDate<TODAY;
                             return (
                               <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:overdue?`${C.red}04`:"transparent"}}
@@ -4616,7 +4638,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         ))}</tr></thead>
                         <tbody>
                           {overdueInRegion.map(d=>{
-                            const rep=REPS.find(r=>r.id===d.repId);
+                            const rep=reps.find(r=>r.id===d.repId);
                             return (
                               <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}}
                                 onMouseOver={e=>e.currentTarget.style.background=C.s2}
@@ -4686,7 +4708,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const totT = allD.reduce((s,d)=>s+(d.targetAmount||0),0);
                       const blocked = allD.filter(d=>d.awaitingApproval&&d.outcome!=="Proposal Accepted");
                       const atRiskD = allD.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7);
-                      const nonCompliant = REPS.filter(r=>!att[TODAY]?.[r.id]);
+                      const nonCompliant = reps.filter(r=>!att[TODAY]?.[r.id]);
                       const pct = totT>0?Math.round((totC/totT)*100):0;
                       const digest = [
                         `📊 OTV Sales Digest — ${TODAY}`,
@@ -4697,7 +4719,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         ...blocked.slice(0,5).map(d=>`  • ${d.clientCompany} — ${fmtR(d.amount)} → ${d.awaitingApproval} (${daysSince(d.awaitingApprovalSince||TODAY)}d)`),
                         ``,
                         atRiskD.length ? `🔴 ${atRiskD.length} deal(s) at risk (7+ days no contact):` : `✅ No at-risk deals`,
-                        ...atRiskD.slice(0,5).map(d=>{const r=REPS.find(x=>x.id===d.repId);return`  • ${d.clientCompany} — ${r?.name||""} (${daysSince(d.lastContact)}d idle)`;}),
+                        ...atRiskD.slice(0,5).map(d=>{const r=reps.find(x=>x.id===d.repId);return`  • ${d.clientCompany} — ${r?.name||""} (${daysSince(d.lastContact)}d idle)`;}),
                         ``,
                         nonCompliant.length ? `⚠️ Not logged today: ${nonCompliant.map(r=>r.name).join(", ")}` : `✅ All reps logged`,
                       ].join("\n");
@@ -4809,7 +4831,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           return {logged:todayLogged, planned:tmrwPlanned, total:rhs.length};
                         })()},
                         {label:"Sales Executives", rows: (() => {
-                          const reps = REPS;
                           const todayLogged  = reps.filter(r=>meetings.some(m=>m.repId===r.id&&m.date===TODAY)).length;
                           const tmrwPlanned  = reps.filter(r=>(plans||[]).some(p=>p.repId===r.id&&p.date===TOMORROW&&p.status==="Planned")).length;
                           return {logged:todayLogged, planned:tmrwPlanned, total:reps.length};
@@ -4868,7 +4889,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <tbody>
                       {[
                         {label:"Region Heads",     depts:["RH North","RH South","RH East","RH West","RH National"]},
-                        {label:"Sales Executives",  depts:REPS.map(r=>String(r.id))},
+                        {label:"Sales Executives",  depts:reps.map(r=>String(r.id))},
                         {label:"Sales Strategy",    depts:["Sales Strategy"]},
                       ].map(({label,depts})=>{
                         const open    = tasks.filter(t=>depts.some(d=>t.dept===d||String(t.assignedTo)===d)&&t.status!=="Done").length;
@@ -4928,7 +4949,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const noDigitalRegions= regionAnalysis.filter(r=>r.count>0&&!r.hasDigital);
 
                   // Rep-level signals
-                  const repPcts = REPS.map(r=>{
+                  const repPcts = reps.map(r=>{
                     const rd=allD.filter(d=>d.repId===r.id);
                     const t=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
                     const c=rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
@@ -5075,7 +5096,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {atRisk.length>0&&(
                     <div style={{marginBottom:14}}>
                       <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",marginBottom:7}}>NO CONTACT 7+ DAYS</div>
-                      {atRisk.map(d=>{const rep=REPS.find(r=>r.id===d.repId);return(
+                      {atRisk.map(d=>{const rep=reps.find(r=>r.id===d.repId);return(
                         <div key={d.id} style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:5,padding:"9px 14px",marginBottom:5,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                           <div style={{flex:1}}><span className="sans" style={{fontWeight:700}}>{d.clientCompany}</span><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span><span className="pill" style={{background:`${oColor(d.outcome)}22`,color:oColor(d.outcome),marginLeft:8,fontSize:10}}>{d.outcome}</span></div>
                           <span style={{color:C.red,fontSize:11,whiteSpace:"nowrap"}}>{daysSince(d.lastContact)}d idle</span>
@@ -5092,7 +5113,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {overdueNext.length>0&&(
                     <div style={{marginBottom:14}}>
                       <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",marginBottom:7}}>OVERDUE NEXT STEPS</div>
-                      {overdueNext.map(d=>{const rep=REPS.find(r=>r.id===d.repId);return(
+                      {overdueNext.map(d=>{const rep=reps.find(r=>r.id===d.repId);return(
                         <div key={d.id} style={{background:`${C.orange}06`,border:`1px solid ${C.orange}22`,borderRadius:5,padding:"9px 14px",marginBottom:5,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                           <div style={{flex:1}}><span className="sans" style={{fontWeight:700}}>{d.clientCompany}</span><span style={{color:C.dim,fontSize:11}}> · {rep?.name} · {d.nextStep}</span></div>
                           <span style={{color:C.orange,fontSize:11,whiteSpace:"nowrap"}}>was due {d.nextStepDate}</span>
@@ -5106,7 +5127,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div className="card" style={{padding:14}}>
                       <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:9}}>HIGH PROBABILITY — PUSH TO CLOSE</div>
                       {visibleDeals.filter(d=>["Very Interested","Proposal Accepted"].includes(d.outcome)).sort((a,b)=>b.amount-a.amount).slice(0,4).map(d=>{
-                        const rep=REPS.find(r=>r.id===d.repId);
+                        const rep=reps.find(r=>r.id===d.repId);
                         return(
                           <div key={d.id} style={{marginBottom:8,paddingBottom:8,borderBottom:`1px solid ${C.s2}`}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
@@ -5125,7 +5146,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                     <div className="card" style={{padding:14}}>
                       <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:9}}>COMPLIANCE — TODAY · 11:30 PM</div>
-                      {REPS.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId).map(r=>{
+                      {reps.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId).map(r=>{
                         const tL=meetings.some(m=>m.repId===r.id&&m.date===TODAY)||(plans_crm||plans||[]).some(p=>p.repId===r.id&&p.date===TODAY&&p.status==="Done");
                         const tP=(plans_crm||plans||[]).some(p=>p.repId===r.id&&p.date===TOMORROW&&p.status==="Planned");
                         const ok=tL&&tP;
@@ -5186,7 +5207,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div>
                     {rtClients.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No accounts yet. Add a deal to get started.</div>}
                     {rtClients.map(c=>{
-                      const rep = REPS.find(r=>r.id===c.repId);
+                      const rep = reps.find(r=>r.id===c.repId);
                       const idle = daysSince(c.lastContact);
                       const idleColor = idle>=7?C.red:idle>=3?C.orange:C.green;
                       const pct = c.target>0?Math.round((c.total/c.target)*100):0;
@@ -5273,7 +5294,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Proposal Accepted"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Proposal Accepted"?a.amount:0))).map(d=>{
-                                const rep=REPS.find(r=>r.id===d.repId);
+                                const rep=reps.find(r=>r.id===d.repId);
                                 const ach=d.outcome==="Proposal Accepted"?d.amount:0;
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
@@ -5317,7 +5338,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   // Submit a new proposal
                   const submitProposal = (ip, elem) => {
                     if (!ipPropClient.trim()) { showToast("Enter client name","err"); return; }
-                    const myRep = REPS.find(r=>r.id===user_role?.repId);
+                    const myRep = reps.find(r=>r.id===user_role?.repId);
                     const prop = {
                       id: `ipr${Date.now()}`,
                       ipId: ip.id, elemId: elem.id,
@@ -5421,7 +5442,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     const myProposal = isRep ? ep.find(p=>p.repId===user_role?.repId) : null;
                                     // Effective display values
                                     const effClient  = approved.length>0 ? approved.map(p=>p.client).join(", ") : elem.client;
-                                    const effRepName = approved.length>0 ? approved.map(p=>p.repName).join(", ") : (elem.repId?REPS.find(r=>r.id===elem.repId)?.name:null);
+                                    const effRepName = approved.length>0 ? approved.map(p=>p.repName).join(", ") : (elem.repId?reps.find(r=>r.id===elem.repId)?.name:null);
                                     const effClosedAt= approved.length>0 ? approved[0].closedAt : elem.closedAt;
                                     const effRepId   = approved.length>0 ? approved[0].repId    : elem.repId;
                                     const seeCA      = canSeeCA(effRepId);
@@ -5529,7 +5550,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                                     <div style={{fontSize:11,fontWeight:700,color:C.dim,marginBottom:8,letterSpacing:".05em"}}>PROPOSALS</div>
                                                     <div style={{display:"flex",flexDirection:"column",gap:6}}>
                                                       {[...pending,...approved,...rejected].map(prop=>{
-                                                        const pRep = REPS.find(r=>r.id===prop.repId);
+                                                        const pRep = reps.find(r=>r.id===prop.repId);
                                                         const statusColor = prop.status==="Approved"?C.green:prop.status==="Rejected"?C.red:C.orange;
                                                         return (
                                                           <div key={prop.id} style={{display:"flex",gap:10,alignItems:"center",padding:"8px 12px",background:C.surface,borderRadius:6,border:`1px solid ${statusColor}33`,flexWrap:"wrap"}}>
@@ -5615,7 +5636,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                       );
                       return bsDeals.map(d=>{
-                        const rep = REPS.find(r=>r.id===d.repId);
+                        const rep = reps.find(r=>r.id===d.repId);
                         const idle = daysSince(d.lastContact);
                         const idleC = idle>=7?C.red:idle>=3?C.orange:C.green;
                         const stageC = oColor(d.outcome);
@@ -5685,7 +5706,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Proposal Accepted"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Proposal Accepted"?a.amount:0))).map(d=>{
-                                const rep=REPS.find(r=>r.id===d.repId);
+                                const rep=reps.find(r=>r.id===d.repId);
                                 const ach=d.outcome==="Proposal Accepted"?d.amount:0;
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
@@ -5740,7 +5761,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Proposal Accepted"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Proposal Accepted"?a.amount:0))).map(d=>{
-                                const rep=REPS.find(r=>r.id===d.repId);
+                                const rep=reps.find(r=>r.id===d.repId);
                                 const ach=d.outcome==="Proposal Accepted"?d.amount:0;
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
@@ -5823,7 +5844,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               </tr></thead>
                               <tbody>
                                 {sd.sort((a,b)=>b.amount-a.amount).map(d=>{
-                                  const rep=REPS.find(r=>r.id===d.repId);
+                                  const rep=reps.find(r=>r.id===d.repId);
                                   const idle=daysSince(d.lastContact);
                                   const dw=d.awaitingApproval&&d.awaitingApprovalSince?daysSince(d.awaitingApprovalSince):0;
                                   const ov=d.awaitingApproval&&dw>=APPROVAL_SLA_DAYS;
@@ -5867,7 +5888,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const showTabBar = view==="leaderboard"; // only non-rep roles use the internal tab switcher
 
             // ── Always rank ALL reps for the leaderboard (activity + target% only, no revenue amounts) ──
-            const lbAllReps = REPS.map(rep => {
+            const lbAllReps = reps.map(rep => {
               const rd      = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
               const closed  = rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+d.amount,0);
               const rm      = meetings.filter(m=>m.repId===rep.id);
@@ -6461,10 +6482,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               })() : isRH ? (()=>{
                 // ── REGION HEAD TARGETS: rep-wise tiles → click → client list ──
                 const myRegion = user_role?.region;
-                const myReps   = REPS.filter(r=>r.region===myRegion);
+                const myReps   = reps.filter(r=>r.region===myRegion);
                 if (rhRepDrill) {
                   // Client detail for selected rep
-                  const repObj = REPS.find(r=>r.id===rhRepDrill);
+                  const repObj = reps.find(r=>r.id===rhRepDrill);
                   const repDeals = visibleDeals.filter(d=>d.repId===rhRepDrill);
                   const rT=repDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
                   const rC=repDeals.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
@@ -6664,7 +6685,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {/* ── DRILLDOWN LEVEL 2: Rep → Client List ── */}
                     {targetDrilldown && nshRepDrill && (()=>{
                       const tile    = TILES.find(t=>t.key===targetDrilldown.key);
-                      const repObj  = REPS.find(r=>r.id===nshRepDrill);
+                      const repObj  = reps.find(r=>r.id===nshRepDrill);
                       const rd      = getTileDeals(targetDrilldown.key).filter(d=>d.repId===nshRepDrill);
                       const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
                       const rC=rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
@@ -6743,7 +6764,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const tsc=tPct>=80?C.green:tPct>=50?C.accent:C.red;
                       // Geographic regions: drill to rep tiles; deal-type tiles: flat list
                       const isGeoTile = ["North","South","West","East","Odisha"].includes(targetDrilldown.key);
-                      const regionReps = isGeoTile ? REPS.filter(r=>r.region===targetDrilldown.key) : [];
+                      const regionReps = isGeoTile ? reps.filter(r=>r.region===targetDrilldown.key) : [];
                       return (
                         <div style={{marginTop:16}}>
                           {/* Back + header */}
@@ -6785,7 +6806,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 <tbody>
                                   {td.length===0&&<tr><td colSpan={colSpan} style={{padding:24,textAlign:"center",color:C.muted}}>No deals.</td></tr>}
                                   {td.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
-                                    const rep=REPS.find(r=>r.id===d.repId);
+                                    const rep=reps.find(r=>r.id===d.repId);
                                     const ach=d.outcome==="Proposal Accepted"?d.amount:0;
                                     const sf=Math.max(0,(d.targetAmount||0)-ach);
                                     const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
@@ -6839,7 +6860,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   !["Proposal Accepted","Not Interested"].includes(d.outcome)
                 );
                 // 3. Overdue tasks assigned to reps in this region
-                const myRepIds = REPS.filter(r=>r.region===myRegion).map(r=>r.id);
+                const myRepIds = reps.filter(r=>r.region===myRegion).map(r=>r.id);
                 const overdueRepTasks = tasks.filter(t=>
                   myRepIds.includes(t.repId||t.assignedTo) &&
                   t.dueDate < TODAY && t.status !== "Done"
@@ -6880,7 +6901,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
                             <tbody>{rhApproval.map(d=>{
-                              const rep=REPS.find(r=>r.id===d.repId);
+                              const rep=reps.find(r=>r.id===d.repId);
                               const dw=daysSince(d.awaitingApprovalSince);
                               return (
                                 <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.red}04`}} onMouseOver={e=>e.currentTarget.style.background=`${C.red}08`} onMouseOut={e=>e.currentTarget.style.background=`${C.red}04`}>
@@ -6914,7 +6935,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
                             <tbody>{regionBlocked.filter(d=>!rhApproval.find(r=>r.id===d.id)).map(d=>{
-                              const rep=REPS.find(r=>r.id===d.repId);
+                              const rep=reps.find(r=>r.id===d.repId);
                               const dw=daysSince(d.awaitingApprovalSince);
                               return (
                                 <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
@@ -6946,7 +6967,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
                             <tbody>{overdueRepTasks.map(t=>{
-                              const rep=REPS.find(r=>r.id===(t.repId||t.assignedTo));
+                              const rep=reps.find(r=>r.id===(t.repId||t.assignedTo));
                               return (
                                 <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                   <td style={{padding:"10px 14px",fontWeight:600}}>{t.title}</td>
@@ -6972,7 +6993,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ TEAM ═══ — Region Head sees their region team only */}
           {view==="team" && isRH && (()=>{
             const rhRegion = user_role?.region;
-            const myReps   = REPS.filter(r => r.region === rhRegion);
+            const myReps   = reps.filter(r => r.region === rhRegion);
             const rhDeals  = visibleDeals;
             return (
               <div className="fin">
@@ -7175,14 +7196,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const fuPlans = (plans||[]).filter(p =>
                   (p.autoCreatedFrom === "follow-up" || p.autoCreatedFrom === "next-meeting") &&
                   p.status !== "Done" && p.status !== "Cancelled" &&
-                  (user_role.canView==="all" ? true : user_role.canView==="region" ? REPS.find(r=>r.id===p.repId)?.region===user_role.region : p.repId===user_role.repId)
+                  (user_role.canView==="all" ? true : user_role.canView==="region" ? reps.find(r=>r.id===p.repId)?.region===user_role.region : p.repId===user_role.repId)
                 ).sort((a,b)=>a.date>b.date?1:-1).slice(0,10);
                 if (!fuPlans.length) return null;
                 return (
                   <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:8,padding:"12px 16px",marginBottom:18}}>
                     <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>📞 Follow-ups & Next Meetings ({fuPlans.length})</div>
                     {fuPlans.map(p=>{
-                      const rep = REPS.find(r=>r.id===p.repId);
+                      const rep = reps.find(r=>r.id===p.repId);
                       const isOverdue = p.date < TODAY;
                       const isToday   = p.date === TODAY;
                       return (
@@ -7209,7 +7230,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
               {/* ACTION ITEM DUE DATE ALERTS */}
               {(()=>{
-                const visReps = (user_role.canView==="all" ? REPS : user_role.canView==="region" ? REPS.filter(r=>r.region===user_role.region) : REPS.filter(r=>r.id===user_role.repId)).map(r=>r.id);
+                const visReps = (user_role.canView==="all" ? reps : user_role.canView==="region" ? reps.filter(r=>r.region===user_role.region) : reps.filter(r=>r.id===user_role.repId)).map(r=>r.id);
                 const dueTasks = tasks.filter(t => visReps.includes(t.repId) && t.status!=="Done" && t.dueDate);
                 const stepDuePlansWR = (plans||[]).filter(p => visReps.includes(p.repId) && p.autoCreatedFrom==="next-step" && p.status!=="Done");
                 const all = [
@@ -7226,7 +7247,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>⏰ Action Item Due Dates ({all.length})</div>
                     {all.slice(0,12).map((item,i)=>{
                       const clr = item._urgency==="overdue"?C.red:item._urgency==="today"?C.orange:C.blue;
-                      const rep = REPS.find(r=>r.id===(item.repId||item.assignedTo));
+                      const rep = reps.find(r=>r.id===(item.repId||item.assignedTo));
                       return (
                         <div key={item.id||i} style={{background:C.s2,borderRadius:5,padding:"8px 12px",marginBottom:4,borderLeft:`3px solid ${clr}`,display:"flex",gap:10,alignItems:"flex-start"}}>
                           <div style={{flex:1}}>
@@ -7258,7 +7279,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
               {[TODAY,D1,D3,D7].map(date=>{
                 const dm = meetings.filter(m => m.date===date &&
-                  (user_role.canView==="all" ? true : user_role.canView==="region" ? REPS.find(r=>r.id===m.repId)?.region===user_role.region : m.repId===user_role.repId)
+                  (user_role.canView==="all" ? true : user_role.canView==="region" ? reps.find(r=>r.id===m.repId)?.region===user_role.region : m.repId===user_role.repId)
                 );
                 if (!dm.length) return null;
                 const label = date===TODAY?"TODAY":date===D1?"YESTERDAY":date===D3?"3 DAYS AGO":"LAST WEEK";
@@ -7420,7 +7441,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </tr></thead>
                             <tbody>
                               {approvalEsc.map(d=>{
-                                const rep=REPS.find(r=>r.id===d.repId);
+                                const rep=reps.find(r=>r.id===d.repId);
                                 const dw=daysSince(d.awaitingApprovalSince);
                                 return (
                                   <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.red}04`}}
@@ -7506,7 +7527,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </tr></thead>
                             <tbody>
                               {taskEsc.map(t=>{
-                                const rep=REPS.find(r=>r.id===t.assignedTo);
+                                const rep=reps.find(r=>r.id===t.assignedTo);
                                 const daysOver=daysSince(t.dueDate);
                                 return (
                                   <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.blue}04`}}
@@ -7557,7 +7578,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <table>
                         <thead><tr><th>Rep</th><th>Region</th><th>Role</th><th>Logged</th><th>Meetings</th><th>Status</th></tr></thead>
                         <tbody>
-                          {REPS.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId).map(rep=>{
+                          {reps.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId).map(rep=>{
                             const logged=a[rep.id];
                             const rm=meetings.filter(m=>m.repId===rep.id&&m.date===date);
                             const hasLate=rm.some(m=>m.late);
@@ -7746,8 +7767,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </tr></thead>
                       <tbody>
                         {vis.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(task=>{
-                          const assignee=task.assignedToUserId?USER_ROLES.find(u=>u.id===task.assignedToUserId):REPS.find(r=>r.id===task.assignedTo);
-                          const rep=assignee||(task.assignedTo?REPS.find(r=>r.id===task.assignedTo):null);
+                          const assignee=task.assignedToUserId?USER_ROLES.find(u=>u.id===task.assignedToUserId):reps.find(r=>r.id===task.assignedTo);
+                          const rep=assignee||(task.assignedTo?reps.find(r=>r.id===task.assignedTo):null);
                           const overdue=task.dueDate<TODAY&&task.status!=="Done";
                           const sc=task.status==="Done"?C.green:overdue?C.red:task.status==="In Progress"?C.blue:C.accent;
                           return (
@@ -8534,11 +8555,314 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {view==="import" && isAdmin && (
             <div className="fin">
-              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>IMPORT DATA</div>
-              <div style={{fontSize:11,color:C.dim,marginBottom:20}}>Upload your data via CSV or Excel. Download a template, fill it in, upload it back.</div>
+              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>DATA MANAGEMENT</div>
+              <div style={{fontSize:11,color:C.dim,marginBottom:20}}>Add, edit, or deactivate sales reps and clients. Changes apply instantly for all users.</div>
 
-              {/* ── DATA TYPE TABS ── */}
-              {(()=>{
+              {/* ── TOP-LEVEL TABS ── */}
+              <div style={{display:"flex",gap:0,marginBottom:22,borderBottom:`1px solid ${C.border}`}}>
+                {([["reps","◇ Sales Reps"],["clients","◎ Clients"],["bulk","⬆ Bulk Import"]] as const).map(([id,label])=>(
+                  <button key={id} onClick={()=>setDmTab(id)}
+                    style={{padding:"10px 20px",background:"transparent",border:"none",
+                      borderBottom:dmTab===id?`2px solid ${C.accent}`:"2px solid transparent",
+                      color:dmTab===id?C.accent:C.dim,cursor:"pointer",
+                      fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:dmTab===id?700:400}}>
+                    {label}
+                  </button>
+                ))}
+              </div>
+
+              {/* ── SALES REPS TAB ── */}
+              {dmTab==="reps" && (()=>{
+                const REGIONS = ["North","South","East","West","National","Central"];
+                const ROLES   = ["Sales Executive","Senior Sales","Business Development"];
+                const saveRep = () => {
+                  if (!repEditForm.name?.trim()){showToast("Name required","err");return;}
+                  setReps(p=>p.map(r=>r.id===repEditId?{...r,...repEditForm}:r));
+                  setRepEditId(null); setRepEditForm({});
+                  showToast("Rep updated");
+                };
+                const addRep = () => {
+                  if (!repAddForm.name.trim()){showToast("Name required","err");return;}
+                  const newId = Math.max(0,...reps.map(r=>r.id))+1;
+                  setReps(p=>[...p,{id:newId,...repAddForm,active:true}]);
+                  setRepAddMode(false);
+                  setRepAddForm({name:"",region:"North",role:"Sales Executive",target:10000000,active:true});
+                  showToast(`${repAddForm.name} added`);
+                };
+                return (
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                      <div style={{fontSize:12,color:C.dim}}>{reps.filter(r=>r.active!==false).length} active · {reps.filter(r=>r.active===false).length} inactive</div>
+                      <button onClick={()=>{setRepAddMode(true);setRepEditId(null);}}
+                        style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        + Add Rep
+                      </button>
+                    </div>
+
+                    {/* Add rep inline form */}
+                    {repAddMode && (
+                      <div className="card" style={{padding:"16px 18px",marginBottom:14,border:`1px solid ${C.accent}44`}}>
+                        <div className="sans" style={{fontWeight:700,marginBottom:12,fontSize:13}}>New Sales Rep</div>
+                        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:10,marginBottom:12}}>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>FULL NAME *</div>
+                            <input value={repAddForm.name} onChange={e=>setRepAddForm(p=>({...p,name:e.target.value}))} placeholder="e.g. Sunita Patra"
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>REGION *</div>
+                            <select value={repAddForm.region} onChange={e=>setRepAddForm(p=>({...p,region:e.target.value}))}
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12}}>
+                              {REGIONS.map(r=><option key={r}>{r}</option>)}
+                            </select></div>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>ROLE</div>
+                            <select value={repAddForm.role} onChange={e=>setRepAddForm(p=>({...p,role:e.target.value}))}
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12}}>
+                              {ROLES.map(r=><option key={r}>{r}</option>)}
+                            </select></div>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>TARGET (₹L)</div>
+                            <input type="number" value={repAddForm.target/100000} onChange={e=>setRepAddForm(p=>({...p,target:parseFloat(e.target.value||0)*100000}))}
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}} /></div>
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={addRep} style={{background:C.accent,border:"none",color:"#000",borderRadius:5,padding:"7px 18px",fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>Save Rep</button>
+                          <button onClick={()=>setRepAddMode(false)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"7px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Reps table */}
+                    <div style={{border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead>
+                          <tr style={{background:C.s2}}>
+                            {["ID","Name","Region","Role","Target","Status","Actions"].map(h=>(
+                              <th key={h} style={{padding:"9px 12px",color:C.dim,fontWeight:700,fontSize:10,letterSpacing:".07em",textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {reps.map(rep=>{
+                            const isEditing = repEditId===rep.id;
+                            const inactive  = rep.active===false;
+                            return (
+                              <tr key={rep.id} style={{borderTop:`1px solid ${C.s2}`,background:inactive?"rgba(0,0,0,.03)":"transparent",opacity:inactive?.65:1}}>
+                                <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",color:C.muted,fontSize:11}}>{rep.id}</td>
+                                <td style={{padding:"9px 12px"}}>
+                                  {isEditing
+                                    ? <input value={repEditForm.name||rep.name} onChange={e=>setRepEditForm(p=>({...p,name:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:140}} />
+                                    : <span style={{fontWeight:600,color:inactive?C.muted:C.text}}>{rep.name}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px"}}>
+                                  {isEditing
+                                    ? <select value={repEditForm.region||rep.region} onChange={e=>setRepEditForm(p=>({...p,region:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12}}>
+                                        {REGIONS.map(r=><option key={r}>{r}</option>)}
+                                      </select>
+                                    : <span style={{color:C.blue,fontFamily:"'DM Mono',monospace",fontSize:11}}>{rep.region}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px"}}>
+                                  {isEditing
+                                    ? <select value={repEditForm.role||rep.role} onChange={e=>setRepEditForm(p=>({...p,role:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12}}>
+                                        {ROLES.map(r=><option key={r}>{r}</option>)}
+                                      </select>
+                                    : <span style={{color:C.dim,fontSize:11}}>{rep.role}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace"}}>
+                                  {isEditing
+                                    ? <input type="number" value={(repEditForm.target??rep.target)/100000}
+                                        onChange={e=>setRepEditForm(p=>({...p,target:parseFloat(e.target.value||0)*100000}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:70,fontFamily:"'DM Mono',monospace"}} />
+                                    : <span style={{color:C.accent}}>₹{((rep.target||0)/100000).toFixed(0)}L</span>}
+                                </td>
+                                <td style={{padding:"9px 12px"}}>
+                                  <span style={{fontSize:10,fontWeight:700,padding:"2px 8px",borderRadius:12,
+                                    background:inactive?`${C.red}18`:`${C.green}18`,
+                                    color:inactive?C.red:C.green}}>
+                                    {inactive?"INACTIVE":"ACTIVE"}
+                                  </span>
+                                </td>
+                                <td style={{padding:"9px 12px"}}>
+                                  <div style={{display:"flex",gap:6}}>
+                                    {isEditing ? (
+                                      <>
+                                        <button onClick={saveRep}
+                                          style={{background:C.green,border:"none",color:"#fff",borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>✓ Save</button>
+                                        <button onClick={()=>{setRepEditId(null);setRepEditForm({});}}
+                                          style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✕</button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <button onClick={()=>{setRepEditId(rep.id);setRepEditForm({...rep});setRepAddMode(false);}}
+                                          style={{background:`${C.blue}15`,border:"none",color:C.blue,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Edit</button>
+                                        <button onClick={()=>{setReps(p=>p.map(r=>r.id===rep.id?{...r,active:!inactive}:r));showToast(inactive?"Rep activated":"Rep deactivated");}}
+                                          style={{background:inactive?`${C.green}15`:`${C.red}12`,border:"none",color:inactive?C.green:C.red,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                          {inactive?"Activate":"Deactivate"}
+                                        </button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── CLIENT MASTER TAB ── */}
+              {dmTab==="clients" && (()=>{
+                const REGIONS  = ["North","South","East","West","National","Central"];
+                const INDUSTRIES = ["FMCG","Banking/Finance","Automobile","Healthcare","Retail","Telecom","Technology","Steel/Manufacturing","Beverages","Paints","Media","Government","Other"];
+                const saveClient = () => {
+                  if (!clientEditForm.company?.trim()){showToast("Company name required","err");return;}
+                  setMasterClients(p=>p.map(c=>c.id===clientEditId?{...c,...clientEditForm}:c));
+                  setClientEditId(null); setClientEditForm({});
+                  showToast("Client updated");
+                };
+                const addClient = () => {
+                  if (!clientAddForm.company.trim()){showToast("Company name required","err");return;}
+                  const newId = `mc${Date.now()}`;
+                  setMasterClients(p=>[...p,{id:newId,...clientAddForm}]);
+                  setClientAddMode(false);
+                  setClientAddForm({company:"",industry:"",contact:"",phone:"",email:"",region:"National"});
+                  showToast(`${clientAddForm.company} added to client master`);
+                };
+                return (
+                  <div>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                      <div style={{fontSize:12,color:C.dim}}>{masterClients.length} clients in master list</div>
+                      <button onClick={()=>{setClientAddMode(true);setClientEditId(null);}}
+                        style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        + Add Client
+                      </button>
+                    </div>
+
+                    {/* Add client form */}
+                    {clientAddMode && (
+                      <div className="card" style={{padding:"16px 18px",marginBottom:14,border:`1px solid ${C.accent}44`}}>
+                        <div className="sans" style={{fontWeight:700,marginBottom:12,fontSize:13}}>New Client</div>
+                        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:10,marginBottom:10}}>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>COMPANY NAME *</div>
+                            <input value={clientAddForm.company} onChange={e=>setClientAddForm(p=>({...p,company:e.target.value}))} placeholder="e.g. Havells India"
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>INDUSTRY</div>
+                            <select value={clientAddForm.industry} onChange={e=>setClientAddForm(p=>({...p,industry:e.target.value}))}
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12}}>
+                              <option value="">Select</option>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}
+                            </select></div>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>REGION</div>
+                            <select value={clientAddForm.region} onChange={e=>setClientAddForm(p=>({...p,region:e.target.value}))}
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12}}>
+                              {REGIONS.map(r=><option key={r}>{r}</option>)}
+                            </select></div>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:10,marginBottom:12}}>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>PRIMARY CONTACT</div>
+                            <input value={clientAddForm.contact} onChange={e=>setClientAddForm(p=>({...p,contact:e.target.value}))} placeholder="Contact name"
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>PHONE</div>
+                            <input value={clientAddForm.phone} onChange={e=>setClientAddForm(p=>({...p,phone:e.target.value}))} placeholder="9800000000"
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}} /></div>
+                          <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>EMAIL</div>
+                            <input value={clientAddForm.email} onChange={e=>setClientAddForm(p=>({...p,email:e.target.value}))} placeholder="name@company.com"
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}} /></div>
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={addClient} style={{background:C.accent,border:"none",color:"#000",borderRadius:5,padding:"7px 18px",fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>Save Client</button>
+                          <button onClick={()=>setClientAddMode(false)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"7px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Clients table */}
+                    <div style={{border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead>
+                          <tr style={{background:C.s2}}>
+                            {["Company","Industry","Region","Contact","Phone","Email","Actions"].map(h=>(
+                              <th key={h} style={{padding:"9px 12px",color:C.dim,fontWeight:700,fontSize:10,letterSpacing:".07em",textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
+                            ))}
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {masterClients.map(cl=>{
+                            const isEditing = clientEditId===cl.id;
+                            return (
+                              <tr key={cl.id} style={{borderTop:`1px solid ${C.s2}`}}>
+                                <td style={{padding:"9px 12px"}}>
+                                  {isEditing
+                                    ? <input value={clientEditForm.company??cl.company} onChange={e=>setClientEditForm(p=>({...p,company:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:140}} />
+                                    : <span style={{fontWeight:600}}>{cl.company}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px"}}>
+                                  {isEditing
+                                    ? <select value={clientEditForm.industry??cl.industry} onChange={e=>setClientEditForm(p=>({...p,industry:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11}}>
+                                        <option value="">-</option>{INDUSTRIES.map(i=><option key={i}>{i}</option>)}
+                                      </select>
+                                    : <span style={{color:C.dim,fontSize:11}}>{cl.industry||"—"}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px"}}>
+                                  {isEditing
+                                    ? <select value={clientEditForm.region??cl.region} onChange={e=>setClientEditForm(p=>({...p,region:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11}}>
+                                        {REGIONS.map(r=><option key={r}>{r}</option>)}
+                                      </select>
+                                    : <span style={{color:C.blue,fontFamily:"'DM Mono',monospace",fontSize:11}}>{cl.region||"—"}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px"}}>
+                                  {isEditing
+                                    ? <input value={clientEditForm.contact??cl.contact} onChange={e=>setClientEditForm(p=>({...p,contact:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:120}} />
+                                    : <span style={{color:C.dim,fontSize:11}}>{cl.contact||"—"}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",fontSize:11}}>
+                                  {isEditing
+                                    ? <input value={clientEditForm.phone??cl.phone} onChange={e=>setClientEditForm(p=>({...p,phone:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11,width:110,fontFamily:"'DM Mono',monospace"}} />
+                                    : <span style={{color:C.dim}}>{cl.phone||"—"}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",fontSize:11}}>
+                                  {isEditing
+                                    ? <input value={clientEditForm.email??cl.email} onChange={e=>setClientEditForm(p=>({...p,email:e.target.value}))}
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11,width:150,fontFamily:"'DM Mono',monospace"}} />
+                                    : <span style={{color:C.muted}}>{cl.email||"—"}</span>}
+                                </td>
+                                <td style={{padding:"9px 12px"}}>
+                                  <div style={{display:"flex",gap:6}}>
+                                    {isEditing ? (
+                                      <>
+                                        <button onClick={saveClient}
+                                          style={{background:C.green,border:"none",color:"#fff",borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>✓ Save</button>
+                                        <button onClick={()=>{setClientEditId(null);setClientEditForm({});}}
+                                          style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✕</button>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <button onClick={()=>{setClientEditId(cl.id);setClientEditForm({...cl});setClientAddMode(false);}}
+                                          style={{background:`${C.blue}15`,border:"none",color:C.blue,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Edit</button>
+                                        <button onClick={()=>{setMasterClients(p=>p.filter(c=>c.id!==cl.id));showToast("Client removed");}}
+                                          style={{background:`${C.red}12`,border:"none",color:C.red,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Remove</button>
+                                      </>
+                                    )}
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* ── BULK IMPORT TAB (original CSV upload) ── */}
+              {dmTab==="bulk" && (()=>{
                 const tabs = [
                   {id:"deals",      label:"Deals",          icon:"◈", desc:"Client deals, pipeline, targets"},
                   {id:"reps",       label:"Sales Reps",     icon:"◇", desc:"Rep names, regions, roles"},
@@ -8598,13 +8922,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   if (type==="deals") {
                     const newDeals = rows.map((row,i)=>{
                       const repName = row["Rep Name"]||"";
-                      const rep = REPS.find(r=>r.name.toLowerCase().includes(repName.toLowerCase().slice(0,5))) || REPS[0];
+                      const rep = reps.find(r=>r.name.toLowerCase().includes(repName.toLowerCase().slice(0,5))) || reps[0];
                       return {id:`imp_${Date.now()}_${i}`,repId:rep.id,clientCompany:row["Client Company"]||"Unknown",contactName:row["Contact Name"]||"",designation:row["Designation"]||"",phone:row["Phone"]||"",email:row["Email"]||"",dealType:row["Deal Type"]||"Linear TV",outcome:row["Stage"]||"Needs Callback",amount:parseCur(row["Expected Amount"]),targetAmount:parseCur(row["Target Amount"]),region:row["Region"]||rep.region||"North",priority:row["Priority"]||"Regular",quarter:row["Quarter"]||"Q1 FY26",notes:row["Notes"]||"",nextStep:row["Next Step"]||"",nextStepDate:row["Next Step Date"]||null,lastContact:null,reqs:[]};
                     });
                     setDeals(p=>[...p,...newDeals]);
                     showToast(`✓ ${newDeals.length} deals imported`);
                   } else if (type==="revenue") {
-                    const repLookup = r => REPS.find(rep=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
+                    const repLookup = r => reps.find(rep=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
                     const entries = rows.map((row,i)=>{
                       const rep = repLookup(row["Rep Name"]);
                       return {id:`re_imp_${Date.now()}_${i}`,repId:rep?.id||null,clientCompany:row["Client Company"]||"",dealType:row["Deal Type"]||"Linear TV",amount:parseCur(row["Amount"]),invoiceRef:row["Invoice Ref"]||"",date:row["Date"]||TODAY,quarter:row["Quarter"]||"Q1 FY26",notes:row["Notes"]||""};
@@ -8613,7 +8937,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     showToast(`✓ ${entries.length} revenue entries imported`);
                   } else if (type==="targets") {
                     const newSubs = rows.map((row,i)=>{
-                      const rep = REPS.find(r=>r.name.toLowerCase().includes((row["Rep Name"]||"").toLowerCase().slice(0,5)));
+                      const rep = reps.find(r=>r.name.toLowerCase().includes((row["Rep Name"]||"").toLowerCase().slice(0,5)));
                       return {id:`ts_imp_${Date.now()}_${i}`,repId:rep?.id||null,repName:row["Rep Name"]||"",region:row["Region"]||"",quarter:row["Quarter"]||"Q1 FY26",clients:[{clientCompany:row["Client Company"]||"",dealType:row["Deal Type"]||"Linear TV",targetAmount:parseCur(row["Target Amount"])}],totalTarget:parseCur(row["Target Amount"]),status:"Pending RH",submittedAt:TODAY,approvalLog:[]};
                     });
                     setTargetSubs(p=>[...p,...newSubs]);
@@ -8759,7 +9083,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const top5=allD.filter(d=>d.priority==="Top 5").sort((a,b)=>b.amount-a.amount);
             const regions=["National","North","South","East","West"];
             const regionStats=regions.map(r=>{const rd=allD.filter(d=>d.region===r);const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);const rC=rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);const rPct=rT>0?Math.round((rC/rT)*100):0;return{r,rT,rC,rPct};});
-            const compliantReps=REPS.filter(r=>att[TODAY]?.[r.id]).length;
+            const compliantReps=reps.filter(r=>att[TODAY]?.[r.id]).length;
             const openEsc=deals.filter(d=>d.awaitingApproval&&daysSince(d.awaitingApprovalSince||TODAY)>=APPROVAL_SLA_DAYS).length;
             return(<div className="fin">
               <div style={{marginBottom:16}}><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>STRATEGIC KPIs</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>{filterQ} · Organisation-wide</div></div>
@@ -8779,12 +9103,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:14}}>
                 <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 18px"}}>
                   <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>Team Health · Today</div>
-                  {[["Reps Compliant",`${compliantReps} / ${REPS.length}`,compliantReps===REPS.length?C.green:C.orange],["Open Escalations",openEsc,openEsc===0?C.green:C.red],["At-Risk Deals",atRisk.length,atRisk.length===0?C.green:C.red],["Overdue Next Steps",overdueNext.length,overdueNext.length===0?C.green:C.orange]].map(([l,v,c])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.s2}`}}><span style={{fontSize:12,color:C.dim}}>{l}</span><span className="sans" style={{fontSize:16,fontWeight:700,color:c}}>{v}</span></div>))}
+                  {[["Reps Compliant",`${compliantReps} / ${reps.length}`,compliantReps===reps.length?C.green:C.orange],["Open Escalations",openEsc,openEsc===0?C.green:C.red],["At-Risk Deals",atRisk.length,atRisk.length===0?C.green:C.red],["Overdue Next Steps",overdueNext.length,overdueNext.length===0?C.green:C.orange]].map(([l,v,c])=>(<div key={l} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"7px 0",borderBottom:`1px solid ${C.s2}`}}><span style={{fontSize:12,color:C.dim}}>{l}</span><span className="sans" style={{fontSize:16,fontWeight:700,color:c}}>{v}</span></div>))}
                 </div>
                 <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 18px"}}>
                   <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:12}}>Top 5 Deals</div>
                   {top5.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:"20px 0"}}>No Top 5 deals tagged</div>}
-                  {top5.slice(0,5).map(d=>{const rep=REPS.find(r=>r.id===d.repId);return(<div key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${C.s2}`}}><div style={{flex:1}}><div style={{fontWeight:700,fontSize:12}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{rep?.name}</div></div><div style={{textAlign:"right"}}><div className="sans" style={{fontSize:13,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600}}>{d.outcome}</span></div></div>);})}
+                  {top5.slice(0,5).map(d=>{const rep=reps.find(r=>r.id===d.repId);return(<div key={d.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 0",borderBottom:`1px solid ${C.s2}`}}><div style={{flex:1}}><div style={{fontWeight:700,fontSize:12}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{rep?.name}</div></div><div style={{textAlign:"right"}}><div className="sans" style={{fontSize:13,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600}}>{d.outcome}</span></div></div>);})}
                 </div>
               </div>
             </div>);
@@ -8795,7 +9119,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             return(<div className="fin">
               <div style={{marginBottom:16}}><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>TOP RISKS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>Highest-value open deals · sorted by target size and idle time</div></div>
               {highRisk.length===0&&<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green}}>✓ No open risks.</div>}
-              {highRisk.map((d,i)=>{const rep=REPS.find(r=>r.id===d.repId);const riskColor=d.idle>=14?C.red:d.idle>=7?C.orange:C.blue;const riskLabel=d.idle>=14?"HIGH":d.idle>=7?"MEDIUM":"WATCH";return(
+              {highRisk.map((d,i)=>{const rep=reps.find(r=>r.id===d.repId);const riskColor=d.idle>=14?C.red:d.idle>=7?C.orange:C.blue;const riskLabel=d.idle>=14?"HIGH":d.idle>=7?"MEDIUM":"WATCH";return(
                 <div key={d.id} style={{background:C.surface,border:`1px solid ${d.idle>=7?riskColor+"44":C.border}`,borderLeft:`3px solid ${riskColor}`,borderRadius:8,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"flex-start",gap:14}}>
                   <div style={{width:52,textAlign:"center",flexShrink:0}}><div className="sans" style={{fontSize:20,fontWeight:800,color:riskColor}}>#{i+1}</div><div style={{background:`${riskColor}22`,color:riskColor,padding:"2px 5px",borderRadius:4,fontSize:8,fontWeight:700,marginTop:3}}>{riskLabel}</div></div>
                   <div style={{flex:1}}>
@@ -8813,7 +9137,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             return(<div className="fin">
               <div style={{marginBottom:16}}><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>SENIOR REQUESTS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>Meetings where a rep has asked for senior presence</div></div>
               {seniorReqs.length===0&&<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:40,textAlign:"center"}}><div style={{fontSize:24,marginBottom:8}}>✓</div><div className="sans" style={{fontWeight:700,color:C.green}}>No senior requests pending</div></div>}
-              {seniorReqs.map(m=>{const rep=REPS.find(r=>r.id===m.repId);const deal=deals.find(d=>d.repId===m.repId&&(d.clientCompany||"").toLowerCase().includes((m.clientCompany||"").toLowerCase().slice(0,5)));return(
+              {seniorReqs.map(m=>{const rep=reps.find(r=>r.id===m.repId);const deal=deals.find(d=>d.repId===m.repId&&(d.clientCompany||"").toLowerCase().includes((m.clientCompany||"").toLowerCase().slice(0,5)));return(
                 <div key={m.id} style={{background:C.surface,border:`1px solid ${C.blue}44`,borderLeft:`3px solid ${C.blue}`,borderRadius:8,padding:"14px 18px",marginBottom:10}}>
                   <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                     <div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:6}}><span className="sans" style={{fontSize:15,fontWeight:700}}>{m.clientCompany}</span><span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600}}>Senior Needed</span></div><div style={{fontSize:11,color:C.dim,marginBottom:4}}><strong>{rep?.name}</strong> is asking for <strong style={{color:C.blue}}>{m.seniorRequestedName||m.seniorRequestedRole}</strong> ({m.seniorRequestedRole}) in the next round</div>{m.nextSteps&&<div style={{fontSize:11,color:C.text}}>Context: {m.nextSteps}</div>}</div>
@@ -8833,7 +9157,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {[{label:"TOTAL PENDING",value:pending.length,color:C.orange},{label:"OVERDUE (>2D)",value:pending.filter(d=>daysSince(d.awaitingApprovalSince||TODAY)>=2).length,color:C.red},{label:"TOTAL VALUE",value:fmtR(pending.reduce((s,d)=>s+(d.amount||0),0)),color:C.accent}].map(k=>(<div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div><div className="sans" style={{fontSize:24,fontWeight:700,color:k.color}}>{k.value}</div></div>))}
               </div>
               {pending.length===0&&<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ No pending approvals</div>}
-              {pending.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Amount","Waiting For","Days","Stage","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{pending.map(d=>{const rep=REPS.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:dw>=2?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=dw>=2?`${C.red}04`:"transparent"}><td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{d.awaitingApproval}</span></td><td style={{padding:"10px 14px",color:dw>=2?C.red:C.dim,fontWeight:dw>=2?700:400}}>{dw}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"10px 14px",whiteSpace:"nowrap"}}><button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()} style={{background:canApprove(d)?`${C.green}22`:C.s3,border:"none",color:canApprove(d)?C.green:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{canApprove(d)?"Approve →":"🔒 Locked"}</button></td></tr>);})}</tbody></table></div>}
+              {pending.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Amount","Waiting For","Days","Stage","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{pending.map(d=>{const rep=reps.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:dw>=2?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=dw>=2?`${C.red}04`:"transparent"}><td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{d.awaitingApproval}</span></td><td style={{padding:"10px 14px",color:dw>=2?C.red:C.dim,fontWeight:dw>=2?700:400}}>{dw}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"10px 14px",whiteSpace:"nowrap"}}><button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()} style={{background:canApprove(d)?`${C.green}22`:C.s3,border:"none",color:canApprove(d)?C.green:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{canApprove(d)?"Approve →":"🔒 Locked"}</button></td></tr>);})}</tbody></table></div>}
             </div>);
           })()}
 
@@ -8849,7 +9173,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {[["KEY ACCOUNT TARGET",fmtR(totT),C.text],["CLOSED",fmtR(totC),C.green],["PENDING",fmtR(Math.max(0,totT-totC)),C.accent]].map(([l,v,c])=>(<div key={l}><div style={{fontSize:9,color:C.dim,letterSpacing:".08em",marginBottom:2}}>{l}</div><div className="sans" style={{fontSize:20,fontWeight:700,color:c}}>{v}</div></div>))}
                 <div style={{marginLeft:"auto",textAlign:"right"}}><div className="sans" style={{fontSize:44,fontWeight:800,color:sc,lineHeight:1}}>{totPct}%</div><div style={{fontSize:10,color:C.dim}}>achieved</div></div>
               </div>
-              {allD.sort((a,b)=>b.amount-a.amount).map(d=>{const rep=REPS.find(r=>r.id===d.repId);const senReq=seniorReqs.find(m=>m.repId===d.repId&&(m.clientCompany||"").toLowerCase().includes(d.clientCompany.toLowerCase().slice(0,5)));return(
+              {allD.sort((a,b)=>b.amount-a.amount).map(d=>{const rep=reps.find(r=>r.id===d.repId);const senReq=seniorReqs.find(m=>m.repId===d.repId&&(m.clientCompany||"").toLowerCase().includes(d.clientCompany.toLowerCase().slice(0,5)));return(
                 <div key={d.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${oColor(d.outcome)}`,borderRadius:8,padding:"14px 18px",marginBottom:10}}>
                   <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:12,flexWrap:"wrap"}}>
                     <div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span className="sans" style={{fontSize:15,fontWeight:700}}>{d.clientCompany}</span><span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 7px",borderRadius:5,fontSize:10,fontWeight:700}}>TOP 5</span>{senReq&&<span style={{background:`${C.blue}22`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10,fontWeight:700}}>⬆ Senior Requested</span>}</div><div style={{fontSize:11,color:C.dim}}>{d.contactName&&<span>{d.contactName}{d.designation?`, ${d.designation}`:""} · </span>}<span>Managed by {rep?.name}</span></div>{d.nextStep&&<div style={{fontSize:11,color:C.text,marginTop:6}}>→ {d.nextStep}</div>}{d.awaitingApproval&&<div style={{marginTop:5}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>Blocked → {d.awaitingApproval} ({daysSince(d.awaitingApprovalSince||TODAY)}d)</span></div>}</div>
@@ -8869,7 +9193,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {[{label:"PENDING",value:mdEsc.length,color:C.orange},{label:"OVERDUE",value:mdEsc.filter(d=>daysSince(d.awaitingApprovalSince||TODAY)>=APPROVAL_SLA_DAYS).length,color:C.red},{label:"VALUE",value:fmtR(mdEsc.reduce((s,d)=>s+(d.amount||0),0)),color:C.accent}].map(k=>(<div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div><div className="sans" style={{fontSize:24,fontWeight:700,color:k.color}}>{k.value}</div></div>))}
               </div>
               {mdEsc.length===0&&<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ No escalations pending for MD</div>}
-              {mdEsc.map(d=>{const rep=REPS.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(
+              {mdEsc.map(d=>{const rep=reps.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(
                 <div key={d.id} style={{background:C.surface,border:`1px solid ${dw>=2?C.red+"44":C.border}`,borderLeft:`3px solid ${dw>=2?C.red:C.orange}`,borderRadius:8,padding:"14px 18px",marginBottom:10}}>
                   <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                     <div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span className="sans" style={{fontSize:15,fontWeight:700}}>{d.clientCompany}</span><span style={{background:`${dw>=2?C.red:C.orange}22`,color:dw>=2?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{dw}d → {d.awaitingApproval}</span></div><div style={{fontSize:11,color:C.dim}}>{rep?.name} · {d.region}</div>{d.nextStep&&<div style={{fontSize:11,color:C.text,marginTop:5}}>Next: {d.nextStep}</div>}</div>
@@ -8918,7 +9242,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
                 {[{l:"NO CONTACT 30D+",v:allD.filter(d=>daysSince(d.lastContact)>=30&&d.outcome!=="Proposal Accepted").length,c:C.red},{l:"HIGH-VALUE STALLED",v:highValueStalled.length,c:C.orange},{l:"VALUE AT RISK",v:fmtR(highValueStalled.reduce((s,d)=>s+(d.amount||0),0)),c:C.accent}].map(k=>(<div key={k.l} className="card" style={{padding:13,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div></div>))}
               </div>
-              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Region","Target","Last Contact","Days Idle","Stage"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{[...highValueStalled].sort((a,b)=>daysSince(b.lastContact)-daysSince(a.lastContact)).map(d=>{const rep=REPS.find(r=>r.id===d.repId);const idle=daysSince(d.lastContact);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}><td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{d.lastContact||"Never"}</td><td style={{padding:"10px 14px",color:idle>=30?C.red:idle>=14?C.orange:C.dim,fontWeight:700}}>{idle}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td></tr>);})} {highValueStalled.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No stalled high-value accounts!</td></tr>}</tbody></table></div>
+              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Region","Target","Last Contact","Days Idle","Stage"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{[...highValueStalled].sort((a,b)=>daysSince(b.lastContact)-daysSince(a.lastContact)).map(d=>{const rep=reps.find(r=>r.id===d.repId);const idle=daysSince(d.lastContact);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}><td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{d.lastContact||"Never"}</td><td style={{padding:"10px 14px",color:idle>=30?C.red:idle>=14?C.orange:C.dim,fontWeight:700}}>{idle}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td></tr>);})} {highValueStalled.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No stalled high-value accounts!</td></tr>}</tbody></table></div>
             </div>);
           })()}
 
@@ -8932,7 +9256,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const tvDigiDeals = deals.filter(d=>d.dealType==="Integrated Packages"||d.dealType==="Media Solutions");
                 if(!tvDigiDeals.length) return <div style={{textAlign:"center",padding:50,color:C.muted}}>No TV+Digital integrated deals yet.</div>;
                 return tvDigiDeals.map(d=>{
-                  const rep = REPS.find(r=>r.id===d.repId);
+                  const rep = reps.find(r=>r.id===d.repId);
                   const sc  = oColor(d.outcome);
                   return (
                     <div key={d.id} className="card" style={{padding:"14px 18px",marginBottom:10}}>
@@ -9001,8 +9325,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
                 {[{l:"TOTAL DIGITAL",v:fmtR(digiDeals.reduce((s,d)=>s+(d.amount||0),0)),c:C.blue},{l:"CLOSED",v:fmtR(digiDeals.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0)),c:C.green},{l:"OPEN PIPELINE",v:fmtR(digiDeals.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0)),c:C.accent},{l:"WAITING ON YOU",v:blocked.length,c:blocked.length>0?C.orange:C.green}].map(k=>(<div key={k.l} className="card" style={{padding:13,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div></div>))}
               </div>
-              {digiTasks.length>0&&(<div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}><div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📋 {digiTasks.length} Task{digiTasks.length!==1?"s":""} Assigned to Digital</div>{digiTasks.slice(0,4).map(t=>{const rep=REPS.find(r=>r.id===t.repId);return(<div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:C.s2,borderRadius:5,marginBottom:5}}><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{t.title}</div><div style={{fontSize:10,color:C.dim}}>{t.clientCompany&&`${t.clientCompany} · `}{rep&&`from ${rep.name} · `}Due {t.dueDate}</div></div><span style={{background:t.dueDate<TODAY?`${C.red}22`:`${C.orange}18`,color:t.dueDate<TODAY?C.red:C.orange,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.dueDate<TODAY?"OVERDUE":t.priority}</span><button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button></div>);})}{digiTasks.length>4&&<div style={{fontSize:10,color:C.dim,textAlign:"center",marginTop:5}}>+{digiTasks.length-4} more · see My Tasks</div>}</div>)}
-              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Region","Type","Amount","Needs from Digital","Stage","Idle"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{digiDeals.length===0&&<tr><td colSpan={8} style={{padding:24,textAlign:"center",color:C.muted}}>No digital deals for {filterQ} yet</td></tr>}{digiDeals.map(d=>{const rep=REPS.find(r=>r.id===d.repId);const idle=daysSince(d.lastContact);const digiReqs=(d.reqs||[]).filter(r=>r.dept==="Digital");const waitingOnUs=d.awaitingApproval==="Digital";return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:waitingOnUs?`${C.blue}06`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=waitingOnUs?`${C.blue}06`:"transparent"}><td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div>{waitingOnUs&&<span style={{background:`${C.blue}22`,color:C.blue,padding:"1px 5px",borderRadius:3,fontSize:9,fontWeight:700}}>Needs your action</span>}</td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"9px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{d.dealType}</td><td style={{padding:"9px 12px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"9px 12px"}}>{digiReqs.length>0?<div>{digiReqs.map((r,i)=><div key={i} style={{fontSize:10,color:C.blue}}>{r.desc}</div>)}</div>:waitingOnUs?<span style={{color:C.blue,fontSize:11}}>Approval needed</span>:<span style={{color:C.muted}}>—</span>}</td><td style={{padding:"9px 12px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"9px 12px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11}}>{idle===0?"Today":`${idle}d`}</td></tr>);})}</tbody></table></div>
+              {digiTasks.length>0&&(<div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}><div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📋 {digiTasks.length} Task{digiTasks.length!==1?"s":""} Assigned to Digital</div>{digiTasks.slice(0,4).map(t=>{const rep=reps.find(r=>r.id===t.repId);return(<div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:C.s2,borderRadius:5,marginBottom:5}}><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{t.title}</div><div style={{fontSize:10,color:C.dim}}>{t.clientCompany&&`${t.clientCompany} · `}{rep&&`from ${rep.name} · `}Due {t.dueDate}</div></div><span style={{background:t.dueDate<TODAY?`${C.red}22`:`${C.orange}18`,color:t.dueDate<TODAY?C.red:C.orange,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.dueDate<TODAY?"OVERDUE":t.priority}</span><button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button></div>);})}{digiTasks.length>4&&<div style={{fontSize:10,color:C.dim,textAlign:"center",marginTop:5}}>+{digiTasks.length-4} more · see My Tasks</div>}</div>)}
+              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Region","Type","Amount","Needs from Digital","Stage","Idle"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{digiDeals.length===0&&<tr><td colSpan={8} style={{padding:24,textAlign:"center",color:C.muted}}>No digital deals for {filterQ} yet</td></tr>}{digiDeals.map(d=>{const rep=reps.find(r=>r.id===d.repId);const idle=daysSince(d.lastContact);const digiReqs=(d.reqs||[]).filter(r=>r.dept==="Digital");const waitingOnUs=d.awaitingApproval==="Digital";return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:waitingOnUs?`${C.blue}06`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=waitingOnUs?`${C.blue}06`:"transparent"}><td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div>{waitingOnUs&&<span style={{background:`${C.blue}22`,color:C.blue,padding:"1px 5px",borderRadius:3,fontSize:9,fontWeight:700}}>Needs your action</span>}</td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"9px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{d.dealType}</td><td style={{padding:"9px 12px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"9px 12px"}}>{digiReqs.length>0?<div>{digiReqs.map((r,i)=><div key={i} style={{fontSize:10,color:C.blue}}>{r.desc}</div>)}</div>:waitingOnUs?<span style={{color:C.blue,fontSize:11}}>Approval needed</span>:<span style={{color:C.muted}}>—</span>}</td><td style={{padding:"9px 12px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"9px 12px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11}}>{idle===0?"Today":`${idle}d`}</td></tr>);})}</tbody></table></div>
             </div>);
           })()}
 
@@ -9012,7 +9336,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             return(<div className="fin">
               <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}><div><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY TASKS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>Tasks assigned to Digital · {myTasks.length} total · {overdueCount} overdue</div></div><button className="btn btn-primary" onClick={()=>setTaskModal(true)}>+ Create Task</button></div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>{[{l:"OPEN",v:myTasks.filter(t=>t.status==="Open").length,c:C.blue},{l:"IN PROGRESS",v:myTasks.filter(t=>t.status==="In Progress").length,c:C.accent},{l:"OVERDUE",v:overdueCount,c:C.red},{l:"DONE",v:myTasks.filter(t=>t.status==="Done").length,c:C.green}].map(k=>(<div key={k.l} className="card" style={{padding:12,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div></div>))}</div>
-              {myTasks.length===0?<div style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:8,padding:32,textAlign:"center",color:C.dim}}>No tasks assigned to Digital yet.</div>:<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Task","Client","Raised By","Priority","Status","Due","Update"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{myTasks.map(t=>{const rep=REPS.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;return(<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:overdue?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=overdue?`${C.red}04`:"transparent"}><td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:1,maxWidth:200,whiteSpace:"normal"}}>{t.description}</div>}</td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name||t.assignedByName||"—"}</td><td style={{padding:"9px 12px"}}><span style={{background:t.priority==="High"?`${C.red}18`:t.priority==="Medium"?`${C.orange}18`:`${C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span></td><td style={{padding:"9px 12px"}}><span style={{background:`${sc}18`,color:sc,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{overdue?"OVERDUE":t.status}</span></td><td style={{padding:"9px 12px",color:overdue?C.red:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{t.dueDate}</td><td style={{padding:"9px 12px"}}>{t.status!=="Done"&&<select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))} style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>{TASK_STATUSES.map(s=><option key={s}>{s}</option>)}</select>}</td></tr>);})}  </tbody></table></div>}
+              {myTasks.length===0?<div style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:8,padding:32,textAlign:"center",color:C.dim}}>No tasks assigned to Digital yet.</div>:<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Task","Client","Raised By","Priority","Status","Due","Update"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{myTasks.map(t=>{const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;return(<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:overdue?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=overdue?`${C.red}04`:"transparent"}><td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:1,maxWidth:200,whiteSpace:"normal"}}>{t.description}</div>}</td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name||t.assignedByName||"—"}</td><td style={{padding:"9px 12px"}}><span style={{background:t.priority==="High"?`${C.red}18`:t.priority==="Medium"?`${C.orange}18`:`${C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span></td><td style={{padding:"9px 12px"}}><span style={{background:`${sc}18`,color:sc,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{overdue?"OVERDUE":t.status}</span></td><td style={{padding:"9px 12px",color:overdue?C.red:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{t.dueDate}</td><td style={{padding:"9px 12px"}}>{t.status!=="Done"&&<select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))} style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>{TASK_STATUSES.map(s=><option key={s}>{s}</option>)}</select>}</td></tr>);})}  </tbody></table></div>}
             </div>);
           })()}
 
@@ -9021,7 +9345,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             return(<div className="fin">
               <div style={{marginBottom:16}}><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>ESCALATIONS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>Deals waiting on Digital team</div></div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>{[{l:"PENDING",v:digiBlocked.length,c:C.orange},{l:"OVERDUE (>2D)",v:digiBlocked.filter(d=>daysSince(d.awaitingApprovalSince||TODAY)>=2).length,c:C.red},{l:"VALUE",v:fmtR(digiBlocked.reduce((s,d)=>s+(d.amount||0),0)),c:C.accent}].map(k=>(<div key={k.l} className="card" style={{padding:13,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:24,fontWeight:700,color:k.c}}>{k.v}</div></div>))}</div>
-              {digiBlocked.length===0?<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ Nothing waiting on Digital right now</div>:digiBlocked.map(d=>{const rep=REPS.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<div key={d.id} style={{background:C.surface,border:`1px solid ${dw>=2?C.red+"44":C.border}`,borderLeft:`3px solid ${dw>=2?C.red:C.orange}`,borderRadius:8,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span className="sans" style={{fontSize:14,fontWeight:700}}>{d.clientCompany}</span><span style={{background:`${dw>=2?C.red:C.orange}22`,color:dw>=2?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{dw}d waiting</span></div><div style={{fontSize:11,color:C.dim,marginBottom:4}}>{rep?.name} · {d.region}</div>{d.nextStep&&<div style={{fontSize:11,color:C.text}}>Context: {d.nextStep}</div>}</div><div style={{textAlign:"right",display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}><div className="sans" style={{fontSize:15,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span><button onClick={()=>{
+              {digiBlocked.length===0?<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ Nothing waiting on Digital right now</div>:digiBlocked.map(d=>{const rep=reps.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<div key={d.id} style={{background:C.surface,border:`1px solid ${dw>=2?C.red+"44":C.border}`,borderLeft:`3px solid ${dw>=2?C.red:C.orange}`,borderRadius:8,padding:"14px 18px",marginBottom:8,display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}><div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span className="sans" style={{fontSize:14,fontWeight:700}}>{d.clientCompany}</span><span style={{background:`${dw>=2?C.red:C.orange}22`,color:dw>=2?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{dw}d waiting</span></div><div style={{fontSize:11,color:C.dim,marginBottom:4}}>{rep?.name} · {d.region}</div>{d.nextStep&&<div style={{fontSize:11,color:C.text}}>Context: {d.nextStep}</div>}</div><div style={{textAlign:"right",display:"flex",flexDirection:"column",gap:6,alignItems:"flex-end"}}><div className="sans" style={{fontSize:15,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span><button onClick={()=>{
                                 const nextApprover = d.amount >= 50000000 ? "CXO" : null;
                                 setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:nextApprover,awaitingApprovalSince:nextApprover?TODAY:null}:x));
                                 showToast(nextApprover ? `Approved → forwarded to CXO` : "Deal approved ✓");
@@ -9038,7 +9362,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ RH TEAM PLAN ═══ */}
           {view==="rh-team-plan" && isRH && (()=>{
-            const myReps  = REPS.filter(r=>r.region===rhRegion);
+            const myReps  = reps.filter(r=>r.region===rhRegion);
             const myRepIds= myReps.map(r=>r.id);
             const tPlans  = (plans||[]).filter(p=>myRepIds.includes(p.repId));
             const todayTP = tPlans.filter(p=>p.date===TODAY);
@@ -9057,7 +9381,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{padding:"10px 14px",minHeight:60}}>
                         {dp.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:12}}>Nothing planned</div>}
                         {dp.map(p=>{
-                          const rep=REPS.find(r=>r.id===p.repId);
+                          const rep=reps.find(r=>r.id===p.repId);
                           return (
                             <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"7px 10px",background:C.s2,borderRadius:5}}>
                               <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent,flexShrink:0}}>{(rep?.name||"?")[0]}</div>
@@ -9083,7 +9407,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <tbody>
                       {weekPlan.length===0&&<tr><td colSpan={6} style={{padding:24,textAlign:"center",color:C.muted}}>No meetings planned this week</td></tr>}
                       {weekPlan.sort((a,b)=>a.date>b.date?1:a.time>b.time?1:-1).map(p=>{
-                        const rep=REPS.find(r=>r.id===p.repId);
+                        const rep=reps.find(r=>r.id===p.repId);
                         const isToday=p.date===TODAY;
                         return (
                           <tr key={p.id} style={{borderBottom:`1px solid ${C.s2}`,background:isToday?`${C.accent}06`:"transparent"}}
@@ -9106,7 +9430,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ MY TASKS (Region Head / NSH) ═══ */}
           {view==="my-tasks" && (isRH||isNSH) && (()=>{
-            const myRepIds = isRH ? REPS.filter(r=>r.region===rhRegion).map(r=>r.id) : REPS.map(r=>r.id);
+            const myRepIds = isRH ? reps.filter(r=>r.region===rhRegion).map(r=>r.id) : reps.map(r=>r.id);
             const myActionTasks = tasks.filter(t=>t.dept==="NSH"&&t.status!=="Done"&&myRepIds.includes(t.repId));
             const myAssignedTasks = tasks.filter(t=>t.assignedToUserId===activeUser);
             const allMine = [...myAssignedTasks, ...myActionTasks.filter(t=>!myAssignedTasks.find(x=>x.id===t.id))];
@@ -9147,7 +9471,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </tr></thead>
                     <tbody>
                       {allMine.sort((a,b)=>a.status==="Done"?1:b.status==="Done"?-1:a.dueDate>b.dueDate?1:-1).map(t=>{
-                        const assigner = t.assignedBy ? USER_ROLES.find(u=>u.id===t.assignedBy)||REPS.find(r=>r.id===t.assignedBy) : null;
+                        const assigner = t.assignedBy ? USER_ROLES.find(u=>u.id===t.assignedBy)||reps.find(r=>r.id===t.assignedBy) : null;
                         const fromLabel = t.assignedBy===activeUser ? "Me" : assigner?.name || t.assignedByName || "—";
                         const overdue=t.dueDate<TODAY&&t.status!=="Done";
                         const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
@@ -9182,7 +9506,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ RH TEAM PIPELINE ═══ */}
           {view==="rh-team-pipeline" && isRH && (()=>{
-            const myReps=REPS.filter(r=>r.region===rhRegion);
+            const myReps=reps.filter(r=>r.region===rhRegion);
             return (
               <div className="fin">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -9227,7 +9551,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ RH TEAM TARGETS ═══ — same as RH targets but labelled for Team */}
           {view==="rh-team-targets" && isRH && view==="rh-team-targets" && (()=>{
-            const myReps=REPS.filter(r=>r.region===rhRegion);
+            const myReps=reps.filter(r=>r.region===rhRegion);
             const rhT=visibleDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
             const rhC=visibleDeals.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
             const rhPct=rhT>0?Math.round((rhC/rhT)*100):0;
@@ -9247,7 +9571,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div style={{marginTop:10,height:6,background:C.s3,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(rhPct,100)}%`,background:sc,borderRadius:3}} /></div>
                 </div>
                 {rhRepDrill ? (()=>{
-                  const rep=REPS.find(r=>r.id===rhRepDrill);
+                  const rep=reps.find(r=>r.id===rhRepDrill);
                   const rd=visibleDeals.filter(d=>d.repId===rhRepDrill);
                   return (
                     <div>
@@ -9307,7 +9631,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ RH TEAM TASKS ═══ */}
           {view==="rh-team-tasks" && isRH && (()=>{
-            const myRepIds=REPS.filter(r=>r.region===rhRegion).map(r=>r.id);
+            const myRepIds=reps.filter(r=>r.region===rhRegion).map(r=>r.id);
             const teamTasks=tasks.filter(t=>myRepIds.includes(t.repId));
             return (
               <div className="fin">
@@ -9328,7 +9652,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>{["Rep","Task","Client","Priority","Status","Due","Action"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{teamTasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
-                        const rep=REPS.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
+                        const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
                         return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:overdue?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=overdue?`${C.red}04`:"transparent"}>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{rep?.name||"—"}</div></td>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:2,maxWidth:200,whiteSpace:"normal"}}>{t.description}</div>}</td>
@@ -9348,7 +9672,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ RH TEAM HR ═══ */}
           {view==="rh-team-hr" && isRH && (()=>{
-            const myRepIds=REPS.filter(r=>r.region===rhRegion).map(r=>r.id);
+            const myRepIds=reps.filter(r=>r.region===rhRegion).map(r=>r.id);
             const teamAbs=absenceReports.filter(r=>myRepIds.includes(r.repId));
             return (
               <div className="fin">
@@ -9480,7 +9804,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* Two-column: today left, tomorrow right */}
                 {regions.map(region=>{
-                  const rReps   = REPS.filter(r=>r.region===region).map(r=>r.id);
+                  const rReps   = reps.filter(r=>r.region===region).map(r=>r.id);
                   const todayP  = (plans||[]).filter(p=>rReps.includes(p.repId)&&p.date===TODAY);
                   const tmrwP   = (plans||[]).filter(p=>rReps.includes(p.repId)&&p.date===TOMORROW);
                   if (!todayP.length && !tmrwP.length) return null;
@@ -9489,7 +9813,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       {/* Region label */}
                       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8,padding:"6px 12px",background:C.s2,borderRadius:6,borderLeft:`3px solid ${C.accent}`}}>
                         <span className="sans" style={{fontWeight:700,fontSize:13}}>{region}</span>
-                        <span style={{fontSize:10,color:C.dim}}>{REPS.filter(r=>r.region===region).length} reps</span>
+                        <span style={{fontSize:10,color:C.dim}}>{reps.filter(r=>r.region===region).length} reps</span>
                         <span style={{marginLeft:"auto",fontSize:10,color:C.dim}}>{todayP.length} today · {tmrwP.length} tomorrow</span>
                       </div>
                       {/* Two halves */}
@@ -9500,7 +9824,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <div style={{padding:"8px 12px",minHeight:50}}>
                               {list.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:"10px 0"}}>Nothing planned</div>}
                               {list.map(p=>{
-                                const rep=REPS.find(r=>r.id===p.repId);
+                                const rep=reps.find(r=>r.id===p.repId);
                                 return (
                                   <div key={p.id} style={{display:"flex",alignItems:"flex-start",gap:8,marginBottom:7,paddingBottom:7,borderBottom:`1px solid ${C.s2}`}}>
                                     <div style={{width:20,height:20,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:700,color:C.accent,flexShrink:0}}>{(rep?.name||"?")[0]}</div>
@@ -9548,11 +9872,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
 
                 {displayRegions.map(region=>{
-                  const rReps = REPS.filter(r=>r.region===region);
+                  const rReps = reps.filter(r=>r.region===region);
                   const rRepIds = rReps.map(r=>r.id);
                   // Get today's deals with plans logged
                   const regionDeals = deals.filter(d=>d.region===region&&qMatch(d.quarter)&&d.outcome!=="Not Interested");
-                  const todayMtgs   = meetings.filter(m=>REPS.find(r=>r.id===m.repId&&r.region===region)&&m.date===TODAY);
+                  const todayMtgs   = meetings.filter(m=>reps.find(r=>r.id===m.repId&&r.region===region)&&m.date===TODAY);
                   const todayPlanned= (plans||[]).filter(p=>rRepIds.includes(p.repId)&&p.date===TODAY);
                   const tmrwPlanned = (plans||[]).filter(p=>rRepIds.includes(p.repId)&&p.date===TOMORROW);
                   return (
@@ -9576,7 +9900,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <tbody>
                             {regionDeals.length===0&&<tr><td colSpan={6} style={{padding:20,textAlign:"center",color:C.muted,fontSize:11}}>No deals for {region} in {filterQ}</td></tr>}
                             {regionDeals.sort((a,b)=>b.amount-a.amount).map(d=>{
-                              const rep  = REPS.find(r=>r.id===d.repId);
+                              const rep  = reps.find(r=>r.id===d.repId);
                               const lastM= meetings.filter(m=>m.repId===d.repId&&(m.clientCompany||"").toLowerCase().includes(d.clientCompany.toLowerCase().slice(0,5))).sort((a,b)=>b.date>a.date?1:-1)[0];
                               const todayHasMeeting = todayPlanned.some(p=>p.repId===d.repId&&(p.clientAgencyName||"").toLowerCase().includes(d.clientCompany.toLowerCase().slice(0,5)));
                               return (
@@ -9608,7 +9932,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           </div>
                           <div style={{padding:"8px 12px",display:"flex",flexWrap:"wrap",gap:6}}>
                             {tmrwPlanned.map(p=>{
-                              const rep=REPS.find(r=>r.id===p.repId);
+                              const rep=reps.find(r=>r.id===p.repId);
                               return (
                                 <div key={p.id} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 10px",fontSize:11}}>
                                   <span style={{fontWeight:600}}>{p.clientAgencyName}</span>
@@ -9653,7 +9977,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div style={{flex:1}}>
                           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
                             <span className="sans" style={{fontSize:15,fontWeight:700}}>{rhu.region} Region</span>
-                            <span style={{fontSize:11,color:C.dim}}>{REPS.filter(r=>r.region===rhu.region).length} reps · {rd.length} deals</span>
+                            <span style={{fontSize:11,color:C.dim}}>{reps.filter(r=>r.region===rhu.region).length} reps · {rd.length} deals</span>
                           </div>
                           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:8}}>
                             {[["TARGET",fmtR(rT),C.dim],["CLOSED",fmtR(rC),C.green],["PIPELINE",fmtR(rP),C.accent],["ACHIEVE",`${rPct}%`,sc],["AT RISK",rRisk,rRisk>0?C.red:C.green]].map(([l,v,c])=>(
@@ -9707,7 +10031,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead><tr>{["Client","Rep","Amount","Stage","Next Step","Awaiting"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                           <tbody>
-                            {rd.sort((a,b)=>b.amount-a.amount).map(d=>{const rep=REPS.find(r=>r.id===d.repId);return(
+                            {rd.sort((a,b)=>b.amount-a.amount).map(d=>{const rep=reps.find(r=>r.id===d.repId);return(
                               <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                 <td style={{padding:"8px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
                                 <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{rep?.name}</td>
@@ -9757,7 +10081,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const rP=rd.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                       const rPct=rT>0?Math.round((rC/rT)*100):0;
                       const rRisk=rd.filter(d=>!["Proposal Accepted","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
-                      const nReps=REPS.filter(r=>r.region===region).length;
+                      const nReps=reps.filter(r=>r.region===region).length;
                       const sc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
                       return(<tr key={region} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                         <td style={{padding:"10px 14px"}}><div className="sans" style={{fontWeight:700}}>{region}</div></td>
@@ -9794,11 +10118,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>{["Task","Client","Region","Priority","Status","Due","Update"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{rhTasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
-                        const rep=REPS.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
+                        const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
                         return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:1,maxWidth:200,whiteSpace:"normal"}}>{t.description}</div>}</td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td>
-                          <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?REPS.find(r=>r.id===rep.id)?.region:"—"}</td>
+                          <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?reps.find(r=>r.id===rep.id)?.region:"—"}</td>
                           <td style={{padding:"9px 12px"}}><span style={{background:t.priority==="High"?`${C.red}18`:t.priority==="Medium"?`${C.orange}18`:`${C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span></td>
                           <td style={{padding:"9px 12px"}}><span style={{background:`${sc}18`,color:sc,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{overdue?"OVERDUE":t.status}</span></td>
                           <td style={{padding:"9px 12px",color:overdue?C.red:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{t.dueDate}</td>
@@ -9825,7 +10149,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:20}}>
                   {REGIONS.map(reg=>{
                     const rh   = rhUsers.find(u=>u.region===reg);
-                    const reps = REPS.filter(r=>r.region===reg);
+                    const reps = reps.filter(r=>r.region===reg);
                     const rAbs = absenceReports.filter(a=>reps.map(r=>r.id).includes(a.repId));
                     const absent = rAbs.filter(a=>a.markedAs==="Absent").length;
                     const exc    = rAbs.filter(a=>a.exception==="Overridden").length;
@@ -9842,7 +10166,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* Per-region breakdown */}
                 {REGIONS.map(reg=>{
-                  const reps = REPS.filter(r=>r.region===reg);
+                  const reps = reps.filter(r=>r.region===reg);
                   const rAbs = absenceReports.filter(a=>reps.map(r=>r.id).includes(a.repId));
                   if (!rAbs.length) return null;
                   const rh = rhUsers.find(u=>u.region===reg);
@@ -9887,7 +10211,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"5px 10px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace",textTransform:"capitalize"}}>{r==="all"?"All":r}</button>)}
                   </div>
                 </div>
-                {REPS.filter(r=>nshRegion==="all"||r.region===nshRegion).map((rep,rank)=>{
+                {reps.filter(r=>nshRegion==="all"||r.region===nshRegion).map((rep,rank)=>{
                   const rd=filterDeals.filter(d=>d.repId===rep.id);
                   const rC=rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+d.amount,0);
                   const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
@@ -9943,7 +10267,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <thead><tr>{["Client","Rep","Region","Amount","Stage","Next Step","Awaiting"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {fd.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No deals found</td></tr>}
-                      {fd.sort((a,b)=>b.amount-a.amount).map(d=>{const rep=REPS.find(r=>r.id===d.repId);return(
+                      {fd.sort((a,b)=>b.amount-a.amount).map(d=>{const rep=reps.find(r=>r.id===d.repId);return(
                         <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name}</td>
@@ -9964,7 +10288,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ NSH REP TARGETS ═══ */}
           {view==="nsh-rep-targets" && isNSHDashboard && (()=>{
             const regions=["all","National","North","South","East","West"];
-            const fReps=nshRegion==="all"?REPS:REPS.filter(r=>r.region===nshRegion);
+            const fReps=nshRegion==="all"?reps:reps.filter(r=>r.region===nshRegion);
             return (
               <div className="fin">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
@@ -9999,7 +10323,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ NSH REP TASKS ═══ */}
           {view==="nsh-rep-tasks" && isNSHDashboard && (()=>{
             const regions=["all","National","North","South","East","West"];
-            const fReps=nshRegion==="all"?REPS.map(r=>r.id):REPS.filter(r=>r.region===nshRegion).map(r=>r.id);
+            const fReps=nshRegion==="all"?reps.map(r=>r.id):reps.filter(r=>r.region===nshRegion).map(r=>r.id);
             const fTasks=tasks.filter(t=>fReps.includes(t.repId));
             return (
               <div className="fin">
@@ -10020,7 +10344,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>{["Rep","Region","Task","Client","Priority","Status","Due"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{fTasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
-                        const rep=REPS.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
+                        const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
                         return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"8px 12px",fontWeight:600,fontSize:11}}>{rep?.name||"—"}</td>
                           <td style={{padding:"8px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{rep?.region||"—"}</span></td>
@@ -10329,7 +10653,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ REP ALL-REPS SCORECARD ═══ */}
           {view==="rep-allreps" && isRep && (()=>{
             const myRepId  = user_role?.repId;
-            const allReps  = REPS.map(rep=>{
+            const allReps  = reps.map(rep=>{
               const rd   = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
               const rT   = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
               const rC   = rd.filter(d=>d.outcome==="Proposal Accepted").reduce((s,d)=>s+(d.amount||0),0);
@@ -10395,7 +10719,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const myRepId   = user_role?.repId;
             const myRegion  = user_role?.region;
             // Show all reps in same region, sorted by % achieved
-            const teammates = REPS.filter(r => r.region === myRegion)
+            const teammates = reps.filter(r => r.region === myRegion)
               .map(rep => {
                 const rd  = deals.filter(d => d.repId === rep.id && d.quarter === filterQ);
                 const rT  = rd.reduce((s,d) => s + (d.targetAmount||0), 0);
@@ -10562,7 +10886,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               ].map(f=>(
                 <div key={f.key}><label>{f.label}</label><input type={f.type} placeholder={f.ph} value={dealForm[f.key]||""} onChange={e=>setDealForm(p=>({...p,[f.key]:e.target.value}))} /></div>
               ))}
-              <div><label>Assign Rep *</label>{isRep?(<input readOnly value={REPS.find(r=>r.id===parseInt(dealForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />):(<select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{REPS.map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select>)}</div>
+              <div><label>Assign Rep *</label>{isRep?(<input readOnly value={reps.find(r=>r.id===parseInt(dealForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />):(<select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{reps.map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select>)}</div>
               <div><label>Deal Type</label><select value={dealForm.dealType} onChange={e=>setDealForm(p=>({...p,dealType:e.target.value}))}><option value="">Select</option>{DEAL_TYPES.map(d=><option key={d}>{d}</option>)}</select></div>
               <div><label>Contact Level</label><select value={dealForm.contactLevel} onChange={e=>setDealForm(p=>({...p,contactLevel:e.target.value}))}><option value="">Select</option>{CONTACT_LEVELS.map(c=><option key={c}>{c}</option>)}</select></div>
               <div><label>Priority</label><select value={dealForm.priority} onChange={e=>setDealForm(p=>({...p,priority:e.target.value}))}><option>Top 5</option><option>Regular</option></select></div>
@@ -10599,17 +10923,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <label>Sales Rep *</label>
                 {isRep ? (
                   // Rep sees their own name — no dropdown
-                  <input readOnly value={REPS.find(r=>r.id===parseInt(logForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />
+                  <input readOnly value={reps.find(r=>r.id===parseInt(logForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />
                 ) : (
                   <select value={logForm.repId} onChange={e=>setLogForm(p=>({...p,repId:e.target.value}))}>
                     <option value="">Select rep</option>
-                    {REPS.map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
+                    {reps.map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
                   </select>
                 )}
               </div>
               <div>
                 <label>Region</label>
-                <input readOnly value={REPS.find(r=>r.id===parseInt(logForm.repId))?.region||""} style={{color:C.dim,background:C.s2,cursor:"default"}} />
+                <input readOnly value={reps.find(r=>r.id===parseInt(logForm.repId))?.region||""} style={{color:C.dim,background:C.s2,cursor:"default"}} />
               </div>
               <div>
                 <label>Meeting Time</label>
