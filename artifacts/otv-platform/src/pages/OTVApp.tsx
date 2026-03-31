@@ -3296,6 +3296,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const [inlineLogPlan, setInlineLogPlan] = planInlineState;
             const [inlineLogStatus, setInlineLogStatus] = planInlineStatusState;
 
+            // ── At-risk deal detection ──
+            const riskThreshold = adminConfig?.inactivityDaysRisk ?? 7;
+            const atRiskDeals = deals.filter(d =>
+              d.repId === myRepId &&
+              !["Mail Confirmed","Not Interested"].includes(d.outcome) &&
+              daysSince(d.lastContact) >= riskThreshold
+            ).sort((a,b) => daysSince(b.lastContact) - daysSince(a.lastContact));
+
             return (
               <div className="fin">
                 {/* Header */}
@@ -3315,6 +3323,73 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   </div>
                 </div>
+
+                {/* ── At-Risk Alert Banner ── */}
+                {atRiskDeals.length > 0 && (
+                  <div style={{background:`${C.red}12`,border:`1.5px solid ${C.red}55`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                      <span style={{fontSize:14}}>⚠️</span>
+                      <span className="sans" style={{fontWeight:700,fontSize:13,color:C.red}}>
+                        {atRiskDeals.length === 1 ? "1 deal is going cold" : `${atRiskDeals.length} deals are going cold`} — act today
+                      </span>
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                      {atRiskDeals.map(d => {
+                        const idle = daysSince(d.lastContact);
+                        return (
+                          <div key={d.id} style={{display:"flex",alignItems:"center",gap:10,background:`${C.red}08`,borderRadius:5,padding:"6px 10px"}}>
+                            <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{d.clientCompany}</span>
+                            <span style={{fontSize:11,color:C.dim}}>{d.outcome}</span>
+                            <span style={{background:`${C.red}22`,color:C.red,padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>
+                              No contact for {idle} day{idle!==1?"s":""}
+                            </span>
+                            <button
+                              onClick={()=>{ setMeetingForm(f=>({...f,dealId:d.id,clientAgencyName:d.clientCompany})); setMeetingOpen(true); }}
+                              style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                              Log Meeting →
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Revenue Confirmation Prompt ── */}
+                {(()=>{
+                  const pendingRevenue = revenueEntries.filter(e=>
+                    e.repId===myRepId && e.invoiceRef==="PO Pending" && qMatch(e.quarter)
+                  );
+                  if (!pendingRevenue.length) return null;
+                  return (
+                    <div style={{background:`${C.accent}10`,border:`1.5px solid ${C.accent}55`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:14}}>💰</span>
+                          <span className="sans" style={{fontWeight:700,fontSize:13,color:C.accent}}>
+                            {pendingRevenue.length} deal{pendingRevenue.length!==1?"s":""} won — confirm PO amount in Revenue Log
+                          </span>
+                        </div>
+                        <button
+                          onClick={()=>setView("revenue-log")}
+                          style={{background:C.accent,color:"#fff",border:"none",borderRadius:5,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                          Open Revenue Log →
+                        </button>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                        {pendingRevenue.map(e=>(
+                          <div key={e.id} style={{display:"flex",alignItems:"center",gap:10,background:`${C.accent}08`,borderRadius:5,padding:"5px 10px"}}>
+                            <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{e.clientCompany}</span>
+                            <span style={{fontSize:11,color:C.dim}}>{e.dealType}</span>
+                            <span style={{background:`${C.accent}22`,color:C.accent,padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:700}}>
+                              ₹{e.amount>0?fmtR(e.amount):"—"} · PO Pending confirmation
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── Sub-tabs ── */}
                 <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
@@ -4033,7 +4108,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             // ── TEAM NUMBERS ──
             const rhT  = rhDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-            const rhC  = rhDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+            const rhC  = revenueEntries.filter(e=>myRepIds.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const rhP  = rhDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
             const rhPct= rhT>0?Math.round((rhC/rhT)*100):0;
             const rhAtRisk = rhDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7);
@@ -4282,7 +4357,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const rhRegion = user_role?.region;
             const rhDeals  = visibleDeals;
             const rhT = rhDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-            const rhC = rhDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+            const rhRepIds_t = [...new Set(rhDeals.map(d=>d.repId))];
+            const rhC = revenueEntries.filter(e=>rhRepIds_t.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const rhP = rhDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
             const rhPct = rhT>0?Math.round((rhC/rhT)*100):0;
             const sc = rhPct>=80?C.green:rhPct>=50?C.accent:C.red;
@@ -4291,7 +4367,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const clientRows = rhDeals
               .filter(d=>d.outcome!=="Not Interested")
               .map(d=>{
-                const ach = d.outcome==="Mail Confirmed"?d.amount:0;
+                const ach = revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                 const gap = Math.max(0,(d.targetAmount||0)-ach);
                 const pct = d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                 const rep = reps.find(r=>r.id===d.repId);
@@ -4985,7 +5061,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               {/* KPIs — 4 clean cards for management, 3 for reps */}
               <div style={{display:"grid",gridTemplateColumns:isRep?"repeat(3,1fr)":"repeat(5,1fr)",gap:10,marginBottom:16}}>
                 {(isRep ? [
-                  {label:"MY CLOSED QTD",   value:fmtR(visibleDeals.filter(d=>d.repId===user_role?.repId&&d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0)), color:C.green},
+                  {label:"MY CLOSED QTD",   value:fmtR(revenueEntries.filter(e=>e.repId===user_role?.repId&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0)), color:C.green},
                   {label:"MY PIPELINE",     value:fmtR(visibleDeals.filter(d=>d.repId===user_role?.repId&&!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0)), color:C.accent},
                   {label:"MY OPEN ACTIONS", value:tasks.filter(t=>t.assignedTo===user_role?.repId&&t.status!=="Done").length, color:C.blue},
                 ] : [
@@ -6608,7 +6684,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               })() : (() => {
                 const allD=deals.filter(d=>qMatch(d.quarter));
                 const mT=allD.reduce((s,d)=>s+(d.targetAmount||0),0);
-                const mC=allD.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                const mC=revenueEntries.filter(e=>qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                 const mP=allD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                 const mW=allD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+((d.amount||0)*(STAGE_PROB[d.outcome]||0)/100),0);
                 const mF=mC+mW; const mG=Math.max(0,mT-mF);
@@ -6656,8 +6732,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(240px,1fr))",gap:10}}>
                       {TILES.map(tile=>{
                         const td=getTileDeals(tile.key);
+                        const tRepIds=[...new Set(td.map(d=>d.repId))];
                         const tT=td.reduce((s,d)=>s+(d.targetAmount||0),0);
-                        const tC=td.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                        const tC=revenueEntries.filter(e=>tRepIds.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                         const tP=td.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                         const tW=td.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+((d.amount||0)*(STAGE_PROB[d.outcome]||0)/100),0);
                         const tF=tC+tW; const tG=Math.max(0,tT-tF);
@@ -6703,7 +6780,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const repObj  = reps.find(r=>r.id===nshRepDrill);
                       const rd      = getTileDeals(targetDrilldown.key).filter(d=>d.repId===nshRepDrill);
                       const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                      const rC=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                      const rC=revenueEntries.filter(e=>e.repId===nshRepDrill&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const rG=Math.max(0,rT-rC);
                       const rPct=rT>0?Math.round((rC/rT)*100):0;
                       const rsc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
@@ -6740,8 +6817,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <thead><tr>{["Client","Deal Type","Target","Achieved","Shortfall","Stage"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                               <tbody>
                                 {rd.length===0&&<tr><td colSpan={6} style={{padding:24,textAlign:"center",color:C.muted}}>No clients.</td></tr>}
-                                {rd.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
-                                  const ach=d.outcome==="Mail Confirmed"?d.amount:0;
+                                {rd.sort((a,b)=>{
+                                  const achA=revenueEntries.filter(e=>e.repId===a.repId&&e.clientCompany===a.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const achB=revenueEntries.filter(e=>e.repId===b.repId&&e.clientCompany===b.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  return Math.max(0,(b.targetAmount||0)-achB)-Math.max(0,(a.targetAmount||0)-achA);
+                                }).map(d=>{
+                                  const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                   const sf=Math.max(0,(d.targetAmount||0)-ach);
                                   const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                   return (
@@ -9881,7 +9962,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {view==="rh-team-targets" && isRH && view==="rh-team-targets" && (()=>{
             const myReps=reps.filter(r=>r.region===rhRegion);
             const rhT=visibleDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-            const rhC=visibleDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+            const rhRepIds_tm=[...new Set(myReps.map(r=>r.id))];
+            const rhC=revenueEntries.filter(e=>rhRepIds_tm.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const rhPct=rhT>0?Math.round((rhC/rhT)*100):0;
             const sc=rhPct>=80?C.green:rhPct>=50?C.accent:C.red;
             return (
