@@ -1449,6 +1449,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     inactivityDaysEscalate: 14,
     webhookUrl: "",
   });
+  const [clientMasterList, setClientMasterList] = usePersistedState<string[]>("otv_clientMaster", []);
+  const [masterNewName, setMasterNewName]         = useState("");
 
   // ── DEAL INACTIVITY ENFORCEMENT — runs on load and when adminConfig changes ──
   useEffect(() => {
@@ -6170,9 +6172,44 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             );
           })()}
 
+          {/* Global client-name datalist — used by all clientCompany inputs */}
+          <datalist id="cm-list">
+            {clientMasterList.map((n,i)=><option key={i} value={n}/>)}
+          </datalist>
+
           {/* ═══ ADMIN ═══ */}
           {(view==="admin-access"||view==="admin-approvals") && isAdmin && (
               <div className="fin">
+                {/* Pre-launch demo data banner */}
+                {(()=>{
+                  const DEMO_CLIENTS = ["Havells India","Berger Paints","Asian Paints"];
+                  const demoFound = deals.some(d=>DEMO_CLIENTS.includes(d.clientCompany));
+                  if (!demoFound) return null;
+                  return (
+                    <div style={{background:`${C.red}12`,border:`2px solid ${C.red}`,borderRadius:10,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
+                      <div style={{fontSize:22,lineHeight:1}}>⚠️</div>
+                      <div style={{flex:1}}>
+                        <div className="sans" style={{fontWeight:800,fontSize:13,color:C.red,marginBottom:4}}>DEMO DATA IS ACTIVE — DO NOT ONBOARD REAL USERS YET</div>
+                        <div style={{fontSize:11,color:C.dim,marginBottom:10}}>
+                          Seed clients (Havells India, Berger Paints, Asian Paints etc.) are still in the database. Every new rep will see this fake data in their pipeline from day one. Run a full reset <strong>before</strong> the first real user logs in.
+                        </div>
+                        <button onClick={async()=>{
+                          const typed = window.prompt("Type  RESET  (all caps) to wipe all demo data and start clean.\n\nThis cannot be undone.");
+                          if(typed===null)return;
+                          if(typed.trim()!=="RESET"){showToast("Reset cancelled — type RESET exactly","err");return;}
+                          try{
+                            const r=await fetch("/api/state/reset-all",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirmText:"RESET",triggeredBy:user?.email||"admin",role:"ADMIN"})});
+                            const j=await r.json();
+                            if(j.ok){Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));showToast("Demo data cleared — reloading…");setTimeout(()=>window.location.reload(),800);}
+                            else showToast("Reset failed: "+j.error,"err");
+                          }catch{showToast("Reset failed","err");}
+                        }} style={{background:C.red,border:"none",color:"#fff",borderRadius:6,padding:"8px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                          🗑 Clear All Demo Data Now
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
                 <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>
                   {view==="admin-access"?"ACCESS MANAGEMENT":"APPROVAL QUEUE"}
                 </div>
@@ -7874,9 +7911,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
                         <div>
                           <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>CLIENT NAME</div>
-                          <input value={addClientForm.clientCompany} placeholder="e.g. Havells India"
-                            onChange={e=>setAddClientForm(p=>({...p,clientCompany:e.target.value}))}
-                            style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}/>
+                          {(()=>{
+                            const val = addClientForm.clientCompany.trim();
+                            const isOffList = val.length>0 && clientMasterList.length>0 && !clientMasterList.some(n=>n.toLowerCase()===val.toLowerCase());
+                            return (<>
+                              <input list="cm-list" value={addClientForm.clientCompany} placeholder={clientMasterList.length>0?"Type to search client list…":"e.g. Havells India"}
+                                onChange={e=>setAddClientForm(p=>({...p,clientCompany:e.target.value}))}
+                                style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",background:C.s2,border:`1px solid ${isOffList?C.orange:C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}/>
+                              {isOffList && <div style={{fontSize:10,color:C.orange,marginTop:3}}>⚠ "{val}" is not in the approved client list — admin can add it in System Configuration.</div>}
+                              {clientMasterList.length===0 && <div style={{fontSize:10,color:C.muted,marginTop:3}}>No client list configured yet. Ask admin to add clients in System Configuration → Client Master List.</div>}
+                            </>);
+                          })()}
                         </div>
                         <div>
                           <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>DEAL TYPE</div>
@@ -8630,6 +8675,81 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{marginTop:10,fontSize:10,color:C.muted}}>
                   Triggers: EOD absence reports · Deal won · Approval breaches SLA
                 </div>
+              </div>
+
+              {/* Client Master List */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6,flexWrap:"wrap",gap:8}}>
+                  <div className="sans" style={{fontWeight:700}}>Client Master List</div>
+                  <span style={{fontSize:10,color:C.dim,background:C.s2,border:`1px solid ${C.border}`,borderRadius:10,padding:"2px 10px"}}>{clientMasterList.length} clients</span>
+                </div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:14}}>
+                  The canonical list of advertiser names. Reps see a searchable dropdown from this list when entering clients — preventing spelling variations that break revenue matching. Names must match exactly what the agency / client uses in ROs.
+                </div>
+                {/* Add new */}
+                <div style={{display:"flex",gap:8,marginBottom:12}}>
+                  <input value={masterNewName} onChange={e=>setMasterNewName(e.target.value)}
+                    onKeyDown={e=>{
+                      if(e.key==="Enter"&&masterNewName.trim()){
+                        const name=masterNewName.trim();
+                        if(clientMasterList.some(n=>n.toLowerCase()===name.toLowerCase())){showToast("Already in list","err");return;}
+                        setClientMasterList(p=>[...p,name].sort((a,b)=>a.localeCompare(b)));
+                        setMasterNewName("");
+                        showToast(`${name} added to client list ✓`);
+                      }
+                    }}
+                    placeholder="Type client name and press Enter or click Add…"
+                    style={{flex:1,padding:"8px 11px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                  <button onClick={()=>{
+                    const name=masterNewName.trim();
+                    if(!name){showToast("Enter a client name","err");return;}
+                    if(clientMasterList.some(n=>n.toLowerCase()===name.toLowerCase())){showToast("Already in list","err");return;}
+                    setClientMasterList(p=>[...p,name].sort((a,b)=>a.localeCompare(b)));
+                    setMasterNewName("");
+                    showToast(`${name} added ✓`);
+                  }} style={{padding:"8px 16px",background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:5,color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap"}}>
+                    + Add
+                  </button>
+                </div>
+                {/* Import from existing deals */}
+                {(()=>{
+                  const existingClients=[...new Set(deals.map(d=>d.clientCompany).filter(Boolean))].sort();
+                  const notYetAdded=existingClients.filter(c=>!clientMasterList.some(m=>m.toLowerCase()===c.toLowerCase()));
+                  if(!notYetAdded.length)return null;
+                  return (
+                    <div style={{marginBottom:12,padding:"10px 12px",background:`${C.accent}0a`,border:`1px solid ${C.accent}33`,borderRadius:6}}>
+                      <div style={{fontSize:10,color:C.accent,fontWeight:700,marginBottom:8,letterSpacing:".06em"}}>IMPORT FROM EXISTING DEALS ({notYetAdded.length} not yet listed)</div>
+                      <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
+                        {notYetAdded.map(c=>(
+                          <button key={c} onClick={()=>{setClientMasterList(p=>[...p,c].sort((a,b)=>a.localeCompare(b)));showToast(`${c} added ✓`);}}
+                            style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,borderRadius:12,padding:"3px 11px",fontSize:11,color:C.accent,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                            + {c}
+                          </button>
+                        ))}
+                      </div>
+                      <button onClick={()=>{
+                        const toAdd=notYetAdded.filter(c=>!clientMasterList.some(m=>m.toLowerCase()===c.toLowerCase()));
+                        setClientMasterList(p=>[...p,...toAdd].sort((a,b)=>a.localeCompare(b)));
+                        showToast(`${toAdd.length} clients imported ✓`);
+                      }} style={{fontSize:10,background:`${C.accent}22`,border:`1px solid ${C.accent}55`,borderRadius:4,padding:"4px 12px",color:C.accent,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        Import All {notYetAdded.length}
+                      </button>
+                    </div>
+                  );
+                })()}
+                {/* Current list */}
+                {clientMasterList.length===0
+                  ? <div style={{textAlign:"center",padding:20,color:C.muted,fontSize:11}}>No clients added yet. Add them above or import from existing deals.</div>
+                  : <div style={{display:"flex",flexWrap:"wrap",gap:6,maxHeight:200,overflowY:"auto"}}>
+                      {clientMasterList.map((c,i)=>(
+                        <div key={i} style={{display:"flex",alignItems:"center",gap:5,background:C.s2,border:`1px solid ${C.border}`,borderRadius:14,padding:"4px 10px 4px 12px",fontSize:11}}>
+                          <span>{c}</span>
+                          <button onClick={()=>{if(!window.confirm(`Remove "${c}" from client list?`))return;setClientMasterList(p=>p.filter((_,j)=>j!==i));showToast(`${c} removed`);}}
+                            style={{background:"none",border:"none",color:C.muted,cursor:"pointer",padding:"0 2px",lineHeight:1,fontSize:13}}>✕</button>
+                        </div>
+                      ))}
+                    </div>
+                }
               </div>
 
               {/* Audit log summary */}
@@ -11036,9 +11156,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{fontSize:10,color:C.dim,marginBottom:8,letterSpacing:".05em",fontWeight:700}}>CLIENT TARGETS</div>
               {planUploadForm.clients.map((cl,i)=>(
                 <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 1.2fr auto",gap:8,marginBottom:7,alignItems:"center"}}>
-                  <input value={cl.clientCompany} placeholder={`Client ${i+1} name`}
-                    onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,clientCompany:e.target.value}:c)}))}
-                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                  {(()=>{
+                    const val=cl.clientCompany.trim();
+                    const offList=val.length>0&&clientMasterList.length>0&&!clientMasterList.some(n=>n.toLowerCase()===val.toLowerCase());
+                    return <input list="cm-list" value={cl.clientCompany} placeholder={clientMasterList.length>0?"Search client list…":`Client ${i+1} name`}
+                      onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,clientCompany:e.target.value}:c)}))}
+                      style={{padding:"8px 10px",background:C.s2,border:`1px solid ${offList?C.orange:C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}} title={offList?`"${val}" not in approved client list`:undefined}/>;
+                  })()}
                   <select value={cl.dealType}
                     onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,dealType:e.target.value}:c)}))}
                     style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
