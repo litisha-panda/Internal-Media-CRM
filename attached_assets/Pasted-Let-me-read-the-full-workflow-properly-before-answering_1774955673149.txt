@@ -1,0 +1,75 @@
+Let me read the full workflow properly before answering.Good. I have everything I need now. Here's the honest, systems-level review you asked for.
+
+---
+
+## The Workflow I've Understood
+
+The platform is built around one core loop:
+
+**Rep plans → Rep meets → Rep logs → Deal updates → Manager sees → Targets get measured**
+
+Every piece feeds into that chain. Here's how it's supposed to connect:
+
+**My Plan** is where the day starts. Rep plans tomorrow's meetings. Those planned entries sit on the calendar. When a meeting happens, the rep logs it. The log does 4 things simultaneously: updates the deal's `lastContact`, updates the `outcome`, creates tasks for whoever needs to act next, and creates an Internal Request if approval is needed. This is the best-connected part of the whole system — the meeting log is genuinely the engine.
+
+**Revenue Tracker / Pipeline** shows the deals created from those meetings. Deals accumulate, stage moves from Needs Callback → Very Interested → Proposal Accepted. That journey is the pipeline.
+
+**My Targets** is where reps submit client-by-client targets which go up the chain: RH → NSH → Strategy → CRO for approval. Once approved, those become the rep's official quota. Achievement is measured from Revenue Log entries against those approved targets.
+
+**War Room** is the manager's version of the same data — it aggregates deals, flags what's at risk, blocked, or idle.
+
+**Revenue Log** is where actual booked revenue is recorded (PO received, payment confirmed). This is separate from pipeline deal values — or it's supposed to be.
+
+**HR Reports / Compliance / Absence** runs in parallel — the 11:30 PM daily rule triggers absence if a rep doesn't log today and plan tomorrow.
+
+---
+
+## Is The Logic Fair?
+
+**The concept is sound.** The chain from plan → log → deal → target → revenue is the right mental model for a broadcast sales operation.
+
+**But there are 3 structural disconnects that break the chain:**
+
+**1. The biggest gap: Revenue is not connected to Targets**
+
+The My Targets page shows `totalAchieved` from `revenueEntries`. The War Room and pipeline show `totalClosed` from `d.amount` on deals with "Proposal Accepted". These are two separate calculations that are never reconciled. A rep can log revenue in the Revenue Log, see it in My Targets as achieved, but the War Room still shows 0% closed because no deal has been marked "Proposal Accepted." The two systems don't talk to each other — they co-exist in parallel.
+
+**2. Revenue Log has no entry point in the navigation**
+
+The `revenue-log` view exists in the code. It renders. But there is no nav item pointing to it for any role — not for reps, not for RH, not for NSH. The only way to reach it is if something in the UI calls `setView("revenue-log")` directly. It's essentially a hidden screen. This means revenue is barely getting logged in practice, which is why everything shows `—`.
+
+**3. Deals and Targets are parallel, not connected**
+
+A rep submits targets in My Targets (client + deal type + amount). Separately, a rep adds deals in Revenue Tracker (same client + deal type + amount). These are two different records with no foreign key between them. The system can't tell that the ₹50L Daikin target in My Targets is the same as the Daikin deal in the pipeline. Achievement in My Targets comes from Revenue Entries. Achievement in the pipeline comes from deal outcomes. A single sale generates activity in 3 different places (Target, Deal, Revenue Entry) with no automatic link between them.
+
+---
+
+## The Missing Connective Tissue
+
+Here's what should happen but doesn't:
+
+When a **deal is marked Proposal Accepted → it should automatically credit towards the rep's approved target for that client.** Right now it doesn't. Closing a deal in the pipeline and logging revenue are two separate manual actions with no bridge.
+
+When **revenue is logged → it should update the deal outcome** (this exists but overwrites `d.amount`, corrupting the pipeline). And it should update the target progress. Currently it only does one of those two.
+
+The **Rep's view of their own progress is fragmented** — they see pipeline in Revenue Tracker, targets in My Targets, and revenue in Revenue Log as three separate tabs with no unified "here's where you stand" screen.
+
+---
+
+## What's Well Connected
+
+The **meeting log → tasks → internal requests → deal update** chain is genuinely tight and well-built. Logging a meeting creates tasks, raises IRs, updates the deal's last contact and next step, and even auto-creates a plan entry for the follow-up date. That whole path works.
+
+The **escalation chain** (idle deals → auto-flag to NSH after configurable days) is also properly wired.
+
+The **approval chain** (RH → NSH → CXO for deals above threshold) is solid.
+
+The **HR/compliance loop** (plan tomorrow + log today = present, else absent) is logically complete.
+
+---
+
+## Summary in One Sentence Per Issue
+
+The meeting-to-deal chain is solid. The deal-to-revenue chain is broken at the join. The target-to-achievement chain exists but uses a different data source than everything else. And the Revenue Log — which is the piece that should close the loop — has no way for anyone to reach it.
+
+Want to work through how to fix the connections, not the code?
