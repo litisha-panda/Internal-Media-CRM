@@ -47,24 +47,7 @@ const D14    = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
 const getToday    = () => new Date().toISOString().split("T")[0];
 const getTomorrow = () => new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
-const SEED_TASKS = [
-  { id:"t1",  assignedTo:1,  assignedBy:"litisha",    assignedByName:"Litisha (CXO)",         repId:1,  clientCompany:"Havells India",      title:"Send revised sponsorship deck",              description:"Update the H2 deck with new property reel and resubmit to Deepa Menon by EOD.",                   priority:"High",   status:"Open",        dueDate:TODAY,    createdAt:D1 },
-  { id:"t2",  assignedTo:5,  assignedBy:"litisha",    assignedByName:"Litisha (CXO)",         repId:5,  clientCompany:"Asian Paints",       title:"Escalate to CEO before CMO meeting",         description:"Confirm CEO availability for CMO meeting. Vikram to coordinate calendar with Litisha's EA.",       priority:"High",   status:"Open",        dueDate:TOMORROW, createdAt:TODAY },
-  { id:"t3",  assignedTo:2,  assignedBy:"gk",         assignedByName:"GK (Sales Head)",       repId:2,  clientCompany:"Apollo Hospitals",   title:"Get digital media plan from Darpan",         description:"Chase Darpan for the custom Apollo digital plan. Needed before Friday pitch.",                   priority:"Medium", status:"In Progress", dueDate:TOMORROW, createdAt:D1 },
-  { id:"t4",  assignedTo:7,  assignedBy:"rh_north",   assignedByName:"Region Head – North",   repId:7,  clientCompany:"Maruti Suzuki",      title:"Share FCT grid for summer campaign",         description:"Prepare and share the FCT grid proposal for Maruti's Alto & Swift campaign by Friday.",          priority:"High",   status:"Open",        dueDate:TOMORROW, createdAt:D1 },
-  { id:"t5",  assignedTo:9,  assignedBy:"rh_north",   assignedByName:"Region Head – North",   repId:9,  clientCompany:"LG Electronics",     title:"Confirm premium slot availability",          description:"Check with programming team for H2 primetime slots and confirm with LG CMO Seema Jain.",         priority:"High",   status:"Open",        dueDate:TODAY,    createdAt:D1 },
-  { id:"t6",  assignedTo:11, assignedBy:"rh_south",   assignedByName:"Region Head – South",   repId:11, clientCompany:"Dr Reddy's Labs",    title:"Follow up on digital health plan",           description:"Chase digital team for health awareness plan for Dr Reddy's South India campaign.",               priority:"Medium", status:"In Progress", dueDate:TOMORROW, createdAt:D3 },
-  { id:"t7",  assignedTo:13, assignedBy:"rh_south",   assignedByName:"Region Head – South",   repId:13, clientCompany:"Britannia Industries",title:"Collect PO and invoice details",             description:"Britannia deal is closed. Collect the official PO and share invoice details with finance.",       priority:"High",   status:"Open",        dueDate:TODAY,    createdAt:D1 },
-  { id:"t8",  assignedTo:14, assignedBy:"rh_east",    assignedByName:"Region Head – East",    repId:14, clientCompany:"Tata Steel",         title:"Prepare corporate brand campaign deck",      description:"Build a customised brand visibility deck for Tata Steel East India corporate campaign.",          priority:"Medium", status:"Open",        dueDate:D3,       createdAt:D7 },
-  { id:"t9",  assignedTo:17, assignedBy:"rh_east",    assignedByName:"Region Head – East",    repId:17, clientCompany:"Patanjali Ayurved",  title:"Finalise Yoga IP tie-in structure",          description:"Get written confirmation from Patanjali on IP tie-in terms before the next pitch meeting.",       priority:"High",   status:"In Progress", dueDate:TOMORROW, createdAt:D1 },
-  { id:"t10", assignedTo:19, assignedBy:"rh_west",    assignedByName:"Region Head – West",    repId:19, clientCompany:"Airtel India",       title:"Submit integrated package offer note",       description:"Draft and submit the premium integrated package deal note for Airtel CMO's approval.",            priority:"High",   status:"Open",        dueDate:TODAY,    createdAt:D1 },
-  { id:"t11", assignedTo:21, assignedBy:"rh_west",    assignedByName:"Region Head – West",    repId:21, clientCompany:"Flipkart",           title:"Lock Big Billion Days campaign slots",       description:"Confirm and lock primetime + digital slots for Flipkart's festive campaign package.",             priority:"High",   status:"Open",        dueDate:TOMORROW, createdAt:TODAY },
-  { id:"t12", assignedTo:22, assignedBy:"gk",         assignedByName:"GK (Sales Head)",       repId:22, clientCompany:"HUL",                title:"Get sign-off for national campaign package", description:"HUL CEO meeting planned — get package sign-off before end of week.",                             priority:"High",   status:"Open",        dueDate:TODAY,    createdAt:D1 },
-  { id:"t13", assignedTo:25, assignedBy:"gk",         assignedByName:"GK (Sales Head)",       repId:25, clientCompany:"Coca-Cola India",    title:"Confirm summer campaign airing dates",       description:"Lock Q1 primetime slots for Coca-Cola summer campaign. Coordinate with programming.",              priority:"Medium", status:"In Progress", dueDate:TOMORROW, createdAt:D3 },
-  { id:"t14", assignedTo:26, assignedBy:"rh_central", assignedByName:"Region Head – Central", repId:26, clientCompany:"ONGC",               title:"Prepare ONGC corporate PR campaign deck",   description:"Build customised corporate PR deck for ONGC Odisha operations team.",                             priority:"Medium", status:"Open",        dueDate:D3,       createdAt:D7 },
-  { id:"t15", assignedTo:28, assignedBy:"rh_central", assignedByName:"Region Head – Central", repId:28, clientCompany:"BPCL",               title:"Send fuel brand campaign proposal",          description:"Finalise and send the Speed + Pure for Sure campaign deck to BPCL GM Marketing.",                priority:"High",   status:"Open",        dueDate:TODAY,    createdAt:D1 },
-  { id:"t16", assignedTo:30, assignedBy:"rh_central", assignedByName:"Region Head – Central", repId:30, clientCompany:"Odisha State Coop",  title:"Follow up on cooperative IP sponsorship",   description:"OSCB CEO has confirmed interest. Send IP sponsorship terms and slot options.",                    priority:"High",   status:"Open",        dueDate:TOMORROW, createdAt:TODAY },
-];
+const SEED_TASKS: any[] = [];
 
 // Get start of current week (Monday)
 function getWeekStart(dateStr) {
@@ -88,95 +71,10 @@ const HR_EMAIL = "hr@odishatv.com";
 // Plan status
 const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
 
-const SEED_PLANS = [
-  { id:"p1",  repId:1,  date:TODAY,    time:"10:00", clientAgencyName:"Reliance Retail",      contactName:"Sameer Joshi",    agenda:"Present revised OTT + TV integrated grid",     pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p2",  repId:1,  date:TODAY,    time:"14:30", clientAgencyName:"ITC Foods",             contactName:"Saurabh Tiwari",  agenda:"Q3 renewal — push for 6-week primetime",       pitchType:"FCT",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p3",  repId:2,  date:TODAY,    time:"11:00", clientAgencyName:"Berger Paints",         contactName:"Rajesh Kumar",    agenda:"PO follow-up, brand guidelines for FCT",       pitchType:"FCT",                 status:"Done",    loggedMeetingId:"ml2", isUnplanned:false },
-  { id:"p4",  repId:5,  date:TODAY,    time:"09:00", clientAgencyName:"Havells India",         contactName:"Deepa Menon",     agenda:"H2 sponsorship deck walkthrough",               pitchType:"IPs",                 status:"Done",    loggedMeetingId:"ml1", isUnplanned:false },
-  { id:"p5",  repId:1,  date:TOMORROW, time:"10:00", clientAgencyName:"Reliance Retail",      contactName:"Sameer Joshi",    agenda:"Follow-up on revised grid feedback",            pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p6",  repId:2,  date:TOMORROW, time:"15:00", clientAgencyName:"Apollo Hospitals",     contactName:"Ravi Krishnan",   agenda:"Digital health campaign proposal",              pitchType:"Digital",             status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p7",  repId:5,  date:TOMORROW, time:"11:30", clientAgencyName:"Asian Paints",         contactName:"Harsh Goenka",    agenda:"CMO meeting — flagship package",                pitchType:"IPs",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p8",  repId:7,  date:TODAY,    time:"10:30", clientAgencyName:"Maruti Suzuki",        contactName:"Arun Kapoor",     agenda:"Summer FCT grid walkthrough",                   pitchType:"FCT",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p9",  repId:7,  date:TOMORROW, time:"14:00", clientAgencyName:"Nestle India",         contactName:"Priya Bhatt",     agenda:"Integrated grid review and revision",           pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p10", repId:9,  date:TODAY,    time:"11:00", clientAgencyName:"LG Electronics",       contactName:"Seema Jain",      agenda:"Premium slot package discussion with CMO",      pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p11", repId:9,  date:TOMORROW, time:"10:00", clientAgencyName:"Samsung India",        contactName:"Tarun Mehta",     agenda:"Campaign go-live PO handover",                  pitchType:"FCT",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p12", repId:11, date:TODAY,    time:"09:30", clientAgencyName:"Dr Reddy's Labs",      contactName:"Kavitha Murthy",  agenda:"Digital health plan first look",                pitchType:"Digital",             status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p13", repId:13, date:TODAY,    time:"15:00", clientAgencyName:"Britannia Industries", contactName:"Harish Bhat",     agenda:"PO collection — deal closed",                   pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p14", repId:14, date:TODAY,    time:"10:00", clientAgencyName:"Tata Steel",           contactName:"Ajay Tandon",     agenda:"Corporate brand campaign kickoff",              pitchType:"FCT",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p15", repId:17, date:TODAY,    time:"11:30", clientAgencyName:"Patanjali Ayurved",    contactName:"Divya Trivedi",   agenda:"Yoga IP tie-in terms finalisation",             pitchType:"IPs",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p16", repId:17, date:TOMORROW, time:"14:30", clientAgencyName:"Reliance Retail",      contactName:"Sneha Dey",       agenda:"Digital + FCT combo pitch",                     pitchType:"Digital",             status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p17", repId:19, date:TODAY,    time:"12:00", clientAgencyName:"Airtel India",         contactName:"Pawan Tiwari",    agenda:"Premium integrated package offer note",         pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p18", repId:21, date:TODAY,    time:"10:00", clientAgencyName:"Flipkart",             contactName:"Vikash Singhania",agenda:"Big Billion Days campaign slot locking",        pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p19", repId:22, date:TODAY,    time:"09:00", clientAgencyName:"HUL",                  contactName:"Sanjiv Mehta",    agenda:"National integrated campaign sign-off",         pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p20", repId:25, date:TODAY,    time:"11:00", clientAgencyName:"Coca-Cola India",      contactName:"Prasoon Joshi",   agenda:"Summer campaign airing date lock-in",           pitchType:"Integrated Packages", status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p21", repId:25, date:TOMORROW, time:"15:00", clientAgencyName:"Red Bull India",       contactName:"Simone Shah",     agenda:"Sports media solutions pitch",                  pitchType:"FCT",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p22", repId:26, date:TODAY,    time:"10:00", clientAgencyName:"ONGC",                 contactName:"Subash Nayak",    agenda:"Corporate PR campaign deck walkthrough",        pitchType:"FCT",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p23", repId:28, date:TODAY,    time:"11:30", clientAgencyName:"BPCL",                 contactName:"Mahesh Tripathy", agenda:"Fuel brand campaign deck presentation",         pitchType:"FCT",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p24", repId:30, date:TODAY,    time:"14:00", clientAgencyName:"Odisha State Coop",    contactName:"Biswajit Pattnaik",agenda:"Cooperative banking IP sponsorship terms",     pitchType:"IPs",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-  { id:"p25", repId:30, date:TOMORROW, time:"10:30", clientAgencyName:"IDBI Bank",            contactName:"Saswat Rath",     agenda:"Banking campaign revised rate card review",     pitchType:"FCT",                 status:"Planned", loggedMeetingId:null,  isUnplanned:false },
-];
-
-// Weekly plans
-const SEED_WEEKLY_PLANS = [
-  { id:"wp1", repId:1, weekStart:THIS_WEEK_START, submittedAt:"2026-03-22T21:00:00", meetings:[
-    { date:TODAY,    time:"10:00", clientAgencyName:"Reliance Retail",  agenda:"OTT + TV grid" },
-    { date:TODAY,    time:"14:30", clientAgencyName:"ITC Foods",         agenda:"Q3 renewal" },
-    { date:TOMORROW, time:"10:00", clientAgencyName:"Reliance Retail",  agenda:"Grid feedback" },
-  ]},
-];
-const SEED_ABSENCE_REPORTS = [
-  { id:"ab1",  repId:3,  repName:"Rohit Nanda",      region:"East",    role:"Sales Executive", date:TODAY, generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab2",  repId:3,  repName:"Rohit Nanda",      region:"East",    role:"Sales Executive", date:D1,    generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab3",  repId:1,  repName:"Arjun Mishra",     region:"North",   role:"Sales Executive", date:D3,    generatedAt:"23:59", status:"Exception Granted", sentTo:HR_EMAIL, markedAs:"Present", exception:"Overridden",exceptionBy:"Litisha (CXO)", exceptionReason:"Client emergency — Reliance site visit, phone network down.", generatedBy:"System (Auto)" },
-  { id:"ab4",  repId:8,  repName:"Kavya Singh",      region:"North",   role:"Sales Executive", date:D1,    generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab5",  repId:12, repName:"Ananya Krishnan",  region:"South",   role:"Sales Executive", date:TODAY, generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab6",  repId:16, repName:"Bikash Pradhan",   region:"East",    role:"Sales Executive", date:D3,    generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab7",  repId:16, repName:"Bikash Pradhan",   region:"East",    role:"Sales Executive", date:D7,    generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab8",  repId:18, repName:"Varun Mehta",      region:"West",    role:"Sales Executive", date:D1,    generatedAt:"23:59", status:"Exception Granted", sentTo:HR_EMAIL, markedAs:"Present", exception:"Overridden",exceptionBy:"Litisha (CXO)", exceptionReason:"Client field visit — Reliance Jio site demo. Confirmed by RH.", generatedBy:"System (Auto)" },
-  { id:"ab9",  repId:27, repName:"Lipika Mishra",    region:"Central", role:"Sales Executive", date:TODAY, generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab10", repId:29, repName:"Sunita Sahoo",     region:"Central", role:"Sales Executive", date:D3,    generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab11", repId:10, repName:"Pooja Agarwal",    region:"North",   role:"Sales Executive", date:D7,    generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-  { id:"ab12", repId:24, repName:"Shreya Bose",      region:"National",role:"Sales Executive", date:D1,    generatedAt:"23:59", status:"Sent to HR",       sentTo:HR_EMAIL, markedAs:"Absent",  exception:null,       exceptionBy:null,          exceptionReason:null, generatedBy:"System (Auto)" },
-];
-
-const REPS = [
-  // ── NORTH (5 reps) ──
-  { id:  1, name: "Arjun Mishra",     region: "North",    role: "Sales Executive",          target: 18000000 },
-  { id:  7, name: "Rahul Sharma",     region: "North",    role: "Senior Sales",             target: 20000000 },
-  { id:  8, name: "Kavya Singh",      region: "North",    role: "Sales Executive",          target: 15000000 },
-  { id:  9, name: "Manish Tiwari",    region: "North",    role: "Senior Sales",             target: 22000000 },
-  { id: 10, name: "Pooja Agarwal",    region: "North",    role: "Sales Executive",          target: 16000000 },
-  // ── SOUTH (5 reps) ──
-  { id:  2, name: "Priya Dash",       region: "South",    role: "Senior Sales",             target: 22000000 },
-  { id:  6, name: "Meera Rao",        region: "South",    role: "Sales Executive",          target: 14000000 },
-  { id: 11, name: "Suresh Reddy",     region: "South",    role: "Senior Sales",             target: 19000000 },
-  { id: 12, name: "Ananya Krishnan",  region: "South",    role: "Sales Executive",          target: 13000000 },
-  { id: 13, name: "Karthik Iyer",     region: "South",    role: "Senior Sales",             target: 21000000 },
-  // ── EAST (5 reps) ──
-  { id:  3, name: "Rohit Nanda",      region: "East",     role: "Sales Executive",          target: 12000000 },
-  { id: 14, name: "Sanjay Mohanty",   region: "East",     role: "Senior Sales",             target: 17000000 },
-  { id: 15, name: "Debasmita Das",    region: "East",     role: "Sales Executive",          target: 14000000 },
-  { id: 16, name: "Bikash Pradhan",   region: "East",     role: "Sales Executive",          target: 11000000 },
-  { id: 17, name: "Rina Panda",       region: "East",     role: "Senior Sales",             target: 18000000 },
-  // ── WEST (5 reps) ──
-  { id:  4, name: "Sneha Patel",      region: "West",     role: "Senior Sales",             target: 16000000 },
-  { id: 18, name: "Varun Mehta",      region: "West",     role: "Sales Executive",          target: 13000000 },
-  { id: 19, name: "Divya Joshi",      region: "West",     role: "Senior Sales",             target: 20000000 },
-  { id: 20, name: "Amit Desai",       region: "West",     role: "Sales Executive",          target: 15000000 },
-  { id: 21, name: "Preethi Shah",     region: "West",     role: "Senior Sales",             target: 17000000 },
-  // ── NATIONAL (5 reps) ──
-  { id:  5, name: "Vikram Sen",       region: "National", role: "National Account Manager", target: 45000000 },
-  { id: 22, name: "Neha Kapoor",      region: "National", role: "Senior Sales",             target: 35000000 },
-  { id: 23, name: "Rajesh Malhotra",  region: "National", role: "National Account Manager", target: 40000000 },
-  { id: 24, name: "Shreya Bose",      region: "National", role: "Sales Executive",          target: 28000000 },
-  { id: 25, name: "Aditya Kumar",     region: "National", role: "Senior Sales",             target: 32000000 },
-  // ── CENTRAL (5 reps) ──
-  { id: 26, name: "Sameer Nayak",     region: "Central",  role: "Senior Sales",             target: 18000000 },
-  { id: 27, name: "Lipika Mishra",    region: "Central",  role: "Sales Executive",          target: 14000000 },
-  { id: 28, name: "Pratap Rath",      region: "Central",  role: "Senior Sales",             target: 20000000 },
-  { id: 29, name: "Sunita Sahoo",     region: "Central",  role: "Sales Executive",          target: 12000000 },
-  { id: 30, name: "Debadatta Patra",  region: "Central",  role: "Senior Sales",             target: 16000000 },
-];
+const SEED_PLANS: any[]        = [];
+const SEED_WEEKLY_PLANS: any[] = [];
+const SEED_ABSENCE_REPORTS: any[] = [];
+const REPS: any[]              = [];
 
 const USER_ROLES = [
   // FULL ACCESS
@@ -230,259 +128,25 @@ const USER_ROLES = [
   { id: "rep_debadatta",  name: "Debadatta Patra",       role: "SALES REP",      canView: "self",   region: "Central",  repId: 30 },
 ];
 
-const SEED_DEALS = [
-  // ── NATIONAL (Vikram Sen, repId:5) ──
-  { id:"d1",  repId:5, clientCompany:"Havells India",      contactName:"Deepa Menon",    designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9823401234", email:"deepa@havells.com",      dealType:"IPs",        outcome:"Very Interested",             amount:15000000, targetAmount:15000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Send H2 sponsorship deck",               nextStepDate:D1,       awaitingApproval:"NSH",            awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"H2 sponsorship deck",status:"In Progress",raisedAt:"14:00"}], notes:"Budget confirmed. CMO interested." },
-  { id:"d2",  repId:5, clientCompany:"Asian Paints",       contactName:"Harsh Goenka",   designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9834512345", email:"harsh@asianpaints.com",  dealType:"IPs",        outcome:"Very Interested",             amount:12000000, targetAmount:12000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D3,    nextStep:"CMO meeting – present flagship package", nextStepDate:D1,       awaitingApproval:"CXO",            awaitingApprovalSince:D1,   reqs:[], notes:"Need CEO to attend CMO meeting." },
-  { id:"d3",  repId:5, clientCompany:"Tata Consumer",      contactName:"Ravi Shankar",   designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9812309876", email:"ravi@tataconsumer.com",  dealType:"Integrated Packages", outcome:"Interested – Needs Revision", amount:9000000,  targetAmount:9000000,  region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised multi-brand grid",               nextStepDate:D3,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D7,   reqs:[{dept:"Sales Strategy",desc:"Multi-brand integrated grid",status:"Overdue",raisedAt:"09:00"}], notes:"Multi-brand portfolio." },
-  // ── SOUTH (Priya Dash repId:2, Meera Rao repId:6) ──
-  { id:"d4",  repId:2, clientCompany:"Berger Paints",      contactName:"Rajesh Kumar",   designation:"Brand Manager",  contactLevel:"Brand Manager",   phone:"9812345678", email:"rajesh@berger.com",      dealType:"Linear TV",          outcome:"Proposal Accepted",           amount:2200000,  targetAmount:3500000,  region:"South",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"PO follow-up",                           nextStepDate:TODAY,    awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"6-week primetime deal closed." },
-  { id:"d5",  repId:6, clientCompany:"Apollo Hospitals",   contactName:"Ravi Krishnan",  designation:"GM Marketing",   contactLevel:"VP / GM",         phone:"9901234567", email:"ravi@apollo.com",        dealType:"Digital",            outcome:"Very Interested",             amount:6000000,  targetAmount:7500000,  region:"South",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Custom digital media plan",              nextStepDate:D3,       awaitingApproval:"Digital",        awaitingApprovalSince:D1,   reqs:[{dept:"Digital",desc:"Custom digital plan",status:"Done",raisedAt:"12:00"}], notes:"Full digital takeover." },
-  { id:"d6",  repId:2, clientCompany:"Sundaram Finance",   contactName:"Kavita Nair",    designation:"Marketing Head", contactLevel:"VP / GM",         phone:"9845612345", email:"kavita@sundaram.com",    dealType:"Linear TV",          outcome:"Needs Callback",              amount:3000000,  targetAmount:4000000,  region:"South",    priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Follow up after budget approval",        nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Q2 budget cycle." },
-  // ── NORTH (Arjun Mishra, repId:1) ──
-  { id:"d7",  repId:1, clientCompany:"Daikin India",       contactName:"Prashant Joshi", designation:"VP Sales",       contactLevel:"VP / GM",         phone:"9876543210", email:"prashant@daikin.in",     dealType:"Linear TV",          outcome:"Very Interested",             amount:4500000,  targetAmount:5000000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D1,    nextStep:"Revised FCT grid for summer campaign",   nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Summer AC campaign — high intent." },
-  { id:"d8",  repId:1, clientCompany:"Relaxo Footwear",    contactName:"Amit Gupta",     designation:"Brand Manager",  contactLevel:"Brand Manager",   phone:"9911223344", email:"amit@relaxo.com",        dealType:"IPs",        outcome:"Interested – Needs Revision", amount:2800000,  targetAmount:3500000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Sponsorship deck with property details", nextStepDate:D1,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"Property sponsorship deck",status:"Pending",raisedAt:"10:00"}], notes:"Property title rights needed." },
-  // ── EAST (Rohit Nanda, repId:3) ──
-  { id:"d9",  repId:3, clientCompany:"ITC Limited",        contactName:"Sumit Das",      designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9933445566", email:"sumit@itc.in",           dealType:"Integrated Packages", outcome:"Very Interested",             amount:5500000,  targetAmount:6000000,  region:"East",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Integrated plan for FMCG brands",        nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"ITC wants TV+Digital combo for East market." },
-  { id:"d10", repId:3, clientCompany:"Emami Group",        contactName:"Harsha Reddy",   designation:"Brand Director", contactLevel:"VP / GM",         phone:"9955667788", email:"harsha@emami.com",       dealType:"Linear TV",          outcome:"Price Concern",               amount:2000000,  targetAmount:3000000,  region:"East",     priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised rate card with discount",        nextStepDate:D3,       awaitingApproval:"NSH",            awaitingApprovalSince:D7,   reqs:[], notes:"Rate sensitivity. NSH approval needed on discount." },
-  // ── WEST (Sneha Patel, repId:4) ──
-  { id:"d11", repId:4, clientCompany:"Pidilite Industries",contactName:"Rakesh Shah",    designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9977889900", email:"rakesh@pidilite.com",    dealType:"IPs",        outcome:"Very Interested",             amount:7000000,  targetAmount:8000000,  region:"West",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Sponsorship deal for Fevicol brand",     nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"CMO personally keen. Premium slot required." },
-  { id:"d12", repId:4, clientCompany:"Godrej Consumer",    contactName:"Nisha Mehta",    designation:"Marketing Head", contactLevel:"VP / GM",         phone:"9988001122", email:"nisha@godrej.com",       dealType:"Digital",            outcome:"Needs Callback",              amount:3500000,  targetAmount:5000000,  region:"West",     priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Digital campaign brief",                 nextStepDate:TOMORROW, awaitingApproval:"Digital",        awaitingApprovalSince:D3,   reqs:[{dept:"Digital",desc:"Campaign brief for GCPL",status:"In Progress",raisedAt:"11:00"}], notes:"GCPL digital push for West India." },
-  // ── NORTH NEW REPS ──
-  { id:"d13", repId:7,  clientCompany:"Maruti Suzuki",      contactName:"Arun Kapoor",    designation:"Marketing Head", contactLevel:"VP / GM",         phone:"9811001100", email:"arun@maruti.com",        dealType:"Linear TV",          outcome:"Very Interested",             amount:8500000,  targetAmount:9000000,  region:"North",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Summer campaign FCT grid",               nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Alto 800 & Swift campaign for North belt." },
-  { id:"d14", repId:7,  clientCompany:"Nestle India",       contactName:"Priya Bhatt",    designation:"Brand Director", contactLevel:"VP / GM",         phone:"9822002200", email:"priya@nestle.com",       dealType:"Integrated Packages",outcome:"Interested – Needs Revision", amount:6000000,  targetAmount:7500000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Revised integrated grid with digital",   nextStepDate:TOMORROW, awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"Integrated grid for Nestle",status:"Pending",raisedAt:"11:30"}], notes:"Maggi + KitKat combo campaign." },
-  { id:"d15", repId:8,  clientCompany:"Dabur India",        contactName:"Vineet Sharma",  designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9833003300", email:"vineet@dabur.com",       dealType:"IPs",                outcome:"Price Concern",               amount:4200000,  targetAmount:5500000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised sponsorship rates",              nextStepDate:D3,       awaitingApproval:"NSH",            awaitingApprovalSince:D7,   reqs:[], notes:"Chyawanprash season push. Rate sensitivity." },
-  { id:"d16", repId:8,  clientCompany:"Bajaj Consumer",     contactName:"Rohit Bose",     designation:"Brand Manager",  contactLevel:"Brand Manager",   phone:"9844004400", email:"rohit@bajajconsumer.com",dealType:"Linear TV",          outcome:"Needs Callback",              amount:3000000,  targetAmount:4000000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Follow-up after Q2 budget cycle",        nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Almond Drops hair oil summer push." },
-  { id:"d17", repId:9,  clientCompany:"LG Electronics",     contactName:"Seema Jain",     designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9855005500", email:"seema@lg.com",           dealType:"Integrated Packages",outcome:"Very Interested",             amount:11000000, targetAmount:12000000, region:"North",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Premium slot + OTT combo proposal",      nextStepDate:D1,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"AC & refrigerator summer campaign." },
-  { id:"d18", repId:9,  clientCompany:"Samsung India",      contactName:"Tarun Mehta",    designation:"Marketing Head", contactLevel:"Marketing Head",  phone:"9866006600", email:"tarun@samsung.com",      dealType:"Digital",            outcome:"Proposal Accepted",           amount:5500000,  targetAmount:5500000,  region:"North",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"PO collection",                          nextStepDate:TODAY,    awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Galaxy S series launch campaign. Closed." },
-  { id:"d19", repId:10, clientCompany:"HUL – Lakme",        contactName:"Nandita Roy",    designation:"Brand Director", contactLevel:"VP / GM",         phone:"9877007700", email:"nandita@hul.com",        dealType:"Media Solutions",    outcome:"Interested – Needs Revision", amount:4000000,  targetAmount:5000000,  region:"North",    priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Custom media solutions deck",            nextStepDate:D3,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"Media solutions for Lakme",status:"In Progress",raisedAt:"10:00"}], notes:"Beauty segment — wants strong female viewership data." },
-  { id:"d20", repId:10, clientCompany:"Marico Industries",  contactName:"Ankit Sethi",    designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9888008800", email:"ankit@marico.com",       dealType:"Linear TV",          outcome:"Very Interested",             amount:6500000,  targetAmount:7000000,  region:"North",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Primetime slot confirmation",            nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Parachute & Saffola — dual brand campaign." },
-  // ── SOUTH NEW REPS ──
-  { id:"d21", repId:11, clientCompany:"Dr Reddy's Labs",    contactName:"Kavitha Murthy", designation:"Marketing Head", contactLevel:"Marketing Head",  phone:"9899009900", email:"kavitha@drreddys.com",   dealType:"Digital",            outcome:"Very Interested",             amount:5000000,  targetAmount:6000000,  region:"South",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Health campaign digital plan",           nextStepDate:D3,       awaitingApproval:"Digital",        awaitingApprovalSince:D1,   reqs:[{dept:"Digital",desc:"Health awareness digital plan",status:"In Progress",raisedAt:"09:30"}], notes:"Generic pharma OTC brand awareness South India." },
-  { id:"d22", repId:11, clientCompany:"Cipla Health",       contactName:"Sridhar Rao",    designation:"Brand Director", contactLevel:"VP / GM",         phone:"9810101010", email:"sridhar@cipla.com",      dealType:"Linear TV",          outcome:"Price Concern",               amount:3500000,  targetAmount:5000000,  region:"South",    priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised rate card for Tamil Nadu belt",  nextStepDate:D3,       awaitingApproval:"NSH",            awaitingApprovalSince:D7,   reqs:[], notes:"OTC product launch campaign. Tight budget." },
-  { id:"d23", repId:12, clientCompany:"TVS Motors",         contactName:"Ganesh Iyer",    designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9821202020", email:"ganesh@tvsmotor.com",    dealType:"IPs",                outcome:"Very Interested",             amount:8000000,  targetAmount:9500000,  region:"South",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Cricket + Reality show sponsorship deal",nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Apache RTR sponsorship. Strong interest." },
-  { id:"d24", repId:12, clientCompany:"Hero MotoCorp",      contactName:"Meenakshi Lal",  designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9832303030", email:"meenakshi@heromotocorp.com",dealType:"Linear TV",       outcome:"Needs Callback",              amount:4000000,  targetAmount:5500000,  region:"South",    priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Budget confirmation after board meet",   nextStepDate:D7,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Splendor campaign. On hold pending Q2 budget." },
-  { id:"d25", repId:13, clientCompany:"Britannia Industries",contactName:"Harish Bhat",   designation:"MD",             contactLevel:"C-Suite / Owner", phone:"9843404040", email:"harish@britannia.in",    dealType:"Integrated Packages",outcome:"Proposal Accepted",           amount:10500000, targetAmount:10500000, region:"South",    priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"PO and invoice",                         nextStepDate:TODAY,    awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Good Day & Marie Gold biscuits. Deal sealed." },
-  { id:"d26", repId:13, clientCompany:"Parle Products",     contactName:"Rohini Suresh",  designation:"Marketing Head", contactLevel:"Marketing Head",  phone:"9854505050", email:"rohini@parle.com",       dealType:"Linear TV",          outcome:"Interested – Needs Revision", amount:5500000,  targetAmount:7000000,  region:"South",    priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Festival campaign grid proposal",        nextStepDate:TOMORROW, awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"Festival grid for Parle",status:"Pending",raisedAt:"12:00"}], notes:"Parle-G festive push. Needs primetime weekend slots." },
-  // ── EAST NEW REPS ──
-  { id:"d27", repId:14, clientCompany:"Tata Steel",         contactName:"Ajay Tandon",    designation:"VP Corporate Affairs",contactLevel:"VP / GM",     phone:"9865606060", email:"ajay@tatasteel.com",     dealType:"Media Solutions",    outcome:"Very Interested",             amount:7000000,  targetAmount:8000000,  region:"East",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Corporate brand campaign deck",          nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Brand visibility campaign. East-heavy mandate." },
-  { id:"d28", repId:14, clientCompany:"Adani Wilmar",       contactName:"Preeti Gupta",   designation:"Brand Director", contactLevel:"VP / GM",         phone:"9876707070", email:"preeti@adaniwilmar.com", dealType:"IPs",                outcome:"Interested – Needs Revision", amount:4500000,  targetAmount:6000000,  region:"East",     priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Fortune Oil sponsorship proposal",       nextStepDate:D3,       awaitingApproval:"NSH",            awaitingApprovalSince:D7,   reqs:[], notes:"Fortune brand — needs revised IP tie-in." },
-  { id:"d29", repId:15, clientCompany:"NALCO",              contactName:"Bijaya Kumar",    designation:"GM PR",          contactLevel:"VP / GM",         phone:"9887808080", email:"bijaya@nalco.gov.in",    dealType:"Linear TV",          outcome:"Price Concern",               amount:2500000,  targetAmount:4000000,  region:"East",     priority:"Regular",quarter:"Q2 FY26", lastContact:D7,    nextStep:"Govt rate approval",                     nextStepDate:D7,       awaitingApproval:"NSH",            awaitingApprovalSince:D7,   reqs:[], notes:"PSU deal — tendering process. Long cycle." },
-  { id:"d30", repId:15, clientCompany:"SAIL",               contactName:"Sunita Tripathy", designation:"DGM Marketing",  contactLevel:"VP / GM",        phone:"9898909090", email:"sunita@sail.in",         dealType:"Linear TV",          outcome:"Needs Callback",              amount:3000000,  targetAmount:4500000,  region:"East",     priority:"Regular",quarter:"Q2 FY26", lastContact:D3,    nextStep:"Revised proposal post management change",nextStepDate:D7,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"New DGM took over. Needs re-introduction meeting." },
-  { id:"d31", repId:16, clientCompany:"Vedanta Resources",  contactName:"Kapil Jain",     designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9809010101", email:"kapil@vedanta.com",      dealType:"Media Solutions",    outcome:"Very Interested",             amount:9000000,  targetAmount:10000000, region:"East",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"CSR + brand campaign media plan",        nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Vedanta wants strong CSR positioning in Odisha." },
-  { id:"d32", repId:16, clientCompany:"Bhushan Power",      contactName:"Amit Ranjan",    designation:"Brand Manager",  contactLevel:"Brand Manager",   phone:"9820111111", email:"amit@bhushan.com",       dealType:"Linear TV",          outcome:"Proposal Accepted",           amount:3200000,  targetAmount:3200000,  region:"East",     priority:"Regular",quarter:"Q1 FY26", lastContact:D1,    nextStep:"PO follow-up",                           nextStepDate:TODAY,    awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Industrial brand — deal closed. PO due." },
-  { id:"d33", repId:17, clientCompany:"Patanjali Ayurved",  contactName:"Divya Trivedi",  designation:"Marketing Head", contactLevel:"Marketing Head",  phone:"9831212121", email:"divya@patanjali.com",    dealType:"IPs",                outcome:"Very Interested",             amount:6500000,  targetAmount:7500000,  region:"East",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Yoga campaign IP tie-in",                nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Baba Ramdev campaign — East India focus." },
-  { id:"d34", repId:17, clientCompany:"Reliance Retail",    contactName:"Sneha Dey",      designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9842313131", email:"sneha.dey@ril.com",      dealType:"Digital",            outcome:"Interested – Needs Revision", amount:5000000,  targetAmount:6500000,  region:"East",     priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Digital + FCT combo brief",              nextStepDate:TOMORROW, awaitingApproval:"Digital",        awaitingApprovalSince:D3,   reqs:[{dept:"Digital",desc:"Digital combo for Reliance East",status:"Pending",raisedAt:"14:00"}], notes:"JioMart East expansion push." },
-  // ── WEST NEW REPS ──
-  { id:"d35", repId:18, clientCompany:"Reliance Jio",       contactName:"Mohan Kapoor",   designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9853414141", email:"mohan@jio.com",          dealType:"Digital",            outcome:"Proposal Accepted",           amount:9000000,  targetAmount:9000000,  region:"West",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"PO and go-live",                         nextStepDate:TODAY,    awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"5G launch campaign West India. Deal closed." },
-  { id:"d36", repId:18, clientCompany:"Vodafone Idea",      contactName:"Kritika Bhatia", designation:"Brand Director", contactLevel:"VP / GM",         phone:"9864515151", email:"kritika@vi.com",         dealType:"Linear TV",          outcome:"Price Concern",               amount:4000000,  targetAmount:6000000,  region:"West",     priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised FCT rates",                      nextStepDate:D3,       awaitingApproval:"NSH",            awaitingApprovalSince:D7,   reqs:[], notes:"Vi rebranding campaign. Tight budget. Rate issue." },
-  { id:"d37", repId:19, clientCompany:"Airtel India",       contactName:"Pawan Tiwari",   designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9875616161", email:"pawan@airtel.com",       dealType:"Integrated Packages",outcome:"Very Interested",             amount:13000000, targetAmount:14000000, region:"West",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Premium integrated package deal",        nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Xstream + broadband combo campaign. Strong intent." },
-  { id:"d38", repId:19, clientCompany:"Tata Communications",contactName:"Ritu Sharma",    designation:"Marketing Head", contactLevel:"Marketing Head",  phone:"9886717171", email:"ritu@tatacomm.com",      dealType:"Media Solutions",    outcome:"Needs Callback",              amount:5000000,  targetAmount:7000000,  region:"West",     priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Media solutions deck for enterprise",    nextStepDate:D7,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Enterprise B2B segment — longer decision cycle." },
-  { id:"d39", repId:20, clientCompany:"Zomato",             contactName:"Sundar Rajan",   designation:"VP Brand",       contactLevel:"VP / GM",         phone:"9897818181", email:"sundar@zomato.com",      dealType:"Digital",            outcome:"Very Interested",             amount:7500000,  targetAmount:8500000,  region:"West",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Social + digital heavy campaign brief",  nextStepDate:D3,       awaitingApproval:"Digital",        awaitingApprovalSince:D1,   reqs:[{dept:"Digital",desc:"Digital campaign for Zomato",status:"In Progress",raisedAt:"15:00"}], notes:"Hyperlocal food delivery awareness campaign." },
-  { id:"d40", repId:20, clientCompany:"Swiggy",             contactName:"Asha Patel",     designation:"Marketing Director",contactLevel:"VP / GM",       phone:"9808919191", email:"asha@swiggy.in",         dealType:"Digital",            outcome:"Interested – Needs Revision", amount:4000000,  targetAmount:5500000,  region:"West",     priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Revised digital plan with reach data",   nextStepDate:TOMORROW, awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"Reach data deck for Swiggy",status:"Pending",raisedAt:"11:00"}], notes:"Wants OTV reach data across West markets." },
-  { id:"d41", repId:21, clientCompany:"Flipkart",           contactName:"Vikash Singhania",designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9819020202", email:"vikash@flipkart.com",    dealType:"Integrated Packages",outcome:"Very Interested",             amount:12000000, targetAmount:13000000, region:"West",     priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Big Billion Days campaign package",      nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Festive season combo push — TV + digital." },
-  { id:"d42", repId:21, clientCompany:"Amazon India",       contactName:"Namrata Sinha",  designation:"Brand Manager",  contactLevel:"Brand Manager",   phone:"9830121212", email:"namrata@amazon.in",      dealType:"Linear TV",          outcome:"Needs Callback",              amount:6000000,  targetAmount:8000000,  region:"West",     priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Budget alignment with India marketing",  nextStepDate:D7,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"India ops team needs US HQ approval for budget." },
-  // ── NATIONAL NEW REPS ──
-  { id:"d43", repId:22, clientCompany:"HUL",                contactName:"Sanjiv Mehta",   designation:"CEO",            contactLevel:"C-Suite / Owner", phone:"9841222222", email:"sanjiv@hul.com",         dealType:"Integrated Packages",outcome:"Very Interested",             amount:25000000, targetAmount:28000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"National integrated campaign package",   nextStepDate:D3,       awaitingApproval:"CXO",            awaitingApprovalSince:D1,   reqs:[], notes:"HUL multi-brand campaign — national mandate." },
-  { id:"d44", repId:22, clientCompany:"Procter & Gamble",   contactName:"Madhusudan Kela",designation:"MD India",        contactLevel:"C-Suite / Owner", phone:"9852323232", email:"madhu@pg.com",           dealType:"IPs",                outcome:"Interested – Needs Revision", amount:18000000, targetAmount:22000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised sponsorship package for P&G",    nextStepDate:D3,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D7,   reqs:[{dept:"Sales Strategy",desc:"P&G national sponsorship deck",status:"Overdue",raisedAt:"09:00"}], notes:"Tide, Ariel, Pampers — multi-brand IP tie-in." },
-  { id:"d45", repId:23, clientCompany:"Colgate Palmolive",  contactName:"Ram Raghavan",   designation:"MD",             contactLevel:"C-Suite / Owner", phone:"9863424242", email:"ram@colgate.com",         dealType:"Linear TV",          outcome:"Proposal Accepted",           amount:16000000, targetAmount:16000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"PO and invoice",                         nextStepDate:TODAY,    awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"National FCT campaign closed. Flagship deal." },
-  { id:"d46", repId:23, clientCompany:"Reckitt Benckiser",  contactName:"Laxman Narasimhan",designation:"Regional VP",  contactLevel:"C-Suite / Owner", phone:"9874525252", email:"laxman@reckitt.com",     dealType:"Integrated Packages",outcome:"Very Interested",             amount:20000000, targetAmount:22000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Dettol + Harpic national combo",         nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Hygiene category — national push post COVID." },
-  { id:"d47", repId:24, clientCompany:"Mondelez India",     contactName:"Deepak Iyer",    designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9885626262", email:"deepak@mondelez.com",    dealType:"IPs",                outcome:"Very Interested",             amount:14000000, targetAmount:15000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Cadbury brand property sponsorship",     nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Silk + Bournvita dual brand IP deal." },
-  { id:"d48", repId:24, clientCompany:"PepsiCo India",      contactName:"Ahmed Khan",     designation:"CMO",            contactLevel:"C-Suite / Owner", phone:"9896727272", email:"ahmed@pepsico.com",      dealType:"Digital",            outcome:"Interested – Needs Revision", amount:10000000, targetAmount:13000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:D3,    nextStep:"Digital-first campaign plan",            nextStepDate:D3,       awaitingApproval:"Digital",        awaitingApprovalSince:D3,   reqs:[{dept:"Digital",desc:"Digital plan for PepsiCo IPL season",status:"In Progress",raisedAt:"10:30"}], notes:"IPL season digital + OTT heavy campaign." },
-  { id:"d49", repId:25, clientCompany:"Coca-Cola India",    contactName:"Prasoon Joshi",  designation:"VP Marketing",   contactLevel:"VP / GM",         phone:"9807828282", email:"prasoon@coca-cola.com",  dealType:"Integrated Packages",outcome:"Very Interested",             amount:18000000, targetAmount:20000000, region:"National", priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Summer campaign national package",        nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Thums Up + Limca summer push. High intent." },
-  { id:"d50", repId:25, clientCompany:"Red Bull India",     contactName:"Simone Shah",    designation:"Country Head",   contactLevel:"C-Suite / Owner", phone:"9818929292", email:"simone@redbull.com",     dealType:"Media Solutions",    outcome:"Needs Callback",              amount:6000000,  targetAmount:8000000,  region:"National", priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Custom media solutions for sports segment",nextStepDate:D7,      awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Niche youth sports segment. Budget conservative." },
-  // ── CENTRAL NEW REPS ──
-  { id:"d51", repId:26, clientCompany:"ONGC",               contactName:"Subash Nayak",   designation:"CGM PR",         contactLevel:"VP / GM",         phone:"9829030303", email:"subash@ongc.co.in",      dealType:"Media Solutions",    outcome:"Very Interested",             amount:8000000,  targetAmount:10000000, region:"Central",  priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"Corporate PR campaign for Odisha ops",   nextStepDate:D3,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"ONGC local community outreach campaign." },
-  { id:"d52", repId:26, clientCompany:"Coal India",         contactName:"Tapas Mohanty",  designation:"GM Corp Comm",   contactLevel:"VP / GM",         phone:"9840131313", email:"tapas@coalindia.in",     dealType:"Linear TV",          outcome:"Needs Callback",              amount:3500000,  targetAmount:5000000,  region:"Central",  priority:"Regular",quarter:"Q2 FY26", lastContact:D7,    nextStep:"Tender-based proposal",                  nextStepDate:D7,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"PSU annual ad budget. Tender process." },
-  { id:"d53", repId:27, clientCompany:"State Bank of India",contactName:"Rajesh Padhi",   designation:"DGM Marketing",  contactLevel:"VP / GM",         phone:"9851232323", email:"rajesh@sbi.co.in",       dealType:"Linear TV",          outcome:"Interested – Needs Revision", amount:5500000,  targetAmount:7000000,  region:"Central",  priority:"Top 5",  quarter:"Q1 FY26", lastContact:D3,    nextStep:"Festive savings campaign proposal",      nextStepDate:TOMORROW, awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"SBI festive campaign deck",status:"Pending",raisedAt:"09:00"}], notes:"SBI festive deposit drive campaign." },
-  { id:"d54", repId:27, clientCompany:"LIC India",          contactName:"Suchitra Panda", designation:"DRM Marketing",  contactLevel:"VP / GM",         phone:"9862333333", email:"suchitra@lic.co.in",     dealType:"IPs",                outcome:"Price Concern",               amount:4000000,  targetAmount:6000000,  region:"Central",  priority:"Regular",quarter:"Q1 FY26", lastContact:D7,    nextStep:"Revised rates for insurance IP",         nextStepDate:D3,       awaitingApproval:"NSH",            awaitingApprovalSince:D7,   reqs:[], notes:"LIC annual policy campaign. PSU rate constraints." },
-  { id:"d55", repId:28, clientCompany:"BPCL",               contactName:"Mahesh Tripathy",designation:"GM Marketing",   contactLevel:"VP / GM",         phone:"9873434343", email:"mahesh@bpcl.co.in",      dealType:"Media Solutions",    outcome:"Very Interested",             amount:7000000,  targetAmount:8000000,  region:"Central",  priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Fuel brand campaign deck",               nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Speed brand + Pure for Sure — Odisha push." },
-  { id:"d56", repId:28, clientCompany:"Indian Oil",         contactName:"Pradeep Lenka",  designation:"DGM Corp Comm",  contactLevel:"VP / GM",         phone:"9884535353", email:"pradeep@iocl.co.in",     dealType:"Linear TV",          outcome:"Proposal Accepted",           amount:4200000,  targetAmount:4200000,  region:"Central",  priority:"Top 5",  quarter:"Q1 FY26", lastContact:D1,    nextStep:"PO and airing schedule",                 nextStepDate:TODAY,    awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"IOCL corporate campaign closed for Central region." },
-  { id:"d57", repId:29, clientCompany:"NTPC",               contactName:"Kamala Nayak",   designation:"GM PR",          contactLevel:"VP / GM",         phone:"9895636363", email:"kamala@ntpc.co.in",      dealType:"Media Solutions",    outcome:"Interested – Needs Revision", amount:5000000,  targetAmount:7000000,  region:"Central",  priority:"Regular",quarter:"Q2 FY26", lastContact:D3,    nextStep:"Green energy campaign media plan",       nextStepDate:D7,       awaitingApproval:"Sales Strategy", awaitingApprovalSince:D3,   reqs:[{dept:"Sales Strategy",desc:"Green energy campaign for NTPC",status:"Pending",raisedAt:"10:00"}], notes:"Renewable energy push — green brand repositioning." },
-  { id:"d58", repId:29, clientCompany:"Power Grid Corp",    contactName:"Umakant Das",    designation:"DGM Marketing",  contactLevel:"VP / GM",         phone:"9806737373", email:"umakant@powergrid.in",   dealType:"Linear TV",          outcome:"Needs Callback",              amount:2500000,  targetAmount:4000000,  region:"Central",  priority:"Regular",quarter:"Q2 FY26", lastContact:D7,    nextStep:"PSU annual campaign RFQ",                nextStepDate:D7,       awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"Tender in progress. Long gestation PSU deal." },
-  { id:"d59", repId:30, clientCompany:"Odisha State Coop", contactName:"Biswajit Pattnaik",designation:"CEO",           contactLevel:"C-Suite / Owner", phone:"9817838383", email:"biswajit@oscb.co.in",    dealType:"IPs",                outcome:"Very Interested",             amount:6000000,  targetAmount:7000000,  region:"Central",  priority:"Top 5",  quarter:"Q1 FY26", lastContact:TODAY, nextStep:"Cooperative banking IP sponsorship",     nextStepDate:TOMORROW, awaitingApproval:null,             awaitingApprovalSince:null, reqs:[], notes:"OSCB wants strong rural Odisha brand presence." },
-  { id:"d60", repId:30, clientCompany:"IDBI Bank",          contactName:"Saswat Rath",    designation:"DGM Marketing",  contactLevel:"VP / GM",         phone:"9828939393", email:"saswat@idbi.co.in",      dealType:"Linear TV",          outcome:"Price Concern",               amount:3000000,  targetAmount:4500000,  region:"Central",  priority:"Regular",quarter:"Q1 FY26", lastContact:D3,    nextStep:"Revised banking campaign rate card",     nextStepDate:D3,       awaitingApproval:"NSH",            awaitingApprovalSince:D3,   reqs:[], notes:"Bank restructuring campaign. Budget constraints." },
-];
+const SEED_DEALS: any[] = [];
 
-const SEED_PROPERTIES = [
-  {
-    id:"pr1", name:"Odia Idol S3", type:"Reality Show", channel:"OTV",
-    quarter:"Q1 FY26", totalValue:12000000,
-    slots:[
-      {id:"s1",label:"Title Sponsor",value:5000000,status:"In Discussion",clientCompany:"Havells India",repId:5},
-      {id:"s2",label:"Co-Sponsor",value:3000000,status:"Available",clientCompany:"",repId:null},
-      {id:"s3",label:"Associate 1",value:1000000,status:"Committed",clientCompany:"Berger Paints",repId:2},
-      {id:"s4",label:"Associate 2",value:1000000,status:"Available",clientCompany:"",repId:null},
-      {id:"s5",label:"Associate 3",value:1000000,status:"Available",clientCompany:"",repId:null},
-      {id:"s6",label:"Associate 4",value:1000000,status:"Available",clientCompany:"",repId:null},
-    ]
-  },
-  {
-    id:"pr2", name:"Tarang Music Awards", type:"Award Show", channel:"Tarang",
-    quarter:"Q1 FY26", totalValue:8000000,
-    slots:[
-      {id:"s7",label:"Title Sponsor",value:4000000,status:"Available",clientCompany:"",repId:null},
-      {id:"s8",label:"Co-Sponsor",value:2000000,status:"In Discussion",clientCompany:"Asian Paints",repId:5},
-      {id:"s9",label:"Associate 1",value:1000000,status:"Available",clientCompany:"",repId:null},
-      {id:"s10",label:"Associate 2",value:1000000,status:"Available",clientCompany:"",repId:null},
-    ]
-  },
-];
+const SEED_PROPERTIES: any[] = [];
 
 
-const IP_CATALOG = [
-  {
-    id:"ip1", name:"Odia Idol Season 3", type:"Music Reality Show", channel:"OTV", quarter:"Q1 FY26", airDates:"Apr – Jun 2026",
-    elements:[
-      {id:"ie1",  label:"Title Sponsor",                    rackRate:12000000, repId:5,    client:"Havells India",    closedAt:10500000, status:"Committed"},
-      {id:"ie2",  label:"Co-Presenter",                     rackRate:7000000,  repId:22,   client:"Asian Paints",     closedAt:null,     status:"In Discussion"},
-      {id:"ie3",  label:"Powered By",                       rackRate:5000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie4",  label:"Associate Sponsor – A",            rackRate:3000000,  repId:1,    client:"Daikin India",     closedAt:2800000,  status:"Committed"},
-      {id:"ie5",  label:"Associate Sponsor – B",            rackRate:3000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie6",  label:"Product Integration (Top 5 Ep.)",  rackRate:2000000,  repId:7,    client:"Maruti Suzuki",    closedAt:null,     status:"In Discussion"},
-      {id:"ie7",  label:"Product Integration (Finale)",     rackRate:2500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie8",  label:"On-Ground Auditions Sponsor",      rackRate:1500000,  repId:2,    client:"Berger Paints",    closedAt:1200000,  status:"Committed"},
-      {id:"ie9",  label:"Social Media Package",             rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-    ]
-  },
-  {
-    id:"ip2", name:"Tarang Music Awards 2026", type:"Award Show", channel:"Tarang TV", quarter:"Q1 FY26", airDates:"May 2026",
-    elements:[
-      {id:"ie10", label:"Title Sponsor",                    rackRate:10000000, repId:5,    client:"ITC Limited",      closedAt:null,     status:"In Discussion"},
-      {id:"ie11", label:"Co-Presenter",                     rackRate:6000000,  repId:22,   client:"HUL",              closedAt:5500000,  status:"Committed"},
-      {id:"ie12", label:"Best Playback Award Sponsor",      rackRate:2000000,  repId:23,   client:"Samsung India",    closedAt:1800000,  status:"Committed"},
-      {id:"ie13", label:"Best Debut Award Sponsor",         rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie14", label:"Red Carpet Partner",               rackRate:2500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie15", label:"Digital Streaming Sponsor",        rackRate:2000000,  repId:25,   client:"Airtel",           closedAt:null,     status:"In Discussion"},
-      {id:"ie16", label:"Trophy Partner",                   rackRate:2500000,  repId:24,   client:"Titan Company",    closedAt:2000000,  status:"Committed"},
-      {id:"ie17", label:"Social Media Package",             rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-    ]
-  },
-  {
-    id:"ip3", name:"Odia Film Awards (OFA) 2026", type:"Award Show", channel:"OTV", quarter:"Q2 FY26", airDates:"Jul 2026",
-    elements:[
-      {id:"ie18", label:"Title Sponsor",                    rackRate:8000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie19", label:"Co-Presenter",                     rackRate:5000000,  repId:14,   client:"Tata Steel",       closedAt:null,     status:"In Discussion"},
-      {id:"ie20", label:"Best Film Award Sponsor",          rackRate:2000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie21", label:"Best Director Award Sponsor",      rackRate:1500000,  repId:3,    client:"ITC Limited",      closedAt:1200000,  status:"Committed"},
-      {id:"ie22", label:"Best Actor Award Sponsor",         rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie23", label:"Best Actress Award Sponsor",       rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie24", label:"Digital Voting Partner",           rackRate:1000000,  repId:15,   client:"Reliance Jio",     closedAt:null,     status:"In Discussion"},
-      {id:"ie25", label:"Red Carpet Partner",               rackRate:1500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-    ]
-  },
-  {
-    id:"ip4", name:"Dance Odia Dance Season 4", type:"Dance Reality Show", channel:"OTV", quarter:"Q1 FY26", airDates:"Apr – May 2026",
-    elements:[
-      {id:"ie26", label:"Title Sponsor",                    rackRate:7000000,  repId:4,    client:"Reliance Retail",  closedAt:6000000,  status:"Committed"},
-      {id:"ie27", label:"Co-Presenter",                     rackRate:4000000,  repId:19,   client:"Flipkart",         closedAt:null,     status:"In Discussion"},
-      {id:"ie28", label:"Powered By",                       rackRate:2500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie29", label:"Associate Sponsor",                rackRate:2000000,  repId:20,   client:"Paytm",            closedAt:1700000,  status:"Committed"},
-      {id:"ie30", label:"Finale Night Sponsor",             rackRate:2500000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie31", label:"Social Media Package",             rackRate:1000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-    ]
-  },
-  {
-    id:"ip5", name:"Tarang Cine Awards 2026", type:"Award Show", channel:"Tarang TV", quarter:"Q2 FY26", airDates:"Aug 2026",
-    elements:[
-      {id:"ie32", label:"Title Sponsor",                    rackRate:8000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie33", label:"Co-Presenter",                     rackRate:5000000,  repId:22,   client:"Samsung India",    closedAt:null,     status:"In Discussion"},
-      {id:"ie34", label:"Powered By",                       rackRate:3000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie35", label:"Star Performance Sponsor",         rackRate:2000000,  repId:25,   client:"Marico",           closedAt:1800000,  status:"Committed"},
-      {id:"ie36", label:"Digital Voting Partner",           rackRate:1000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie37", label:"Social Media Package",             rackRate:1000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-    ]
-  },
-  {
-    id:"ip6", name:"Super Singer Odia Season 2", type:"Kids Singing Reality", channel:"OTV", quarter:"Q1 FY26", airDates:"Apr – Jun 2026",
-    elements:[
-      {id:"ie38", label:"Title Sponsor",                    rackRate:5000000,  repId:26,   client:"Odisha Tourism",   closedAt:4500000,  status:"Committed"},
-      {id:"ie39", label:"Co-Presenter",                     rackRate:3500000,  repId:28,   client:"LIC India",        closedAt:null,     status:"In Discussion"},
-      {id:"ie40", label:"Powered By",                       rackRate:2500000,  repId:27,   client:"IDBI Bank",        closedAt:2000000,  status:"Committed"},
-      {id:"ie41", label:"Associate Sponsor",                rackRate:2000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-      {id:"ie42", label:"School Auditions Sponsor",         rackRate:1000000,  repId:29,   client:"BPCL",             closedAt:null,     status:"In Discussion"},
-      {id:"ie43", label:"Digital Package",                  rackRate:1000000,  repId:null, client:null,               closedAt:null,     status:"Available"},
-    ]
-  },
-];
+const IP_CATALOG: any[] = [];
 
-const SEED_INTERNAL_REQS = [
-  { id:"ir1", type:"Approval",     raisedBy:"rep_arjun", raisedByName:"Arjun Mishra", repId:1, dealId:"d7", clientCompany:"Daikin India",   dept:"NSH",            subject:"Discount approval — 12% off rate card",       details:"Client pushing for 12% off. Standard is 8%. Need NSH sign-off to close.",        status:"Pending", raisedAt:D3,    slaHours:48, resolvedAt:null, resolverNote:"" },
-  { id:"ir2", type:"Support",      raisedBy:"rep_vikram", raisedByName:"Vikram Sen",   repId:5, dealId:"d1", clientCompany:"Havells India",  dept:"Sales Strategy", subject:"H2 sponsorship deck for Havells",               details:"Need a customised deck with Odia Idol + Tarang Music Awards for Havells CMO.",    status:"In Progress", raisedAt:D3, slaHours:48, resolvedAt:null, resolverNote:"" },
-  { id:"ir3", type:"Approval",     raisedBy:"rep_vikram", raisedByName:"Vikram Sen",   repId:5, dealId:"d2", clientCompany:"Asian Paints",   dept:"NSH",            subject:"CXO attendance at CMO meeting",                 details:"Asian Paints CMO wants CEO/NSH in the room to finalise ₹1.2Cr deal.",            status:"Overdue",  raisedAt:D7,    slaHours:48, resolvedAt:null, resolverNote:"" },
-  { id:"ir4", type:"Creative",     raisedBy:"rep_priya",  raisedByName:"Priya Dash",   repId:2, dealId:"d4", clientCompany:"Berger Paints",  dept:"Branding Team",  subject:"On-air promo material for Berger Paints",       details:"Need 30-sec on-air promo. Brand guidelines shared on email.",                    status:"Done",     raisedAt:D7,    slaHours:48, resolvedAt:D3,  resolverNote:"Sent to production." },
-  { id:"ir5", type:"Escalation",   raisedBy:"rep_rohit",  raisedByName:"Rohit Nanda",  repId:3, dealId:"d9", clientCompany:"ITC Limited",    dept:"NSH",            subject:"ITC deal stalled — NSH intervention needed",    details:"ITC VP wants a direct call with NSH before committing ₹55L integrated plan.",    status:"Pending", raisedAt:D1,    slaHours:48, resolvedAt:null, resolverNote:"" },
-];
+const SEED_INTERNAL_REQS: any[] = [];
 
 // Target approval chain: Draft → Pending RH → Pending NSH → Pending Strategy → Pending CRO → Approved
 const TARGET_APPROVAL_CHAIN = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO","Approved"];
 
-const SEED_TARGET_SUBMISSIONS = [
-  { id:"ts1",  repId:1,  repName:"Arjun Mishra",    region:"North",    quarter:"Q1 FY26",
-    clients:[{clientCompany:"Daikin India",dealType:"Linear TV",targetAmount:5000000},{clientCompany:"LG Electronics",dealType:"Digital",targetAmount:2000000}],
-    totalTarget:7000000,  status:"Approved",      submittedAt:D7,  approvalLog:[{step:"Pending RH",by:"RH North",at:D7,note:"Looks good"},{step:"Pending NSH",by:"NSH",at:D3,note:"Approved"},{step:"Pending Strategy",by:"Sales Strategy",at:D1,note:"Aligned"},{step:"Pending CRO",by:"CRO",at:TODAY,note:"Approved — go"}] },
-  { id:"ts2",  repId:2,  repName:"Priya Dash",      region:"South",    quarter:"Q1 FY26",
-    clients:[{clientCompany:"Berger Paints",dealType:"Linear TV",targetAmount:3500000},{clientCompany:"Sundaram Finance",dealType:"Linear TV",targetAmount:4000000}],
-    totalTarget:7500000,  status:"Pending NSH",   submittedAt:D3,  approvalLog:[{step:"Pending RH",by:"RH South",at:D3,note:"Approved"}] },
-  { id:"ts3",  repId:5,  repName:"Vikram Sen",      region:"National", quarter:"Q1 FY26",
-    clients:[{clientCompany:"Havells India",dealType:"IPs",targetAmount:15000000},{clientCompany:"Asian Paints",dealType:"IPs",targetAmount:12000000},{clientCompany:"Tata Consumer",dealType:"Integrated Packages",targetAmount:9000000}],
-    totalTarget:36000000, status:"Pending Strategy",submittedAt:D7, approvalLog:[{step:"Pending RH",by:"RH National",at:D7,note:"Okayed"},{step:"Pending NSH",by:"NSH",at:D3,note:"Approved"}] },
-  { id:"ts4",  repId:7,  repName:"Rahul Sharma",    region:"North",    quarter:"Q1 FY26",
-    clients:[{clientCompany:"Maruti Suzuki",dealType:"Linear TV",targetAmount:9000000},{clientCompany:"Nestle India",dealType:"Integrated Packages",targetAmount:7500000}],
-    totalTarget:16500000, status:"Pending RH",     submittedAt:D1,  approvalLog:[] },
-  { id:"ts5",  repId:9,  repName:"Manish Tiwari",   region:"North",    quarter:"Q1 FY26",
-    clients:[{clientCompany:"LG Electronics",dealType:"Integrated Packages",targetAmount:12000000},{clientCompany:"Samsung India",dealType:"Digital",targetAmount:5500000}],
-    totalTarget:17500000, status:"Pending NSH",    submittedAt:D7,  approvalLog:[{step:"Pending RH",by:"RH North",at:D3,note:"Strong pipeline"}] },
-  { id:"ts6",  repId:11, repName:"Suresh Reddy",    region:"South",    quarter:"Q1 FY26",
-    clients:[{clientCompany:"Dr Reddy's Labs",dealType:"Digital",targetAmount:6000000},{clientCompany:"Cipla Health",dealType:"Linear TV",targetAmount:5000000}],
-    totalTarget:11000000, status:"Approved",       submittedAt:D14, approvalLog:[{step:"Pending RH",by:"RH South",at:D14,note:"Approved"},{step:"Pending NSH",by:"NSH",at:D7,note:"Good"},{step:"Pending Strategy",by:"Sales Strategy",at:D3,note:"Aligned"},{step:"Pending CRO",by:"CRO",at:D1,note:"Approved"}] },
-  { id:"ts7",  repId:13, repName:"Karthik Iyer",    region:"South",    quarter:"Q1 FY26",
-    clients:[{clientCompany:"Britannia Industries",dealType:"Integrated Packages",targetAmount:10500000},{clientCompany:"Parle Products",dealType:"Linear TV",targetAmount:7000000}],
-    totalTarget:17500000, status:"Pending Strategy",submittedAt:D7, approvalLog:[{step:"Pending RH",by:"RH South",at:D7,note:"Excellent pipeline"},{step:"Pending NSH",by:"NSH",at:D3,note:"Approved"}] },
-  { id:"ts8",  repId:14, repName:"Sanjay Mohanty",  region:"East",     quarter:"Q1 FY26",
-    clients:[{clientCompany:"Tata Steel",dealType:"Media Solutions",targetAmount:8000000},{clientCompany:"Adani Wilmar",dealType:"IPs",targetAmount:6000000}],
-    totalTarget:14000000, status:"Pending RH",     submittedAt:D1,  approvalLog:[] },
-  { id:"ts9",  repId:17, repName:"Rina Panda",       region:"East",     quarter:"Q1 FY26",
-    clients:[{clientCompany:"Patanjali Ayurved",dealType:"IPs",targetAmount:7500000},{clientCompany:"Reliance Retail",dealType:"Digital",targetAmount:6500000}],
-    totalTarget:14000000, status:"Pending NSH",    submittedAt:D3,  approvalLog:[{step:"Pending RH",by:"RH East",at:D3,note:"Solid plan"}] },
-  { id:"ts10", repId:19, repName:"Divya Joshi",      region:"West",     quarter:"Q1 FY26",
-    clients:[{clientCompany:"Airtel India",dealType:"Integrated Packages",targetAmount:14000000},{clientCompany:"Tata Communications",dealType:"Media Solutions",targetAmount:7000000}],
-    totalTarget:21000000, status:"Approved",       submittedAt:D14, approvalLog:[{step:"Pending RH",by:"RH West",at:D14,note:"Approved"},{step:"Pending NSH",by:"NSH",at:D7,note:"Approved"},{step:"Pending Strategy",by:"Sales Strategy",at:D3,note:"Aligned"},{step:"Pending CRO",by:"CRO",at:D1,note:"Go"}] },
-  { id:"ts11", repId:21, repName:"Preethi Shah",     region:"West",     quarter:"Q1 FY26",
-    clients:[{clientCompany:"Flipkart",dealType:"Integrated Packages",targetAmount:13000000},{clientCompany:"Amazon India",dealType:"Linear TV",targetAmount:8000000}],
-    totalTarget:21000000, status:"Pending Strategy",submittedAt:D7, approvalLog:[{step:"Pending RH",by:"RH West",at:D7,note:"Strong"},{step:"Pending NSH",by:"NSH",at:D3,note:"Approved"}] },
-  { id:"ts12", repId:22, repName:"Neha Kapoor",      region:"National", quarter:"Q1 FY26",
-    clients:[{clientCompany:"HUL",dealType:"Integrated Packages",targetAmount:28000000},{clientCompany:"Procter & Gamble",dealType:"IPs",targetAmount:22000000}],
-    totalTarget:50000000, status:"Pending CRO",    submittedAt:D7,  approvalLog:[{step:"Pending RH",by:"RH National",at:D7,note:"Approved"},{step:"Pending NSH",by:"NSH",at:D3,note:"Approved"},{step:"Pending Strategy",by:"Sales Strategy",at:D1,note:"Aligned"}] },
-  { id:"ts13", repId:25, repName:"Aditya Kumar",     region:"National", quarter:"Q1 FY26",
-    clients:[{clientCompany:"Coca-Cola India",dealType:"Integrated Packages",targetAmount:20000000},{clientCompany:"Red Bull India",dealType:"Media Solutions",targetAmount:8000000}],
-    totalTarget:28000000, status:"Pending NSH",    submittedAt:D3,  approvalLog:[{step:"Pending RH",by:"RH National",at:D3,note:"Good pipeline"}] },
-  { id:"ts14", repId:26, repName:"Sameer Nayak",     region:"Central",  quarter:"Q1 FY26",
-    clients:[{clientCompany:"ONGC",dealType:"Media Solutions",targetAmount:10000000},{clientCompany:"Coal India",dealType:"Linear TV",targetAmount:5000000}],
-    totalTarget:15000000, status:"Pending RH",     submittedAt:D1,  approvalLog:[] },
-  { id:"ts15", repId:28, repName:"Pratap Rath",       region:"Central",  quarter:"Q1 FY26",
-    clients:[{clientCompany:"BPCL",dealType:"Media Solutions",targetAmount:8000000},{clientCompany:"Indian Oil",dealType:"Linear TV",targetAmount:4200000}],
-    totalTarget:12200000, status:"Approved",       submittedAt:D14, approvalLog:[{step:"Pending RH",by:"RH Central",at:D14,note:"Approved"},{step:"Pending NSH",by:"NSH",at:D7,note:"Approved"},{step:"Pending Strategy",by:"Sales Strategy",at:D3,note:"OK"},{step:"Pending CRO",by:"CRO",at:D1,note:"Approved"}] },
-  { id:"ts16", repId:30, repName:"Debadatta Patra",   region:"Central",  quarter:"Q1 FY26",
-    clients:[{clientCompany:"Odisha State Coop",dealType:"IPs",targetAmount:7000000},{clientCompany:"IDBI Bank",dealType:"Linear TV",targetAmount:4500000}],
-    totalTarget:11500000, status:"Pending NSH",    submittedAt:D3,  approvalLog:[{step:"Pending RH",by:"RH Central",at:D3,note:"Good potential"}] },
-];
+const SEED_TARGET_SUBMISSIONS: any[] = [];
 
-const SEED_REVENUE_ENTRIES = [
-  { id:"re1", repId:2, clientCompany:"Berger Paints",  dealType:"Linear TV", amount:2200000, invoiceRef:"INV-2024-001", date:D3, quarter:"Q1 FY26", notes:"6-week primetime deal PO received" },
-  { id:"re2", repId:5, clientCompany:"Havells India",  dealType:"IPs", amount:5000000, invoiceRef:"INV-2024-002", date:D1, quarter:"Q1 FY26", notes:"First instalment — sponsorship confirmed" },
-];
+const SEED_REVENUE_ENTRIES: any[] = [];
 
-const SEED_MEETINGS = [
-  { id:"ml1", repId:5, repName:"Vikram Sen",  region:"National", dealId:"d1", clientCompany:"Havells India",    contactName:"Deepa Menon",   contactLevel:"VP / GM",       outcome:"Very Interested",            discussion:"Flagship show sponsorship for H2. Budget confirmed.", nextStep:"Send sponsorship deck EOD",  date:TODAY, loggedAt:"09:15", late:false },
-  { id:"ml2", repId:2, repName:"Priya Dash",  region:"South",    dealId:"d4", clientCompany:"Berger Paints",    contactName:"Rajesh Kumar",  contactLevel:"Brand Manager", outcome:"Proposal Accepted",          discussion:"Closed 6-week primetime deal. PO by Friday.",         nextStep:"PO follow-up",              date:TODAY, loggedAt:"11:20", late:false },
-  { id:"ml3", repId:3, repName:"Rohit Nanda", region:"East",     dealId:"d9", clientCompany:"Bikaji Foods",     contactName:"Ankit Shah",    contactLevel:"Junior/Exec",   outcome:"Needs Callback",             discussion:"Junior exec meeting. No authority.",                  nextStep:"Escalate to BM",            date:TODAY, loggedAt:"13:10", late:true  },
-  { id:"ml4", repId:1, repName:"Arjun Mishra",region:"North",    dealId:"d7", clientCompany:"Reliance Retail",  contactName:"Sameer Joshi",  contactLevel:"Marketing Head",outcome:"Interested – Needs Revision", discussion:"Wants digital add-on to existing grid.",              nextStep:"Revised grid with OTT",     date:TODAY, loggedAt:"10:45", late:false },
-  { id:"ml5", repId:6, repName:"Meera Rao",   region:"South",    dealId:"d5", clientCompany:"Apollo Hospitals", contactName:"Ravi Krishnan", contactLevel:"VP / GM",       outcome:"Very Interested",            discussion:"Full digital takeover proposal well received.",        nextStep:"Send digital media plan",   date:D1,    loggedAt:"10:30", late:false },
-  { id:"ml6", repId:4, repName:"Sneha Patel", region:"West",     dealId:"d6", clientCompany:"Zydus Wellness",   contactName:"Karishma Shah", contactLevel:"Marketing Head",outcome:"Price Concern",               discussion:"20% gap. Competitor Zee also pitching.",             nextStep:"Counter-proposal",          date:D1,    loggedAt:"11:00", late:false },
-];
+const SEED_MEETINGS: any[] = [];
 
-const SEED_ATT = { [TODAY]: {1:true,2:true,3:false,4:true,5:true,6:true}, [D1]: {1:true,2:true,3:true,4:true,5:true,6:true} };
+const SEED_ATT: Record<string,Record<number,boolean>> = {};
 
 // ─── COLORS ───────────────────────────────────────────────────────────────────
 const C = { bg:"#f0f4f9", surface:"#ffffff", s2:"#e8eef7", s3:"#dde5f0", border:"#c8d3e5", accent:"#c47d00", green:"#15803d", red:"#c92828", blue:"#1d5db4", purple:"#7920e8", orange:"#c24000", text:"#18243a", dim:"#4d5e78", muted:"#8a97ae" };
@@ -1383,6 +1047,21 @@ function usePersistedState(key, initial) {
   return [state, setState];
 }
 
+// ── DATA VERSION AUTO-CLEAR ────────────────────────────────────────────────
+// Bump this string whenever seed data or schema changes to wipe stale localStorage.
+const DATA_VERSION = "v3-clean";
+(function clearStaleData() {
+  try {
+    if (localStorage.getItem("otv_data_version") !== DATA_VERSION) {
+      const keysToRemove = Object.keys(localStorage).filter(k =>
+        k.startsWith("otv_") && k !== "otv_data_version"
+      );
+      keysToRemove.forEach(k => localStorage.removeItem(k));
+      localStorage.setItem("otv_data_version", DATA_VERSION);
+    }
+  } catch {}
+})();
+
 export default function OTVApp() {
   const [loggedIn, setLoggedIn]       = useState(false);
   const [loginUser, setLoginUser]     = useState(null);
@@ -1837,11 +1516,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [irFormOpen, setIrFormOpen]                     = useState(false);
   const [irForm, setIrForm]                             = useState(BLANK_IR_FORM);
   const [editIrId, setEditIrId]                         = useState<string|null>(null);
-  const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", [
-    {id:"pu1", name:"Ravi Kumar",  email:"ravi@odishatv.com",  requestedAt: "2026-03-20"},
-    {id:"pu2", name:"Sonal Mehta", email:"sonal@odishatv.com", requestedAt: "2026-03-23"},
-    {id:"pu3", name:"Deepak Panda",email:"deepak@odishatv.com",requestedAt: "2026-03-26"},
-  ]);
+  const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", []);
   // Merge any self-registered pending signups into admin's queue
   useEffect(() => {
     try {
@@ -1855,22 +1530,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       }
     } catch {}
   }, []);
-  const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles",
-    USER_ROLES.filter(u=>u.id!=="admin").map(u=>({...u}))
-  );
+  const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles", []);
   const [reps, setReps]                                 = usePersistedState("otv_reps", REPS);
-  const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", [
-    {id:"mc1",company:"Reliance Retail",industry:"Retail",contact:"Sunita Sharma",phone:"9810001234",email:"sunita@relianceretail.com",region:"National"},
-    {id:"mc2",company:"ITC Foods",industry:"FMCG",contact:"Anil Varma",phone:"9820002345",email:"anil@itcfoods.com",region:"National"},
-    {id:"mc3",company:"HDFC Bank",industry:"Banking/Finance",contact:"Priya Mehta",phone:"9830003456",email:"priya@hdfcbank.com",region:"North"},
-    {id:"mc4",company:"Maruti Suzuki",industry:"Automobile",contact:"Arun Kapoor",phone:"9840004567",email:"arun@maruti.com",region:"North"},
-    {id:"mc5",company:"Apollo Hospitals",industry:"Healthcare",contact:"Ravi Krishnan",phone:"9850005678",email:"ravi@apollo.com",region:"South"},
-    {id:"mc6",company:"Asian Paints",industry:"Paints",contact:"Harsh Goenka",phone:"9860006789",email:"harsh@asianpaints.com",region:"National"},
-    {id:"mc7",company:"Tata Steel",industry:"Steel/Manufacturing",contact:"Ajay Tandon",phone:"9870007890",email:"ajay@tatasteel.com",region:"East"},
-    {id:"mc8",company:"Nestle India",industry:"FMCG",contact:"Priya Bhatt",phone:"9880008901",email:"priya@nestle.com",region:"West"},
-    {id:"mc9",company:"HUL",industry:"FMCG",contact:"Sanjiv Mehta",phone:"9890009012",email:"sanjiv@hul.com",region:"National"},
-    {id:"mc10",company:"Coca-Cola India",industry:"Beverages",contact:"Prasoon Joshi",phone:"9800010123",email:"prasoon@cocacola.com",region:"National"},
-  ]);
+  const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", []);
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
@@ -6534,6 +6196,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 const region   = regionEl?.value || "North";
                                 const newUser  = {id:`u_${pu.id}`,name:pu.name,role,canView:role==="SALES REP"?"self":role==="REGION HEAD"?"region":"all",region};
                                 setLiveRoles(p=>[...p, newUser]);
+                                // If approved as SALES REP, also add to reps list for attendance/targets tracking
+                                if (role === "SALES REP") {
+                                  setReps(prev => {
+                                    const nextId = prev.length > 0 ? Math.max(...prev.map(r=>r.id)) + 1 : 1;
+                                    const repDesig = pu.designation || "Sales Executive";
+                                    return [...prev, {id:nextId, name:pu.name, region, role:repDesig, target:0}];
+                                  });
+                                }
                                 setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
                                 // If they signed up via the form, unlock their login credentials
                                 if (pu.passwordHash) {
