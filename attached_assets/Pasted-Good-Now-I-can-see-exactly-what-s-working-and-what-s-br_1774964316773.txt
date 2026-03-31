@@ -1,0 +1,60 @@
+Good. Now I can see exactly what's working and what's broken. Four clear issues from these screens.
+
+---
+
+## Issue 1 — Tasks reach Region Head but don't say what to do
+
+Image 2 confirms tasks ARE being created for RH. That part works. But look at what the RH sees:
+
+**"[IR] hncdiwkechnks — Requested by Arjun Mishra: hncdiwkechnks"**
+
+The task title is the gibberish the rep typed as their action text. There's no context — no client name, no deal value, no what specifically is needed. The RH gets a notification with no actionable information.
+
+**The fix:** Task title must follow a structured format: **"[Action type] — [Client] — [What's needed] — Raised by [Rep name]"**. Example: "Rate Approval — Daikin India — 12% discount needs RH sign-off — Raised by Arjun Mishra."
+
+---
+
+## Issue 2 — After logging, clicking the meeting loses the action items
+
+Image 3 shows what a rep sees when they click a logged meeting — a simplified edit form with What Happened, Client Feedback, Next Steps as a text box, Follow-up Date, Next Meeting Date. 
+
+**The "What do you need / Who do you need it from" section is completely gone.** This means a rep can never go back and add an action item after they've submitted the initial log. If they forgot to tag someone, there's no way to fix it. And they can't see what actions were already raised from that meeting.
+
+**The fix:** The meeting detail view after logging must show — as read-only — all action items that were raised from it, who they were sent to, and their current status. If the rep needs to add a new action item post-log, there should be an "+ Add Action Item" button that creates a new internal request without re-logging the whole meeting.
+
+---
+
+## Issue 3 — SLA is 0 days so everything escalates immediately
+
+Image 4 shows: **"Original request to Region Head has breached SLA (0d). Escalating for urgent action."**
+
+The SLA is set to 0 days which means every single internal request escalates to NSH the moment it's created. The rep raises a request, it instantly appears as an escalation before the RH has even seen it. This makes the escalation system meaningless — everything is always escalating.
+
+**The fix:** SLA for Region Head approvals should be at minimum 2 working days. Tell Replit to check the `adminConfig.slaHours` default value — it appears to be set to 0 or near-zero. Change the default to 48 hours for RH, 48 hours for NSH.
+
+---
+
+## Issue 4 — The rep's own next steps vs others' requests are not separated
+
+You identified this correctly. When a rep logs a meeting with next steps:
+
+- **"I need to send a revised deck"** → this is the rep's own task → should go to **My Tasks** for the rep
+- **"I need rate approval from Region Head"** → this is a request to someone else → should go to **Internal Requests** and create a task for the **RH**
+
+Right now both go to Internal Requests regardless. So the rep's own to-dos are buried in the same list as requests they've sent to others. The rep has no clean "things I need to do" list.
+
+**The fix:** In the meeting log next steps, when "Who do you need it from?" is set to **Self** or left blank → create a task in the rep's **My Tasks**. When it's set to anyone else → create an **Internal Request** routed to that person AND create a task for that person. The rep should see their own tasks in Tasks and their pending requests to others in Internal Requests as two separate clean lists.
+
+---
+
+## Tell Replit:
+
+Four fixes needed from this review:
+
+**1. Task title format** — When a task is auto-created from a meeting log next step, the title must be structured as: "[Action needed] — [Client Company] — Raised by [Rep Name]". The client company and rep name must be pulled automatically from the meeting log context. Never use free-text from the next steps field as the task title alone.
+
+**2. Meeting detail view after logging** — When a rep clicks on a previously logged meeting, show a read-only summary of all action items raised from that meeting — what was requested, who it was sent to, and current status (Pending / Done / Escalated). Add an "+ Add Action Item" button that creates a new internal request without requiring the rep to re-log the meeting.
+
+**3. SLA default values** — The default SLA for internal requests is currently 0 days causing immediate escalation. Change defaults in adminConfig to: Region Head = 48 hours, NSH = 48 hours, Sales Strategy = 48 hours, CXO = 72 hours. Admin can change these from the config panel.
+
+**4. Self tasks vs internal requests routing** — In the meeting log next steps section, when "Who do you need it from?" is set to "Self" or blank, create a task in the rep's My Tasks only — do not create an Internal Request. When it is set to any other person or department, create an Internal Request routed to that person AND show it in the rep's Internal Requests as "sent by me — awaiting response." The rep should never see their own personal to-dos mixed in with requests they've sent to others.

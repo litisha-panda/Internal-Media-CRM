@@ -1444,7 +1444,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [calendarLoading, setCalendarLoading] = useState(false);
   const [adminConfig, setAdminConfig]         = usePersistedState("otv_adminConfig", {
     approvalThresholds: { RH: 5000000, NSH: 10000000, CXO: 30000000 },
-    slaHours:           { RH: 24, NSH: 48, CXO: 72, default: 48 },
+    slaHours:           { "Region Head": 48, NSH: 48, "Sales Strategy": 48, CXO: 72, default: 48 },
     inactivityDaysRisk: 7,
     inactivityDaysEscalate: 14,
     webhookUrl: "",
