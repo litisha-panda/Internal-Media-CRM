@@ -2203,6 +2203,19 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       return {...rep,closed,pipe,meetings:rm.length,seniorM,senPct,risk,attOk,cPct,coverage:rep.target>0?Math.round(((closed+pipe)/rep.target)*100):0};
     }).sort((a,b)=>b.cPct-a.cPct), [deals, meetings, att, filterQ, user_role]);
 
+  // ── ROLE CONSTANTS (defined here so searchResults useMemo can use them) ──
+  const isRep          = user_role?.role === "SALES REP";
+  const isRH           = user_role?.role === "REGION HEAD";
+  const isNSH          = user_role?.role === "SALES HEAD";
+  const isCRORole      = user_role?.role === "CRO";
+  const isStrategy     = user_role?.role === "SALES STRATEGY";
+  const isDigiOps      = user_role?.role === "DIGI OPS";
+  const isAdmin        = user_role?.role === "ADMIN";
+  const isNSHDashboard = ["SALES HEAD","CRO","SALES STRATEGY"].includes(user_role?.role);
+  const canLogMeeting  = !["CRO","SALES STRATEGY"].includes(user_role?.role);
+  const isCEORole      = false;
+  const isMDRole       = false;
+
   // Global search results — scoped to what the current user is allowed to see,
   // and navigates only to sidebar views that exist for the current role.
   const searchResults = useMemo(() => {
@@ -2801,22 +2814,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     if (calResult?.meetLink) showToast(`Meeting logged + Calendar event created ✓` + taskMsg + irMsg + planMsgStr2);
     else showToast((late ? "Meeting logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsg + planMsgStr2);
   };
-
-  // ── ROLE CONSTANTS ──
-  const isRep          = user_role?.role === "SALES REP";
-  const isRH           = user_role?.role === "REGION HEAD";
-  const isNSH          = user_role?.role === "SALES HEAD";
-  const isCRORole      = user_role?.role === "CRO";
-  const isStrategy     = user_role?.role === "SALES STRATEGY";
-  const isDigiOps      = user_role?.role === "DIGI OPS";
-  const isAdmin        = user_role?.role === "ADMIN";
-  // NSH Dashboard is shared by NSH, CRO, and Sales Strategy
-  const isNSHDashboard = ["SALES HEAD","CRO","SALES STRATEGY"].includes(user_role?.role);
-  // CRO and Sales Strategy can VIEW meetings but cannot log them
-  const canLogMeeting  = !["CRO","SALES STRATEGY"].includes(user_role?.role);
-  // Legacy aliases
-  const isCEORole = false;
-  const isMDRole  = false;
 
   // ── TOUR HELPERS ──
   const _tourKey = isRep?"rep":isRH?"rh":isNSH?"nsh":isStrategy?"strategy":isCRORole?"cro":isAdmin?"admin":"rep";
