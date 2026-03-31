@@ -1,0 +1,24 @@
+What Gemini missed entirely — the real gaps
+Gemini is a general AI reviewing a screen recording without business context. It missed the three gaps that actually matter most for a sales rep:
+Gap 1 — Revenue Log is disconnected from everything
+A rep closes a deal, gets an RO, goes to Revenue Log, enters the amount. Nothing in their daily flow naturally leads them there. There's no prompt, no reminder, no link from the closed deal to the Revenue Log. Revenue never gets logged unless the rep remembers to do it separately. This is why achievement shows ₹0 for most reps.
+Gap 2 — A rep has no single answer to "how am I doing?"
+War Room shows one number. Revenue Tracker shows another. My Targets shows a third. A rep who wants to know their standing has to check three screens and mentally reconcile three different calculations. In a real sales environment this creates distrust in the system — reps stop believing the numbers and go back to Excel.
+Gap 3 — No prompt when a deal goes cold
+A rep has Daikin India in their pipeline. They haven't contacted them in 8 days. Nothing happens. No alert, no nudge, no pop-up when they open My Plan. The "At Risk" label appears in Revenue Tracker but the rep has to navigate there to see it. The system knows the deal is cold but doesn't tell the rep proactively where they spend their time — My Plan.
+
+To answer Gemini's question directly
+"Which re-typing pain point is the biggest complaint?"
+None of the re-typing issues. The biggest real complaint from any sales rep in this system will be:
+"I don't know where to look to find out how I'm doing."
+Three screens, three numbers, none of them matching. That's what kills trust in a CRM faster than any UX friction.
+
+What to tell Replit now — prioritised
+Only three things matter before deployment:
+1. War Room pipeline must show real numbers
+When a rep has deals in any active stage (Very Interested, Negotiation, Proposal Shared), those deal amounts must appear in MY PIPELINE immediately. If the deal was created with ₹0 from a meeting stub, the rep must be prompted to add a deal value before the meeting log submits. A deal with no amount is invisible in every dashboard.
+2. My Plan must show At Risk accounts proactively
+If a rep has a deal where last contact was 7+ days ago, show a red banner on My Plan — not buried in Revenue Tracker. "You haven't contacted Daikin India in 8 days — it's at risk." The rep sees this the moment they open their day.
+3. One achievement number everywhere
+My Targets ACHIEVED, War Room MY CLOSED QTD, and Revenue Tracker ACHIEVED must all read from the same source — revenue entries only. No exceptions. This is the d.amount fix we already identified. Until this is fixed, no rep will trust the system.
+Everything else Gemini flagged — calendar sync, convert to deal button, auto-assign — is polish. These three are the difference between a system reps use and a system reps abandon.

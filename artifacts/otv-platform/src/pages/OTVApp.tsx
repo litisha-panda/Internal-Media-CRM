@@ -2327,8 +2327,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       .map(i=>`${i.action}${i.neededFrom?" (→ "+i.neededFrom+")":""}${i.remarks?" — "+i.remarks:""}`)
       .join("; ");
 
+    const meetingId = `ml${Date.now()}`;
+
     setMeetings(p => [{
-      id: `ml${Date.now()}`,
+      id: meetingId,
       ...updatedForm,
       repId: parseInt(updatedForm.repId),
       repName: rep.name, region: rep.region,
@@ -2350,6 +2352,31 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       if (neededFrom==="CRO")            return "sales_analysis";
       return null;
     };
+
+    // Self items → rep's own My Tasks (not an Internal Request)
+    const selfTasks = (updatedForm.nextStepItems||[])
+      .filter(i => i.action && (!i.neededFrom || i.neededFrom === "Self"))
+      .map(i => ({
+        id: `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+        assignedTo: rep?.name||null,
+        assignedToUserId: activeUser,
+        assignedDept: "Self",
+        repId: repIdIntC,
+        clientCompany,
+        title: `${i.action}${clientCompany ? " — "+clientCompany : ""}`,
+        description: `${i.remarks ? i.remarks+" — " : ""}My own action item from meeting log on ${TODAY}. Client: ${clientCompany}.`,
+        priority: "Medium",
+        status: "Open",
+        dueDate: i.dueDate || TOMORROW,
+        createdAt: TODAY,
+        assignedBy: activeUser,
+        assignedByName: user_role?.name || "Sales Rep",
+        fromMeetingLog: true,
+        meetingLogId: meetingId,
+        isSelfTask: true,
+      }));
+
+    // Routed items → structured title + assignee task
     const newTasks = (updatedForm.nextStepItems||[])
       .filter(i => i.action && i.neededFrom && i.neededFrom !== "Self" && i.neededFrom !== "Client")
       .map(i => ({
@@ -2359,7 +2386,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         assignedDept: i.neededFrom,
         repId: repIdIntC,
         clientCompany,
-        title: i.action,
+        title: `${i.action} — ${clientCompany} — Raised by ${rep?.name||""}`,
         description: `${i.remarks ? i.remarks+" — " : ""}Raised from meeting log by ${rep?.name} on ${TODAY}. Client: ${clientCompany}.`,
         priority: "High",
         status: "Open",
@@ -2368,21 +2395,31 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         assignedBy: activeUser,
         assignedByName: user_role?.name || "Sales Rep",
         fromMeetingLog: true,
+        meetingLogId: meetingId,
       }));
+    if (selfTasks.length) setTasks(p => [...selfTasks, ...p]);
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
 
-    // Auto-create internal requests from next step items (when neededFrom is a dept, not Self/Client)
+    // Auto-create internal requests (routed items only — Self stays in My Tasks)
+    const getSlaHours = (dept: string) =>
+      (adminConfig.slaHours as Record<string,number>)?.[dept] ??
+      (adminConfig.slaHours as Record<string,number>)?.default ?? 48;
+
     const newIRs = (updatedForm.nextStepItems||[])
       .filter(i => i.action && i.neededFrom && !["Self","Client"].includes(i.neededFrom))
       .map(i => ({
         id: `ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
         type: ["Region Head","NSH","CXO"].includes(i.neededFrom) ? "Approval" : "Support",
-        dept: i.neededFrom, subject: i.action,
+        dept: i.neededFrom,
+        subject: `${i.action} — ${clientCompany} — Raised by ${rep?.name||""}`,
         details: (i.remarks||"") + (clientCompany ? ` — ${clientCompany}` : ""),
         raisedBy: activeUser, raisedByName: user_role?.name||"",
         repId: parseInt(updatedForm.repId)||null,
         dealId: updatedForm.dealId||null, clientCompany,
-        status: "Pending", raisedAt: TODAY, slaHours: 48, resolvedAt: null, resolverNote: ""
+        status: "Pending", raisedAt: TODAY,
+        slaHours: getSlaHours(i.neededFrom),
+        resolvedAt: null, resolverNote: "",
+        meetingLogId: meetingId,
       }));
     if (newIRs.length) setInternalReqs(p => [...newIRs, ...p]);
 
