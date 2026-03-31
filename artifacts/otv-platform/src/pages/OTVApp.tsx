@@ -1627,14 +1627,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [tourActive,  setTourActive]  = useState(false);
   const [tourStep,    setTourStep]    = useState(0);
   const [tourKey,     setTourKey]     = useState("rep");
-  // Auto-show welcome modal on first login per user
-  useEffect(() => {
-    const key = `otv_welcome_${activeUser}`;
-    if (!localStorage.getItem(key)) {
-      const tid = setTimeout(() => setShowWelcomeModal(true), 700);
-      return () => clearTimeout(tid);
-    }
-  }, [activeUser]);
+  // Welcome modal is manual-only — opened via the ? button in the top bar
   // Tour card dynamic positioning: track target element's bounding rect
   const [tourTargetRect, setTourTargetRect] = useState<DOMRect|null>(null);
   // Auto-navigate when tour step changes + compute target highlight rect
