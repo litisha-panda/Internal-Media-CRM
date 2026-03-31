@@ -1770,6 +1770,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
+  const [planUploadOpen, setPlanUploadOpen]             = useState(false);
+  const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,quarter:string,clients:{clientCompany:string,dealType:string,targetAmount:string}[]}>({repId:"",quarter:"Q1 FY26",clients:[{clientCompany:"",dealType:"Linear TV",targetAmount:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
@@ -2203,9 +2205,37 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const parsedRepId = parseInt(dealForm.repId);
     if (!dealForm.clientCompany||!parsedRepId||!dealForm.targetAmount){showToast("Fill required fields (client, rep, target)","err");return;}
     if (!reps.find(r=>r.id===parsedRepId)){showToast("Select a valid rep","err");return;}
-    const rep=reps.find(r=>r.id===parseInt(dealForm.repId));
-    setDeals(p=>[...p,{id:`d${Date.now()}`,...dealForm,repId:parseInt(dealForm.repId),repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:parseCurrency(dealForm.targetAmount),lastContact:TODAY,reqs:[]}]);
-    setDealForm(BLANK_DEAL);setAddDealOpen(false);showToast("Deal added ✓");
+    const rep = reps.find(r=>r.id===parseInt(dealForm.repId));
+    const tgtAmt = parseCurrency(dealForm.targetAmount);
+    const dealQ  = dealForm.quarter || entryQ;
+    setDeals(p=>[...p,{id:`d${Date.now()}`,...dealForm,repId:parsedRepId,repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:tgtAmt,lastContact:TODAY,reqs:[]}]);
+    // When a manager adds a deal for a rep, also submit a target plan entry so it
+    // appears in the rep's My Targets view once the plan clears the approval chain.
+    if (!isRep) {
+      const initStatus = isRH?"Pending NSH":isNSH?"Pending Strategy":isStrategy?"Pending CRO":isCRORole?"Approved":"Pending NSH";
+      const steps = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO"];
+      const startIdx = steps.indexOf(initStatus);
+      const skipLog  = steps.slice(0,startIdx).map(step=>({step,by:user_role?.name||"",at:TODAY,note:`Submitted by ${user_role?.role}`}));
+      const newEntry = {clientCompany:dealForm.clientCompany.trim(),dealType:dealForm.dealType||"Linear TV",targetAmount:tgtAmt};
+      // Append to an existing editable sub for this rep+quarter if one exists
+      const existingSub = targetSubs.find(s=>s.repId===parsedRepId&&s.quarter===dealQ&&s.status===initStatus&&s.submittedByRole===user_role?.role);
+      if (existingSub) {
+        setTargetSubs(p=>p.map(s=>s.id===existingSub.id?{...s,clients:[...s.clients,newEntry],totalTarget:s.totalTarget+tgtAmt}:s));
+      } else {
+        setTargetSubs(p=>[...p,{
+          id:`ts${Date.now()}`,
+          repId:parsedRepId,repName:rep.name,region:rep.region,
+          quarter:dealQ,clients:[newEntry],totalTarget:tgtAmt,
+          status:initStatus,submittedAt:TODAY,
+          submittedByName:user_role?.name||"",submittedByRole:user_role?.role||"",
+          approvalLog:skipLog,
+        }]);
+      }
+      showToast(initStatus==="Approved"?`Deal added + target auto-approved ✓`:`Deal added + target plan submitted → ${initStatus} ✓`);
+    } else {
+      showToast("Deal added ✓");
+    }
+    setDealForm(BLANK_DEAL); setAddDealOpen(false);
   };
 
   const handleLogMeeting = () => {
@@ -7990,9 +8020,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   // Collect ALL non-rejected subs for this quarter (approved + pending)
                   const activeSubs = mySubs.filter(s=>qMatch(s.quarter)&&s.status!=="Rejected");
                   if(!activeSubs.length) return null;
-                  // Flatten clients, tagging each with their parent sub's status
+                  // Flatten clients, tagging each with their parent sub's status and submitter
                   const allClients = activeSubs.flatMap(sub=>
-                    sub.clients.map(cl=>({...cl, subStatus:sub.status, approvalLog:sub.approvalLog||[]}))
+                    sub.clients.map(cl=>({...cl, subStatus:sub.status, approvalLog:sub.approvalLog||[], submittedByName:sub.submittedByName||"", submittedByRole:sub.submittedByRole||""}))
                   );
                   // Overall status badge: show the most advanced status
                   const overallStatus = activeSubs.find(s=>s.status==="Approved")?.status || activeSubs[0]?.status;
@@ -8020,7 +8050,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               const isPending = cl.subStatus!=="Approved" && achieved===0;
                               return (
                                 <tr key={i} style={{borderBottom:`1px solid ${C.s2}`,opacity:isPending?0.7:1}}>
-                                  <td style={{padding:"10px 14px",fontWeight:700}}>{cl.clientCompany}</td>
+                                  <td style={{padding:"10px 14px",fontWeight:700}}>
+                                    {cl.clientCompany}
+                                    {cl.submittedByRole && <span style={{marginLeft:6,background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,verticalAlign:"middle"}}>by {cl.submittedByRole}</span>}
+                                  </td>
                                   <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{cl.dealType}</span></td>
                                   <td style={{padding:"10px 14px",color:isPending?C.muted:C.dim}}>{isPending?"—":fmtR(cl.targetAmount)}</td>
                                   <td style={{padding:"10px 14px",fontWeight:700,color:achieved>0?pc:C.muted}}>{isPending||achieved===0?"—":fmtR(achieved)}</td>
@@ -8156,13 +8189,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             return (
               <div className="fin">
-                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>TARGET APPROVALS</div>
-                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>
-                  {isRH?"Review and approve target submissions from your region's sales reps.":
-                   isNSH?"Approve targets cleared by Region Heads.":
-                   isStrategy?"Review NSH-approved targets for strategic alignment.":
-                   "Final CRO sign-off on targets cleared by Sales Strategy."}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4,flexWrap:"wrap",gap:10}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>TARGET APPROVALS</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:3}}>
+                      {isRH?"Review and approve target submissions from your region's sales reps.":
+                       isNSH?"Approve targets cleared by Region Heads.":
+                       isStrategy?"Review NSH-approved targets for strategic alignment.":
+                       "Final CRO sign-off on targets cleared by Sales Strategy."}
+                    </div>
+                  </div>
+                  <button onClick={()=>{setPlanUploadForm({repId:"",quarter:entryQ,clients:[{clientCompany:"",dealType:"Linear TV",targetAmount:""}]});setPlanUploadOpen(true);}}
+                    style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:7,padding:"9px 18px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                    ↑ Upload Plan for Rep
+                  </button>
                 </div>
+                <div style={{marginBottom:16}}/>
 
                 {/* Summary count cards */}
                 {(()=>{
@@ -11034,7 +11076,147 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         );
       })()}
 
-      {/* ADD DEAL MODAL */}
+      {/* ── PLAN UPLOAD MODAL (managers only) ── */}
+      {planUploadOpen && !isRep && (
+        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}} onClick={e=>{if(e.target===e.currentTarget)setPlanUploadOpen(false);}}>
+          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"28px 28px 24px",width:580,maxWidth:"95vw",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.55)"}}>
+            {/* Header */}
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
+              <div>
+                <div className="sans" style={{fontWeight:700,fontSize:16,letterSpacing:.5}}>UPLOAD PLAN FOR REP</div>
+                <div style={{fontSize:11,color:C.dim,marginTop:4}}>
+                  This plan enters the approval chain at{" "}
+                  <span style={{fontWeight:700,color:C.accent}}>{isRH?"NSH level":isNSH?"Sales Strategy level":isStrategy?"CRO level":isCRORole?"final approval (auto-approved)":"NSH level"}</span>.
+                  Once fully approved, it shows in the rep's My Targets.
+                </div>
+              </div>
+              <button onClick={()=>setPlanUploadOpen(false)} style={{background:"none",border:"none",color:C.dim,fontSize:20,cursor:"pointer",lineHeight:1,marginLeft:12}}>✕</button>
+            </div>
+            {/* Approval chain visual */}
+            <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:18,flexWrap:"wrap"}}>
+              {(isRH
+                ?[{s:"RH",done:true},{s:"NSH",done:false},{s:"Strategy",done:false},{s:"CRO → ✓",done:false}]
+                :isNSH
+                ?[{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:false},{s:"CRO → ✓",done:false}]
+                :isStrategy
+                ?[{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:true},{s:"CRO → ✓",done:false}]
+                :[{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:true},{s:"CRO → ✓",done:true}]
+              ).map((step,i,arr)=>(
+                <div key={step.s} style={{display:"flex",alignItems:"center"}}>
+                  <div style={{background:step.done?`${C.green}22`:`${C.accent}18`,border:`1px solid ${step.done?C.green+"55":C.accent+"44"}`,borderRadius:6,padding:"3px 10px",fontSize:10,color:step.done?C.green:C.accent,fontWeight:600,whiteSpace:"nowrap"}}>{step.done&&"✓ "}{step.s}</div>
+                  {i<arr.length-1&&<div style={{width:14,height:1,background:C.border}}/>}
+                </div>
+              ))}
+            </div>
+            {/* Rep + Quarter */}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+              <div>
+                <div style={{fontSize:10,color:C.dim,marginBottom:5,letterSpacing:".05em",fontWeight:700}}>SALES REP *</div>
+                <select value={planUploadForm.repId} onChange={e=>setPlanUploadForm(p=>({...p,repId:e.target.value}))}
+                  style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:planUploadForm.repId?C.text:C.muted,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
+                  <option value="">Select rep…</option>
+                  {reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
+                </select>
+              </div>
+              <div>
+                <div style={{fontSize:10,color:C.dim,marginBottom:5,letterSpacing:".05em",fontWeight:700}}>QUARTER *</div>
+                <select value={planUploadForm.quarter} onChange={e=>setPlanUploadForm(p=>({...p,quarter:e.target.value}))}
+                  style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
+                  {QUARTERS.map(q=><option key={q}>{q}</option>)}
+                </select>
+              </div>
+            </div>
+            {/* Client rows */}
+            <div style={{marginBottom:14}}>
+              <div style={{fontSize:10,color:C.dim,marginBottom:8,letterSpacing:".05em",fontWeight:700}}>CLIENT TARGETS</div>
+              {planUploadForm.clients.map((cl,i)=>(
+                <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 1.2fr auto",gap:8,marginBottom:7,alignItems:"center"}}>
+                  <input value={cl.clientCompany} placeholder={`Client ${i+1} name`}
+                    onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,clientCompany:e.target.value}:c)}))}
+                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                  <select value={cl.dealType}
+                    onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,dealType:e.target.value}:c)}))}
+                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                    {["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"].map(d=><option key={d}>{d}</option>)}
+                  </select>
+                  <input value={cl.targetAmount} placeholder="Target e.g. 50L"
+                    onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,targetAmount:e.target.value}:c)}))}
+                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                  {planUploadForm.clients.length>1
+                    ? <button onClick={()=>setPlanUploadForm(p=>({...p,clients:p.clients.filter((_,j)=>j!==i)}))}
+                        style={{background:`${C.red}18`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"7px 10px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",lineHeight:1}}>✕</button>
+                    : <div style={{width:36}}/>}
+                </div>
+              ))}
+              <button onClick={()=>setPlanUploadForm(p=>({...p,clients:[...p.clients,{clientCompany:"",dealType:"Linear TV",targetAmount:""}]}))}
+                style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginTop:2}}>
+                + Add Client
+              </button>
+            </div>
+            {/* Footer */}
+            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
+              <div style={{fontSize:11,color:C.muted}}>
+                {(()=>{
+                  const valid = planUploadForm.clients.filter(c=>c.clientCompany.trim()&&c.targetAmount);
+                  const total = valid.reduce((s,c)=>s+parseCurrency(c.targetAmount),0);
+                  return valid.length>0?`${valid.length} client${valid.length!==1?"s":""} · ${fmtR(total)} total`:"Add at least one client";
+                })()}
+              </div>
+              <div style={{display:"flex",gap:10}}>
+                <button onClick={()=>setPlanUploadOpen(false)}
+                  style={{padding:"9px 18px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                <button onClick={()=>{
+                  const parsedRepId = parseInt(planUploadForm.repId);
+                  const validClients = planUploadForm.clients.filter(c=>c.clientCompany.trim()&&c.targetAmount);
+                  if(!parsedRepId){showToast("Select a sales rep","err");return;}
+                  if(!validClients.length){showToast("Add at least one client with a target","err");return;}
+                  const rep = reps.find(r=>r.id===parsedRepId);
+                  const initStatus = isRH?"Pending NSH":isNSH?"Pending Strategy":isStrategy?"Pending CRO":isCRORole?"Approved":"Pending NSH";
+                  const steps = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO"];
+                  const startIdx = steps.indexOf(initStatus);
+                  const skipLog  = steps.slice(0,startIdx).map(step=>({step,by:user_role?.name||"",at:TODAY,note:`Plan uploaded by ${user_role?.role}`}));
+                  const clients  = validClients.map(c=>({clientCompany:c.clientCompany.trim(),dealType:c.dealType,targetAmount:parseCurrency(c.targetAmount)}));
+                  const total    = clients.reduce((s,c)=>s+(c.targetAmount||0),0);
+                  const sub = {
+                    id:`ts${Date.now()}`,
+                    repId:parsedRepId,repName:rep?.name||"",region:rep?.region||"",
+                    quarter:planUploadForm.quarter,clients,totalTarget:total,
+                    status:initStatus,submittedAt:TODAY,
+                    submittedByName:user_role?.name||"",submittedByRole:user_role?.role||"",
+                    approvalLog:skipLog,
+                  };
+                  // CRO submission → immediately approved → also create deal stubs
+                  if(initStatus==="Approved"){
+                    const newDeals = clients
+                      .filter(cl=>!deals.find(d=>d.repId===parsedRepId&&d.clientCompany===cl.clientCompany&&d.quarter===planUploadForm.quarter))
+                      .map(cl=>({
+                        id:`d_plan_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
+                        repId:parsedRepId,repName:rep?.name||"",region:rep?.region||"",
+                        clientCompany:cl.clientCompany,contactName:"",designation:"",contactLevel:"",phone:"",email:"",
+                        dealType:cl.dealType,outcome:"Needs Callback",
+                        amount:cl.targetAmount,targetAmount:cl.targetAmount,
+                        priority:"Regular",quarter:planUploadForm.quarter,
+                        notes:`Plan uploaded by ${user_role?.role}`,
+                        nextStep:"",nextStepDate:null,lastContact:TODAY,reqs:[],auditLog:[],
+                        awaitingApproval:null,awaitingApprovalSince:null,
+                      }));
+                    if(newDeals.length>0) setDeals(p=>[...p,...newDeals]);
+                    showToast(`Plan auto-approved — ${clients.length} client${clients.length!==1?"s":""} added to ${rep?.name||"rep"}'s targets ✓`);
+                  } else {
+                    showToast(`Plan submitted for ${rep?.name||"rep"} — enters at ${initStatus} ✓`);
+                  }
+                  setTargetSubs(p=>[sub,...p]);
+                  setPlanUploadOpen(false);
+                }}
+                  style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:6,padding:"9px 22px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                  {isCRORole?"Submit & Auto-Approve ✓":"Submit Plan →"}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {addDealOpen && (
         <div className="overlay" onClick={()=>setAddDealOpen(false)}>
           <div className="modal fin" onClick={e=>e.stopPropagation()}>
