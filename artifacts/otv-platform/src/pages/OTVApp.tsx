@@ -8032,7 +8032,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         : <div style={{display:"flex",gap:8}}>
                             <button onClick={()=>setEditSubId(null)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 14px",fontSize:11,cursor:"pointer",color:C.dim,fontFamily:"'DM Mono',monospace"}}>Cancel</button>
                             <button onClick={()=>{
-                              const updated = editSubClients.map(c=>({...c,targetAmount:parseCurrency(String(c.targetAmount))}));
+                              const updated = editSubClients.map(c=>({...c,targetAmount:parseCurrency(String(c.targetAmount)),clientStatus:"Pending"}));
                               const newTotal = updated.reduce((s,c)=>s+(c.targetAmount||0),0);
                               setTargetSubs(p=>p.map(t=>t.id===sub.id?{
                                 ...t,
