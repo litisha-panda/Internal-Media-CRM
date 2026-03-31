@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, appStateTable } from "@workspace/db";
-import { eq, like } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 
 const router = Router();
 
@@ -12,8 +12,42 @@ const OTV_EMPTY_STATE: Record<string, unknown> = {
   otv_targetSubs: [], otv_tasks: [], otv_wplans: [],
 };
 
-router.post("/state/reset-all", async (_req, res) => {
+router.post("/state/reset-all", async (req, res) => {
   try {
+    const { confirmText, triggeredBy, role } = req.body as {
+      confirmText?: string;
+      triggeredBy?: string;
+      role?: string;
+    };
+
+    // Must be Admin role
+    if (role !== "ADMIN") {
+      res.status(403).json({ ok: false, error: "Only Admin can reset all data." });
+      return;
+    }
+
+    // Must type the confirmation string exactly
+    if (confirmText !== "RESET") {
+      res.status(400).json({ ok: false, error: "Confirmation text must be exactly 'RESET'." });
+      return;
+    }
+
+    // Log the trigger before wiping
+    const resetLog = {
+      triggeredBy: triggeredBy || "unknown",
+      role,
+      at: new Date().toISOString(),
+      action: "reset-all",
+    };
+    await db
+      .insert(appStateTable)
+      .values({ key: "otv_resetLog", value: resetLog as object, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: appStateTable.key,
+        set: { value: resetLog as object, updatedAt: new Date() },
+      });
+
+    // Wipe all app state
     for (const [key, value] of Object.entries(OTV_EMPTY_STATE)) {
       await db
         .insert(appStateTable)
@@ -23,7 +57,8 @@ router.post("/state/reset-all", async (_req, res) => {
           set: { value: value as object, updatedAt: new Date() },
         });
     }
-    res.json({ ok: true, cleared: Object.keys(OTV_EMPTY_STATE) });
+
+    res.json({ ok: true, cleared: Object.keys(OTV_EMPTY_STATE), log: resetLog });
   } catch (err) {
     res.status(500).json({ ok: false, error: String(err) });
   }
