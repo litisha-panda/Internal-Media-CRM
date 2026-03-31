@@ -7897,7 +7897,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* Add Client Modal */}
                 {addClientModalOpen && (
                   <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.6)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}} onClick={e=>{if(e.target===e.currentTarget)setAddClientModalOpen(false);}}>
-                    <div style={{background:C.s1,border:`1px solid ${C.border}`,borderRadius:12,padding:"28px 28px 24px",width:480,maxWidth:"95vw",boxShadow:"0 24px 60px rgba(0,0,0,.5)"}}>
+                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"28px 28px 24px",width:480,maxWidth:"95vw",boxShadow:"0 24px 60px rgba(0,0,0,.5)"}}>
                       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20}}>
                         <div className="sans" style={{fontWeight:700,fontSize:15}}>Add Client Target — {filterQ}</div>
                         <button onClick={()=>setAddClientModalOpen(false)} style={{background:"none",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>✕</button>
