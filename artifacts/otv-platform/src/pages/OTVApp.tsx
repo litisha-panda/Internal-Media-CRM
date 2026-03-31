@@ -2769,7 +2769,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     if (section === "ro") return [];
 
     const irBadge      = internalReqs.filter(r=>r.status!=="Done"&&r.raisedBy===activeUser).length||null;
-    const irInboxDept  = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":null;
+    const irInboxDept  = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":isDigiOps?"Digital":null;
     const irInboxBadge = irInboxDept
       ? internalReqs.filter(r=>r.status!=="Done"&&r.dept===irInboxDept).length||null
       : internalReqs.filter(r=>r.status!=="Done"&&["NSH","Sales Strategy","CRO","Branding Team","Content Team","Digital","Finance","Legal"].includes(r.dept)).length||null;
@@ -6079,14 +6079,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {view==="internal-requests" && (() => {
             const IR_DEPTS = ["NSH","Sales Strategy","Branding Team","Content Team","Digital","Finance","Legal","CXO"];
             // Which dept "inbox" does the current user own?
-            const myInboxDept = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":null;
+            const myInboxDept = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":isDigiOps?"Digital":null;
             // Requests ADDRESSED TO the current user's department
             const inboxReqs = myInboxDept ? internalReqs.filter(r=>r.dept===myInboxDept) : [];
             const myReqs  = isRep
               ? internalReqs.filter(r=>r.raisedBy===activeUser)
               : isRH
                 ? internalReqs.filter(r=>r.raisedBy===activeUser || (r.dept==="Region Head" && USER_ROLES.find(u=>u.id===r.raisedBy)?.region===rhRegion))
-                : internalReqs;
+                : isDigiOps
+                  ? internalReqs.filter(r=>r.dept==="Digital")
+                  : internalReqs;
             const filtered = irStatusFilter==="all" ? myReqs : myReqs.filter(r=>r.status===irStatusFilter);
             const pending  = myReqs.filter(r=>r.status==="Pending"||r.status==="Overdue");
             const inprog   = myReqs.filter(r=>r.status==="In Progress");
@@ -10982,7 +10984,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 if(!assignedUserId||!taskForm.title){showToast("Task title and assignee required","err");return;}
                 const assignedUser = USER_ROLES.find(u=>u.id===assignedUserId);
                 const repId = assignedUser?.repId||null;
-                setTasks(p=>[{id:`t${Date.now()}`,...taskForm,assignedToUserId:assignedUserId,assignedToName:assignedUser?.name||"",assignedTo:repId,repId:repId,assignedBy:activeUser,assignedByName:user_role?.name||user.name,status:"Open",createdAt:TODAY},...p]);
+                const taskDept = assignedUser?.role==="DIGI OPS"?"Digital"
+                  :assignedUser?.role==="SALES HEAD"?"NSH"
+                  :assignedUser?.role==="SALES STRATEGY"?"Sales Strategy"
+                  :assignedUser?.role==="CRO"?"CRO"
+                  :assignedUser?.role==="REGION HEAD"?"Region Head"
+                  :null;
+                setTasks(p=>[{id:`t${Date.now()}`,...taskForm,dept:taskDept,assignedToUserId:assignedUserId,assignedToName:assignedUser?.name||"",assignedTo:repId,repId:repId,assignedBy:activeUser,assignedByName:user_role?.name||user.name,status:"Open",createdAt:TODAY},...p]);
                 closeTaskModal();
                 showToast(assignedUserId===activeUser?"✓ Task created for yourself":"Task assigned to "+(assignedUser?.name||""));
               }}>{selfTaskMode?"Create Task":isRep?"Create Task":"Assign Task"}</button>
