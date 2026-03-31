@@ -6263,6 +6263,30 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                       ))}
                     </div>
+
+                    {/* ── DANGER ZONE: RESET ── */}
+                    <div style={{marginTop:28,padding:"16px 18px",background:`${C.red}0a`,border:`1px solid ${C.red}33`,borderRadius:8}}>
+                      <div style={{fontWeight:700,fontSize:11,color:C.red,letterSpacing:1,marginBottom:6}}>DANGER ZONE — SYSTEM RESET</div>
+                      <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Wipes ALL data from the platform (deals, meetings, targets, reps, users, plans). Use for a clean-slate test. Cannot be undone.</div>
+                      <button onClick={async ()=>{
+                        if (!window.confirm("This will permanently delete ALL app data — deals, meetings, targets, reps, active users, etc.\n\nAre you absolutely sure?")) return;
+                        try {
+                          const r = await fetch("/api/state/reset-all", { method:"POST" });
+                          const j = await r.json();
+                          if (j.ok) {
+                            Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));
+                            showToast("All data cleared — reloading…");
+                            setTimeout(()=>window.location.reload(), 800);
+                          } else {
+                            showToast("Reset failed: "+j.error,"err");
+                          }
+                        } catch(e) {
+                          showToast("Reset failed","err");
+                        }
+                      }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"7px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        ⚠ Reset All App Data
+                      </button>
+                    </div>
                   </div>
                 )}
 

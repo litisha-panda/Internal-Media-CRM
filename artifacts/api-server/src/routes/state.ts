@@ -1,8 +1,33 @@
 import { Router } from "express";
 import { db, appStateTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { eq, like } from "drizzle-orm";
 
 const router = Router();
+
+const OTV_EMPTY_STATE: Record<string, unknown> = {
+  otv_absence: [], otv_att: {}, otv_deals: [], otv_internalReqs: [],
+  otv_ipProposals: [], otv_liveRoles: [], otv_masterClients: [],
+  otv_meetings: [], otv_pendingUsers: [], otv_plans: [], otv_properties: [],
+  otv_reps: [], otv_revenueEntries: [], otv_savedROs: [],
+  otv_targetSubs: [], otv_tasks: [], otv_wplans: [],
+};
+
+router.post("/state/reset-all", async (_req, res) => {
+  try {
+    for (const [key, value] of Object.entries(OTV_EMPTY_STATE)) {
+      await db
+        .insert(appStateTable)
+        .values({ key, value: value as object, updatedAt: new Date() })
+        .onConflictDoUpdate({
+          target: appStateTable.key,
+          set: { value: value as object, updatedAt: new Date() },
+        });
+    }
+    res.json({ ok: true, cleared: Object.keys(OTV_EMPTY_STATE) });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: String(err) });
+  }
+});
 
 router.get("/state/:key", async (req, res) => {
   try {
