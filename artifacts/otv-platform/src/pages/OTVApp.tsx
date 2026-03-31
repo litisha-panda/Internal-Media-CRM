@@ -904,13 +904,18 @@ const GOOGLE_CLIENT_ID = "773380743026-i87vjdrj5n699von60sa3plqqv95mlem.apps.goo
 const ZOHO_CLIENT_ID   = "1000.TQ0C2M1CLOJC0ES8EPEJJWG5LUJ9ON";
 
 function LoginScreen({ onLogin }) {
-  const [mode, setMode]       = useState("options"); // "options" | "email"
-  const [email, setEmail]     = useState("");
-  const [password, setPassword] = useState("");
-  const [name, setName]       = useState("");
-  const [isNew, setIsNew]     = useState(false);
-  const [err, setErr]         = useState("");
-  const [loading, setLoading] = useState(false);
+  const [mode, setMode]           = useState("options"); // "options" | "email"
+  const [email, setEmail]         = useState("");
+  const [password, setPassword]   = useState("");
+  const [name, setName]           = useState("");
+  const [phone, setPhone]         = useState("");
+  const [designation, setDesig]   = useState("");
+  const [intendedRole, setRole]   = useState("SALES REP");
+  const [preferredRegion, setReg] = useState("North");
+  const [isNew, setIsNew]         = useState(false);
+  const [err, setErr]             = useState("");
+  const [loading, setLoading]     = useState(false);
+  const [pendingApproval, setPendingApproval] = useState<any>(null);
 
   const googleReady           = useRef(false);
   const hiddenGoogleBtn       = useRef(null);
@@ -1025,24 +1030,45 @@ function LoginScreen({ onLogin }) {
     e.preventDefault(); setErr("");
     if (!email.trim()) { setErr("Email is required"); return; }
     if (!password.trim()) { setErr("Password is required"); return; }
-    if (isNew && !name.trim()) { setErr("Name is required"); return; }
+    if (isNew && !name.trim()) { setErr("Full name is required"); return; }
+    if (isNew && !phone.trim()) { setErr("Phone number is required"); return; }
     setLoading(true);
     try {
-      const stored = JSON.parse(localStorage.getItem("otv_crm_users") || "[]");
-      const existing = stored.find(u => u.email.toLowerCase() === email.toLowerCase());
-      if (existing) {
+      const stored  = JSON.parse(localStorage.getItem("otv_crm_users") || "[]");
+      const pending = JSON.parse(localStorage.getItem("otv_pendingSignups") || "[]");
+      const approved = stored.find(u => u.email.toLowerCase() === email.toLowerCase());
+      const inPending = pending.find(u => u.email.toLowerCase() === email.toLowerCase());
+
+      if (approved) {
+        // Existing approved user — normal login
         const h = await hashPwd(password);
-        if (existing.passwordHash !== h && existing.password !== password) {
+        if (approved.passwordHash !== h && approved.password !== password) {
           setErr("Incorrect password"); setLoading(false); return;
         }
-        onLogin({ name: existing.name, email: existing.email });
+        onLogin({ name: approved.name, email: approved.email });
+      } else if (inPending) {
+        // Account exists but not yet approved — check password then show holding screen
+        const h = await hashPwd(password);
+        if (inPending.passwordHash !== h) { setErr("Incorrect password"); setLoading(false); return; }
+        setPendingApproval(inPending); setLoading(false);
       } else {
-        if (!isNew) { setErr("No account found — click 'Create account'."); setLoading(false); return; }
-        const newUser = { name: name.trim(), email: email.toLowerCase(), passwordHash: await hashPwd(password) };
-        localStorage.setItem("otv_crm_users", JSON.stringify([...stored, newUser]));
-        onLogin({ name: newUser.name, email: newUser.email });
+        if (!isNew) { setErr("No account found. Click 'Create one' to sign up."); setLoading(false); return; }
+        // Brand-new signup — store in pending, do NOT log in yet
+        if (pending.find(u => u.email === email.toLowerCase())) {
+          setErr("A request for this email is already pending admin approval."); setLoading(false); return;
+        }
+        const h = await hashPwd(password);
+        const newPending = {
+          id: `ps_${Date.now()}`,
+          name: name.trim(), email: email.toLowerCase(), passwordHash: h,
+          phone: phone.trim(), designation: designation.trim(),
+          intendedRole, preferredRegion,
+          requestedAt: new Date().toISOString().split("T")[0],
+        };
+        localStorage.setItem("otv_pendingSignups", JSON.stringify([...pending, newPending]));
+        setPendingApproval(newPending); setLoading(false);
       }
-    } catch(err) {
+    } catch(_err) {
       setErr("Login error — try again."); setLoading(false);
     }
   };
@@ -1054,6 +1080,42 @@ function LoginScreen({ onLogin }) {
       setLoading(false);
     }, 600);
   };
+
+  // ── Pending-approval holding screen ──
+  if (pendingApproval) return (
+    <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace",background:"#f0f4f9",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
+      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
+      <div style={{width:"100%",maxWidth:420}}>
+        <div style={{textAlign:"center",marginBottom:28}}>
+          <div style={{display:"inline-flex",alignItems:"center",gap:12}}>
+            <div style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",borderRadius:10,padding:"8px 14px",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:2}}>OTV</div>
+            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:16,fontWeight:700,color:"#18243a",letterSpacing:1}}>OTV CRM</div>
+          </div>
+        </div>
+        <div style={{background:"#fff",border:"1px solid #c8d3e5",borderRadius:12,padding:"32px 28px",boxShadow:"0 4px 24px rgba(0,0,0,.08)",textAlign:"center"}}>
+          <div style={{fontSize:32,marginBottom:16}}>⏳</div>
+          <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:17,fontWeight:700,color:"#18243a",marginBottom:8}}>Access Request Submitted</div>
+          <div style={{fontSize:12,color:"#4d5e78",lineHeight:1.7,marginBottom:20}}>
+            Hi <strong>{pendingApproval.name}</strong>, your request has been sent to the admin.<br/>
+            Once approved, you can sign in and get started.<br/>
+            <span style={{fontSize:11,color:"#8a97ae"}}>Requested role: {pendingApproval.intendedRole} · {pendingApproval.preferredRegion}</span>
+          </div>
+          <div style={{background:"#f0f4f9",border:"1px solid #c8d3e5",borderRadius:8,padding:"12px 16px",marginBottom:20,textAlign:"left"}}>
+            {[["Name",pendingApproval.name],["Email",pendingApproval.email],["Phone",pendingApproval.phone||"—"],["Designation",pendingApproval.designation||"—"]].map(([l,v])=>(
+              <div key={l} style={{display:"flex",gap:8,fontSize:11,marginBottom:4}}>
+                <span style={{color:"#8a97ae",minWidth:80}}>{l}</span>
+                <span style={{color:"#18243a",fontWeight:600}}>{v}</span>
+              </div>
+            ))}
+          </div>
+          <button onClick={()=>setPendingApproval(null)}
+            style={{background:"transparent",border:"1px solid #c8d3e5",borderRadius:6,padding:"9px 20px",color:"#4d5e78",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+            ← Back to Sign In
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div style={{ fontFamily:"'DM Mono','JetBrains Mono',monospace", background:"#f0f4f9", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
@@ -1164,10 +1226,39 @@ function LoginScreen({ onLogin }) {
               <form onSubmit={handleEmail}>
                 <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
                   {isNew && (
-                    <div>
-                      <label style={{ fontSize:10, color:"#4d5e78", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em" }}>Full Name</label>
-                      <input className="login-input" type="text" placeholder="Your name" value={name} onChange={e=>setName(e.target.value)} autoFocus />
-                    </div>
+                    <>
+                      <div>
+                        <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Full Name *</label>
+                        <input className="login-input" type="text" placeholder="Your full name" value={name} onChange={e=>setName(e.target.value)} autoFocus />
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        <div>
+                          <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Phone *</label>
+                          <input className="login-input" type="tel" placeholder="Mobile number" value={phone} onChange={e=>setPhone(e.target.value)} />
+                        </div>
+                        <div>
+                          <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Designation</label>
+                          <input className="login-input" type="text" placeholder="e.g. Sales Manager" value={designation} onChange={e=>setDesig(e.target.value)} />
+                        </div>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                        <div>
+                          <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Intended Role</label>
+                          <select className="login-input" value={intendedRole} onChange={e=>setRole(e.target.value)} style={{padding:"10px 14px"}}>
+                            {["SALES REP","REGION HEAD","SALES HEAD","SALES STRATEGY","CRO","DIGI OPS"].map(r=><option key={r}>{r}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Region</label>
+                          <select className="login-input" value={preferredRegion} onChange={e=>setReg(e.target.value)} style={{padding:"10px 14px"}}>
+                            {["North","South","East","West","National"].map(r=><option key={r}>{r}</option>)}
+                          </select>
+                        </div>
+                      </div>
+                      <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:6,padding:"8px 12px",fontSize:11,color:"#0369a1"}}>
+                        Your request will be reviewed by the admin before you can access the platform.
+                      </div>
+                    </>
                   )}
                   <div>
                     <label style={{ fontSize:10, color:"#4d5e78", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em" }}>Email</label>
@@ -1751,6 +1842,19 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     {id:"pu2", name:"Sonal Mehta", email:"sonal@odishatv.com", requestedAt: "2026-03-23"},
     {id:"pu3", name:"Deepak Panda",email:"deepak@odishatv.com",requestedAt: "2026-03-26"},
   ]);
+  // Merge any self-registered pending signups into admin's queue
+  useEffect(() => {
+    try {
+      const sups = JSON.parse(localStorage.getItem("otv_pendingSignups") || "[]");
+      if (sups.length > 0) {
+        setPendingUsers(prev => {
+          const existIds = new Set(prev.map(u => u.id));
+          const toAdd = sups.filter(u => !existIds.has(u.id));
+          return toAdd.length ? [...prev, ...toAdd] : prev;
+        });
+      }
+    } catch {}
+  }, []);
   const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles",
     USER_ROLES.filter(u=>u.id!=="admin").map(u=>({...u}))
   );
@@ -6406,13 +6510,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <div style={{flex:1}}>
                               <div className="sans" style={{fontWeight:700,fontSize:13}}>{pu.name}</div>
                               <div style={{fontSize:11,color:C.dim}}>{pu.email} · Requested {daysSince(pu.requestedAt)===0?"today":`${daysSince(pu.requestedAt)}d ago`}</div>
+                              {/* Extra details from self-registration */}
+                              {(pu.phone||pu.designation||pu.intendedRole) && (
+                                <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:4}}>
+                                  {pu.phone&&<span style={{fontSize:10,background:`${C.s2}`,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 7px",color:C.dim}}>📞 {pu.phone}</span>}
+                                  {pu.designation&&<span style={{fontSize:10,background:`${C.s2}`,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 7px",color:C.dim}}>{pu.designation}</span>}
+                                  {pu.intendedRole&&<span style={{fontSize:10,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:4,padding:"1px 7px",color:C.accent,fontWeight:700}}>Wants: {pu.intendedRole}</span>}
+                                  {pu.preferredRegion&&<span style={{fontSize:10,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:4,padding:"1px 7px",color:C.blue}}>📍 {pu.preferredRegion}</span>}
+                                </div>
+                              )}
                             </div>
-                            {/* Role + Region selectors inline */}
-                            <select id={`role-${pu.id}`} defaultValue="SALES REP"
+                            {/* Role + Region selectors inline — pre-fill from signup if available */}
+                            <select id={`role-${pu.id}`} defaultValue={pu.intendedRole||"SALES REP"}
                               style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
                               {ALL_ROLES.filter(r=>r!=="ADMIN").map(r=><option key={r}>{r}</option>)}
                             </select>
-                            <select id={`region-${pu.id}`} defaultValue="North"
+                            <select id={`region-${pu.id}`} defaultValue={pu.preferredRegion||"North"}
                               style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
                               {REGIONS.map(r=><option key={r}>{r}</option>)}
                             </select>
@@ -6425,12 +6538,26 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 const newUser  = {id:`u_${pu.id}`,name:pu.name,role,canView:role==="SALES REP"?"self":role==="REGION HEAD"?"region":"all",region};
                                 setLiveRoles(p=>[...p, newUser]);
                                 setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
+                                // If they signed up via the form, unlock their login credentials
+                                if (pu.passwordHash) {
+                                  const stored = JSON.parse(localStorage.getItem("otv_crm_users")||"[]");
+                                  if (!stored.find(u=>u.email===pu.email)) {
+                                    localStorage.setItem("otv_crm_users", JSON.stringify([...stored, {name:pu.name,email:pu.email,passwordHash:pu.passwordHash}]));
+                                  }
+                                  const sups = JSON.parse(localStorage.getItem("otv_pendingSignups")||"[]");
+                                  localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
+                                }
                                 showToast(`${pu.name} approved as ${role} ✓`);
                               }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                                 ✓ Approve
                               </button>
                               <button onClick={()=>{
                                 setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
+                                // Also remove from pending signups if applicable
+                                if (pu.passwordHash) {
+                                  const sups = JSON.parse(localStorage.getItem("otv_pendingSignups")||"[]");
+                                  localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
+                                }
                                 showToast(`${pu.name} rejected`,"err");
                               }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
                                 Reject
@@ -7938,6 +8065,30 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   ))}
                 </div>
+
+                {/* ── Get Started for the Year banner (new reps with no targets) ── */}
+                {!activeSub && (
+                  <div style={{background:"linear-gradient(135deg,#6366f118,#8b5cf618)",border:"1px solid #8b5cf633",borderRadius:12,padding:"28px 24px",marginBottom:24,textAlign:"center"}}>
+                    <div style={{fontSize:28,marginBottom:12}}>🚀</div>
+                    <div className="sans" style={{fontSize:17,fontWeight:800,color:C.text,marginBottom:8}}>Get Started for FY26!</div>
+                    <div style={{fontSize:12,color:C.dim,lineHeight:1.7,marginBottom:20,maxWidth:420,margin:"0 auto 20px"}}>
+                      You haven't submitted any targets yet for this quarter.<br/>
+                      Add your client names and target amounts — your Region Head will review and send them up the chain for approval.
+                    </div>
+                    <div style={{display:"flex",flexWrap:"wrap",gap:16,justifyContent:"center",marginBottom:20}}>
+                      {[["1. You submit","Add clients + targets below"],["2. RH reviews","Region Head checks and approves"],["3. NSH & Strategy","Verify alignment with national plan"],["4. CRO locks it in","Becomes your official quota"]].map(([step,desc])=>(
+                        <div key={step} style={{background:"#fff",border:"1px solid #c8d3e5",borderRadius:8,padding:"10px 14px",minWidth:130,textAlign:"left"}}>
+                          <div style={{fontSize:10,fontWeight:700,color:"#8b5cf6",marginBottom:3,letterSpacing:".06em"}}>{step}</div>
+                          <div style={{fontSize:11,color:C.dim}}>{desc}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <button onClick={()=>{ setAddClientForm({clientCompany:"",dealType:"Linear TV",targetAmount:""}); setAddClientModalOpen(true); }}
+                      style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:8,padding:"11px 28px",fontSize:13,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                      + Add My First Client Target
+                    </button>
+                  </div>
+                )}
 
                 {/* Summary stats row */}
                 {activeSub && (
