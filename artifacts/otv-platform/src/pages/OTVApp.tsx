@@ -7812,12 +7812,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <td style={{padding:"10px 14px"}}><span style={{background:`${sc}18`,color:sc,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{overdue?"OVERDUE":task.status}</span></td>
                               <td style={{padding:"10px 14px",color:overdue?C.red:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{task.dueDate}</td>
                               <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
-                                {task.status!=="Done"&&(
-                                  <select value={task.status} onChange={e=>setTasks(p=>p.map(t=>t.id===task.id?{...t,status:e.target.value}:t))}
-                                    style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,marginRight:6}}>
-                                    {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
-                                  </select>
-                                )}
+                                {(()=>{
+                                  const canEdit = isAdmin || task.assignedToUserId===activeUser || task.assignedTo===user_role?.repId || task.assignedBy===activeUser;
+                                  return task.status!=="Done" && canEdit ? (
+                                    <select value={task.status} onChange={e=>setTasks(p=>p.map(t=>t.id===task.id?{...t,status:e.target.value}:t))}
+                                      style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,marginRight:6}}>
+                                      {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
+                                    </select>
+                                  ) : task.status!=="Done" ? (
+                                    <span style={{color:C.muted,fontSize:10}}>—</span>
+                                  ) : null;
+                                })()}
                                 {isAdmin&&<button onClick={()=>setTasks(p=>p.filter(t=>t.id!==task.id))} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:12,padding:"2px 5px"}}>✕</button>}
                               </td>
                             </tr>
