@@ -6290,8 +6290,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <button onClick={()=>{openNoteModal("Resolution Note", "Resolved", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
                           </>
                         )}
-                        {/* Escalate: visible to rep/RH when the request is overdue */}
-                        {overdue && (isRep||isRH) && req.status!=="Done" && req.type!=="Escalation" && (
+                        {/* Escalate: visible to rep/RH for any active non-escalation request */}
+                        {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && req.type!=="Escalation" && (
                           <button onClick={()=>{
                             const escalated = {
                               id:`ir${Date.now()}`,
