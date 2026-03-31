@@ -10983,8 +10983,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {label:"Designation",key:"designation",type:"text",ph:"e.g. VP Marketing"},
                 {label:"Phone",key:"phone",type:"text",ph:"Mobile"},
                 {label:"Email",key:"email",type:"text",ph:"email@company.com"},
-                {label:"Target Amount (Rs) * — what you're going after",key:"targetAmount",type:"number",ph:"e.g. 5000000"},
-                {label:"Expected (Rs) — likely close amount (leave blank = same as target)",key:"amount",type:"number",ph:"auto-filled from target"},
+                {label:"Target Amount * — e.g. 50L or 2.5Cr",key:"targetAmount",type:"text",ph:"50L / 2.5Cr / 5000000"},
+                {label:"Expected Amount — likely close (blank = same as target)",key:"amount",type:"text",ph:"50L / 2.5Cr / leave blank"},
                 {label:"Next Step",key:"nextStep",type:"text",ph:"Action item"},
                 {label:"Next Step Date",key:"nextStepDate",type:"date",ph:""},
               ].map(f=>(
