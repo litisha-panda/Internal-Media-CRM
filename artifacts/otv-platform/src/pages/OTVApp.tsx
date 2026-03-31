@@ -3219,7 +3219,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const endDT   = `${dateParts}T${endH}${endM}00`;
                   window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}`,"_blank");
                 } else if (pf.calPlatform==="zoho") {
-                  window.open(`https://calendar.zoho.in/newevent?title=${title}&startdate=${date}&starttime=${startH}:${endM}&enddate=${date}&endtime=${endH}:${endM}&desc=${details}`,"_blank");
+                  // Zoho Calendar has no public pre-fill URL — generate an .ics file instead
+                  const ics = [
+                    "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//OTV CRM//EN","CALSCALE:GREGORIAN","METHOD:REQUEST",
+                    "BEGIN:VEVENT",
+                    `DTSTART:${dateParts}T${startH}${endM}00`,
+                    `DTEND:${dateParts}T${endH}${endM}00`,
+                    `SUMMARY:[OTV] Meeting: ${pf.clientAgencyName.trim()}`,
+                    `DESCRIPTION:Contact: ${pf.contactName.trim()}${pf.agenda?"\\nAgenda: "+pf.agenda:""}`,
+                    `UID:otv-${Date.now()}@odishatv.com`,
+                    "STATUS:CONFIRMED","END:VEVENT","END:VCALENDAR"
+                  ].join("\r\n");
+                  const blob = new Blob([ics],{type:"text/calendar;charset=utf-8"});
+                  const a = document.createElement("a");
+                  a.href = URL.createObjectURL(blob);
+                  a.download = `OTV-${pf.clientAgencyName.trim().replace(/\s+/g,"-")}.ics`;
+                  a.click();
                 } else if (pf.calPlatform==="outlook") {
                   const startISO = `${date}T${startH}:${endM}:00`;
                   const endISO   = `${date}T${endH}:${endM}:00`;
@@ -3935,7 +3950,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {cp.icon} {cp.label}
                                 </button>
                               ))}
-                              <span style={{fontSize:10,color:C.muted,lineHeight:"28px",paddingLeft:4}}>Opens in new tab</span>
+                              <span style={{fontSize:10,color:C.muted,lineHeight:"28px",paddingLeft:4}}>{pf.calPlatform==="zoho"?"Downloads .ics file":"Opens in new tab"}</span>
                             </div>
                           )}
                         </div>
@@ -11393,7 +11408,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"flex",gap:8,flexWrap:"wrap",marginBottom:10}}>
                       {[
                         {id:"google", label:"Google Calendar",  icon:"📅", color:"#4285F4", desc:"Creates event + auto-generates Google Meet link"},
-                        {id:"zoho",   label:"Zoho Calendar",    icon:"📆", color:"#e42527", desc:"Creates event in Zoho Calendar"},
+                        {id:"zoho",   label:"Zoho Calendar",    icon:"📆", color:"#e42527", desc:"Downloads .ics file — open to add to Zoho Calendar"},
                         {id:"none",   label:"No Calendar",      icon:"⊘",  color:"#7d8590", desc:"Schedule internally only, no calendar invite"},
                       ].map(cp=>(
                         <button key={cp.id} onClick={()=>setLogForm(p=>({...p,calendarPlatform:cp.id}))}
@@ -11419,8 +11434,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     )}
                     {logForm.calendarPlatform==="zoho" && (
                       <div style={{display:"flex",alignItems:"center",gap:8,padding:"8px 12px",background:`#e4252718`,border:"1px solid #e4252744",borderRadius:5}}>
-                        <span style={{fontSize:12,color:"#e42527",fontWeight:600}}>Zoho Meeting</span>
-                        <span style={{fontSize:11,color:C.dim}}> — event created in Zoho Calendar (Zoho OAuth required in production)</span>
+                        <span style={{fontSize:14}}>📆</span>
+                        <div>
+                          <span style={{fontSize:12,color:"#e42527",fontWeight:600}}>Zoho Calendar</span>
+                          <span style={{fontSize:11,color:C.dim}}> — an .ics file will download. Open it to add the event to Zoho Calendar.</span>
+                        </div>
                       </div>
                     )}
                     {logForm.calendarPlatform && logForm.calendarPlatform !== "none" && (
