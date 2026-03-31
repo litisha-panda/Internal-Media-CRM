@@ -8256,10 +8256,31 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note:`Approved ${approvedOnly.length} client${approvedOnly.length!==1?"s":""}`}]
                               }:t));
                               if(nextStep==="Approved"){
+                                const newDeals = [];
                                 approvedOnly.forEach(cl=>{
                                   const existing = deals.find(d=>d.repId===sub.repId&&d.clientCompany===cl.clientCompany&&d.quarter===sub.quarter);
-                                  if(existing) setDeals(p=>p.map(d=>d.id===existing.id?{...d,targetAmount:cl.targetAmount}:d));
+                                  if(existing){
+                                    setDeals(p=>p.map(d=>d.id===existing.id?{...d,targetAmount:cl.targetAmount}:d));
+                                  } else {
+                                    const rep = reps.find(r=>r.id===sub.repId);
+                                    newDeals.push({
+                                      id:`d_ts_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+                                      repId:sub.repId, repName:sub.repName||rep?.name||"",
+                                      region:sub.region||rep?.region||"",
+                                      clientCompany:cl.clientCompany, contactName:"", designation:"",
+                                      contactLevel:"", phone:"", email:"",
+                                      dealType:cl.dealType||"Linear TV",
+                                      outcome:"Needs Callback",
+                                      amount:cl.targetAmount, targetAmount:cl.targetAmount,
+                                      priority:"Regular", quarter:sub.quarter,
+                                      notes:`Auto-created from approved target submission`,
+                                      nextStep:"", nextStepDate:null,
+                                      lastContact:TODAY, reqs:[], auditLog:[],
+                                      awaitingApproval:null, awaitingApprovalSince:null,
+                                    });
+                                  }
                                 });
+                                if(newDeals.length>0) setDeals(p=>[...p,...newDeals]);
                               }
                               showToast(nextStep==="Approved"?`✓ ${approvedOnly.length} targets approved!`:`Forwarded ${approvedOnly.length} clients → ${nextStep||""}`);
                             }}
