@@ -2602,6 +2602,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       { label:"MY CRM",      items:[
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
         N("pipeline","Revenue Tracker","◈"),
+        N("revenue-log","Revenue Log","₹"),
         N("target-submit","My Targets","◎",targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
         N("tasks","Tasks","✓",myRepTaskBadge),
         N("internal-requests","Internal Requests","⬆",irBadge),
@@ -2620,6 +2621,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       { label:"MY CRM",      items:[
         N("warroom","War Room","⬡",rhEscBadge),
         N("pipeline","Revenue Tracker","◈"),
+        N("revenue-log","Revenue Log","₹"),
         N("targets","My Targets","◎"),
         N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length||null),
         N("my-tasks","My Tasks","✓"),
@@ -7752,15 +7754,36 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </button>
                 </div>
 
-                {/* Approval chain indicator */}
-                <div style={{display:"flex",alignItems:"center",gap:0,marginTop:14,marginBottom:16,flexWrap:"wrap"}}>
-                  {["You","Region Head","NSH","Sales Strategy","CRO → Approved"].map((s,i)=>(
-                    <div key={s} style={{display:"flex",alignItems:"center"}}>
-                      <div style={{background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"4px 10px",fontSize:10,color:C.accent,fontWeight:600,whiteSpace:"nowrap"}}>{s}</div>
-                      {i<4&&<div style={{width:16,height:1,background:C.border}}/>}
+                {/* Approval chain indicator — live step highlighting */}
+                {(()=>{
+                  const latestSub = allActiveSubs.length>0 ? allActiveSubs.reduce((a,b)=>((a.submittedAt||"")>=(b.submittedAt||"") ? a : b)) : null;
+                  const chainStatus = latestSub?.status || null;
+                  const stepMap:Record<string,number> = {"Pending RH":1,"Pending NSH":2,"Pending Strategy":3,"Pending CRO":4,"Approved":5};
+                  const activeStep = chainStatus ? (stepMap[chainStatus]??0) : 0;
+                  const pillLabels = ["You","Region Head","NSH","Sales Strategy","CRO → Approved"];
+                  return (
+                    <div style={{display:"flex",alignItems:"center",gap:0,marginTop:14,marginBottom:16,flexWrap:"wrap"}}>
+                      {pillLabels.map((s,i)=>{
+                        const done    = activeStep===5 || i<activeStep;
+                        const current = activeStep<5 && i===activeStep;
+                        const bg    = done ? `${C.green}18` : current ? `${C.accent}18` : `${C.dim}10`;
+                        const bdr   = done ? `1px solid ${C.green}44` : current ? `1px solid ${C.accent}55` : `1px solid ${C.border}`;
+                        const col   = done ? C.green : current ? C.accent : C.muted;
+                        const fw    = (done||current) ? 700 : 500;
+                        return (
+                          <div key={s} style={{display:"flex",alignItems:"center"}}>
+                            <div style={{background:bg,border:bdr,borderRadius:6,padding:"4px 10px",fontSize:10,color:col,fontWeight:fw,whiteSpace:"nowrap",transition:"all .2s"}}>
+                              {done&&i<4?"✓ "+s:s}
+                            </div>
+                            {i<4&&<div style={{width:16,height:1,background:done?C.green:C.border,transition:"background .2s"}}/>}
+                          </div>
+                        );
+                      })}
+                      {chainStatus&&chainStatus!=="Approved"&&<div style={{marginLeft:12,fontSize:10,color:C.dim}}>Awaiting {pillLabels[activeStep]}</div>}
+                      {chainStatus==="Approved"&&<div style={{marginLeft:12,fontSize:10,color:C.green,fontWeight:700}}>Fully Approved ✓</div>}
                     </div>
-                  ))}
-                </div>
+                  );
+                })()}
 
                 {/* ── Get Started for the Year banner (new reps with no targets) ── */}
                 {!activeSub && (
@@ -8352,7 +8375,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           if(matchDeal){
                             const allForDeal = [...revenueEntries.filter(e=>e.clientCompany===client&&qMatch(e.quarter)),entry];
                             const total = allForDeal.reduce((s,e)=>s+(e.amount||0),0);
-                            setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,amount:total,outcome:total>=matchDeal.targetAmount?"Proposal Accepted":d.outcome}:d));
+                            setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,outcome:total>=(d.targetAmount||d.amount)?"Proposal Accepted":d.outcome}:d));
                           }
                           setRf({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
                           showToast(`₹${(amt/100000).toFixed(1)}L logged for ${client} ✓`);

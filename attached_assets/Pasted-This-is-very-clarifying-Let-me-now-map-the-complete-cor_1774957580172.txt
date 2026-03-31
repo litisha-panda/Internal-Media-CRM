@@ -1,0 +1,46 @@
+This is very clarifying. Let me now map the complete corrected picture before giving you the onboarding sequence and rollout plan.Here's my complete PM thinking on this — the corrected workflow, the onboarding sequence, and the rollout plan.
+
+The whole system has three distinct phases that happen at different cadences. The confusion is that the app treats them as if they're all happening simultaneously.
+
+**Phase 1 — Year Setup** happens once. Sales Strategy owns it. It's the only time targets get entered.
+
+**Phase 2 — Daily Operations** is the rep's loop. Every single working day. Meet → log → RO → revenue.
+
+**Phase 3 — Measurement** is what managers read. It's a live view of Phase 2 against Phase 1.
+
+Right now the app mixes all three together with no clear sequence. Here's how they should be structured:Now the onboarding sequence — who does what, in what order, before a single rep touches the system:Now here's everything that needs to change in the system, framed as product decisions — not code instructions.
+
+---
+
+## The 7 things that need to change before deployment
+
+**1. Targets must be truly frozen after CRO approval**
+Right now a rep can add new clients to an approved submission and it silently changes the total. The rule you described is correct: the original target number cannot change. If a rep wants to add a new client to compensate for a shortfall, they can — but it gets listed as an additional revenue opportunity, not a change to their quota. The `totalTarget` shown on their page must always be the CRO-approved number.
+
+**2. RO upload = revenue credited. Directly.**
+Right now the RO Parser and the Revenue Log are disconnected. A rep parses an RO and the revenue doesn't appear anywhere in their target progress. What should happen: after a rep parses an RO and confirms it, the system should ask "Which client target does this count towards?" and credit it immediately. The Revenue Log as a separate hidden screen should disappear — it should be a natural step in the RO upload flow.
+
+**3. Revenue Log needs to be in the navigation**
+Even before the RO-direct flow is built, reps cannot find the Revenue Log right now because it has no navigation entry for any role. This is why every rep's achievement shows `—`. Put it in the rep's sidebar immediately, between My Targets and Tasks.
+
+**4. Zoho CRM for client and agency names**
+When a rep logs a meeting, adds a deal, or uploads targets — they should be typing into a search box that queries Zoho, not a free-text field. This eliminates spelling variations ("Havells" vs "Havells India" vs "Havells Ltd") that break every revenue match across the system. This is the most important data quality fix.
+
+**5. 11:30 PM rule needs a real email**
+The system marks people absent but nothing goes anywhere. The spec says email HR. What should actually happen: on the 1st of each month, the system generates a report of all absent days per rep from the previous month and emails it to HR and the rep's RH. The 24th of month framing you mentioned is the payroll deadline — the report should go out by then.
+
+**6. Seed data wiped before production**
+The `/api/state/reset-all` endpoint exists and works. It needs to be triggered once before any real user logs in. After that it should be removed or restricted to Admin only with a confirmation gate — because running it after real data is in would destroy everything.
+
+**7. "Proposal Accepted" needs renaming**
+You clarified this means mail confirmation — not PO, not RO, not payment. But the label "Proposal Accepted" reads like a closed deal to everyone who sees the War Room. Rename it to "Mail Confirmed" or "Verbal Confirmed" so managers know this is not booked revenue. Booked revenue is only when the RO arrives and is uploaded.
+
+---
+
+## The single test for deployment readiness
+
+Before going live, Sales Strategy should do this end-to-end on the actual deployed system with real credentials:
+
+Log in as Sales Strategy → upload 3 rep target rows for different regions → approve as each RH → approve as NSH → approve as CRO → log in as a rep → see your frozen target → log a meeting → upload a sample RO → see the revenue credit on My Targets → check that the War Room matches.
+
+If any step breaks or the numbers don't match, the system isn't ready. If every step works and the numbers match, it is.
