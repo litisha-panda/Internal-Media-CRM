@@ -1451,6 +1451,10 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   });
   const [clientMasterList, setClientMasterList] = usePersistedState<string[]>("otv_clientMaster", []);
   const [masterNewName, setMasterNewName]         = useState("");
+  const [zohoImporting, setZohoImporting]         = useState(false);
+  const [zohoAccounts, setZohoAccounts]           = useState<string[]>([]);
+  const [zohoError, setZohoError]                 = useState<string|null>(null);
+  const [zohoSearchQ, setZohoSearchQ]             = useState("");
 
   // ── DEAL INACTIVITY ENFORCEMENT — runs on load and when adminConfig changes ──
   useEffect(() => {
@@ -8711,6 +8715,65 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     + Add
                   </button>
                 </div>
+                {/* ── Import from Zoho CRM ── */}
+                <div style={{marginBottom:12,padding:"12px 14px",background:`${C.green}08`,border:`1px solid ${C.green}33`,borderRadius:6}}>
+                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",gap:8,marginBottom:8}}>
+                    <div style={{fontSize:10,color:C.green,fontWeight:700,letterSpacing:".06em"}}>IMPORT FROM ZOHO CRM</div>
+                    <button onClick={async()=>{
+                      setZohoError(null);
+                      setZohoImporting(true);
+                      setZohoAccounts([]);
+                      try{
+                        const url=zohoSearchQ.trim().length>=2
+                          ?`/api/zoho/accounts?search=${encodeURIComponent(zohoSearchQ.trim())}`
+                          :"/api/zoho/accounts";
+                        const r=await fetch(url);
+                        const j=await r.json();
+                        if(j.ok){setZohoAccounts(j.accounts||[]);if(!j.accounts?.length)setZohoError("No accounts found in Zoho CRM.");}
+                        else setZohoError(j.error||"Failed to fetch from Zoho CRM.");
+                      }catch(e:unknown){setZohoError(e instanceof Error?e.message:"Network error");}
+                      finally{setZohoImporting(false);}
+                    }} disabled={zohoImporting}
+                      style={{padding:"6px 14px",background:C.green,border:"none",borderRadius:5,color:"#fff",fontSize:11,cursor:zohoImporting?"not-allowed":"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,opacity:zohoImporting?0.6:1}}>
+                      {zohoImporting?"Fetching…":"Fetch Accounts"}
+                    </button>
+                  </div>
+                  <div style={{display:"flex",gap:6,marginBottom:8}}>
+                    <input value={zohoSearchQ} onChange={e=>setZohoSearchQ(e.target.value)}
+                      placeholder="Search Zoho accounts by name… (leave blank to fetch all)"
+                      style={{flex:1,padding:"6px 10px",background:"#fff",border:`1px solid ${C.green}44`,borderRadius:5,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}/>
+                  </div>
+                  {zohoError&&<div style={{fontSize:11,color:C.red,marginBottom:6}}>⚠ {zohoError}</div>}
+                  {zohoAccounts.length>0&&(()=>{
+                    const notYet=zohoAccounts.filter(a=>!clientMasterList.some(m=>m.toLowerCase()===a.toLowerCase()));
+                    return (
+                      <div>
+                        <div style={{fontSize:10,color:C.dim,marginBottom:6}}>{zohoAccounts.length} account{zohoAccounts.length!==1?"s":""} returned · {notYet.length} not yet in your list</div>
+                        <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8,maxHeight:120,overflowY:"auto"}}>
+                          {zohoAccounts.map(a=>{
+                            const already=clientMasterList.some(m=>m.toLowerCase()===a.toLowerCase());
+                            return <button key={a} onClick={()=>{
+                              if(already)return;
+                              setClientMasterList(p=>[...p,a].sort((x,y)=>x.localeCompare(y)));
+                              showToast(`${a} added ✓`);
+                            }}
+                              style={{background:already?`${C.green}12`:`${C.green}20`,border:`1px solid ${already?C.green+"44":C.green+"66"}`,borderRadius:12,padding:"3px 11px",fontSize:11,color:already?C.muted:C.green,cursor:already?"default":"pointer",fontFamily:"'DM Mono',monospace",textDecoration:already?"line-through":"none"}}>
+                              {already?"✓":"+"}  {a}
+                            </button>;
+                          })}
+                        </div>
+                        {notYet.length>0&&<button onClick={()=>{
+                          setClientMasterList(p=>[...p,...notYet].sort((a,b)=>a.localeCompare(b)));
+                          showToast(`${notYet.length} Zoho accounts imported ✓`);
+                        }} style={{fontSize:10,background:`${C.green}22`,border:`1px solid ${C.green}55`,borderRadius:4,padding:"4px 12px",color:C.green,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                          Import All {notYet.length} New
+                        </button>}
+                      </div>
+                    );
+                  })()}
+                  {!zohoAccounts.length&&!zohoError&&!zohoImporting&&<div style={{fontSize:10,color:C.muted}}>Click "Fetch Accounts" to pull your advertiser list directly from Zoho CRM.</div>}
+                </div>
+
                 {/* Import from existing deals */}
                 {(()=>{
                   const existingClients=[...new Set(deals.map(d=>d.clientCompany).filter(Boolean))].sort();
