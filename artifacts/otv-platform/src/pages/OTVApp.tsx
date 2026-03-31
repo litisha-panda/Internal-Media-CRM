@@ -2104,48 +2104,62 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       return {...rep,closed,pipe,meetings:rm.length,seniorM,senPct,risk,attOk,cPct,coverage:rep.target>0?Math.round(((closed+pipe)/rep.target)*100):0};
     }).sort((a,b)=>b.cPct-a.cPct), [deals, meetings, att, filterQ, user_role]);
 
-  // Global search results — scoped to what the current user is allowed to see
+  // Global search results — scoped to what the current user is allowed to see,
+  // and navigates only to sidebar views that exist for the current role.
   const searchResults = useMemo(() => {
     const q = globalSearch.trim().toLowerCase();
     if (q.length < 2) return [];
-    const canView   = user_role?.canView || "self";
-    const myRepId   = user_role?.repId;
-    const myRegion  = user_role?.region;
-    // Scope deals: no quarter filter so historical deals are searchable
-    const scopedDeals = canView==="all"
+    const canView  = user_role?.canView || "self";
+    const myRepId  = user_role?.repId;
+    const myRegion = user_role?.region;
+
+    // Determine which sidebar page each result type should land on.
+    // null means the role has no such page — those results are suppressed.
+    const dealView    = isAdmin ? null : "pipeline";
+    const meetingView = (isAdmin || isDigiOps) ? null : "my-plan";
+    const taskView    = isRep      ? "tasks"
+                      : isRH       ? "rh-team-tasks"
+                      : isNSH      ? "my-tasks"
+                      : isStrategy ? "nsh-rep-tasks"
+                      : isCRORole  ? "nsh-rep-tasks"
+                      : isDigiOps  ? "digi-tasks"
+                      : null; // Admin: no task view
+
+    // Scope data to what the user is allowed to see
+    const scopedDeals = !dealView ? [] : canView==="all"
       ? deals
       : canView==="region"
         ? deals.filter(d=>d.region===myRegion)
         : deals.filter(d=>d.repId===myRepId);
-    // Scope meetings by the same rule
-    const scopedMeetings = canView==="all"
+    const scopedMeetings = !meetingView ? [] : canView==="all"
       ? meetings
       : canView==="region"
         ? meetings.filter(m=>reps.find(r=>r.id===m.repId)?.region===myRegion)
         : meetings.filter(m=>m.repId===myRepId);
-    // Scope tasks: assignee or (for reps) their own tasks; managers see their scope
-    const scopedTasks = canView==="all"
+    const scopedTasks = !taskView ? [] : canView==="all"
       ? tasks
       : canView==="region"
         ? tasks.filter(t=>reps.find(r=>r.id===t.repId)?.region===myRegion)
         : tasks.filter(t=>t.assignedTo===myRepId||t.assignedToUserId===activeUser||t.assignedBy===activeUser);
+
     const out = [];
     scopedDeals.filter(d =>
       d.clientCompany?.toLowerCase().includes(q) ||
       d.contactName?.toLowerCase().includes(q) ||
       d.notes?.toLowerCase().includes(q)
-    ).slice(0, 5).forEach(d => out.push({ type:"deal", label:d.clientCompany, sub:`${d.outcome} · ${fmtR(d.amount)}`, action:()=>{ setView("pipeline"); setGlobalSearch(""); setSearchOpen(false); } }));
+    ).slice(0, 5).forEach(d => out.push({ type:"deal", label:d.clientCompany, sub:`${d.outcome} · ${fmtR(d.amount)}`, action:()=>{ setView(dealView); setGlobalSearch(""); setSearchOpen(false); } }));
     scopedMeetings.filter(m =>
       m.clientCompany?.toLowerCase().includes(q) ||
       m.discussion?.toLowerCase().includes(q) ||
       m.contactName?.toLowerCase().includes(q)
-    ).slice(0, 3).forEach(m => out.push({ type:"meeting", label:m.clientCompany, sub:`${m.date} · ${(m.discussion||"").slice(0,55)}`, action:()=>{ setView("activity"); setGlobalSearch(""); setSearchOpen(false); } }));
+    ).slice(0, 3).forEach(m => out.push({ type:"meeting", label:m.clientCompany, sub:`${m.date} · ${(m.discussion||"").slice(0,55)}`, action:()=>{ setView(meetingView); setGlobalSearch(""); setSearchOpen(false); } }));
     scopedTasks.filter(t =>
       t.clientCompany?.toLowerCase().includes(q) ||
       t.title?.toLowerCase().includes(q)
-    ).slice(0, 3).forEach(t => out.push({ type:"task", label:t.title, sub:t.clientCompany, action:()=>{ setView("tasks"); setGlobalSearch(""); setSearchOpen(false); } }));
+    ).slice(0, 3).forEach(t => out.push({ type:"task", label:t.title, sub:t.clientCompany, action:()=>{ setView(taskView); setGlobalSearch(""); setSearchOpen(false); } }));
     return out.slice(0, 8);
-  }, [globalSearch, deals, meetings, tasks, user_role, reps, activeUser]);
+  }, [globalSearch, deals, meetings, tasks, user_role, reps, activeUser,
+      isRep, isRH, isNSH, isStrategy, isCRORole, isDigiOps, isAdmin]);
 
   const updateOutcome = (id, outcome) => {
     const closed = outcome === "Proposal Accepted";
@@ -3038,7 +3052,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 onChange={e=>{setGlobalSearch(e.target.value);setSearchOpen(true);}}
                 onFocus={()=>setSearchOpen(true)}
                 onBlur={()=>setTimeout(()=>setSearchOpen(false),150)}
-                placeholder="Search deals, clients, meetings…"
+                placeholder="Search clients, deals, tasks…"
                 style={{width:"100%",background:C.s2,border:`1px solid ${globalSearch?C.accent:C.border}`,borderRadius:6,padding:"5px 10px 5px 28px",fontSize:11,color:C.text,fontFamily:"'DM Mono',monospace",outline:"none",transition:"border-color .15s"}}
               />
               {globalSearch && <button onClick={()=>{setGlobalSearch("");setSearchOpen(false);}} style={{position:"absolute",right:7,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:13,lineHeight:1}}>×</button>}
