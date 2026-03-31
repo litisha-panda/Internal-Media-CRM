@@ -1426,7 +1426,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const BLANK_LOG = {
     repId:"",
     meetingTime:"", clientOrAgency:"Client",
-    dealId:"", clientAgencyName:"",
+    dealId:"", clientAgencyName:"", dealAmount:"",
     contactName:"", designation:"", mobile:"",
     meetingType:"Physical Meeting",
     pitchType:"", discussion:"", clientFeedback:"",
@@ -2113,18 +2113,23 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       const approvalItem2 = (logForm.nextStepItems||[]).find(i =>
         i.neededFrom && ["Region Head","NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
       );
+      const newAmt = logForm.dealAmount ? parseCurrency(logForm.dealAmount) : null;
       setDeals(p => p.map(d => d.id === logForm.dealId ? {
         ...d,
         lastContact: TODAY,
         outcome: logForm.status === "Closed" ? "Mail Confirmed" : d.outcome,
+        // Update deal value if it was ₹0 and rep entered one
+        amount: (newAmt && (!d.amount||d.amount===0)) ? newAmt : d.amount,
+        targetAmount: (newAmt && (!d.targetAmount||d.targetAmount===0)) ? newAmt : d.targetAmount,
         nextStep: nextStepsSummary || firstFollowUpItem?.action || logForm.nextSteps,
         nextStepDate: firstFollowUpItem?.dueDate || logForm.followUpDate || d.nextStepDate,
         awaitingApproval: approvalItem2 ? approvalItem2.neededFrom : d.awaitingApproval,
         awaitingApprovalSince: approvalItem2 ? TODAY : d.awaitingApprovalSince,
         auditLog: [...(d.auditLog||[]), ...(approvalItem2?[{at:TODAY,by:user_role?.name||"Rep",role:user_role?.role||"",action:"Flagged",from:null,to:approvalItem2.neededFrom,note:approvalItem2.action}]:[])],
       } : d));
-    } else if (clientCompany && (logForm.nextStepItems||[]).some(i=>i.action)) {
+    } else if (clientCompany) {
       // No deal yet — create a pipeline stub for follow-up
+      const stubAmt = logForm.dealAmount ? parseCurrency(logForm.dealAmount) : 0;
       const stub = {
         id: `d_stub_${Date.now()}`,
         repId: parseInt(logForm.repId),
@@ -2134,8 +2139,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         phone: logForm.mobile || "",
         dealType: logForm.pitchType ? (logForm.pitchType.includes("FCT")?"Linear TV":logForm.pitchType.includes("Digital")?"Digital":"Media Solutions") : "Linear TV",
         outcome: "Needs Callback",
-        amount: 0,
-        targetAmount: 0,
+        amount: stubAmt,
+        targetAmount: stubAmt,
         region: rep?.region || "National",
         priority: "Regular",
         quarter: entryQ,
@@ -2148,7 +2153,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         reqs: [],
       };
       setDeals(p => [stub, ...p]);
-      showToast("New pipeline entry created from meeting log");
+      showToast(stubAmt > 0 ? `Pipeline entry created — ₹${fmtR(stubAmt)} added to your pipeline` : "Pipeline entry created — set deal value to appear in pipeline");
     }
 
     // Auto-create calendar plans for each next-step item that has a due date
@@ -2435,15 +2440,44 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         action: "Flagged for approval", from: null, to: approvalItem.neededFrom,
         note: `${approvalItem.action} — raised via meeting log`,
       }] : [];
+      const newAmtC = updatedForm.dealAmount ? parseCurrency(updatedForm.dealAmount) : null;
       setDeals(p => p.map(d => d.id === updatedForm.dealId ? {
         ...d, lastContact: TODAY,
         outcome: updatedForm.status === "Closed" ? "Mail Confirmed" : d.outcome,
+        amount: (newAmtC && (!d.amount||d.amount===0)) ? newAmtC : d.amount,
+        targetAmount: (newAmtC && (!d.targetAmount||d.targetAmount===0)) ? newAmtC : d.targetAmount,
         nextStep: nextStepsSummary || firstFollowUpItem?.action || updatedForm.nextSteps,
         nextStepDate: firstFollowUpItem?.dueDate || updatedForm.followUpDate || d.nextStepDate,
         awaitingApproval: newAwaiting,
         awaitingApprovalSince: approvalItem ? TODAY : d.awaitingApprovalSince,
         auditLog: [...(d.auditLog||[]), ...auditEntry],
       } : d));
+    } else if (clientCompany) {
+      const stubAmtC = updatedForm.dealAmount ? parseCurrency(updatedForm.dealAmount) : 0;
+      const stubC = {
+        id: `d_stub_${Date.now()}`,
+        repId: parseInt(updatedForm.repId),
+        clientCompany,
+        contactName: updatedForm.contactName || "",
+        designation: updatedForm.designation || "",
+        phone: updatedForm.mobile || "",
+        dealType: updatedForm.pitchType ? (updatedForm.pitchType.includes("FCT")?"Linear TV":updatedForm.pitchType.includes("Digital")?"Digital":"Media Solutions") : "Linear TV",
+        outcome: "Needs Callback",
+        amount: stubAmtC,
+        targetAmount: stubAmtC,
+        region: rep?.region || "National",
+        priority: "Regular",
+        quarter: entryQ,
+        notes: `Created from meeting log on ${TODAY}. ${updatedForm.discussion||""}`,
+        nextStep: nextStepsSummary || "",
+        nextStepDate: firstFollowUpItem?.dueDate || updatedForm.followUpDate || null,
+        lastContact: TODAY,
+        awaitingApproval: null,
+        awaitingApprovalSince: null,
+        reqs: [],
+      };
+      setDeals(p => [stubC, ...p]);
+      showToast(stubAmtC > 0 ? `Pipeline entry created — ₹${fmtR(stubAmtC)} added to pipeline` : "Pipeline entry created — set deal value to appear in pipeline");
     }
 
     // Auto-create calendar plans for each next-step item that has a due date
@@ -11210,11 +11244,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       {/* ASSIGN TASK MODAL */}
       {taskModal && (() => {
         const closeTaskModal = () => { setTaskModal(false); setSelfTaskMode(false); setTaskForm(BLANK_TASK_FORM); };
-        // Auto-fill self for reps (when not in selfTaskMode) so they default to themselves in the picker
-        if (!selfTaskMode && isRep && user_role?.id && !taskForm.assignedToUserId) {
-          setTimeout(()=>setTaskForm(p=>p.assignedToUserId?p:{...p,assignedToUserId:user_role.id}),0);
-        }
         const modalTitle = selfTaskMode ? "Create Task for Myself" : isRep ? "Create Task" : "Assign Task";
+        // For reps in non-self mode: default assignee is themselves (can override)
+        const repDefaultUserId = (isRep && !selfTaskMode && !taskForm.assignedToUserId) ? (user_role?.id || "") : "";
         return (
         <div className="overlay" onClick={closeTaskModal}>
           <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:500}}>
@@ -11228,8 +11260,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <input readOnly value={(user_role?.name||"Me")+" (You)"} style={{color:C.text,background:C.s2,cursor:"default"}} />
                 </div>
               ) : (
-                <div><label>{isRep ? "Assign to (defaults to yourself)" : "Assign to *"}</label>
-                  <select value={taskForm.assignedToUserId} onChange={e=>setTaskForm(p=>({...p,assignedToUserId:e.target.value}))}>
+                <div><label>{isRep ? "Assign to (default: yourself)" : "Assign to *"}</label>
+                  <select value={taskForm.assignedToUserId || repDefaultUserId} onChange={e=>setTaskForm(p=>({...p,assignedToUserId:e.target.value}))}>
                     <option value="">— Select person —</option>
                     <optgroup label="Leadership &amp; Strategy">
                       {USER_ROLES.filter(u=>["ADMIN","SALES HEAD","SALES STRATEGY","CRO","DIGI OPS"].includes(u.role)).map(u=>(
@@ -11537,6 +11569,25 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <label>Or type name (new client)</label>
                 <input placeholder="Not in CRM yet?" value={logForm.clientAgencyName||""} onChange={e=>setLogForm(p=>({...p,clientAgencyName:e.target.value,dealId:""}))} />
               </div>
+              {/* Deal value prompt — shown when selected deal has ₹0 or when it's a new client */}
+              {(()=>{
+                const selDeal = logForm.dealId ? deals.find(d=>d.id===logForm.dealId) : null;
+                const needsValue = (selDeal && (selDeal.amount===0||!selDeal.amount)) || (!logForm.dealId && (logForm.clientAgencyName||"").trim());
+                if (!needsValue) return null;
+                return (
+                  <div style={{background:`${C.accent}10`,border:`1px solid ${C.accent}44`,borderRadius:6,padding:"8px 10px"}}>
+                    <div style={{fontSize:10,color:C.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>
+                      {selDeal ? "This deal has no value — set it now so it appears in your pipeline" : "Set expected deal value (appears in pipeline immediately)"}
+                    </div>
+                    <input
+                      placeholder="e.g. 15,00,000"
+                      value={logForm.dealAmount||""}
+                      onChange={e=>setLogForm(p=>({...p,dealAmount:e.target.value}))}
+                      style={{fontSize:12,width:"100%"}}
+                    />
+                  </div>
+                );
+              })()}
             </div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
               <div>
@@ -11914,16 +11965,88 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 }
               </div>
 
-              {/* Next steps */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Next Steps {meetingEditMode&&<span style={{color:C.red,fontWeight:400}}>*</span>}</div>
-                {meetingEditMode
-                  ? <input value={ef.nextSteps||""} onChange={e=>setEf({nextSteps:e.target.value})} placeholder="What is the clear next action?" style={{width:"100%",fontSize:12}} />
-                  : vm.nextSteps
-                      ? <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:`${C.orange}11`,border:`1px solid ${C.orange}33`,borderRadius:6,padding:"10px 12px"}}>{vm.nextSteps}</div>
-                      : <div style={{fontSize:11,color:C.muted}}>—</div>
-                }
-              </div>
+              {/* Action Items — structured next step cards */}
+              {(()=>{
+                const items = (vm.nextStepItems||[]).filter(i=>i.action);
+                const addItem = () => {
+                  setMeetings(p => p.map(m => m.id===viewMeetingId ? {
+                    ...m,
+                    nextStepItems:[...(m.nextStepItems||[]),{action:"",neededFrom:"",remarks:"",dueDate:""}]
+                  }:m));
+                };
+                const updateItem = (idx:number, field:string, val:string) => {
+                  setMeetings(p => p.map(m => m.id===viewMeetingId ? {
+                    ...m,
+                    nextStepItems:(m.nextStepItems||[]).map((it,i)=>i===idx?{...it,[field]:val}:it)
+                  }:m));
+                };
+                const removeItem = (idx:number) => {
+                  setMeetings(p => p.map(m => m.id===viewMeetingId ? {
+                    ...m,
+                    nextStepItems:(m.nextStepItems||[]).filter((_,i)=>i!==idx)
+                  }:m));
+                };
+                const linkedIRColor = (status:string) => status==="Done"||status==="Resolved"?C.green:status==="In Progress"?C.blue:status==="Rejected"?C.red:C.accent;
+                return (
+                  <div style={{marginBottom:12}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>
+                        Action Items {items.length>0&&<span style={{color:C.blue,fontWeight:400}}>({items.length})</span>}
+                      </div>
+                      <button onClick={addItem} style={{fontSize:10,color:C.blue,background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:4,padding:"3px 9px",cursor:"pointer",fontWeight:600}}>
+                        + Add Action Item
+                      </button>
+                    </div>
+                    {(vm.nextStepItems||[]).length===0 && !meetingEditMode && (
+                      vm.nextSteps
+                        ? <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:`${C.accent}11`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"10px 12px"}}>{vm.nextSteps}</div>
+                        : <div style={{fontSize:11,color:C.muted}}>No action items recorded.</div>
+                    )}
+                    {(vm.nextStepItems||[]).map((item, idx) => {
+                      const linkedIR = item.action ? internalReqs.find(r=>r.meetingLogId===vm.id&&r.subject===item.action) : null;
+                      const linkedTask = item.action ? tasks.find(t=>t.meetingLogId===vm.id&&t.title?.includes(item.action.slice(0,30))) : null;
+                      return (
+                        <div key={idx} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 11px",marginBottom:7}}>
+                          {/* Row 1: action text + remove button */}
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:5}}>
+                            <input
+                              value={item.action||""}
+                              onChange={e=>updateItem(idx,"action",e.target.value)}
+                              placeholder="What needs to happen…"
+                              style={{fontSize:12,fontWeight:600,width:"100%",color:C.text,flex:1}}
+                            />
+                            <button onClick={()=>removeItem(idx)} style={{fontSize:14,color:C.red,background:"transparent",border:"none",cursor:"pointer",lineHeight:1,padding:0,marginLeft:4,flexShrink:0}}>×</button>
+                          </div>
+                          {/* Row 2: neededFrom + dueDate + remarks */}
+                          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:(linkedIR||linkedTask)?6:0}}>
+                            <select value={item.neededFrom||""} onChange={e=>updateItem(idx,"neededFrom",e.target.value)} style={{fontSize:11,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:C.dim}}>
+                              <option value="">Self</option>
+                              {["Region Head","NSH","CXO","Sales Strategy","Digital","Finance","Legal","Branding Team","Content Team","Client"].map(r=><option key={r}>{r}</option>)}
+                            </select>
+                            <input type="date" min="2020-01-01" max="2099-12-31" value={item.dueDate||""} onChange={e=>updateItem(idx,"dueDate",e.target.value)} style={{fontSize:11,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:C.dim}} />
+                            <input value={item.remarks||""} onChange={e=>updateItem(idx,"remarks",e.target.value)} placeholder="Notes…" style={{fontSize:11,flex:1,minWidth:80}} />
+                          </div>
+                          {/* Linked IR or Task status badge */}
+                          {(linkedIR||linkedTask)&&(
+                            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+                              {linkedIR&&(
+                                <span style={{fontSize:10,background:`${linkedIRColor(linkedIR.status)}18`,color:linkedIRColor(linkedIR.status),border:`1px solid ${linkedIRColor(linkedIR.status)}44`,borderRadius:4,padding:"2px 8px",fontWeight:600}}>
+                                  IR → {linkedIR.dept}: {linkedIR.status}
+                                </span>
+                              )}
+                              {linkedTask&&(
+                                <span style={{fontSize:10,background:`${C.green}18`,color:C.green,border:`1px solid ${C.green}44`,borderRadius:4,padding:"2px 8px",fontWeight:600}}>
+                                  Task: {linkedTask.status}
+                                </span>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
 
               {/* Follow-up & next meeting */}
               <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
