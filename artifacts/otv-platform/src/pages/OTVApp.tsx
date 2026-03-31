@@ -1374,6 +1374,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [planEditForm, setPlanEditForm]   = useState({time:"",clientAgencyName:"",contactName:"",phone:"",agenda:"",pitchType:""});
   const [loginProvider, setLoginProvider] = useState<"google"|"zoho"|"demo">("demo");
   const planInlineState                   = useState(null); // [inlineLogPlan, setInlineLogPlan]
+  const planInlineStatusState             = useState<string>(""); // [inlineLogStatus, setInlineLogStatus]
   const [rhRepDrill, setRhRepDrill]       = useState(null); // Region Head targets drilldown
   const [nshRHDrill,  setNshRHDrill]      = useState(null); // NSH drills into specific RH region
   const [nshRegion,   setNshRegion]       = useState("all"); // NSH rep-CRM region filter
@@ -3231,6 +3232,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             // Inline log state — which plan is being logged right now
             const [inlineLogPlan, setInlineLogPlan] = planInlineState;
+            const [inlineLogStatus, setInlineLogStatus] = planInlineStatusState;
 
             return (
               <div className="fin">
@@ -3428,7 +3430,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     if (m) setViewMeetingId(m.id);
                                   } else if (isFuture) {
                                     showToast(`This meeting is on ${p.date}. Come back on the day to log it.`);
-                                  } else { setInlineLogPlan(isOpen?null:p.id); }
+                                  } else { if (!isOpen) setInlineLogStatus(""); setInlineLogPlan(isOpen?null:p.id); }
                                 }}
                                 style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 10px",background:p.status==="Done"?`${C.green}08`:blocked?`${C.orange}06`:isFuture?C.s2:isOpen?`${C.accent}10`:C.s2,borderRadius:6,border:`1px solid ${p.status==="Done"?C.green+"33":blocked?C.orange+"44":isFuture?C.border:isOpen?C.accent+"55":C.border}`,cursor:isFuture?"default":"pointer",transition:"all .1s",opacity:isFuture?0.8:1}}>
                                 <span style={{fontSize:10,color:C.dim,whiteSpace:"nowrap",marginTop:1}}>🕐 {p.time}</span>
@@ -3486,7 +3488,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               {!isFuture&&isOpen&&(()=>{
                                 // Auto-detect if deal is closed
                                 const matchDealInline=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
-                                const isClosed = matchDealInline?.outcome==="Proposal Accepted";
+                                const isClosed = inlineLogStatus === "Closed" || matchDealInline?.outcome==="Proposal Accepted";
                                 return (
                                 <div style={{background:`${C.accent}06`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"14px 14px",marginTop:4}}>
                                   <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:12}}>Log This Meeting</div>
@@ -3509,17 +3511,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <div><label>Client Feedback</label><textarea rows={2} placeholder="Positive, hesitant, needs approval..." id={`fb_${p.id}`} style={{fontSize:11,resize:"none"}} /></div>
                                     <div>
                                       <label>Meeting Status *</label>
-                                      <select id={`status_${p.id}`} style={{fontSize:11}}>
+                                      <select value={inlineLogStatus} onChange={e=>setInlineLogStatus(e.target.value)} style={{fontSize:11}}>
+                                        <option value="">Select…</option>
                                         {MEETING_STATUS.map(s=><option key={s}>{s}</option>)}
                                       </select>
                                     </div>
                                   </div>
 
-                                  {/* Next Steps — always mandatory */}
+                                  {/* Next Steps — hidden when Closed */}
+                                  {!isClosed && (
                                   <div style={{marginBottom:8}}>
                                     <label>Next Steps * <span style={{color:C.red,fontWeight:400}}>(required)</span></label>
                                     <input placeholder="What is the clear next action from this meeting?" id={`ns_${p.id}`} style={{fontSize:11}} />
                                   </div>
+                                  )}
 
                                   {/* Follow-up + next meeting — hidden if deal is closed */}
                                   {!isClosed && (
@@ -3566,8 +3571,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <button className="btn btn-primary" style={{fontSize:11}} onClick={()=>{
                                       const disc = document.getElementById(`disc_${p.id}`)?.value||"";
                                       const fb   = document.getElementById(`fb_${p.id}`)?.value||"";
-                                      const st   = document.getElementById(`status_${p.id}`)?.value||"Meeting Done";
-                                      const ns   = document.getElementById(`ns_${p.id}`)?.value||"";
+                                      const st   = inlineLogStatus||"Meeting Done";
+                                      const ns   = isClosed?"Deal Closed":document.getElementById(`ns_${p.id}`)?.value||"";
                                       const fu   = document.getElementById(`fu_${p.id}`)?.value||"";
                                       const nm   = document.getElementById(`nm_${p.id}`)?.value||"";
                                       const nm_time = document.getElementById(`nm_time_${p.id}`)?.value||"";
