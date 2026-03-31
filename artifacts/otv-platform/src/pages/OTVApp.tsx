@@ -1600,6 +1600,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [myPlanTab,  setMyPlanTab]        = useState<"plan"|"log">("plan"); // My Plan sub-tabs
   const [addPlanFor, setAddPlanFor]       = useState(null);
   const [planForm, setPlanForm]           = useState({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
+  const [planEditId, setPlanEditId]       = useState<string|null>(null);
+  const [planEditForm, setPlanEditForm]   = useState({time:"",clientAgencyName:"",contactName:"",phone:"",agenda:"",pitchType:""});
   const [loginProvider, setLoginProvider] = useState<"google"|"zoho"|"demo">("demo");
   const planInlineState                   = useState(null); // [inlineLogPlan, setInlineLogPlan]
   const [rhRepDrill, setRhRepDrill]       = useState(null); // Region Head targets drilldown
@@ -2683,9 +2685,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
   };
 
   const getApprovalChainNext = (currentApprover, amount) => {
-    if (currentApprover === "NSH") return amount >= APPROVAL_THRESHOLDS.CXO ? "CXO" : null;
-    if (currentApprover === "CXO") return null;
-    if (currentApprover === "RH")  return "NSH";
+    if (currentApprover === "NSH")            return amount >= APPROVAL_THRESHOLDS.CXO ? "CXO" : "Sales Strategy";
+    if (currentApprover === "Sales Strategy") return "CXO";
+    if (currentApprover === "CXO")            return null;
+    if (currentApprover === "RH")             return "NSH";
     return null;
   };
 
@@ -2879,6 +2882,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       { label:"LEADERBOARD", items:[
         N("lb-region","By Region","◇"),
         N("lb-all","By Sales Rep","◇"),
+      ]},
+      { label:"SETTINGS",    items:[
+        N("strategy-config","Approval Settings","⚙"),
       ]},
     ];
 
@@ -3626,13 +3632,32 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     {p.status==="Done"?"Done":p.status==="Cancelled"?"Cancelled":blocked?"⏳ Blocked":isFuture?"📅 Upcoming":"Tap to log"}
                                   </span>
                                   {p.status!=="Done"&&!isFuture&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
+                                  {isFuture&&p.status!=="Done"&&<button onClick={e=>{e.stopPropagation();if(planEditId===p.id){setPlanEditId(null);}else{setPlanEditId(p.id);setPlanEditForm({time:p.time||"10:00",clientAgencyName:p.clientAgencyName||"",contactName:p.contactName||"",phone:p.phone||"",agenda:p.agenda||"",pitchType:p.pitchType||""});}}} style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,borderRadius:4,padding:"1px 7px",color:C.blue,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✎ Edit</button>}
                                 </div>
                               </div>
 
-                              {/* Info note for future meetings */}
-                              {isFuture&&isOpen&&(
-                                <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:5,padding:"8px 12px",marginTop:4,fontSize:11,color:C.blue}}>
-                                  📅 Meeting is scheduled for <strong>{p.date}</strong>. You can log the outcome after the meeting happens.
+                              {/* Inline EDIT form for future plans */}
+                              {isFuture&&planEditId===p.id&&(
+                                <div style={{background:`${C.blue}06`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"12px 14px",marginTop:4}}>
+                                  <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>Edit Planned Meeting</div>
+                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                                    <div><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Time</label><input type="time" value={planEditForm.time} onChange={e=>setPlanEditForm(f=>({...f,time:e.target.value}))} style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
+                                    <div><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Client / Agency</label><input value={planEditForm.clientAgencyName} onChange={e=>setPlanEditForm(f=>({...f,clientAgencyName:e.target.value}))} style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
+                                    <div><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Contact Name</label><input value={planEditForm.contactName} onChange={e=>setPlanEditForm(f=>({...f,contactName:e.target.value}))} style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
+                                    <div><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Phone</label><input value={planEditForm.phone} onChange={e=>setPlanEditForm(f=>({...f,phone:e.target.value}))} style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
+                                    <div style={{gridColumn:"1/-1"}}><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Agenda</label><input value={planEditForm.agenda} onChange={e=>setPlanEditForm(f=>({...f,agenda:e.target.value}))} placeholder="What are you going in with?" style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
+                                  </div>
+                                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
+                                    <button onClick={()=>setPlanEditId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
+                                  </div>
+                                </div>
+                              )}
+
+                              {/* Info note for future meetings (no edit) */}
+                              {isFuture&&planEditId!==p.id&&(
+                                <div style={{background:`${C.blue}06`,border:`1px solid ${C.blue}18`,borderRadius:5,padding:"6px 10px",marginTop:4,fontSize:10,color:C.blue}}>
+                                  📅 Scheduled for <strong>{p.date}</strong>. Come back on the day to log the outcome. Use ✎ Edit to change details.
                                 </div>
                               )}
 
@@ -3678,8 +3703,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {/* Follow-up + next meeting — hidden if deal is closed */}
                                   {!isClosed && (
                                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                                      <div><label>Follow-up Date</label><input type="date" id={`fu_${p.id}`} style={{fontSize:11}} /></div>
-                                      <div><label>Next Meeting Date</label><input type="date" id={`nm_${p.id}`} style={{fontSize:11}} /></div>
+                                      <div><label>Follow-up Date</label><input type="date" min="2020-01-01" max="2099-12-31" id={`fu_${p.id}`} style={{fontSize:11}} /></div>
+                                      <div><label>Next Meeting Date</label><input type="date" min="2020-01-01" max="2099-12-31" id={`nm_${p.id}`} style={{fontSize:11}} /></div>
+                                      <div><label>Next Meeting Time <span style={{color:C.dim,fontWeight:400}}>(if rescheduled)</span></label><input type="time" id={`nm_time_${p.id}`} style={{fontSize:11}} /></div>
                                     </div>
                                   )}
 
@@ -3708,7 +3734,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                         </div>
                                       </div>
                                       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                                        <div><label>By when do you need it?</label><input type="date" id={`bywhen_${p.id}`} style={{fontSize:11}} /></div>
+                                        <div><label>By when do you need it?</label><input type="date" min="2020-01-01" max="2099-12-31" id={`bywhen_${p.id}`} style={{fontSize:11}} /></div>
                                         <div><label>Remarks</label><input placeholder="Any context..." id={`rmk_${p.id}`} style={{fontSize:11}} /></div>
                                       </div>
                                     </div>
@@ -3723,6 +3749,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       const ns   = document.getElementById(`ns_${p.id}`)?.value||"";
                                       const fu   = document.getElementById(`fu_${p.id}`)?.value||"";
                                       const nm   = document.getElementById(`nm_${p.id}`)?.value||"";
+                                      const nm_time = document.getElementById(`nm_time_${p.id}`)?.value||"";
                                       const act  = document.getElementById(`action_${p.id}`)?.value||"";
                                       const frm  = document.getElementById(`from_${p.id}`)?.value||"";
                                       const bywhen = document.getElementById(`bywhen_${p.id}`)?.value||"";
@@ -3732,7 +3759,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       const loggedAt = `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}`;
                                       const newMeetId = `ml${Date.now()}`;
                                       setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done",loggedMeetingId:newMeetId}:pl));
-                                      setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Proposal Accepted":"Needs Callback",isUnplanned:false},...q]);
+                                      setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,nextMeetingTime:nm_time||"",meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Proposal Accepted":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
                                         setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:myRepId,assignedByName:reps.find(r=>r.id===myRepId)?.name||""},...q]);
@@ -6111,7 +6138,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <select value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
                           style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}>
                           <option value="">— Select client —</option>
-                          {[...new Set(deals.filter(d=>myRepId?d.repId===myRepId:true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
+                          {[...new Set(deals.filter(d=>user_role?.repId?d.repId===user_role.repId:true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                     </div>
@@ -8358,7 +8385,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           </div>
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>DATE</div>
-                            <input type="date" value={rf.date} onChange={e=>setRf(p=>({...p,date:e.target.value}))}
+                            <input type="date" min="2020-01-01" max="2099-12-31" value={rf.date} onChange={e=>setRf(p=>({...p,date:e.target.value}))}
                               style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                           </div>
                         </div>
@@ -8425,6 +8452,83 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               </div>
             );
           })()}
+
+          {/* ═══ STRATEGY APPROVAL SETTINGS ═══ */}
+          {view==="strategy-config" && isStrategy && (
+            <div className="fin">
+              <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>APPROVAL SETTINGS</div>
+              <div style={{fontSize:11,color:C.dim,marginBottom:20}}>Configure deal approval thresholds and inactivity rules. Changes apply immediately for all users.</div>
+
+              {/* Approval Thresholds */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
+                <div className="sans" style={{fontWeight:700,marginBottom:6}}>Approval Thresholds</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:14}}>Deal amount determines who reviews it. Chain: NSH → Sales Strategy → CXO.</div>
+                {[
+                  {key:"RH",  label:"Region Head reviews deals above",  help:"Below this → Rep proceeds independently"},
+                  {key:"NSH", label:"NSH reviews deals above",          help:"After RH clears the deal"},
+                  {key:"CXO", label:"CXO sign-off required above",       help:"Strategic deals — final gate before closing"},
+                ].map(({key,label,help})=>(
+                  <div key={key} style={{display:"flex",alignItems:"center",gap:12,marginBottom:12,flexWrap:"wrap",padding:"10px 12px",background:C.s2,borderRadius:6}}>
+                    <div style={{flex:1,minWidth:180}}>
+                      <div style={{fontSize:12,fontWeight:600}}>{label}</div>
+                      <div style={{fontSize:10,color:C.dim,marginTop:2}}>{help}</div>
+                    </div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:11,color:C.dim}}>₹</span>
+                      <input type="number" value={adminConfig.approvalThresholds?.[key]!=null?adminConfig.approvalThresholds[key]/100000:0}
+                        onChange={e=>setAdminConfig(p=>({...p,approvalThresholds:{...p.approvalThresholds,[key]:parseFloat(e.target.value||"0")*100000}}))}
+                        style={{width:80,padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"right"}}/>
+                      <span style={{fontSize:11,color:C.dim}}>L</span>
+                    </div>
+                    <div style={{minWidth:90,fontSize:11,color:C.accent,fontWeight:700}}>{((adminConfig.approvalThresholds?.[key]||0)/100000).toFixed(0)}L = ₹{((adminConfig.approvalThresholds?.[key]||0)/10000000).toFixed(2)}Cr</div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Deal Inactivity Rules */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
+                <div className="sans" style={{fontWeight:700,marginBottom:6}}>Deal Inactivity Rules</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:14}}>Deals with no contact activity are flagged and auto-escalated based on these thresholds.</div>
+                {[
+                  {key:"inactivityDaysRisk",     label:"Flag deal as At Risk after",       suffix:"days without client contact"},
+                  {key:"inactivityDaysEscalate", label:"Auto-escalate to NSH after",       suffix:"days without client contact"},
+                ].map(({key,label,suffix})=>(
+                  <div key={key} style={{display:"flex",alignItems:"center",gap:12,marginBottom:10,padding:"10px 12px",background:C.s2,borderRadius:6,flexWrap:"wrap"}}>
+                    <div style={{flex:1,fontSize:12,fontWeight:600}}>{label}</div>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <input type="number" value={adminConfig[key]||0}
+                        onChange={e=>setAdminConfig(p=>({...p,[key]:parseInt(e.target.value||"0")}))}
+                        style={{width:56,padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
+                      <span style={{fontSize:11,color:C.dim}}>{suffix}</span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* SLA Hours */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
+                <div className="sans" style={{fontWeight:700,marginBottom:6}}>SLA Hours by Approver Level</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:14}}>Approvals not actioned within these hours are flagged Overdue and escalated upward.</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10}}>
+                  {Object.entries(adminConfig.slaHours||{}).map(([k,v])=>(
+                    <div key={k} style={{background:C.s2,borderRadius:6,padding:"10px 12px"}}>
+                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:6}}>{k.toUpperCase()}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:4}}>
+                        <input type="number" value={v as number}
+                          onChange={e=>setAdminConfig(p=>({...p,slaHours:{...p.slaHours,[k]:parseInt(e.target.value||"48")}}))}
+                          style={{width:50,padding:"4px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
+                        <span style={{fontSize:10,color:C.dim}}>hrs</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div style={{background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"10px 14px",fontSize:11,color:C.green}}>
+                ✓ All changes are saved automatically and take effect immediately for all logged-in users.
+              </div>
+            </div>
+          )}
 
           {/* ═══ IMPORT DATA ═══ */}
           {/* ═══ ADMIN CONFIG ═══ */}
@@ -10847,7 +10951,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <select value={taskForm.priority} onChange={e=>setTaskForm(p=>({...p,priority:e.target.value}))}>
                     {TASK_PRIORITIES.map(p=><option key={p}>{p}</option>)}
                   </select></div>
-                <div><label>Due Date</label><input type="date" value={taskForm.dueDate} onChange={e=>setTaskForm(p=>({...p,dueDate:e.target.value}))} /></div>
+                <div><label>Due Date</label><input type="date" min="2020-01-01" max="2099-12-31" value={taskForm.dueDate} onChange={e=>setTaskForm(p=>({...p,dueDate:e.target.value}))} /></div>
               </div>
             </div>
             <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
@@ -10886,7 +10990,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               ].map(f=>(
                 <div key={f.key}><label>{f.label}</label><input type={f.type} placeholder={f.ph} value={dealForm[f.key]||""} onChange={e=>setDealForm(p=>({...p,[f.key]:e.target.value}))} /></div>
               ))}
-              <div><label>Assign Rep *</label>{isRep?(<input readOnly value={reps.find(r=>r.id===parseInt(dealForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />):(<select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{reps.map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select>)}</div>
+              <div><label>Assign Rep *</label>{isRep?(<input readOnly value={reps.find(r=>r.id===parseInt(dealForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />):(<select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select>)}</div>
               <div><label>Deal Type</label><select value={dealForm.dealType} onChange={e=>setDealForm(p=>({...p,dealType:e.target.value}))}><option value="">Select</option>{DEAL_TYPES.map(d=><option key={d}>{d}</option>)}</select></div>
               <div><label>Contact Level</label><select value={dealForm.contactLevel} onChange={e=>setDealForm(p=>({...p,contactLevel:e.target.value}))}><option value="">Select</option>{CONTACT_LEVELS.map(c=><option key={c}>{c}</option>)}</select></div>
               <div><label>Priority</label><select value={dealForm.priority} onChange={e=>setDealForm(p=>({...p,priority:e.target.value}))}><option>Top 5</option><option>Regular</option></select></div>
@@ -11102,7 +11206,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <input placeholder="Any notes…" value={item.remarks} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],remarks:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
 
                   {/* Due date */}
-                  <input type="date" value={item.dueDate} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],dueDate:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
+                  <input type="date" min="2020-01-01" max="2099-12-31" value={item.dueDate} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],dueDate:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
 
                   {/* Remove row */}
                   <button onClick={()=>{const arr=(logForm.nextStepItems||[]).filter((_,i)=>i!==idx);setLogForm(p=>({...p,nextStepItems:arr.length?arr:[{...BLANK_NEXT_STEP_ITEM}]}));}}
@@ -11122,11 +11226,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
               <div>
                 <label>Follow-Up Date</label>
-                <input type="date" value={logForm.followUpDate||""} onChange={e=>setLogForm(p=>({...p,followUpDate:e.target.value}))} />
+                <input type="date" min="2020-01-01" max="2099-12-31" value={logForm.followUpDate||""} onChange={e=>setLogForm(p=>({...p,followUpDate:e.target.value}))} />
               </div>
               <div>
                 <label>Meeting Status</label>
-                <select value={logForm.status||""} onChange={e=>setLogForm(p=>({...p,status:e.target.value}))}>
+                <select value={logForm.status||""} onChange={e=>{const s=e.target.value;setLogForm(p=>({...p,status:s,scheduleNext:s==="Rescheduled"?true:p.scheduleNext}));}}>
                   <option value="">Select</option>
                   {MEETING_STATUS.map(s=><option key={s}>{s}</option>)}
                 </select>
@@ -11152,7 +11256,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                     <div>
                       <label>Meeting Date *</label>
-                      <input type="date" value={logForm.nextMeetingDate||""} onChange={e=>setLogForm(p=>({...p,nextMeetingDate:e.target.value}))} />
+                      <input type="date" min="2020-01-01" max="2099-12-31" value={logForm.nextMeetingDate||""} onChange={e=>setLogForm(p=>({...p,nextMeetingDate:e.target.value}))} />
                     </div>
                     <div>
                       <label>Meeting Time</label>
@@ -11265,7 +11369,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   }
                   <div style={{fontSize:11,color:C.dim,marginTop:4,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
                     {meetingEditMode
-                      ? <input type="date" value={ef.date||""} onChange={e=>setEf({date:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim}} />
+                      ? <input type="date" min="2020-01-01" max="2099-12-31" value={ef.date||""} onChange={e=>setEf({date:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim}} />
                       : <span>{vm.date}</span>
                     }
                     {meetingEditMode
@@ -11365,7 +11469,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div>
                   <div style={{fontSize:10,color:C.blue,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>📞 Follow-up Date</div>
                   {meetingEditMode
-                    ? <input type="date" value={ef.followUpDate||""} onChange={e=>setEf({followUpDate:e.target.value})} style={{width:"100%",fontSize:12}} />
+                    ? <input type="date" min="2020-01-01" max="2099-12-31" value={ef.followUpDate||""} onChange={e=>setEf({followUpDate:e.target.value})} style={{width:"100%",fontSize:12}} />
                     : vm.followUpDate
                         ? <div style={{fontSize:13,fontWeight:600,color:C.text,background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"8px 12px"}}>{vm.followUpDate}</div>
                         : <div style={{fontSize:11,color:C.muted}}>Not set</div>
@@ -11374,7 +11478,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div>
                   <div style={{fontSize:10,color:C.green,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>📅 Next Meeting Date</div>
                   {meetingEditMode
-                    ? <input type="date" value={ef.nextMeetingDate||""} onChange={e=>setEf({nextMeetingDate:e.target.value})} style={{width:"100%",fontSize:12}} />
+                    ? <input type="date" min="2020-01-01" max="2099-12-31" value={ef.nextMeetingDate||""} onChange={e=>setEf({nextMeetingDate:e.target.value})} style={{width:"100%",fontSize:12}} />
                     : vm.nextMeetingDate
                         ? <div style={{fontSize:13,fontWeight:600,color:C.text,background:`${C.green}11`,border:`1px solid ${C.green}33`,borderRadius:6,padding:"8px 12px"}}>{vm.nextMeetingDate}</div>
                         : <div style={{fontSize:11,color:C.muted}}>Not set</div>

@@ -4,7 +4,7 @@ Internal sales management platform for Odisha Television Network. Private, not f
 
 ## Stack
 
-- `artifacts/otv-platform/src/pages/OTVApp.tsx` — entire frontend, ~10,800 lines, single React/Vite component
+- `artifacts/otv-platform/src/pages/OTVApp.tsx` — entire frontend, ~11,600+ lines, single React/Vite component
 - `artifacts/api-server/` — Express API server at `/api`, port 8080
 - `lib/db/` — Drizzle ORM + PostgreSQL (Replit built-in DB)
 - Build tool: Vite. One secret: `ANTHROPIC_API_KEY`
@@ -68,3 +68,6 @@ Current palette: `bg:#f0f4f9`, `surface:#ffffff`, `s2:#e8eef7`, `s3:#dde5f0`, `b
 - Task model: `assignedToUserId` (USER_ROLES id), `assignedTo` (numeric repId). Filter must check BOTH.
 - `openSelfTask()` helper opens task modal pre-filled for current user with `selfTaskMode=true`
 - RO Parser features are explicitly excluded from all work
+- Plan edit state: `planEditId` (string|null) + `planEditForm` ({time,clientAgencyName,contactName,phone,agenda,pitchType}) — controls inline edit form on future plan chips
+- All `<input type="date">` elements carry `min="2020-01-01" max="2099-12-31"` to prevent 6-digit years
+- Sales Strategy nav has "Approval Settings" (view `strategy-config`) — edits adminConfig.approvalThresholds, inactivityDaysRisk, inactivityDaysEscalate, slaHours
