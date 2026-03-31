@@ -15,14 +15,22 @@ args = ["pnpm", "store", "prune"]
 env = { "CI" = "true" }
 
 [workflows]
-
+runButton = "Project"
+[[workflows.workflow]]
+name = "Project"
+mode = "parallel"
+author = "agent"
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/otv-platform: web"
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "artifacts/api-server: API Server"
 [agent]
 stack = "PNPM_WORKSPACE"
 expertMode = true
 
-[postMerge]
-path = "scripts/post-merge.sh"
-timeoutMs = 20000
+
 
 [nix]
 channel = "stable-25_05"
