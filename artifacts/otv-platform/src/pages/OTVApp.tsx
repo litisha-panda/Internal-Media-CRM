@@ -6293,10 +6293,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {/* Escalate: visible to rep/RH for any active non-escalation request */}
                         {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && req.type!=="Escalation" && (
                           <button onClick={()=>{
+                            const escalatedDept = req.dept==="NSH"?"CXO":req.dept==="Sales Strategy"?"NSH":req.dept==="Region Head"?"NSH":req.dept==="CXO"?"CXO":"Region Head";
                             const escalated = {
                               id:`ir${Date.now()}`,
                               type:"Escalation",
-                              dept: req.dept==="NSH"?"CXO":req.dept==="Sales Strategy"?"NSH":"NSH",
+                              dept: escalatedDept,
                               subject:`ESCALATION: ${req.subject}`,
                               details:`Original request to ${req.dept} has breached SLA (${daysOld}d). Escalating for urgent action.\n\nOriginal: ${req.details||""}`,
                               raisedBy:activeUser, raisedByName:user_role?.name||"",
