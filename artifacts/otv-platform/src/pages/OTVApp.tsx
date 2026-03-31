@@ -2104,27 +2104,48 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       return {...rep,closed,pipe,meetings:rm.length,seniorM,senPct,risk,attOk,cPct,coverage:rep.target>0?Math.round(((closed+pipe)/rep.target)*100):0};
     }).sort((a,b)=>b.cPct-a.cPct), [deals, meetings, att, filterQ, user_role]);
 
-  // Global search results — across deals, meetings, tasks
+  // Global search results — scoped to what the current user is allowed to see
   const searchResults = useMemo(() => {
     const q = globalSearch.trim().toLowerCase();
     if (q.length < 2) return [];
+    const canView   = user_role?.canView || "self";
+    const myRepId   = user_role?.repId;
+    const myRegion  = user_role?.region;
+    // Scope deals: no quarter filter so historical deals are searchable
+    const scopedDeals = canView==="all"
+      ? deals
+      : canView==="region"
+        ? deals.filter(d=>d.region===myRegion)
+        : deals.filter(d=>d.repId===myRepId);
+    // Scope meetings by the same rule
+    const scopedMeetings = canView==="all"
+      ? meetings
+      : canView==="region"
+        ? meetings.filter(m=>reps.find(r=>r.id===m.repId)?.region===myRegion)
+        : meetings.filter(m=>m.repId===myRepId);
+    // Scope tasks: assignee or (for reps) their own tasks; managers see their scope
+    const scopedTasks = canView==="all"
+      ? tasks
+      : canView==="region"
+        ? tasks.filter(t=>reps.find(r=>r.id===t.repId)?.region===myRegion)
+        : tasks.filter(t=>t.assignedTo===myRepId||t.assignedToUserId===activeUser||t.assignedBy===activeUser);
     const out = [];
-    deals.filter(d =>
+    scopedDeals.filter(d =>
       d.clientCompany?.toLowerCase().includes(q) ||
       d.contactName?.toLowerCase().includes(q) ||
       d.notes?.toLowerCase().includes(q)
     ).slice(0, 5).forEach(d => out.push({ type:"deal", label:d.clientCompany, sub:`${d.outcome} · ${fmtR(d.amount)}`, action:()=>{ setView("pipeline"); setGlobalSearch(""); setSearchOpen(false); } }));
-    meetings.filter(m =>
+    scopedMeetings.filter(m =>
       m.clientCompany?.toLowerCase().includes(q) ||
       m.discussion?.toLowerCase().includes(q) ||
       m.contactName?.toLowerCase().includes(q)
     ).slice(0, 3).forEach(m => out.push({ type:"meeting", label:m.clientCompany, sub:`${m.date} · ${(m.discussion||"").slice(0,55)}`, action:()=>{ setView("activity"); setGlobalSearch(""); setSearchOpen(false); } }));
-    tasks.filter(t =>
+    scopedTasks.filter(t =>
       t.clientCompany?.toLowerCase().includes(q) ||
       t.title?.toLowerCase().includes(q)
     ).slice(0, 3).forEach(t => out.push({ type:"task", label:t.title, sub:t.clientCompany, action:()=>{ setView("tasks"); setGlobalSearch(""); setSearchOpen(false); } }));
     return out.slice(0, 8);
-  }, [globalSearch, deals, meetings, tasks]);
+  }, [globalSearch, deals, meetings, tasks, user_role, reps, activeUser]);
 
   const updateOutcome = (id, outcome) => {
     const closed = outcome === "Proposal Accepted";
