@@ -5241,7 +5241,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const fsc = fcastPct>=80?C.green:fcastPct>=60?C.accent:C.red;
 
             // Region-wise breakdown
-            const regions = ["National","North","South","East","West"];
+            const regions = REGIONS;
             const regionStats = regions.map(r=>{
               const rd = allD.filter(d=>d.region===r);
               const rT = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
@@ -10284,7 +10284,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const forecast=totC+totW; const fcastPct=totT>0?Math.round((forecast/totT)*100):0; const closePct=totT>0?Math.round((totC/totT)*100):0;
             const fsc=fcastPct>=80?C.green:fcastPct>=60?C.accent:C.red;
             const top5=allD.filter(d=>d.priority==="Top 5").sort((a,b)=>b.amount-a.amount);
-            const regions=["National","North","South","East","West"];
+            const regions=REGIONS;
             const regionStats=regions.map(r=>{const rd=allD.filter(d=>d.region===r);const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);const rRepIdsR=new Set(rd.map(d=>d.repId));const rC=revenueEntries.filter(e=>rRepIdsR.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const rPct=rT>0?Math.round((rC/rT)*100):0;return{r,rT,rC,rPct};});
             const compliantReps=reps.filter(r=>att[TODAY]?.[r.id]).length;
             const openEsc=deals.filter(d=>d.awaitingApproval&&daysSince(d.awaitingApprovalSince||TODAY)>=APPROVAL_SLA_DAYS).length;
@@ -11000,7 +11000,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH RH PLAN ═══ */}
           {view==="nsh-rh-plan" && isNSHDashboard && (()=>{
-            const regions = ["National","North","South","East","West"];
+            const regions = REGIONS;
             return (
               <div className="fin">
                 <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>REGION HEADS' PLAN</div>
@@ -11055,7 +11055,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH REGIONAL PLAN ═══ */}
           {view==="nsh-regional-plan" && isNSHDashboard && (()=>{
-            const regions = ["National","North","South","East","West"];
+            const regions = REGIONS;
             const [selRegion, setSelRegion] = [nshRegion, setNshRegion];
             const displayRegions = selRegion==="all" ? regions : [selRegion];
             return (
@@ -11210,7 +11210,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH RH PIPELINE ═══ */}
           {view==="nsh-rh-pipeline" && isNSHDashboard && (()=>{
-            const regions=["National","North","South","East","West"];
+            const regions=REGIONS;
             return (
               <div className="fin">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
@@ -11259,7 +11259,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH RH TARGETS ═══ */}
           {view==="nsh-rh-targets" && isNSHDashboard && (()=>{
-            const regions=["National","North","South","East","West"];
+            const regions=REGIONS;
             const totT=deals.filter(d=>qMatch(d.quarter)).reduce((s,d)=>s+(d.targetAmount||0),0);
             const totC=deals.filter(d=>qMatch(d.quarter)&&d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
             const totPct=totT>0?Math.round((totC/totT)*100):0;
@@ -11409,7 +11409,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH REP SCORECARD ═══ */}
           {view==="nsh-rep-scorecard" && isNSHDashboard && (()=>{
-            const regions=["all","National","North","South","East","West"];
+            const regions=["all",...REGIONS];
             const filterDeals=nshRegion==="all"?deals.filter(d=>qMatch(d.quarter)):deals.filter(d=>d.region===nshRegion&&qMatch(d.quarter));
             return (
               <div className="fin">
@@ -11462,7 +11462,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH REP PIPELINE ═══ */}
           {view==="nsh-rep-pipeline" && isNSHDashboard && (()=>{
-            const regions=["all","National","North","South","East","West"];
+            const regions=["all",...REGIONS];
             const fd=nshRegion==="all"?deals.filter(d=>qMatch(d.quarter)&&d.outcome!=="Not Interested"):deals.filter(d=>d.region===nshRegion&&qMatch(d.quarter)&&d.outcome!=="Not Interested");
             return (
               <div className="fin">
@@ -11495,7 +11495,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH REP TARGETS ═══ */}
           {view==="nsh-rep-targets" && isNSHDashboard && (()=>{
-            const regions=["all","National","North","South","East","West"];
+            const regions=["all",...REGIONS];
             const fReps=nshRegion==="all"?reps:reps.filter(r=>r.region===nshRegion);
             return (
               <div className="fin">
@@ -11530,7 +11530,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH REP TASKS ═══ */}
           {view==="nsh-rep-tasks" && isNSHDashboard && (()=>{
-            const regions=["all","National","North","South","East","West"];
+            const regions=["all",...REGIONS];
             const fReps=nshRegion==="all"?reps.map(r=>r.id):reps.filter(r=>r.region===nshRegion).map(r=>r.id);
             const fTasks=tasks.filter(t=>fReps.includes(t.repId));
             return (
@@ -11572,7 +11572,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH REP HR ═══ */}
           {view==="nsh-rep-hr" && isNSHDashboard && (()=>{
-            const regions=["all","National","North","South","East","West"];
+            const regions=["all",...REGIONS];
             const fAbs=nshRegion==="all"?absenceReports:absenceReports.filter(r=>r.region===nshRegion);
             return (
               <div className="fin">
