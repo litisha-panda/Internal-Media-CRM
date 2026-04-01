@@ -62,6 +62,23 @@ The entire platform uses a soft light-mode palette defined in two places (must b
 
 Current palette: `bg:#f0f4f9`, `surface:#ffffff`, `s2:#e8eef7`, `s3:#dde5f0`, `border:#c8d3e5`, `accent:#c47d00` (amber), `text:#18243a` (dark navy), `dim:#4d5e78`, `muted:#8a97ae`
 
+## Zoho CRM Integration
+
+Live client/agency lookup against Zoho CRM sandbox. Credentials: `ZOHO_CLIENT_ID`, `ZOHO_CLIENT_SECRET`, `ZOHO_REFRESH_TOKEN` (env secrets). Base URL: `https://crmsandbox.zoho.in/crm/v2`.
+
+- **API endpoints** (server-side, credentials never exposed to browser):
+  - `GET /api/zoho/clients?q=` — searches Zoho Accounts module, returns `{id, name}[]`
+  - `GET /api/zoho/agencies?q=` — same module, for agency lookup
+- **`ZohoSearchInput` component** (`artifacts/otv-platform/src/components/ZohoSearchInput.tsx`): debounced live search (300ms), requires 3+ chars, shows green ✓ badge when a Zoho ID is confirmed, shows orange fallback warning when Zoho is down.
+- **Integrated in 3 places**:
+  1. Add Deal form — Client Company (Zoho clients) + Agency Name (Zoho agencies)
+  2. Add Client Target modal — Client Name (Zoho clients)
+  3. Revenue Log — select from rep's existing deals (Zoho ID auto-populated)
+- **`zohoAccountId`** stored on: `deals`, `clientAccounts`, `revenueEntries`, `targetSubs.clients`
+- **`zohoAgencyId`** stored on: `deals`
+- **Revenue matching**: prefers `zohoAccountId` equality over name string when both sides have an ID; falls back to `clientCompany` name for legacy records
+- **Graceful fallback**: if Zoho API unreachable, field reverts to free text with warning — reps are never blocked
+
 ## Key architectural notes
 
 - `usePersistedState` is the only state primitive — modifying it changes all sync behaviour
@@ -71,3 +88,4 @@ Current palette: `bg:#f0f4f9`, `surface:#ffffff`, `s2:#e8eef7`, `s3:#dde5f0`, `b
 - Plan edit state: `planEditId` (string|null) + `planEditForm` ({time,clientAgencyName,contactName,phone,agenda,pitchType}) — controls inline edit form on future plan chips
 - All `<input type="date">` elements carry `min="2020-01-01" max="2099-12-31"` to prevent 6-digit years
 - Sales Strategy nav has "Approval Settings" (view `strategy-config`) — edits adminConfig.approvalThresholds, inactivityDaysRisk, inactivityDaysEscalate, slaHours
+- ACHIEVED calculation: always sourced from `revenueEntries` (never from deal.amount + outcome). No auto-stub on deal close.

@@ -1590,6 +1590,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         const rep = USER_ROLES.find(r => r.repId === d.repId);
         accountMap[key] = {
           id: uid(), clientName: d.clientCompany, repId: d.repId,
+          zohoAccountId: d.zohoAccountId || "",
           region: rep?.region || d.region || "",
           fiscalYear: d.quarter?.slice(-3) === "FY26" ? "FY26" : "FY26",
           annualTarget: parseCurrency(d.targetAmount || "0") || 0,
@@ -2173,7 +2174,29 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const rep = reps.find(r=>r.id===parseInt(dealForm.repId));
     const tgtAmt = parseCurrency(dealForm.targetAmount);
     const dealQ  = dealForm.quarter || entryQ;
-    setDeals(p=>[...p,{id:`d${Date.now()}`,...dealForm,repId:parsedRepId,repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:tgtAmt,lastContact:TODAY,reqs:[]}]);
+    const newDealId = `d${Date.now()}`;
+    setDeals(p=>[...p,{id:newDealId,...dealForm,repId:parsedRepId,repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:tgtAmt,lastContact:TODAY,reqs:[]}]);
+    // Upsert clientAccount so the new deal has a linked account with its Zoho ID
+    setClientAccounts(prev => {
+      const existing = prev.find(a => a.clientName === dealForm.clientCompany.trim() && a.repId === parsedRepId);
+      if (existing) {
+        if (!existing.zohoAccountId && dealForm.zohoAccountId) {
+          return prev.map(a => a.id === existing.id ? {...a, zohoAccountId: dealForm.zohoAccountId, updatedAt: TODAY} : a);
+        }
+        return prev;
+      }
+      const newAcct = {
+        id: uid(), clientName: dealForm.clientCompany.trim(), repId: parsedRepId,
+        zohoAccountId: dealForm.zohoAccountId || "",
+        region: rep.region || "", fiscalYear: CURRENT_FY,
+        annualTarget: tgtAmt, currentStage: mapLegacyOutcome(dealForm.outcome||"Prospect"),
+        lastContactDate: TODAY, lastDealMeetingDate: TODAY,
+        createdAt: TODAY, updatedAt: TODAY,
+      };
+      // Link the new deal to this account
+      setDeals(p => p.map(d => d.id === newDealId ? {...d, clientAccountId: newAcct.id} : d));
+      return [...prev, newAcct];
+    });
     // When a manager adds a deal for a rep, also submit a target plan entry so it
     // appears in the rep's My Targets view once the plan clears the approval chain.
     if (!isRep) {
@@ -5161,7 +5184,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const highRisk = allD
               .filter(d=>d.outcome!=="Mail Confirmed"&&d.outcome!=="Not Interested")
               .map(d=>{
-                const achieved=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                const achieved=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                 const pct = d.targetAmount>0?Math.round((achieved/d.targetAmount)*100):0;
                 return {...d, pct};
               })
@@ -5761,7 +5784,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
@@ -6180,7 +6203,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
@@ -6233,7 +6256,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
@@ -7085,7 +7108,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <tbody>
                             {repDeals.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No deals for {filterQ}.</td></tr>}
                             {repDeals.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
-                              const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                              const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                               const pip=!["Mail Confirmed","Not Interested"].includes(d.outcome)?d.amount:0;
                               const sf=Math.max(0,(d.targetAmount||0)-ach);
                               const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
@@ -7298,11 +7321,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <tbody>
                                 {rd.length===0&&<tr><td colSpan={6} style={{padding:24,textAlign:"center",color:C.muted}}>No clients.</td></tr>}
                                 {rd.sort((a,b)=>{
-                                  const achA=revenueEntries.filter(e=>e.repId===a.repId&&e.clientCompany===a.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-                                  const achB=revenueEntries.filter(e=>e.repId===b.repId&&e.clientCompany===b.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const achA=revenueEntries.filter(e=>e.repId===a.repId&&(a.zohoAccountId&&e.zohoAccountId?a.zohoAccountId===e.zohoAccountId:e.clientCompany===a.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const achB=revenueEntries.filter(e=>e.repId===b.repId&&(b.zohoAccountId&&e.zohoAccountId?b.zohoAccountId===e.zohoAccountId:e.clientCompany===b.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                   return Math.max(0,(b.targetAmount||0)-achB)-Math.max(0,(a.targetAmount||0)-achA);
                                 }).map(d=>{
-                                  const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                   const sf=Math.max(0,(d.targetAmount||0)-ach);
                                   const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                   return (
@@ -7384,7 +7407,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {td.length===0&&<tr><td colSpan={colSpan} style={{padding:24,textAlign:"center",color:C.muted}}>No target set for this category this fiscal year.</td></tr>}
                                   {td.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
                                     const rep=reps.find(r=>r.id===d.repId);
-                                    const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                    const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                     const sf=Math.max(0,(d.targetAmount||0)-ach);
                                     const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                     return (
@@ -8545,19 +8568,19 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{marginTop:22,display:"flex",gap:10,justifyContent:"flex-end"}}>
                         <button onClick={()=>setAddClientModalOpen(false)} style={{padding:"9px 18px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
                         <button onClick={()=>{
-                          const {clientCompany,dealType,targetAmount} = addClientForm;
+                          const {clientCompany,zohoAccountId,dealType,targetAmount} = addClientForm;
                           if(!clientCompany.trim()||!targetAmount){showToast("Fill in client name and target amount","err");return;}
                           const amt = parseCurrency(targetAmount);
                           // Part 7: When frozen, Additional Revenue Opportunity — no approval chain needed
                           if (isFrozen) {
-                            const newEntry = {clientCompany:clientCompany.trim(),dealType,targetAmount:amt,isAdditionalRevOp:true};
+                            const newEntry = {clientCompany:clientCompany.trim(),zohoAccountId:zohoAccountId||"",dealType,targetAmount:amt,isAdditionalRevOp:true};
                             const sub = {id:`ts${Date.now()}`,repId:myRepId,repName:user_role?.name||"",region:user_role?.region||"",quarter:entryQ,clients:[newEntry],totalTarget:amt,status:"Approved",submittedAt:TODAY,approvalLog:[{at:TODAY,by:user_role?.name||"Rep",action:"Auto-approved as Additional Revenue Opportunity",note:"No approval chain — rep adds directly"}],isAdditionalRevOp:true};
                             setTargetSubs(p=>[sub,...p]);
                             setAddClientModalOpen(false);
                             showToast(`${clientCompany.trim()} added as Additional Revenue Opportunity ✓`);
                             return;
                           }
-                          const newEntry = {clientCompany:clientCompany.trim(),dealType,targetAmount:amt};
+                          const newEntry = {clientCompany:clientCompany.trim(),zohoAccountId:zohoAccountId||"",dealType,targetAmount:amt};
                           // Find existing pending sub for this quarter to append, or create new one
                           const existingSub = mySubs.find(s=>qMatch(s.quarter)&&s.status==="Pending RH");
                           if(existingSub){
@@ -10527,7 +10550,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead><tr>{["Client","Target","Achieved","Pipeline","Shortfall","Stage"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                          <tbody>{rd.map(d=>{const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const sf=Math.max(0,(d.targetAmount||0)-ach);return(
+                          <tbody>{rd.map(d=>{const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const sf=Math.max(0,(d.targetAmount||0)-ach);return(
                             <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                               <td style={{padding:"9px 12px",fontWeight:700}}>{d.clientCompany}</td>
                               <td style={{padding:"9px 12px"}}>{fmtR(d.targetAmount)}</td>
