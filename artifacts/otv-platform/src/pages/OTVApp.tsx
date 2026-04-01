@@ -1626,6 +1626,26 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const getInPlay     = (repId?: number) =>
     deals.filter(d => (repId == null || d.repId === repId) && ["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s, d) => s + (d.pipelineAmount || parseCurrency(d.amount||"0")||0), 0);
   const getShortfall  = (target: number, repId?: number) => Math.max(0, target - getAchieved(repId) - getCommitted(repId) - getInPlay(repId));
+
+  // Part 5: Stacked bar — proportions of annual target: Achieved (green) / Committed (blue) / In Play (amber) / Shortfall (red)
+  // When shortfall reaches zero the entire bar turns solid green.
+  const stackedBar = (target: number, ach: number, comm: number, inpl: number, sf: number, mt=12) => {
+    if (target <= 0) return null;
+    if (sf <= 0) return <div style={{marginTop:mt,height:8,background:C.green,borderRadius:4}} />;
+    const aW = Math.min((ach  / target) * 100, 100);
+    const cW = Math.min((comm / target) * 100, Math.max(0, 100 - aW));
+    const iW = Math.min((inpl / target) * 100, Math.max(0, 100 - aW - cW));
+    const sW = Math.max(0, 100 - aW - cW - iW);
+    return (
+      <div style={{marginTop:mt,display:"flex",height:8,borderRadius:4,overflow:"hidden",background:C.s3}}>
+        {aW>0 && <div style={{width:`${aW}%`,background:C.green,flexShrink:0}} />}
+        {cW>0 && <div style={{width:`${cW}%`,background:C.blue,flexShrink:0}} />}
+        {iW>0 && <div style={{width:`${iW}%`,background:"#d97706",flexShrink:0}} />}
+        {sW>0 && <div style={{width:`${sW}%`,background:`${C.red}66`,flexShrink:0}} />}
+      </div>
+    );
+  };
+
   // Part 9: Return total approved annual target for a rep (sum of all approved targetSubs for CURRENT_FY)
   const getAnnualTarget = (repId?: number) => {
     const subs = targetSubs.filter(s => (repId == null || s.repId === repId) && s.status === "Approved");
@@ -6956,7 +6976,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         ))}
                         <div style={{marginLeft:"auto",textAlign:"right"}}><div className="sans" style={{fontSize:48,fontWeight:800,color:sc,lineHeight:1}}>{mPct}%</div><div style={{fontSize:10,color:C.dim}}>achieved</div></div>
                       </div>
-                      <div style={{marginTop:12,height:6,background:C.s3,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(mPct,100)}%`,background:sc,borderRadius:3}} /></div>
+                      {stackedBar(mT, mC, mCommitted, mInPlay, mG)}
                     </div>
                     <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -7016,7 +7036,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           ))}
                           <div style={{marginLeft:"auto"}}><div className="sans" style={{fontSize:40,fontWeight:800,color:sc,lineHeight:1}}>{rPct}%</div><div style={{fontSize:10,color:C.dim}}>achieved</div></div>
                         </div>
-                        <div style={{marginTop:10,height:5,background:C.s3,borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",width:`${Math.min(rPct,100)}%`,background:sc}} /></div>
+                        {stackedBar(rT, rC, rCommitted, rInPlay, rG, 10)}
                       </div>
                       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -8413,32 +8433,34 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 )}
 
                 {/* Summary stats row — Part 5 four-number dashboard */}
-                {activeSub && (
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:20}}>
-                    {(()=>{
-                      const committed = getCommitted(myRepId);
-                      const inPlay    = getInPlay(myRepId);
-                      const shortfall = getShortfall(totalTarget, myRepId);
-                      const sfColor   = shortfall===0 ? C.green : C.red;
-                      return [
+                {activeSub && (()=>{
+                  const committed = getCommitted(myRepId);
+                  const inPlay    = getInPlay(myRepId);
+                  const shortfall = getShortfall(totalTarget, myRepId);
+                  const sfColor   = shortfall===0 ? C.green : C.red;
+                  return (<>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:12}}>
+                      {[
                         {label:"TOTAL TARGET", value:fmtR(totalTarget), color:C.accent, locked:isFrozen, sub:"Official quota"},
                         {label:"ACHIEVED",      value:fmtR(totalAchieved), color:pctColor,           sub:"RO received"},
                         {label:"COMMITTED",     value:fmtR(committed),     color:C.blue,             sub:"Mail confirmed"},
                         {label:"IN PLAY",       value:fmtR(inPlay),        color:"#d97706",          sub:"Active pipeline"},
                         {label:"SHORTFALL",     value:fmtR(shortfall),     color:sfColor,            sub:shortfall===0?"On target":"Gap remaining"},
-                      ];
-                    })().map(s=>(
-                      <div key={s.label} className="card" style={{padding:"12px 16px"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
-                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em"}}>{s.label}</div>
-                          {(s as any).locked && <span title="CRO-approved and frozen — cannot change" style={{fontSize:10,color:C.green}}>🔒</span>}
+                      ].map(s=>(
+                        <div key={s.label} className="card" style={{padding:"12px 16px"}}>
+                          <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
+                            <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em"}}>{s.label}</div>
+                            {s.locked && <span title="CRO-approved and frozen — cannot change" style={{fontSize:10,color:C.green}}>🔒</span>}
+                          </div>
+                          <div className="sans" style={{fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div>
+                          <div style={{fontSize:9,color:C.muted,marginTop:2}}>{s.sub}</div>
                         </div>
-                        <div className="sans" style={{fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div>
-                        <div style={{fontSize:9,color:C.muted,marginTop:2}}>{(s as any).sub}</div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+                      ))}
+                    </div>
+                    {stackedBar(totalTarget, totalAchieved, committed, inPlay, shortfall, 0)}
+                    <div style={{marginBottom:20}} />
+                  </>);
+                })()}
 
                 {/* Add Client Modal */}
                 {addClientModalOpen && (
@@ -12727,7 +12749,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   style={{background:"none",border:"none",color:C.dim,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
               </div>
               {/* 4-number metrics row */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:16}}>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:8}}>
                 {[["TARGET",fmtR(cTarget),C.dim],["ACHIEVED",fmtR(cAchieved),C.green],["COMMITTED",fmtR(cCommitted),C.blue],["IN PLAY",fmtR(cInPlay),"#d97706"],["SHORTFALL",fmtR(cShortfall),cShortfall===0?C.green:C.red]].map(([l,v,c])=>(
                   <div key={l} style={{background:C.s2,borderRadius:7,padding:"8px 10px",textAlign:"center"}}>
                     <div style={{fontSize:8,color:C.muted,letterSpacing:".07em",marginBottom:3,textTransform:"uppercase"}}>{l}</div>
@@ -12735,6 +12757,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 ))}
               </div>
+              {stackedBar(cTarget, cAchieved, cCommitted, cInPlay, cShortfall, 8)}
+              <div style={{marginBottom:10}} />
               {/* Pending action items */}
               {pendingAIs.length>0&&(
                 <div style={{background:`${C.orange}10`,border:`1px solid ${C.orange}33`,borderRadius:8,padding:"10px 14px",marginBottom:14}}>
