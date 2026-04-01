@@ -1,0 +1,534 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font-sans,'Anthropic Sans',sans-serif)}
+.wrap{padding:16px 0}
+.phase-tabs{display:flex;gap:0;border-bottom:1px solid var(--color-border-tertiary);margin-bottom:20px}
+.phase-tab{padding:10px 18px;cursor:pointer;font-size:12px;font-weight:500;color:var(--color-text-secondary);border-bottom:2px solid transparent;transition:all .15s;white-space:nowrap}
+.phase-tab.active{color:var(--color-text-primary);border-bottom:2px solid #7F77DD}
+.section{margin-bottom:20px}
+.section-title{font-size:11px;font-weight:500;color:var(--color-text-secondary);letter-spacing:.06em;text-transform:uppercase;margin-bottom:10px;padding-bottom:6px;border-bottom:1px solid var(--color-border-tertiary)}
+.flow-row{display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap;margin-bottom:8px}
+.card{background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .15s;min-width:140px;flex:1}
+.card:hover{border-color:var(--color-border-secondary)}
+.card.active{border-color:#7F77DD;background:#EEEDFE}
+.card-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:3px}
+.card-sub{font-size:11px;color:var(--color-text-secondary);line-height:1.4}
+.arrow{display:flex;align-items:center;padding-top:18px;color:var(--color-text-secondary);font-size:14px}
+.detail{background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:14px 16px;margin-top:10px;display:none}
+.detail.show{display:block}
+.detail-title{font-size:13px;font-weight:500;color:var(--color-text-primary);margin-bottom:8px}
+.trigger-row{display:flex;gap:6px;align-items:flex-start;margin-bottom:6px;font-size:12px}
+.trigger-action{background:#EEEDFE;color:#3C3489;border-radius:4px;padding:2px 7px;font-size:11px;font-weight:500;white-space:nowrap;flex-shrink:0}
+.trigger-result{color:var(--color-text-secondary);line-height:1.5}
+.role-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:8px;margin-bottom:12px}
+.role-card{background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .15s}
+.role-card:hover{border-color:#7F77DD}
+.role-card.active{border-color:#7F77DD;background:#EEEDFE}
+.role-name{font-size:12px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+.role-sub{font-size:11px;color:var(--color-text-secondary)}
+.nav-list{list-style:none;margin-top:8px}
+.nav-list li{font-size:11px;color:var(--color-text-secondary);padding:3px 0;border-bottom:1px solid var(--color-border-tertiary);display:flex;justify-content:space-between}
+.nav-list li span{color:#7F77DD;font-size:10px}
+.screen-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px}
+.screen-card{background:var(--color-background-secondary);border:1px solid var(--color-border-tertiary);border-radius:8px;padding:10px 12px;cursor:pointer;transition:border-color .15s}
+.screen-card:hover{border-color:#7F77DD}
+.screen-card.active{border-color:#7F77DD}
+.screen-title{font-size:12px;font-weight:500;color:var(--color-text-primary);margin-bottom:4px}
+.screen-sub{font-size:11px;color:var(--color-text-secondary);line-height:1.4}
+.pill{display:inline-block;padding:2px 7px;border-radius:10px;font-size:10px;font-weight:500;margin-right:3px;margin-bottom:3px}
+.pill-green{background:#EAF3DE;color:#27500A}
+.pill-amber{background:#FAEEDA;color:#633806}
+.pill-red{background:#FCEBEB;color:#501313}
+.pill-blue{background:#E6F1FB;color:#0C447C}
+.pill-purple{background:#EEEDFE;color:#3C3489}
+.bug-note{background:#FCEBEB;border:1px solid #F09595;border-radius:6px;padding:8px 10px;font-size:11px;color:#501313;margin-top:6px}
+h3{font-size:12px;font-weight:500;color:var(--color-text-secondary);margin:10px 0 6px;text-transform:uppercase;letter-spacing:.05em}
+</style>
+<div class="wrap">
+<div class="phase-tabs">
+  <div class="phase-tab active" onclick="showPhase('setup')">Phase 1 — Year setup</div>
+  <div class="phase-tab" onclick="showPhase('daily')">Phase 2 — Daily operations</div>
+  <div class="phase-tab" onclick="showPhase('measure')">Phase 3 — Measurement</div>
+  <div class="phase-tab" onclick="showPhase('roles')">Roles &amp; screens</div>
+  <div class="phase-tab" onclick="showPhase('triggers')">Full trigger map</div>
+  <div class="phase-tab" onclick="showPhase('bugs')">Open issues</div>
+</div>
+
+<!-- PHASE 1 -->
+<div id="phase-setup">
+<div class="section-title">Who does what before reps get access</div>
+<div class="flow-row">
+  <div class="card" onclick="toggleDetail('d-admin')">
+    <div class="card-title">1. Admin</div>
+    <div class="card-sub">Create users, config, import inventory</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" onclick="toggleDetail('d-strategy')">
+    <div class="card-title">2. Sales Strategy</div>
+    <div class="card-sub">Upload annual client targets CSV</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" onclick="toggleDetail('d-chain')">
+    <div class="card-title">3. Approval chain</div>
+    <div class="card-sub">RH → NSH → Strategy → CRO</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" onclick="toggleDetail('d-golive')">
+    <div class="card-title">4. Go Live</div>
+    <div class="card-sub">Admin toggles. Reps get access.</div>
+  </div>
+</div>
+
+<div class="detail" id="d-admin">
+<div class="detail-title">Admin setup — in this order</div>
+<div class="trigger-row"><span class="trigger-action">Access Management</span><span class="trigger-result">Create every user: name, email, role, region. No user = no login.</span></div>
+<div class="trigger-row"><span class="trigger-action">System Config</span><span class="trigger-result">Set Platform State = Pre-launch. Set SLA hours (RH=48, NSH=48, Legal=72). Set inactivity thresholds (7d=At Risk, 14d=escalate). Set min meetings/month=15.</span></div>
+<div class="trigger-row"><span class="trigger-action">Import: Sales Reps</span><span class="trigger-result">CSV: Rep Name, Email, Region, Role, Annual Quota</span></div>
+<div class="trigger-row"><span class="trigger-action">Import: Client Master List</span><span class="trigger-result">Canonical advertiser names. Reps pick from this list — no free typing. Syncs from Zoho CRM (Fetch Accounts button).</span></div>
+<div class="trigger-row"><span class="trigger-action">Import: IP Inventory</span><span class="trigger-result">CSV: IP Name, Channel, IP Type, Air Date, Duration (weeks), Slot Type, Slot Rate, Total Slots Available. No client. No rep. Available to all reps.</span></div>
+<div class="trigger-row"><span class="trigger-action">Import: Digital Products</span><span class="trigger-result">CSV: Product Name, Platform, Description, Rate, Unit, Available From, Available To, Quarter, Max Units Available.</span></div>
+</div>
+
+<div class="detail" id="d-strategy">
+<div class="detail-title">Sales Strategy: target upload</div>
+<div class="trigger-row"><span class="trigger-action">CSV template</span><span class="trigger-result">6 columns only: Rep Name, Region, Client Company, Channel, Deal Type, Annual Target Amount</span></div>
+<div class="trigger-row"><span class="trigger-action">On upload</span><span class="trigger-result">System groups rows by rep. Creates one target submission per rep with all their clients. Status = Pending RH. One row per client-channel-dealtype combination.</span></div>
+<div class="trigger-row"><span class="trigger-action">Oversight dashboard</span><span class="trigger-result">Shows approval chain progress: how many submissions at each stage, which regions complete, total annual target, deal type mix.</span></div>
+</div>
+
+<div class="detail" id="d-chain">
+<div class="detail-title">Approval chain — each step</div>
+<div class="trigger-row"><span class="trigger-action">RH approves</span><span class="trigger-result">Sees only their region's submissions. Approve or send back with note. SLA 48h. Status → Pending NSH.</span></div>
+<div class="trigger-row"><span class="trigger-action">NSH approves</span><span class="trigger-result">Sees all regions at Pending NSH. Approves nationally. Status → Pending Strategy.</span></div>
+<div class="trigger-row"><span class="trigger-action">Sales Strategy confirms</span><span class="trigger-result">Strategic alignment check. Status → Pending CRO.</span></div>
+<div class="trigger-row"><span class="trigger-action">CRO final approval</span><span class="trigger-result">On approval: annualTarget LOCKED on every client account. No one can change it. Admin only with mandatory reason + audit log. Status = Fully Approved.</span></div>
+</div>
+
+<div class="detail" id="d-golive">
+<div class="detail-title">Go Live</div>
+<div class="trigger-row"><span class="trigger-action">Admin toggles Go Live</span><span class="trigger-result">Reps can now log in. They land on My Plan. They see approved annual targets already set. Before this toggle: reps see holding screen "Platform launching on [date]."</span></div>
+</div>
+</div>
+
+<!-- PHASE 2 -->
+<div id="phase-daily" style="display:none">
+<div class="section-title">What happens every working day</div>
+
+<h3>Rep morning — My Plan</h3>
+<div class="flow-row">
+  <div class="card" onclick="toggleDetail('d-myplan')">
+    <div class="card-title">Opens My Plan</div>
+    <div class="card-sub">First screen every day</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" onclick="toggleDetail('d-plan-meeting')">
+    <div class="card-title">Plans a meeting</div>
+    <div class="card-sub">Picks client, time, type</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" onclick="toggleDetail('d-log-meeting')">
+    <div class="card-title">Logs the meeting</div>
+    <div class="card-sub">Touchpoint type + stage + action items</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" onclick="toggleDetail('d-revenue')">
+    <div class="card-title">Logs revenue</div>
+    <div class="card-sub">When RO arrives</div>
+  </div>
+</div>
+
+<div class="detail" id="d-myplan">
+<div class="detail-title">My Plan — what the rep sees, in priority order</div>
+<div class="trigger-row"><span class="trigger-action">Priority 1</span><span class="trigger-result">At Risk cards — any client with no deal meeting in 7+ days. Red card, highest value first. "Daikin India — 8 days no contact — ₹50L at stake." Tap to open client account.</span></div>
+<div class="trigger-row"><span class="trigger-action">Priority 2</span><span class="trigger-result">Action items due today — approvals, documents, meetings due today from others.</span></div>
+<div class="trigger-row"><span class="trigger-action">Priority 3</span><span class="trigger-result">Today's planned meetings — chronological. Card states: grey=upcoming, red pulsing=overdue unlogged, green=logged.</span></div>
+<div class="trigger-row"><span class="trigger-action">Priority 4</span><span class="trigger-result">Tomorrow's meetings — plan ahead section.</span></div>
+<div class="trigger-row"><span class="trigger-action">Monday only</span><span class="trigger-result">Weekly summary card: touchpoints logged, clients contacted, deals moved, revenue logged, at-risk count. Dismissible.</span></div>
+<div class="trigger-row"><span class="trigger-action">11:30 PM rule</span><span class="trigger-result">Before 6pm: small countdown topbar. After 6pm: amber. After 9pm: red banner. After 11pm: fullscreen block — must log or confirm "nothing to log."</span></div>
+</div>
+
+<div class="detail" id="d-plan-meeting">
+<div class="detail-title">Planning a meeting</div>
+<div class="trigger-row"><span class="trigger-action">Client field</span><span class="trigger-result">Searchable dropdown from Client Master List only. No free typing. Rep cannot type a client name that doesn't exist in the master list.</span></div>
+<div class="trigger-row"><span class="trigger-action">Fields required</span><span class="trigger-result">Client, Contact Name, Time, Meeting Type (Physical/Online/Phone Call), Agenda.</span></div>
+<div class="trigger-row"><span class="trigger-action">On save</span><span class="trigger-result">Appears on rep's My Plan AND on RH's Team Plan (read only). RH can see what every rep is doing today without asking.</span></div>
+<div class="trigger-row"><span class="trigger-action">Tomorrow meeting logged today</span><span class="trigger-result">System asks "Did this happen today?" Yes → logs it, auto-removes from tomorrow. No free typing, no manual deletion.</span></div>
+</div>
+
+<div class="detail" id="d-log-meeting">
+<div class="detail-title">Logging a meeting — the most important form in the app</div>
+<div class="trigger-row"><span class="trigger-action">Touchpoint type</span><span class="trigger-result">RELATIONSHIP (Hi Hello, PR, no deal discussion — does NOT update pipeline, does NOT reset escalation clock) or DEAL MEETING (updates stage, resets escalation clock, affects all dashboards).</span></div>
+<div class="trigger-row"><span class="trigger-action">Contact level</span><span class="trigger-result">C-Suite / VP-GM / Marketing Head / Brand Manager / Agency Lead / Junior</span></div>
+<div class="trigger-row"><span class="trigger-action">Stage update</span><span class="trigger-result">Only shown for Deal Meeting. Options: Prospect, In Discussion, Negotiation, Mail Confirmed, Lost. RO Received is set automatically when revenue is logged — never manually.</span></div>
+<div class="trigger-row"><span class="trigger-action">If stage = Mail Confirmed</span><span class="trigger-result">Action items section is HIDDEN. Deal is done, no further internal requests needed. Show prompt: "Waiting for RO? Set a reminder." Options: 3/5/7 days.</span></div>
+<div class="trigger-row"><span class="trigger-action">If stage = Lost</span><span class="trigger-result">Loss reason field appears. MANDATORY. Cannot submit without it. Reason visible to RH and NSH in client thread.</span></div>
+<div class="trigger-row"><span class="trigger-action">Action items section</span><span class="trigger-result">Only shown for Prospect, In Discussion, Negotiation stages. Hidden for Mail Confirmed, Lost, RO Received.</span></div>
+<div class="trigger-row"><span class="trigger-action">Action item fields</span><span class="trigger-result">Type (5 options), Specific Details (150 chars), WHO (dropdown of roles), By When (date picker). Can add multiple.</span></div>
+<div class="trigger-row"><span class="trigger-action">On submit</span><span class="trigger-result">Meeting card → green. Stage updates. lastDealMeetingDate updates. All four dashboard numbers update everywhere immediately. Action items route automatically. At Risk card for this client disappears.</span></div>
+</div>
+
+<div class="detail" id="d-revenue">
+<div class="detail-title">Revenue Log — the ONLY way achievement is credited</div>
+<div class="trigger-row"><span class="trigger-action">Client field</span><span class="trigger-result">Dropdown of rep's approved target clients only. No free typing. Pre-filled if accessed from a Mail Confirmed prompt.</span></div>
+<div class="trigger-row"><span class="trigger-action">Fields</span><span class="trigger-result">Client (dropdown), Amount, Invoice/RO Reference (required), Date, Deal Type, Notes.</span></div>
+<div class="trigger-row"><span class="trigger-action">On submit</span><span class="trigger-result">revenueEntries record created. Client account stage → RO Received automatically. My Targets ACHIEVED updates. War Room CLOSED QTD updates. Revenue Tracker ACHIEVED updates. All three from same revenueEntries source. NEVER from d.amount.</span></div>
+<div class="trigger-row"><span class="trigger-action">If IP deal</span><span class="trigger-result">That specific IP slot → Committed. Other reps who had same slot In Discussion get notification: "[IP] [Slot] has been committed. Your discussion released."</span></div>
+<div class="trigger-row"><span class="trigger-action">Edit revenue entry</span><span class="trigger-result">Edit button on each row. Rep and Admin only. Recalculates all three dashboards immediately on save.</span></div>
+<div class="trigger-row"><span class="trigger-action">Target hit</span><span class="trigger-result">If total achieved hits annual target: clean "Target achieved" message. No sound, no animation.</span></div>
+</div>
+
+<h3>Action item routing — what goes where</h3>
+<div class="screen-grid">
+  <div class="screen-card" onclick="toggleDetail('d-approval')">
+    <div class="screen-title">Approval needed</div>
+    <div class="screen-sub">Rate exception, discount, credit period, CXO attendance</div>
+  </div>
+  <div class="screen-card" onclick="toggleDetail('d-doc')">
+    <div class="screen-title">Document needed</div>
+    <div class="screen-sub">Pitch deck, digital plan, content proposal, rate card</div>
+  </div>
+  <div class="screen-card" onclick="toggleDetail('d-attend')">
+    <div class="screen-title">Attend a meeting</div>
+    <div class="screen-sub">Senior presence, co-pitch, strategy discussion</div>
+  </div>
+  <div class="screen-card" onclick="toggleDetail('d-intro')">
+    <div class="screen-title">Client introduction</div>
+    <div class="screen-sub">Cross-region relationship, referral, access to contact</div>
+  </div>
+  <div class="screen-card" onclick="toggleDetail('d-flag')">
+    <div class="screen-title">Flag for follow-up</div>
+    <div class="screen-sub">Payment default, outstanding dues, invoice request</div>
+  </div>
+  <div class="screen-card" onclick="toggleDetail('d-self')">
+    <div class="screen-title">Self-assigned</div>
+    <div class="screen-sub">Rep's own to-do. Goes to My Tasks only.</div>
+  </div>
+</div>
+
+<div class="detail" id="d-approval">
+<div class="detail-title">Approval needed → Approvals tab of tagged person</div>
+<div class="trigger-row"><span class="trigger-action">Goes to</span><span class="trigger-result">Approvals tab of tagged person (RH, NSH, Finance, CXO). Tagged person sees: client, deal value, what's being approved, who requested, due date. Approve or Reject with mandatory note.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep sees</span><span class="trigger-result">Internal Requests → "Approval sent to [Person] — Pending"</span></div>
+<div class="trigger-row"><span class="trigger-action">SLA breach</span><span class="trigger-result">48h no response → auto-escalate one level up → moves to Escalations tab of tagged person → their manager sees in War Room "Overdue in my team."</span></div>
+</div>
+
+<div class="detail" id="d-doc">
+<div class="detail-title">Document needed → My Tasks of tagged person</div>
+<div class="trigger-row"><span class="trigger-action">Goes to</span><span class="trigger-result">My Tasks of tagged person (Sales Strategy, Digital, Content, Legal). Title: "[Doc needed] — [Client] — [Details] — by [Date] — from [Rep]"</span></div>
+<div class="trigger-row"><span class="trigger-action">SLA breach</span><span class="trigger-result">48h not marked Done → moves to Escalations tab of tagged person → manager notified.</span></div>
+</div>
+
+<div class="detail" id="d-attend">
+<div class="detail-title">Attend a meeting → My Plan of tagged person</div>
+<div class="trigger-row"><span class="trigger-action">Goes to</span><span class="trigger-result">My Plan of tagged person as unscheduled meeting request. They must confirm a date. Meeting appears on both people's My Plan on confirmation.</span></div>
+<div class="trigger-row"><span class="trigger-action">SLA breach</span><span class="trigger-result">48h no confirmation → reminder sent → moves to Escalations.</span></div>
+</div>
+
+<div class="detail" id="d-intro">
+<div class="detail-title">Introduction needed → My Tasks of tagged person</div>
+<div class="trigger-row"><span class="trigger-action">Goes to</span><span class="trigger-result">My Tasks of tagged rep or RH. Title: "[Intro needed] — [Client] — [Details] — from [Rep]". Tagged person's RH gets informational note in War Room only.</span></div>
+</div>
+
+<div class="detail" id="d-flag">
+<div class="detail-title">Flag for follow-up → My Tasks of Legal or Finance only</div>
+<div class="trigger-row"><span class="trigger-action">Goes to</span><span class="trigger-result">My Tasks of Legal or Finance. They act independently. Rep not further involved. Rep gets status updates in Internal Requests.</span></div>
+</div>
+
+<div class="detail" id="d-self">
+<div class="detail-title">Self-assigned → rep's My Tasks only</div>
+<div class="trigger-row"><span class="trigger-action">Goes to</span><span class="trigger-result">Rep's own My Tasks. No Internal Request created. No one else notified. If rep misses due date → appears in their own Escalations and RH sees in War Room.</span></div>
+</div>
+
+<h3>IPs workflow</h3>
+<div class="flow-row">
+  <div class="card" onclick="toggleDetail('d-ip-view')">
+    <div class="card-title">Rep views IPs</div>
+    <div class="card-sub">Sorted by air date, grouped by channel</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" onclick="toggleDetail('d-ip-pitch')">
+    <div class="card-title">Pitches a slot</div>
+    <div class="card-sub">Links slot to target client</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" onclick="toggleDetail('d-ip-close')">
+    <div class="card-title">Closes the deal</div>
+    <div class="card-sub">Revenue logged → slot committed</div>
+  </div>
+</div>
+<div class="detail" id="d-ip-view">
+<div class="trigger-row"><span class="trigger-action">Sort</span><span class="trigger-result">Air date ascending — soonest first. Group by channel. Channel filter at top.</span></div>
+<div class="trigger-row"><span class="trigger-action">Countdown</span><span class="trigger-result">"Airs in X days" — red under 30 days, amber under 60, green over 60.</span></div>
+<div class="trigger-row"><span class="trigger-action">Each slot shows</span><span class="trigger-result">Slot type, rate, total available, In Discussion count (with rep names), Committed count.</span></div>
+</div>
+<div class="detail" id="d-ip-pitch">
+<div class="trigger-row"><span class="trigger-action">Tap "Pitch to client"</span><span class="trigger-result">Dropdown of rep's approved target clients. Rep selects one. System creates Deal of type IPs linked to that client account and that slot. Slot's In Discussion count +1.</span></div>
+<div class="trigger-row"><span class="trigger-action">Multiple reps</span><span class="trigger-result">Multiple reps can have same slot In Discussion simultaneously. First to close wins.</span></div>
+</div>
+<div class="detail" id="d-ip-close">
+<div class="trigger-row"><span class="trigger-action">Rep logs revenue</span><span class="trigger-result">Slot → Committed. All other reps with same slot In Discussion get notification: "[IP] [Slot] committed by [Rep]. Your discussion released." Their deal released back to Available.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rule</span><span class="trigger-result">One slot = one Committed client maximum. Once committed, no further pitching on that slot.</span></div>
+</div>
+</div>
+
+<!-- PHASE 3 -->
+<div id="phase-measure" style="display:none">
+<div class="section-title">The four numbers — everywhere, always the same source</div>
+<div class="flow-row">
+  <div class="card">
+    <div class="card-title" style="color:#27500A">ACHIEVED</div>
+    <div class="card-sub">Sum of revenueEntries for rep + fiscal year. NEVER from d.amount. NEVER from deal stage changes.</div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="color:#0C447C">COMMITTED</div>
+    <div class="card-sub">Sum of pipelineAmount where stage = Mail Confirmed. Client said yes, RO not yet received.</div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="color:#633806">IN PLAY</div>
+    <div class="card-sub">Sum of pipelineAmount where stage = In Discussion or Negotiation.</div>
+  </div>
+  <div class="card">
+    <div class="card-title" style="color:#501313">SHORTFALL</div>
+    <div class="card-sub">Annual Target minus Achieved minus Committed minus In Play. Red if positive, green if zero.</div>
+  </div>
+</div>
+<div class="bug-note">These four numbers must be identical on My Targets, War Room, and Revenue Tracker. All update immediately when any revenue is logged or any stage changes. No refresh. No polling lag visible to user.</div>
+
+<h3>Escalation engine — automatic, no manual triggers</h3>
+<div class="screen-grid">
+  <div class="screen-card" onclick="toggleDetail('d-esc1')">
+    <div class="screen-title">Trigger 1 — No contact</div>
+    <div class="screen-sub">Day 7 / 10 / 14 thresholds</div>
+  </div>
+  <div class="screen-card" onclick="toggleDetail('d-esc2a')">
+    <div class="screen-title">Trigger 2A — Too many meetings</div>
+    <div class="screen-sub">4+ meetings, no stage progress</div>
+  </div>
+  <div class="screen-card" onclick="toggleDetail('d-esc2b')">
+    <div class="screen-title">Trigger 2B — Too few meetings</div>
+    <div class="screen-sub">Under 15 total in a month</div>
+  </div>
+  <div class="screen-card" onclick="toggleDetail('d-esc3')">
+    <div class="screen-title">Trigger 3 — Missed due dates</div>
+    <div class="screen-sub">Any task, approval, or action item</div>
+  </div>
+</div>
+<div class="detail" id="d-esc1">
+<div class="trigger-row"><span class="trigger-action">Measured by</span><span class="trigger-result">lastDealMeetingDate. Relationship touchpoints do NOT reset this clock. Only Deal Meeting touchpoints reset it.</span></div>
+<div class="trigger-row"><span class="trigger-action">Day 7</span><span class="trigger-result">At Risk card at top of rep's My Plan. Stays until rep logs a deal meeting.</span></div>
+<div class="trigger-row"><span class="trigger-action">Day 10</span><span class="trigger-result">RH alert in War Room. "[Rep] — [Client] — 10 days no deal meeting. Monitor."</span></div>
+<div class="trigger-row"><span class="trigger-action">Day 14</span><span class="trigger-result">RH task in My Tasks: "Intervene — [Client] — 14 days — [Rep]." Escalation recorded in client thread.</span></div>
+<div class="trigger-row"><span class="trigger-action">Config</span><span class="trigger-result">All thresholds configurable by Admin in System Config.</span></div>
+</div>
+<div class="detail" id="d-esc2a">
+<div class="trigger-row"><span class="trigger-action">Condition</span><span class="trigger-result">4+ deal meeting touchpoints with same client in rolling 30 days AND stage has not moved forward.</span></div>
+<div class="trigger-row"><span class="trigger-action">Result</span><span class="trigger-result">RH alert in War Room. RH can Intervene (creates action item for themselves) or Dismiss (logs note). Dismissed alerts don't reappear for 14 days.</span></div>
+</div>
+<div class="detail" id="d-esc2b">
+<div class="trigger-row"><span class="trigger-action">Condition</span><span class="trigger-result">Rep logs fewer than 15 total touchpoints in a calendar month.</span></div>
+<div class="trigger-row"><span class="trigger-action">Result</span><span class="trigger-result">RH alert in War Room on last day of month. Informational only — no auto-action.</span></div>
+</div>
+<div class="detail" id="d-esc3">
+<div class="trigger-row"><span class="trigger-action">Condition</span><span class="trigger-result">Any task, approval, or action item not completed by due date.</span></div>
+<div class="trigger-row"><span class="trigger-action">Result</span><span class="trigger-result">Moves to Escalations tab of the assigned person. Their manager sees in War Room "Overdue in my team." Assigned person notified: "Overdue — [Action] — [Client]."</span></div>
+</div>
+
+<h3>Deal stages — the only valid values</h3>
+<div class="flow-row" style="flex-wrap:nowrap;overflow-x:auto;gap:4px">
+  <div class="card" style="min-width:100px;flex:0 0 auto">
+    <div class="card-title">Prospect</div>
+    <div class="card-sub">First contact. No pipeline impact. No escalation.</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" style="min-width:110px;flex:0 0 auto">
+    <div class="card-title">In Discussion</div>
+    <div class="card-sub">Interested. Amount enters IN PLAY.</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" style="min-width:110px;flex:0 0 auto">
+    <div class="card-title">Negotiation</div>
+    <div class="card-sub">Proposal shared. Stays IN PLAY.</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" style="min-width:120px;flex:0 0 auto">
+    <div class="card-title">Mail Confirmed</div>
+    <div class="card-sub">Email confirmed. Moves to COMMITTED.</div>
+  </div>
+  <div class="arrow">→</div>
+  <div class="card" style="min-width:110px;flex:0 0 auto">
+    <div class="card-title">RO Received</div>
+    <div class="card-sub">Auto-set on revenue log. Moves to ACHIEVED.</div>
+  </div>
+</div>
+<div style="margin-top:8px"><span class="pill pill-red">Lost — requires mandatory loss reason. Amount removed from all calculations.</span></div>
+<div class="bug-note">Stage changes ONLY through touchpoint logging. No inline dropdowns in Revenue Tracker or anywhere else. Stage dropdown only exists inside the log meeting form — and only for Prospect/In Discussion/Negotiation (hidden for Mail Confirmed, Lost, RO Received).</div>
+</div>
+
+<!-- ROLES -->
+<div id="phase-roles" style="display:none">
+<div class="section-title">Click a role to see their navigation and permissions</div>
+<div class="role-grid">
+  <div class="role-card" onclick="showRole('rep')"><div class="role-name">Sales Rep</div><div class="role-sub">Self view only</div></div>
+  <div class="role-card" onclick="showRole('rh')"><div class="role-name">Region Head</div><div class="role-sub">Region view</div></div>
+  <div class="role-card" onclick="showRole('nsh')"><div class="role-name">NSH / Sales Head</div><div class="role-sub">National view</div></div>
+  <div class="role-card" onclick="showRole('strategy')"><div class="role-name">Sales Strategy</div><div class="role-sub">Analytics + config</div></div>
+  <div class="role-card" onclick="showRole('cro')"><div class="role-name">CRO</div><div class="role-sub">Final authority</div></div>
+  <div class="role-card" onclick="showRole('admin')"><div class="role-name">Admin</div><div class="role-sub">System control</div></div>
+</div>
+
+<div id="role-detail" style="display:none">
+<div class="detail show" id="role-rep" style="display:none">
+<div class="detail-title">Sales Rep — what they see and can do</div>
+<div class="trigger-row"><span class="trigger-action">Login lands on</span><span class="trigger-result">My Plan directly (home screen still shown first, rep clicks OTV CRM)</span></div>
+<ul class="nav-list">
+  <li>My Plan <span>Plan + log meetings. At Risk alerts. Deadline countdown.</span></li>
+  <li>Revenue Log <span>Log RO revenue. Edit entries. Only source of ACHIEVED.</span></li>
+  <li>War Room <span>My Closed QTD, IN PLAY, My Open Actions. Personal view only.</span></li>
+  <li>Revenue Tracker <span>Accounts tab + deal type tabs. Read only on IPs. No new package button.</span></li>
+  <li>My Targets <span>Annual target by client. 4 numbers. Read only after CRO approval.</span></li>
+  <li>Tasks <span>Own tasks. Self-assigned action items. Missed due dates.</span></li>
+  <li>Internal Requests <span>Sent requests (to others) + received requests (from others). Badge = waiting on rep only.</span></li>
+  <li>HR Reports <span>Own records only.</span></li>
+  <li>Leaderboard <span>My Team, By Region, All Sales Reps.</span></li>
+</ul>
+</div>
+
+<div class="detail show" id="role-rh" style="display:none">
+<div class="detail-title">Region Head — what they see and can do</div>
+<ul class="nav-list">
+  <li>My Plan <span>Own client meetings only. NOT action items from reps.</span></li>
+  <li>Team's Plan <span>All reps in their region. Read only.</span></li>
+  <li>War Room <span>Region: 4 numbers, At Risk clients, pending approvals, overdue items, escalation alerts, low-activity rep alerts.</span></li>
+  <li>Revenue Tracker <span>Region view. All reps, all clients, all deal types.</span></li>
+  <li>Revenue Log <span>Can log revenue on behalf of a rep if needed.</span></li>
+  <li>My Targets <span>Own if RH has personal targets.</span></li>
+  <li>Approvals <span>Section 1: Target submissions pending RH approval. Section 2: Approval requests raised by reps. Both with Approve/Reject buttons.</span></li>
+  <li>My Tasks <span>Action items routed to RH from reps. Structured titles.</span></li>
+  <li>Escalations <span>All overdue items from their region.</span></li>
+  <li>Team's Targets <span>Every rep's annual targets with approval chain status and achievement.</span></li>
+  <li>Team's Tasks <span>All tasks for every rep in region.</span></li>
+  <li>Internal Requests <span>Sent and received.</span></li>
+  <li>HR Reports <span>Own + Team's HR Reports.</span></li>
+  <li>Leaderboard <span>My Region, All Regions, All Sales Reps.</span></li>
+</ul>
+</div>
+
+<div class="detail show" id="role-nsh" style="display:none">
+<div class="detail-title">NSH — national oversight</div>
+<ul class="nav-list">
+  <li>My Plan + RH's Plan + Rep's Plans <span>Read only for others.</span></li>
+  <li>War Room <span>National: all regions, revenue vs target, blocked deals, at-risk nationally.</span></li>
+  <li>Revenue Tracker <span>National view.</span></li>
+  <li>Targets → Approvals <span>All submissions at Pending NSH stage.</span></li>
+  <li>My Tasks + Escalations <span>National escalation view.</span></li>
+  <li>Compliance <span>Full attendance and absence nationally.</span></li>
+  <li>All scorecard views <span>All RHs, all reps, with targets and HR reports.</span></li>
+</ul>
+</div>
+
+<div class="detail show" id="role-strategy" style="display:none">
+<div class="detail-title">Sales Strategy — analytics and configuration</div>
+<ul class="nav-list">
+  <li>Target oversight dashboard <span>Approval chain progress, total annual target, deal type mix.</span></li>
+  <li>War Room + Revenue Tracker <span>National, read only.</span></li>
+  <li>Approvals <span>Pending Strategy approval.</span></li>
+  <li>Approval Settings <span>Configure all SLA thresholds, escalation days, deal value limits, meeting minimums. No code.</span></li>
+  <li>Strategy Analytics <span>Revenue mix FCT vs IPs vs Digital. Whitespace analysis. Deal type performance.</span></li>
+</ul>
+</div>
+
+<div class="detail show" id="role-cro" style="display:none">
+<div class="detail-title">CRO — final authority</div>
+<ul class="nav-list">
+  <li>All NSH views <span>Plus CRO-specific overlays.</span></li>
+  <li>Target approvals <span>Final approval. Locks all targets permanently.</span></li>
+  <li>High-value deals <span>Final approval on deals above CXO threshold.</span></li>
+  <li>National revenue picture <span>Full forecast view.</span></li>
+</ul>
+</div>
+
+<div class="detail show" id="role-admin" style="display:none">
+<div class="detail-title">Admin — system control</div>
+<ul class="nav-list">
+  <li>Access Management <span>Approve signups, assign roles and regions, activate/deactivate users.</span></li>
+  <li>Data Management <span>Add/edit reps, client master list, all 5 bulk imports.</span></li>
+  <li>System Config <span>Go Live toggle, all thresholds, webhook URL for push notifications.</span></li>
+  <li>Reset-All <span>Wipes everything. Requires typing RESET. Logs who and when.</span></li>
+  <li>Edit approved targets <span>Only Admin can. Mandatory reason + audit log.</span></li>
+</ul>
+</div>
+</div>
+</div>
+
+<!-- TRIGGER MAP -->
+<div id="phase-triggers" style="display:none">
+<div class="section-title">Every action and what it triggers — complete map</div>
+<div class="trigger-row"><span class="trigger-action">Rep plans meeting</span><span class="trigger-result">→ Rep's My Plan + RH's Team Plan (read only)</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs Relationship touchpoint</span><span class="trigger-result">→ Client thread updated. lastContactDate updates. Meeting card green. No pipeline changes. No escalation clock reset.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs Deal Meeting — stage update</span><span class="trigger-result">→ Client thread updated. lastDealMeetingDate updates (resets escalation clock). Deal stage updates. All 4 dashboard numbers update immediately everywhere. Meeting card green. At Risk card disappears for this client.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs action item → Self</span><span class="trigger-result">→ Rep's My Tasks only. Nothing else.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs action item → Approval needed</span><span class="trigger-result">→ Tagged person's Approvals tab + My Tasks + sidebar badge. Rep's Internal Requests (sent). SLA 48h starts. Breach → Escalations + manager War Room.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs action item → Document needed</span><span class="trigger-result">→ Tagged person's My Tasks with structured title. Rep's Internal Requests (sent). SLA 48h. Breach → Escalations.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs action item → Attend meeting</span><span class="trigger-result">→ Tagged person's My Plan as unscheduled request. Rep's Internal Requests (awaiting). On confirmation → both people's My Plan updated.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs action item → Introduction needed</span><span class="trigger-result">→ Tagged person's My Tasks. Tagged person's RH gets informational note in War Room only.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs action item → Flag for follow-up</span><span class="trigger-result">→ Legal or Finance My Tasks only. Rep gets status updates in Internal Requests.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep logs revenue in Revenue Log</span><span class="trigger-result">→ revenueEntries record created. Client stage → RO Received. My Targets ACHIEVED updates. War Room CLOSED QTD updates. Revenue Tracker ACHIEVED updates. All three same source. If IP deal → slot Committed + other reps notified.</span></div>
+<div class="trigger-row"><span class="trigger-action">Deal = 7 days no deal meeting</span><span class="trigger-result">→ At Risk card top of rep's My Plan.</span></div>
+<div class="trigger-row"><span class="trigger-action">Deal = 10 days no deal meeting</span><span class="trigger-result">→ RH informational alert in War Room.</span></div>
+<div class="trigger-row"><span class="trigger-action">Deal = 14 days no deal meeting</span><span class="trigger-result">→ RH task in My Tasks: "Intervene — [Client] — 14 days — [Rep]"</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep = 4+ meetings same client, no stage move</span><span class="trigger-result">→ RH War Room alert. RH can Intervene or Dismiss.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep = under 15 touchpoints this month</span><span class="trigger-result">→ RH War Room alert on last day of month.</span></div>
+<div class="trigger-row"><span class="trigger-action">Any task/approval misses due date</span><span class="trigger-result">→ Escalations tab of assigned person. Manager War Room "Overdue in my team." Assigned person notified.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep misses 11:30 PM rule</span><span class="trigger-result">→ Marked absent for that day. Month-end → consolidated absence report for HR.</span></div>
+<div class="trigger-row"><span class="trigger-action">Deal awaiting approval</span><span class="trigger-result">→ Stays in IN PLAY calculation. Shows lock icon. Does NOT disappear from any view.</span></div>
+<div class="trigger-row"><span class="trigger-action">Rep marks deal Lost</span><span class="trigger-result">→ Loss reason mandatory. Amount removed from all calculations. Reason visible to RH and NSH.</span></div>
+<div class="trigger-row"><span class="trigger-action">Monday morning</span><span class="trigger-result">→ Weekly summary card on rep's My Plan. RH sees region summary in War Room.</span></div>
+</div>
+
+<!-- BUGS -->
+<div id="phase-bugs" style="display:none">
+<div class="section-title">Open issues to fix — in priority order</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P0 — Achievement calculation wrong in 8 places.</strong> Lines 2044, 2055, 5235, 5277, 6504, 10282, 10370, 10416 still use d.amount on Mail Confirmed deals. Replace all with revenueEntries calculation. This causes the 129% bug.</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P0 — Guided tour / onboarding removed.</strong> Must be restored. Every role needs a guided tour of their screens when they first log in.</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P1 — Action items section not hiding after Mail Confirmed.</strong> When rep sets stage to Mail Confirmed in log form, action items section must disappear. Deal is done. No further requests needed.</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P1 — Revenue Tracker ACHIEVED not updating.</strong> Only War Room and My Targets update. Revenue Tracker tab still shows stale number.</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P1 — Deals not appearing in Revenue Tracker after touchpoint.</strong> After logging a touchpoint, client account should immediately appear in Revenue Tracker Accounts tab.</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P2 — IPs "Pitch to client" flow not built.</strong> Slot status tracking, rep notifications on commitment, air date countdown not built.</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P2 — Digital Products inventory not built.</strong> No import. No view in Digital tab.</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P2 — Weekly summary card not built.</strong> Monday morning summary for rep and RH.</div>
+<div class="bug-note" style="margin-bottom:8px"><strong>P2 — Pre-launch enforcement not built.</strong> Reps should see holding screen when Platform State = Pre-launch.</div>
+<div class="bug-note"><strong>P3 — Monthly absence report not generated.</strong> System marks absent but report doesn't go anywhere.</div>
+</div>
+
+</div>
+
+<script>
+function showPhase(p){
+  ['setup','daily','measure','roles','triggers','bugs'].forEach(x=>{
+    var el=document.getElementById('phase-'+x);
+    if(el) el.style.display=x===p?'block':'none';
+  });
+  document.querySelectorAll('.phase-tab').forEach((t,i)=>{
+    var phases=['setup','daily','measure','roles','triggers','bugs'];
+    t.classList.toggle('active',phases[i]===p);
+  });
+}
+function toggleDetail(id){
+  var el=document.getElementById(id);
+  if(!el) return;
+  var showing=el.classList.contains('show');
+  document.querySelectorAll('.detail').forEach(d=>d.classList.remove('show'));
+  if(!showing) el.classList.add('show');
+}
+function showRole(r){
+  document.querySelectorAll('.role-card').forEach(c=>c.classList.remove('active'));
+  event.currentTarget.classList.add('active');
+  var rd=document.getElementById('role-detail');
+  rd.style.display='block';
+  ['rep','rh','nsh','strategy','cro','admin'].forEach(x=>{
+    var el=document.getElementById('role-'+x);
+    if(el) el.style.display=x===r?'block':'none';
+  });
+}
+</script>
