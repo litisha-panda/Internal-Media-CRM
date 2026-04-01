@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useRef, useEffect, useMemo } from "react";
+import ZohoSearchInput from "../components/ZohoSearchInput";
 
 
 // Route all Claude API calls through the API server proxy (key stays server-side)
@@ -1457,7 +1458,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
 
   // Part 1+3: `stage` is the canonical field; `outcome` kept for legacy compat
-  const BLANK_DEAL = { clientCompany:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", reqs:[], auditLog:[] };
+  const BLANK_DEAL = { clientCompany:"", zohoAccountId:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", zohoAgencyId:"", reqs:[], auditLog:[] };
   const BLANK_NEXT_STEP_ITEM = {action:"", actionType:"", details:"", neededFrom:"", remarks:"", dueDate:""};
   const ACTION_TYPES = ["Approval needed","Document / plan needed","Attend a meeting","Client introduction needed","Flag for follow-up"];
   const BLANK_LOG = {
@@ -1677,7 +1678,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", []);
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
-  const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
+  const [addClientForm, setAddClientForm]               = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",targetAmount:""});
   // Part 6: Client Account Thread modal
   const [accountThreadOpen, setAccountThreadOpen]       = useState(false);
   const [accountThreadClient, setAccountThreadClient]   = useState<string|null>(null);
@@ -1685,7 +1686,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,quarter:string,clients:{clientCompany:string,dealType:string,targetAmount:string}[]}>({repId:"",quarter:"Q1 FY26",clients:[{clientCompany:"",dealType:"Linear TV",targetAmount:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState([]);
-  const [revForm, setRevForm]                           = useState({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
+  const [revForm, setRevForm]                           = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [importTab, setImportTab]                       = useState("deals");
   const [dmTab, setDmTab]                               = useState<"reps"|"clients"|"bulk">("reps");
   const [repEditId, setRepEditId]                       = useState<number|null>(null);
@@ -8478,17 +8479,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{display:"flex",flexDirection:"column",gap:12}}>
                         <div>
                           <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>CLIENT NAME</div>
-                          {(()=>{
-                            const val = addClientForm.clientCompany.trim();
-                            const isOffList = val.length>0 && clientMasterList.length>0 && !clientMasterList.some(n=>n.toLowerCase()===val.toLowerCase());
-                            return (<>
-                              <input list="cm-list" value={addClientForm.clientCompany} placeholder={clientMasterList.length>0?"Type to search client list…":"e.g. Havells India"}
-                                onChange={e=>setAddClientForm(p=>({...p,clientCompany:e.target.value}))}
-                                style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",background:C.s2,border:`1px solid ${isOffList?C.orange:C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}/>
-                              {isOffList && <div style={{fontSize:10,color:C.orange,marginTop:3}}>⚠ "{val}" is not in the approved client list — admin can add it in System Configuration.</div>}
-                              {clientMasterList.length===0 && <div style={{fontSize:10,color:C.muted,marginTop:3}}>No client list configured yet. Ask admin to add clients in System Configuration → Client Master List.</div>}
-                            </>);
-                          })()}
+                          <ZohoSearchInput
+                            value={addClientForm.clientCompany}
+                            zohoId={addClientForm.zohoAccountId||""}
+                            onChange={(name,id)=>setAddClientForm(p=>({...p,clientCompany:name,zohoAccountId:id}))}
+                            endpoint="/api/zoho/clients"
+                            placeholder="Type to search Zoho…"
+                          />
                         </div>
                         <div>
                           <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>DEAL TYPE</div>
@@ -8979,12 +8976,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:8}}>
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>CLIENT / ADVERTISER</div>
-                            <select value={rf.clientCompany} onChange={e=>setRf(p=>({...p,clientCompany:e.target.value}))}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                            <select value={rf.clientCompany} onChange={e=>{
+                              const sel = e.target.value;
+                              // Auto-populate zohoAccountId from the matched deal if available
+                              const matchDeal = myDeals.find(d=>d.clientCompany===sel);
+                              setRf(p=>({...p,clientCompany:sel,zohoAccountId:matchDeal?.zohoAccountId||""}));
+                            }}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.zohoAccountId?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
                               <option value="">Select client…</option>
                               {[...new Set(myDeals.map(d=>d.clientCompany))].map(cl=><option key={cl}>{cl}</option>)}
                               <option value="__new__">+ Enter manually</option>
                             </select>
+                            {rf.zohoAccountId&&<div style={{fontSize:9,color:C.green,marginTop:2}}>✓ Zoho ID linked — revenue will match correctly</div>}
                             {rf.clientCompany==="__new__"&&(
                               <input placeholder="Client name" value={rf._manual||""} onChange={e=>setRf(p=>({...p,_manual:e.target.value}))}
                                 style={{marginTop:6,width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
@@ -9025,10 +9028,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           if(!client||!rf.amount){showToast("Client and amount are required","err");return;}
                           const amt = parseCurrency(rf.amount);
                           if(!amt){showToast("Invalid amount","err");return;}
-                          const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
+                          const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,zohoAccountId:rf.zohoAccountId||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
                           setRevenueEntries(p=>[entry,...p]);
                           // Part 3+9: Auto-set deal stage to "RO Received" when revenue is logged
-                          const matchDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&d.clientCompany===client&&qMatch(d.quarter));
+                          const matchDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&(rf.zohoAccountId&&d.zohoAccountId?d.zohoAccountId===rf.zohoAccountId:d.clientCompany===client)&&qMatch(d.quarter));
                           if(matchDeal){
                             setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,stage:"RO Received",outcome:"RO Received",lastContact:TODAY}:d));
                             // Update client account stage too
@@ -9036,7 +9039,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               setClientAccounts(p=>p.map(a=>a.id===matchDeal.clientAccountId?{...a,currentStage:"RO Received",lastContactDate:TODAY,updatedAt:TODAY}:a));
                             }
                           }
-                          setRf({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
+                          setRf({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
                           const totalFY = [...revenueEntries.filter(e=>(isRep?e.repId===myRepId:true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
                           // Part 9: Check if annual target reached
                           const annualTarget = isRep ? (getAnnualTarget(myRepId)?.amount||0) : 0;
@@ -11926,8 +11929,29 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           <div className="modal fin" onClick={e=>e.stopPropagation()}>
             <div className="sans" style={{fontSize:16,fontWeight:700,marginBottom:16}}>ADD NEW DEAL</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+              {/* Client Company — Zoho live search */}
+              <div>
+                <label>Client Company *</label>
+                <ZohoSearchInput
+                  value={dealForm.clientCompany||""}
+                  zohoId={dealForm.zohoAccountId||""}
+                  onChange={(name,id)=>setDealForm(p=>({...p,clientCompany:name,zohoAccountId:id}))}
+                  endpoint="/api/zoho/clients"
+                  placeholder="Type to search Zoho…"
+                />
+              </div>
+              {/* Agency Name — optional Zoho live search */}
+              <div>
+                <label>Agency Name (optional)</label>
+                <ZohoSearchInput
+                  value={dealForm.agencyName||""}
+                  zohoId={dealForm.zohoAgencyId||""}
+                  onChange={(name,id)=>setDealForm(p=>({...p,agencyName:name,zohoAgencyId:id}))}
+                  endpoint="/api/zoho/agencies"
+                  placeholder="e.g. Madison, Wavemaker…"
+                />
+              </div>
               {[
-                {label:"Client Company *",key:"clientCompany",type:"text",ph:"Company name"},
                 {label:"Contact Name",key:"contactName",type:"text",ph:"Full name"},
                 {label:"Designation",key:"designation",type:"text",ph:"e.g. VP Marketing"},
                 {label:"Phone",key:"phone",type:"text",ph:"Mobile"},
@@ -12710,7 +12734,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         const clientName = accountThreadClient;
         const clientDeals = deals.filter(d => d.clientCompany === clientName);
         const clientTPs   = touchpoints.filter(t => clientDeals.some(d => d.id === t.dealId) || t.clientAccountId === clientDeals[0]?.clientAccountId);
-        const clientRevs  = revenueEntries.filter(e => e.clientCompany === clientName);
+        // Revenue matching: prefer zohoAccountId over name string; fall back for legacy entries
+        const accountZohoId = clientAccounts.find(a=>a.clientName===clientName)?.zohoAccountId || deals.find(d=>d.clientCompany===clientName)?.zohoAccountId || "";
+        const clientRevs  = revenueEntries.filter(e =>
+          accountZohoId && e.zohoAccountId
+            ? e.zohoAccountId === accountZohoId
+            : e.clientCompany === clientName
+        );
         const account     = clientAccounts.find(a => a.clientName === clientName) || clientDeals[0];
         const currentStage = account?.currentStage || dealStage(clientDeals[0]||{});
         const repObj      = reps.find(r => r.id === (clientDeals[0]?.repId));

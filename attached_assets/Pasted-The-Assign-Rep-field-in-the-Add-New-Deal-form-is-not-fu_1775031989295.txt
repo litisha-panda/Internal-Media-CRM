@@ -1,0 +1,40 @@
+The Assign Rep field in the Add New Deal form is not functional. It appears as an empty text box instead of a searchable dropdown. This is because otv_reps is currently empty. Fix the field so that it pulls from the otv_reps collection and displays as a searchable dropdown. If otv_reps is empty it should show a message: "No reps added yet — ask Admin to add reps first." Also check every other dropdown in the system that pulls from otv_reps — they all have the same problem.
+
+Then do the full onboarding test in this exact order
+Once that fix is deployed, go through this sequence. This is the real test.
+Phase 1 — Admin setup
+Step 1: Log in as Admin. Go to Data Management → Sales Reps. Add at least two real reps with name, email, region, and role. Save.
+Step 2: Still as Admin. Go to System Config. Check that SLA defaults are 48 hours for RH, NSH etc. — not 0. Check that Go Live is toggled OFF.
+Step 3: Still as Admin. Verify the reset-all button requires typing RESET and shows a confirmation before doing anything.
+Phase 2 — Sales Strategy uploads targets
+Step 4: Log in as Sales Strategy. Go to target upload. Download the CSV template. Fill in two rows — one for each rep you created. Example: Rep 1, North region, Daikin India, Linear TV, ₹50L annual target. Rep 2, South region, Apollo Hospitals, Digital, ₹30L annual target. Upload the CSV.
+Step 5: Verify both target submissions appear with status "Pending RH."
+Phase 3 — Approval chain
+Step 6: Log in as Region Head for North. Go to Approvals. Find Rep 1's Daikin India target. Approve it.
+Step 7: Log in as Region Head for South. Approve Rep 2's Apollo Hospitals target.
+Step 8: Log in as NSH. Both targets should now show "Pending NSH." Approve both.
+Step 9: Log in as Sales Strategy. Both should show "Pending Strategy." Approve both.
+Step 10: Log in as CRO. Both should show "Pending CRO." Approve both.
+Step 11: Check that after CRO approval, target amounts are locked. Try to edit one — it should be read only.
+Phase 4 — Go Live
+Step 12: Log in as Admin. Toggle Go Live to ON in System Config.
+Phase 5 — Rep daily workflow
+Step 13: Log in as Rep 1. Verify you land on My Plan — not the home screen. If you see the home screen first, click OTV CRM and verify you go to My Plan.
+Step 14: Go to My Targets. Verify Daikin India shows ₹50L annual target. ACHIEVED should show ₹0 or —. Target should not be editable.
+Step 15: Go to My Plan. Add a planned meeting for today — client: Daikin India, contact: Deepa Menon, time: 10am, type: Physical, agenda: FCT grid discussion.
+Step 16: Tap the meeting to log it. Select touchpoint type: Deal Meeting. Fill in what happened. Set stage to "In Discussion." Add one action item: type "Approval needed," details "12% rate discount," WHO "Region Head," due date tomorrow. Submit.
+Step 17: Check that the meeting card turns green on My Plan.
+Step 18: Go to Revenue Tracker. Daikin India should now appear as an account in the Accounts tab with stage "In Discussion."
+Step 19: Check War Room. IN PLAY should show ₹50L (the deal pipeline amount).
+Phase 6 — RH sees the action item
+Step 20: Log in as Region Head in second window. Go to My Tasks. Should see: "Approval needed — Daikin India — 12% rate discount — by [tomorrow] — from [Rep 1 name]."
+Step 21: Check RH My Plan. The item should NOT be there.
+Step 22: Check RH Approvals tab. The item should be there.
+Step 23: RH approves it with a note: "Approved — standard discount for Q1."
+Step 24: Go back to Rep 1's browser. Go to Internal Requests. Should show the approval as resolved with RH's note.
+Phase 7 — Revenue logging
+Step 25: Still as Rep 1. Log another touchpoint for Daikin India — this time stage: Mail Confirmed.
+Step 26: Check that War Room now shows Daikin India amount under COMMITTED, not IN PLAY.
+Step 27: Go to Revenue Log. Log ₹45L against Daikin India. Invoice ref: INV-2026-001. Submit.
+Step 28: Check three places immediately — My Targets ACHIEVED, War Room CLOSED QTD, Revenue Tracker ACHIEVED. All three must show ₹45L. If any shows a different number — Bug 5 is not fixed.
+Step 29: Go back to Revenue Tracker Accounts tab. Daikin India deal pipeline value should still show the original target amount — not ₹45L. If it shows ₹45L — Bug 1 is not fixed.

@@ -1,0 +1,76 @@
+Yes. This is the most important data quality fix in the entire system and we deliberately kept it out of the brief as a separate sprint because it requires Zoho API work.
+
+But now that Replit says everything else is done, this should be the very next thing you build. Without it, every client name is free text, every revenue match depends on spelling, and the entire system is fragile from day one.
+
+Here is exactly what needs to happen.
+
+---
+
+## What Zoho integration means for the CRM
+
+Every place a rep currently types a client name or agency name needs to become a search-and-select from Zoho. Not a dropdown of everything — a live search. Rep types "Dai" and Zoho returns "Daikin India." Rep selects it. The Zoho record ID is stored alongside the name. From that point forward, all matching across the system uses the Zoho ID, not the name string. Spelling variations become impossible.
+
+---
+
+## The three places it needs to work
+
+**1. Creating a Client Account**
+When a rep creates a new client account, the client name field becomes a Zoho search. They type, results appear, they select. The Zoho Account ID is stored on the client account record.
+
+**2. Logging a Touchpoint**
+When a rep logs a touchpoint and selects the client, it searches from their existing client accounts (which already have Zoho IDs). No new Zoho lookup needed here — the ID is already stored.
+
+**3. Logging Revenue**
+When a rep logs revenue in Revenue Log and selects the client, same as above — pulls from their existing client accounts with Zoho IDs already attached.
+
+---
+
+## Agency name — slightly different
+
+Agency names come from Zoho too but the workflow is different. A deal might be placed through an agency (Madison, Wavemaker, Omnicom etc.) rather than directly with the client. When adding a deal, there should be an optional Agency field that also searches Zoho. If agency is filled, the commission structure changes. This is already how it works in your RO Parser — bring the same logic here.
+
+---
+
+## What to tell Replit
+
+---
+
+Next sprint: Zoho CRM integration for client and agency name lookup.
+
+We already have Zoho sandbox credentials and two API base URLs in use for the RO Parser:
+- `https://crmsandbox.zoho.in/crm/v2` — for all lookup data
+- `https://crmsandbox.zoho.in/crm/broadcast/v2` — for deal pushes only
+
+Use the same credentials and the same `crm/v2` base URL for client and agency lookups.
+
+**What to build:**
+
+**1. Client search endpoint on the API server**
+Create a server-side endpoint `GET /api/zoho/clients?q=[search term]` that queries Zoho CRM Accounts module and returns matching account names and their Zoho record IDs. The search must be server-side — never expose Zoho credentials to the browser.
+
+**2. Agency search endpoint**
+Create `GET /api/zoho/agencies?q=[search term]` that queries Zoho CRM Contacts or Accounts module filtered by agency type. Returns agency names and Zoho record IDs.
+
+**3. Replace client name free text with Zoho search in three places:**
+
+- Create Client Account form — client name field becomes a live search input. Rep types 3+ characters, dropdown shows Zoho results. Rep selects one. Store both `clientName` (display) and `zohoAccountId` (Zoho record ID) on the client account.
+
+- Add Deal form — same search for client name. If client account already exists for that rep, it should appear first in results.
+
+- Revenue Log — client field pulls from rep's existing client accounts (which already have Zoho IDs). No new Zoho lookup needed here. Just a select from their own client account list.
+
+**4. Store Zoho IDs**
+Add `zohoAccountId` field to Client Account object. Add `zohoAgencyId` field to Deal object. These IDs are what the system uses for all internal matching — never the name string alone.
+
+**5. All revenue matching uses Zoho ID not name string**
+When revenue entries are matched to client accounts for achievement calculation, match on `zohoAccountId` if available. Fall back to name string only for legacy records created before this integration. Going forward, all new client accounts must have a Zoho ID.
+
+**6. Graceful fallback**
+If Zoho API is unavailable, the field falls back to free text entry with a warning: "Zoho unavailable — type client name carefully. This may affect revenue matching." Do not block the rep from working if Zoho is down.
+
+**7. Sandbox first, production after**
+Build and test against the Zoho sandbox. Only switch to production Zoho credentials after full end-to-end test is complete.
+
+---
+
+Do the five tests I gave you first to verify the main brief is actually done. Then send this Zoho brief as the next instruction.
