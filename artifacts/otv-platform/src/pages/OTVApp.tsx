@@ -1420,6 +1420,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const planInlineState                   = useState(null); // [inlineLogPlan, setInlineLogPlan]
   const planInlineStatusState             = useState<string>(""); // [inlineLogStatus, setInlineLogStatus]
   const [planLoggedMsg, setPlanLoggedMsg] = useState<Record<string,string>>({}); // Part 8: post-log messages
+  const [weekSummaryDismissed, setWeekSummaryDismissed] = useState<string|null>(null); // "YYYY-MM-DD" of Monday dismissed
   const [rhRepDrill, setRhRepDrill]       = useState(null); // Region Head targets drilldown
   const [nshRHDrill,  setNshRHDrill]      = useState(null); // NSH drills into specific RH region
   const [nshRegion,   setNshRegion]       = useState("all"); // NSH rep-CRM region filter
@@ -3982,6 +3983,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   </span>
                                   {p.status!=="Done"&&!isFuture&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
                                   {isFuture&&p.status!=="Done"&&<button onClick={e=>{e.stopPropagation();if(planEditId===p.id){setPlanEditId(null);}else{setPlanEditId(p.id);setPlanEditForm({time:p.time||"10:00",clientAgencyName:p.clientAgencyName||"",contactName:p.contactName||"",phone:p.phone||"",agenda:p.agenda||"",pitchType:p.pitchType||""});}}} style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,borderRadius:4,padding:"1px 7px",color:C.blue,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✎ Edit</button>}
+                                  {isFuture&&p.status!=="Done"&&p.date===TOMORROW&&(
+                                    <button onClick={e=>{e.stopPropagation();if(confirm(`Did "${p.clientAgencyName}" actually happen today?`)){setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,date:TODAY,status:"Done"}:pl));showToast("Moved to today and marked Done ✓");}}} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"1px 7px",color:C.green,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4}}>✓ Happened today</button>
+                                  )}
                                 </div>
                               </div>
 
@@ -4003,8 +4007,34 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 </div>
                               )}
 
+                              {/* Fix 12: Attend a meeting confirmation for action-item-created plans */}
+                              {isFuture && p.autoCreatedFrom==="action-item" && p.requestedBy && !["Done","Confirmed","Declined"].includes(p.status) && (
+                                <div style={{background:`${C.accent}08`,border:`1px solid ${C.accent}44`,borderRadius:6,padding:"10px 12px",marginTop:4}}>
+                                  <div style={{fontSize:11,color:C.accent,fontWeight:700,marginBottom:6}}>
+                                    📩 Meeting requested by {p.requestedByName||"a colleague"}
+                                  </div>
+                                  <div style={{fontSize:10,color:C.dim,marginBottom:8}}>Confirm or decline this meeting request. Confirming adds it to both your plan and theirs.</div>
+                                  <div style={{display:"flex",gap:8}}>
+                                    <button onClick={()=>{
+                                      setPlans(q=>{
+                                        const confirmed = q.map(pl=>pl.id===p.id?{...pl,status:"Confirmed"}:pl);
+                                        // Create matching plan entry for the requester
+                                        const requesterPlan = {id:`p_conf_${Date.now()}`,repId:p.requestedBy,date:p.date,time:p.time||"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",agenda:`[Confirmed] ${p.agenda||`Meeting with ${p.clientAgencyName}`}`,pitchType:"",meetingType:p.meetingType||"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"confirm-from-"+myRepId};
+                                        return [...confirmed, requesterPlan];
+                                      });
+                                      showToast("Meeting confirmed — added to both plans ✓");
+                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"4px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                      ✓ Confirm date
+                                    </button>
+                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Declined"}:pl));showToast("Meeting request declined");}} style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,borderRadius:5,padding:"4px 14px",color:C.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                      ✗ Decline
+                                    </button>
+                                  </div>
+                                </div>
+                              )}
+
                               {/* Info note for future meetings (no edit) */}
-                              {isFuture&&planEditId!==p.id&&(
+                              {isFuture&&planEditId!==p.id&&!p.autoCreatedFrom&&(
                                 <div style={{background:`${C.blue}06`,border:`1px solid ${C.blue}18`,borderRadius:5,padding:"6px 10px",marginTop:4,fontSize:10,color:C.blue}}>
                                   📅 Scheduled for <strong>{p.date}</strong>. Come back on the day to log the outcome. Use ✎ Edit to change details.
                                 </div>
@@ -4428,6 +4458,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   if (dayOfWeek !== 1) return null;
                   // Last week = Mon–Sun of previous week
                   const now = new Date();
+                  const thisMonday = new Date(now); thisMonday.setDate(now.getDate());
+                  const thisMondayStr = thisMonday.toISOString().slice(0,10);
+                  if (weekSummaryDismissed === thisMondayStr) return null;
                   const lastMonday = new Date(now); lastMonday.setDate(now.getDate()-7);
                   const lastSunday = new Date(now); lastSunday.setDate(now.getDate()-1);
                   const lmStr = lastMonday.toISOString().slice(0,10);
@@ -4441,8 +4474,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const lastWeekAtRisk = atRisk.filter(d=>d.repId===myRepId).length;
                   return (
                     <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"14px 18px",marginBottom:16}}>
-                      <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>
-                        📊 LAST WEEK SUMMARY · {lmStr} – {lsStr}
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                        <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase"}}>
+                          📊 LAST WEEK SUMMARY · {lmStr} – {lsStr}
+                        </div>
+                        <button onClick={()=>setWeekSummaryDismissed(thisMondayStr)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,lineHeight:1,padding:"0 2px"}} title="Dismiss for this week">✕</button>
                       </div>
                       <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
                         {[
@@ -5124,7 +5160,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <td style={{padding:"10px 14px",maxWidth:200,fontSize:12}}>{r.subject}</td>
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{r.clientCompany||"—"}</td>
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{r.raisedAt}</td>
-                              <td style={{padding:"10px 14px"}}><span style={{background:`${r.status==="Pending"?C.orange:r.status==="Overdue"?C.red:C.blue}18`,color:r.status==="Pending"?C.orange:r.status==="Overdue"?C.red:C.blue,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.status}</span></td>
+                              <td style={{padding:"10px 14px"}}>{(()=>{const breached=r.status==="Pending"&&daysSince(r.raisedAt)>=APPROVAL_SLA_DAYS;return <span style={{background:breached?`${C.red}22`:r.status==="Pending"?`${C.orange}18`:r.status==="Overdue"?`${C.red}22`:`${C.blue}18`,color:breached?C.red:r.status==="Pending"?C.orange:r.status==="Overdue"?C.red:C.blue,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{breached?"⚠ SLA Breach":r.status}</span>;})()}</td>
                               <td style={{padding:"10px 14px",whiteSpace:"nowrap",display:"flex",gap:4}}>
                                 <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress",resolverNote:"Acknowledged by "+user_role?.name}:x))}
                                   style={{background:`${C.blue}18`,color:C.blue,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Accept</button>
@@ -5932,12 +5968,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   // Helper: get live proposals for one element
                   const getEP = (ipId, elemId) => ipProposals.filter(p=>p.ipId===ipId&&p.elemId===elemId);
 
-                  // Submit a new proposal
+                  // Submit a new proposal + create linked IPs deal in pipeline
                   const submitProposal = (ip, elem) => {
                     if (!ipPropClient.trim()) { showToast("Enter client name","err"); return; }
                     const myRep = reps.find(r=>r.id===user_role?.repId);
+                    const propId = `ipr${Date.now()}`;
                     const prop = {
-                      id: `ipr${Date.now()}`,
+                      id: propId,
                       ipId: ip.id, elemId: elem.id,
                       repId: user_role?.repId, repName: myRep?.name||user_role?.name||"Rep",
                       client: ipPropClient.trim(),
@@ -5948,8 +5985,27 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       closedAt: null, approvedBy: null, approvedAt: null,
                     };
                     setIpProposals(prev=>[...prev, prop]);
+                    // Create linked IPs deal so it appears in the rep's pipeline
+                    const existingIpDeal = deals.find(d=>d.repId===user_role?.repId&&d.dealType==="IPs"&&d.clientCompany===ipPropClient.trim()&&d.ipPropId===propId);
+                    if (!existingIpDeal) {
+                      const newDeal = {
+                        id:`d_ip_${Date.now()}`, repId:user_role?.repId, repName:myRep?.name||"",
+                        region:myRep?.region||"", clientCompany:ipPropClient.trim(),
+                        contactName:"", designation:"", contactLevel:"", phone:"", email:"",
+                        dealType:"IPs", outcome:"In Discussion", stage:"In Discussion",
+                        amount: parseCurrency(ipPropValue)||elem.rackRate||0,
+                        pipelineAmount: parseCurrency(ipPropValue)||elem.rackRate||0,
+                        targetAmount: parseCurrency(ipPropValue)||elem.rackRate||0,
+                        lossReason:"", priority:"Regular", quarter:ip.quarter||filterQ,
+                        notes:ipPropNote.trim(), nextStep:"", nextStepDate:"",
+                        agencyName:"", zohoAgencyId:"", reqs:[], auditLog:[],
+                        ipId:ip.id, elemId:elem.id, ipPropId:propId,
+                        lastDealMeetingDate:TODAY, lastContact:TODAY,
+                      };
+                      setDeals(prev=>[newDeal,...prev]);
+                    }
                     setIpPropClient(""); setIpPropNote(""); setIpPropValue(""); setIpPropOpen(null);
-                    showToast(`Proposal submitted for ${elem.label} → awaiting Sales Strategy ✓`);
+                    showToast(`Pitched to client — deal added to pipeline. Awaiting Sales Strategy approval ✓`);
                   };
 
                   // Approve a proposal
@@ -8128,11 +8184,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   (user_role.canView!=="self" || d.repId===myRepId)
                 );
 
-                // 2. Internal department requests overdue
+                // 2. Internal department requests overdue (legacy deal reqs)
                 const reqEsc = deals.flatMap((d,_) =>
                   (d.reqs||[])
                     .map((r,i) => ({...r, dealId:d.id, reqIdx:i, clientCompany:d.clientCompany, repId:d.repId, amount:d.amount}))
                     .filter(r => r.status==="Overdue" && (user_role.canView!=="self" || d.repId===myRepId))
+                );
+
+                // 2b. SLA-breached Internal Requests (internalReqs pending 48h+)
+                const irSLABreached = internalReqs.filter(ir =>
+                  ir.status === "Pending" &&
+                  daysSince(ir.raisedAt) >= APPROVAL_SLA_DAYS &&
+                  (user_role.canView!=="self" ? true : ir.repId===myRepId || ir.raisedBy===activeUser)
                 );
 
                 // 3. Tasks overdue and tagged to this user's deals or assigned to them
@@ -8149,9 +8212,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {/* Summary strip */}
                     <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:18}}>
                       {[
-                        {label:"APPROVALS OVERDUE",  value:approvalEsc.length, color:C.red,    desc:`Pending >${APPROVAL_SLA_DAYS}d without response`},
-                        {label:"REQUESTS STUCK",      value:reqEsc.length,      color:C.orange, desc:"Internal requests past SLA"},
-                        {label:"TASKS OVERDUE",       value:taskEsc.length,     color:C.blue,   desc:"Tasks past due date"},
+                        {label:"APPROVALS OVERDUE",  value:approvalEsc.length,   color:C.red,    desc:`Pending >${APPROVAL_SLA_DAYS}d without response`},
+                        {label:"REQUESTS BREACHED",   value:irSLABreached.length, color:C.orange, desc:"Internal requests past 48h SLA"},
+                        {label:"TASKS OVERDUE",       value:taskEsc.length,       color:C.blue,   desc:"Tasks past due date"},
                       ].map(k=>(
                         <div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}>
                           <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div>
@@ -8249,6 +8312,40 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   </tr>
                                 );
                               })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* SECTION 2b: SLA-breached Internal Requests */}
+                    {irSLABreached.length>0&&(
+                      <div style={{marginBottom:18}}>
+                        <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>
+                          ⚠ Internal Requests — SLA Breached (48h+)
+                        </div>
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>
+                              {["From","Type","Subject","Client","Raised","Days","Action"].map(h=>(
+                                <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                              ))}
+                            </tr></thead>
+                            <tbody>
+                              {irSLABreached.map(r=>(
+                                <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.orange}06`}}>
+                                  <td style={{padding:"10px 14px",fontWeight:600}}>{r.raisedByName}</td>
+                                  <td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.type}</span></td>
+                                  <td style={{padding:"10px 14px",maxWidth:200,fontSize:12}}>{r.subject}</td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{r.clientCompany||"—"}</td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{r.raisedAt}</td>
+                                  <td style={{padding:"10px 14px",color:C.red,fontWeight:700}}>{daysSince(r.raisedAt)}d</td>
+                                  <td style={{padding:"10px 14px",whiteSpace:"nowrap",display:"flex",gap:4}}>
+                                    <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress"}:x))} style={{background:`${C.blue}18`,color:C.blue,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Accept</button>
+                                    <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY}:x))} style={{background:`${C.green}18`,color:C.green,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Done</button>
+                                  </td>
+                                </tr>
+                              ))}
                             </tbody>
                           </table>
                         </div>
@@ -9232,15 +9329,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               setRf(p=>({...p,clientCompany:sel,zohoAccountId:matchDeal?.zohoAccountId||""}));
                             }}
                               style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.zohoAccountId?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                              <option value="">Select client…</option>
-                              {[...new Set(myDeals.map(d=>d.clientCompany))].map(cl=><option key={cl}>{cl}</option>)}
-                              <option value="__new__">+ Enter manually</option>
+                              <option value="">Select from approved targets…</option>
+                              {[...new Set(myDeals.map(d=>d.clientCompany))].sort().map(cl=><option key={cl}>{cl}</option>)}
                             </select>
                             {rf.zohoAccountId&&<div style={{fontSize:9,color:C.green,marginTop:2}}>✓ Zoho ID linked — revenue will match correctly</div>}
-                            {rf.clientCompany==="__new__"&&(
-                              <input placeholder="Client name" value={rf._manual||""} onChange={e=>setRf(p=>({...p,_manual:e.target.value}))}
-                                style={{marginTop:6,width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                            )}
+                            {!rf.clientCompany&&<div style={{fontSize:9,color:C.dim,marginTop:2}}>Only approved target clients appear here. Add a deal first.</div>}
                           </div>
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
@@ -9273,12 +9366,34 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                         </div>
                         <button onClick={()=>{
-                          const client = rf.clientCompany==="__new__" ? (rf._manual||"").trim() : rf.clientCompany;
+                          const client = rf.clientCompany;
                           if(!client||!rf.amount){showToast("Client and amount are required","err");return;}
                           const amt = parseCurrency(rf.amount);
                           if(!amt){showToast("Invalid amount","err");return;}
                           const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,zohoAccountId:rf.zohoAccountId||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
                           setRevenueEntries(p=>[entry,...p]);
+                          // Fix 6: IP slot committed — notify other reps with pending proposals for the same slot
+                          if (rf.dealType==="IPs") {
+                            const linkedDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&d.dealType==="IPs"&&d.clientCompany===client&&d.ipId&&d.elemId);
+                            if (linkedDeal) {
+                              const otherPending = ipProposals.filter(p=>p.ipId===linkedDeal.ipId&&p.elemId===linkedDeal.elemId&&p.repId!==myRepId&&p.status==="Pending");
+                              if (otherPending.length) {
+                                const notifTasks = otherPending.map(p=>({
+                                  id:`t_ipnotify_${Date.now()}_${p.repId}`,
+                                  assignedTo:p.repId, assignedToUserId:USER_ROLES.find(u=>u.repId===p.repId)?.id||null,
+                                  assignedDept:"Sales Rep", repId:p.repId, clientCompany:p.client,
+                                  title:`[IP Slot Committed] ${linkedDeal.ipId} · ${linkedDeal.elemId} has been committed to ${client} — your proposal for ${p.client} has been released.`,
+                                  description:`The slot you pitched for ${p.client} is now committed. You can explore other elements in this IP.`,
+                                  priority:"High", status:"Open", dueDate:TODAY, createdAt:TODAY,
+                                  assignedBy:activeUser, assignedByName:user_role?.name||"System", fromMeetingLog:false,
+                                }));
+                                setTasks(prev=>[...notifTasks,...prev]);
+                                // Mark their proposals as Released
+                                setIpProposals(prev=>prev.map(p=>otherPending.some(op=>op.id===p.id)?{...p,status:"Released"}:p));
+                                showToast(`IP slot committed. ${otherPending.length} rep${otherPending.length>1?"s":""} notified.`);
+                              }
+                            }
+                          }
                           // Part 3+9: Auto-set deal stage to "RO Received" when revenue is logged
                           const matchDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&(rf.zohoAccountId&&d.zohoAccountId?d.zohoAccountId===rf.zohoAccountId:d.clientCompany===client)&&qMatch(d.quarter));
                           if(matchDeal){
