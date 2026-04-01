@@ -1238,7 +1238,7 @@ const TOUR_DATA = {
       {title:"Follow-up & Next Meeting Dates", desc:"Inside the log form, set a Follow-up Date (📞) and/or Next Meeting Date (📅). These auto-create entries in your calendar so nothing slips through the cracks.", nav:"my-plan", target:"content-area"},
       {title:"Calendar View", desc:"Switch to the Calendar tab on My Plan for a weekly view. Each cell shows chips with time, type label, client name, and agenda — so you can spot a busy day vs a free one instantly. Click any future cell to plan a meeting.", nav:"my-plan", target:"content-area", tip:"Chips are colour-coded: blue = follow-up call, green = scheduled meeting, orange = action item."},
       {title:"Revenue Tracker (Pipeline)", desc:"Track every deal — client, deal type (FCT / IPs / Digital / Integrated / Media Solutions), amount, quarter, and outcome. Update this after every meeting so your RH has an accurate picture.", nav:"pipeline", target:"pipeline"},
-      {title:"Adding & Updating Deals", desc:"Click '+ Add Deal' to create a new pipeline entry. Fill in client, deal type, quarter, and target amount. As the deal progresses, update the outcome (Very Interested → Mail Confirmed → Committed).", nav:"pipeline", target:"content-area", tip:"Deal types: FCT = air-time, IPs = integrated properties, Media Solutions = branded content. Ask your RH if unsure."},
+      {title:"Adding & Updating Deals", desc:"Click '+ Add Deal' to create a new pipeline entry. Fill in client, deal type, quarter, and target amount. Stage advances automatically when you log a Deal Meeting touchpoint — Prospect → In Discussion → Negotiation → Mail Confirmed.", nav:"pipeline", target:"content-area", tip:"Deal types: Linear TV = air-time, IPs = integrated properties, Media Solutions = branded content. Ask your RH if unsure."},
       {title:"My Targets", desc:"View your quarterly revenue target and current progress. When your RH asks you to submit targets, use the '+ Submit Target' form here and it flows to them for approval.", nav:"target-submit", target:"target-submit"},
       {title:"Tasks", desc:"Action items assigned to you or self-created. Use '+ Create Task' to track anything — calls to make, proposals to send, approvals to chase. Set due dates so nothing is forgotten.", nav:"tasks", target:"tasks"},
       {title:"Internal Requests", desc:"Need a custom rate card, a creative brief, or pricing approval from NSH? Raise an Internal Request here, tag the right department, and track its status end-to-end.", nav:"internal-requests", target:"internal-requests"},
@@ -1253,7 +1253,7 @@ const TOUR_DATA = {
       {title:"My Plan", desc:"Plan and log your own client meetings here — just like a Sales Rep. NSH can see your activity in real time, so keep this updated.", nav:"my-plan"},
       {title:"Team's Plan", desc:"See every rep's planned and logged meetings for today and tomorrow at a glance. Perfect for your morning team stand-up — you can see instantly who is active and who has nothing planned.", nav:"rh-team-plan"},
       {title:"War Room — Your Command View", desc:"The most important screen for you. See which reps are active today, which clients haven't been contacted in 14+ days (at-risk), and who has overdue follow-ups. Red alerts need immediate action from you or the rep.", nav:"warroom"},
-      {title:"Revenue Tracker", desc:"Full pipeline for your region — all reps, all deals, all stages. Filter by rep or deal type. You can update outcomes here if a rep hasn't logged the result of a meeting yet.", nav:"pipeline"},
+      {title:"Revenue Tracker", desc:"Full pipeline for your region — all reps, all deals, all stages. Filter by rep or deal type to get the view you need for a client review or team meeting.", nav:"pipeline"},
       {title:"My Targets", desc:"Your own quarterly revenue target and progress against actuals. This includes the aggregate of all your reps' pipeline.", nav:"targets"},
       {title:"Target Approvals", desc:"When reps in your region submit quarterly targets, they land here for your review. Approve or Reject each one with a note — approved targets flow up to NSH automatically.", nav:"target-approvals"},
       {title:"My Tasks & Assigning Tasks", desc:"Manage your own action items and assign tasks to reps. '+ Assign Task' lets you create a task for any rep in your region with a due date. Overdue tasks surface in the War Room.", nav:"my-tasks"},
@@ -1269,7 +1269,7 @@ const TOUR_DATA = {
       {title:"RH's Plan", desc:"See all Region Heads' planned and logged meetings for the day. Useful context before your morning reviews with them.", nav:"nsh-rh-plan"},
       {title:"Rep's Plan", desc:"Drill into any individual Sales Rep's daily meeting activity across all regions. Useful for spotting low activity or follow-up patterns early.", nav:"nsh-regional-plan"},
       {title:"National War Room", desc:"Your morning command view. All regions and all reps — active today, at-risk clients, overdue follow-ups. This screen tells you within seconds where attention is needed.", nav:"warroom"},
-      {title:"Revenue Tracker", desc:"Full national pipeline. Filter by region, rep, deal type, outcome, or quarter. The Committed and Mail Confirmed rows show your month's likely closures.", nav:"pipeline"},
+      {title:"Revenue Tracker", desc:"Full national pipeline. Filter by region, rep, deal type, stage, or quarter. Mail Confirmed deals are your committed revenue; In Discussion and Negotiation show what's in play.", nav:"pipeline"},
       {title:"Targets", desc:"Review national targets and progress by quarter. Drill into any region or rep to see where the gaps are.", nav:"targets"},
       {title:"Target Approvals", desc:"Target proposals from Region Heads land here for NSH sign-off. Approve or Reject with a note — rejections are sent back to the RH with your feedback automatically.", nav:"target-approvals"},
       {title:"My Tasks", desc:"Your own task board. '+ Create Task' creates a personal task. '+ Assign Task' sends a task to any RH or rep in the system with a due date and priority.", nav:"my-tasks"},
@@ -1297,7 +1297,7 @@ const TOUR_DATA = {
     steps:[
       {title:"Overview", desc:"The Overview tab shows national planning activity — NSH meetings, RH schedules, and rep-level plans. Use it to gauge daily sales momentum at a glance.", nav:"my-plan"},
       {title:"National War Room", desc:"Your pulse check. At-risk clients, overdue follow-ups, and active rep counts across all regions. Open this every morning for a 30-second national health check.", nav:"warroom"},
-      {title:"Revenue Tracker", desc:"Full national pipeline — sort by amount, region, outcome, or quarter. The Committed and Mail Confirmed columns show your month's likely closures.", nav:"pipeline"},
+      {title:"Revenue Tracker", desc:"Full national pipeline — sort by amount, region, stage, or quarter. Mail Confirmed = committed revenue. In Discussion and Negotiation = in play. RO Received = achieved.", nav:"pipeline"},
       {title:"Targets", desc:"National revenue targets and quarterly progress. Drill into any region or quarter to see where actuals are tracking against plan.", nav:"targets"},
       {title:"Target Approvals", desc:"Final-level approval queue for CRO sign-off. Review and approve or reject strategic targets submitted by NSH or Region Heads.", nav:"target-approvals"},
       {title:"All Region Heads", desc:"Scorecard view for each Region Head — pipeline value, target achievement, and team engagement. Your weekly performance review input.", nav:"nsh-rh-scorecard"},
@@ -5911,7 +5911,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
-                              {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
+                              {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
                                 const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
@@ -6044,7 +6044,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                               <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                               <tbody>
-                                {ipDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
+                                {ipDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                   const rep=reps.find(r=>r.id===d.repId);
                                   const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                   const sf=Math.max(0,(d.targetAmount||0)-ach);
@@ -6399,7 +6399,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
-                              {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
+                              {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
                                 const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
@@ -6452,7 +6452,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
-                              {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
+                              {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
                                 const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
@@ -11396,7 +11396,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {view==="nsh-rh-targets" && isNSHDashboard && (()=>{
             const regions=REGIONS;
             const totT=deals.filter(d=>qMatch(d.quarter)).reduce((s,d)=>s+(d.targetAmount||0),0);
-            const totC=deals.filter(d=>qMatch(d.quarter)&&d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+            const totC=revenueEntries.filter(e=>qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const totPct=totT>0?Math.round((totC/totT)*100):0;
             const tsc=totPct>=80?C.green:totPct>=50?C.accent:C.red;
             return (
@@ -12639,6 +12639,28 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </>}
               </div>
             </div>
+
+            {/* SECTION 5 — RO Reminder — shown only for Mail Confirmed */}
+            {logForm.stageUpdate==="Mail Confirmed" && (
+              <div style={{background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:8,padding:"12px 16px",marginBottom:14}}>
+                <div style={{fontSize:12,fontWeight:700,color:C.green,marginBottom:6}}>✓ Mail Confirmed — Waiting for RO?</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:10}}>Set a reminder to follow up if the RO has not arrived:</div>
+                <div style={{display:"flex",gap:8}}>
+                  {[3,5,7].map(days=>{
+                    const rd=new Date(TODAY);rd.setDate(rd.getDate()+days);
+                    const reminderDate=rd.toISOString().slice(0,10);
+                    return (
+                      <button key={days} onClick={()=>{
+                        setPlans((prev:any[])=>[...prev,{id:`p_ro_${Date.now()}_${days}`,repId:myRepId,date:reminderDate,time:"10:00",clientAgencyName:logForm.clientCompany||logForm.clientAgencyName||"",contactName:"",phone:"",agenda:`[RO Reminder] Follow up — RO not yet received`,pitchType:"",meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"ro-reminder"}]);
+                        showToast(`RO follow-up reminder set for ${days} days`);
+                      }} style={{padding:"6px 16px",background:C.green,color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace",fontWeight:600}}>
+                        +{days}d
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* SECTION 5 — Next Steps — hidden for terminal stages */}
             {!["Mail Confirmed","Lost","RO Received"].includes(logForm.stageUpdate||"") && (<>

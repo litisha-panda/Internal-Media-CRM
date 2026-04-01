@@ -20,7 +20,11 @@ async function getAccessToken(): Promise<string> {
     refresh_token: process.env.ZOHO_REFRESH_TOKEN  || "",
   });
 
-  const res = await fetch(`${ZOHO_TOKEN_URL}?${params.toString()}`, { method: "POST" });
+  const res = await fetch(ZOHO_TOKEN_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: params.toString(),
+  });
 
   if (!res.ok) {
     const text = await res.text();
