@@ -8708,10 +8708,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {/* Rejection reason from approval log */}
                     {(sub.approvalLog||[]).length>0&&(
                       <div style={{background:`${C.red}08`,border:`1px solid ${C.red}22`,borderRadius:6,padding:"8px 14px",marginBottom:10,display:"flex",gap:8,flexWrap:"wrap"}}>
-                        {(sub.approvalLog||[]).filter(l=>l.action==="Rejected"||l.note==="Rejected").map((l,i)=>(
+                        {(sub.approvalLog||[]).filter(l=>l.action==="Rejected").map((l,i)=>(
                           <span key={i} style={{fontSize:11,color:C.red}}>✗ {l.by}: {l.note} ({l.at})</span>
                         ))}
-                        {(sub.approvalLog||[]).filter(l=>l.action!=="Rejected"&&l.note!=="Rejected").map((l,i)=>(
+                        {(sub.approvalLog||[]).filter(l=>l.action!=="Rejected").map((l,i)=>(
                           <span key={i} style={{fontSize:11,color:C.green}}>✓ {l.by}: {l.note}</span>
                         ))}
                       </div>
@@ -8829,8 +8829,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const approvedTotal = approvedClients.reduce((s,c)=>s+(c.targetAmount||0),0);
 
                   // helper: update a single client's status inside this submission
+                  // auto-rejects the whole submission if all clients end up rejected
                   const setClientStatus = (clientIdx, newStatus) => {
-                    setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,clients:t.clients.map((cl,i)=>i===clientIdx?{...cl,clientStatus:newStatus}:cl)}:t));
+                    setTargetSubs(p=>p.map(t=>{
+                      if(t.id!==sub.id) return t;
+                      const updatedClients = t.clients.map((cl,i)=>i===clientIdx?{...cl,clientStatus:newStatus}:cl);
+                      const allRejected = updatedClients.every(cl=>(cl.clientStatus||"Pending")==="Rejected");
+                      return {
+                        ...t,
+                        clients: updatedClients,
+                        ...(allRejected ? {
+                          status: "Rejected",
+                          approvalLog: [...(t.approvalLog||[]), {action:"Rejected", step:pendingStep, by:user_role?.name||"", at:TODAY, note:"All clients rejected by "+user_role?.name}]
+                        } : {})
+                      };
+                    }));
                   };
 
                   return (
@@ -8905,8 +8918,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                         <div style={{display:"flex",gap:8}}>
                           <button onClick={()=>{
-                            setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,status:"Rejected",approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note:"Submission rejected"}]}:t));
-                            showToast("Submission rejected");
+                            setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,status:"Rejected",approvalLog:[...t.approvalLog,{action:"Rejected",step:pendingStep,by:user_role?.name||"",at:TODAY,note:"Rejected by "+user_role?.name}]}:t));
+                            showToast("Submission rejected — rep will be notified");
                           }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Reject All</button>
                           <button
                             disabled={!canForward||pendingClients.length>0}
