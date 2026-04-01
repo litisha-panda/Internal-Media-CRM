@@ -1,0 +1,728 @@
+Sorry. Here is the complete final brief with all five clarifications incorporated. Copy everything below this line.
+
+---
+
+# OTV CRM — Complete Product Specification
+## Version 1.0 — Final Brief
+
+---
+
+## CONTEXT FOR REPLIT
+
+Read the entire document before writing a single line of code. Build in the order of sections. Do not skip sections. Do not implement parts out of order. Do not add features not listed here. Do not ask clarifying questions — everything is specified. If something seems ambiguous, default to the simpler interpretation.
+
+The platform is deployed at mediacrm.replit.app as a published Replit app. Backend is Express + PostgreSQL via Drizzle ORM. Frontend is React + Vite. All state persists to PostgreSQL via the `app_state` table using `usePersistedState`. The Claude proxy runs at port 8080.
+
+---
+
+## PART 0 — IMMEDIATE BUG FIXES
+### Do these first. They are breaking the system right now.
+
+**Bug 1 — d.amount mutation**
+When a rep logs revenue in Revenue Log, the code currently overwrites `d.amount` on the deal record with the revenue total. This corrupts every dashboard number. Fix: never touch `d.amount` when logging revenue. Revenue lives only in `revenueEntries`. `d.amount` is the pipeline deal value and must never change after the deal is created.
+
+**Bug 2 — SLA is 0 hours**
+The default SLA for all internal requests is currently 0 hours, causing every request to immediately escalate before anyone has seen it. Fix: change all default SLA values in `adminConfig` to: Region Head 48 hours, NSH 48 hours, Sales Strategy 48 hours, Digital 48 hours, Content 48 hours, Legal 72 hours, Finance 48 hours.
+
+**Bug 3 — "Closed" still in meeting log status dropdown**
+The meeting log status dropdown still shows "Closed" as an option. This was renamed to "Mail Confirmed" in Revenue Tracker but not in the meeting log form. Fix: rename "Closed" to "Mail Confirmed" in the meeting log status dropdown. Both mean the deal has converted via email confirmation. "Closed" is retired everywhere.
+
+**Bug 4 — RH action items appearing in My Plan**
+When a rep raises an action item for Region Head, it appears in the RH's My Plan instead of their My Tasks. Fix: action items from reps must never appear in anyone's My Plan. My Plan is only for client meetings. All action items route to My Tasks or Approvals depending on type.
+
+**Bug 5 — Three achievement numbers that never agree**
+My Targets ACHIEVED, War Room MY CLOSED QTD, and Revenue Tracker ACHIEVED currently read from different sources and show different numbers. Fix: all three must read exclusively from `revenueEntries` filtered by repId and fiscal year. No exceptions.
+
+**Bug 6 — Meeting log creates ₹0 stub deals**
+When a rep logs a meeting for a client who has no existing deal, the system creates a ₹0 stub deal. Fix: a touchpoint log must always require linking to an existing client account. If the client doesn't exist, the rep must create a client account first. No orphan stubs ever.
+
+**Bug 7 — Inline stage dropdowns**
+Revenue Tracker Accounts tab and deal tables have inline outcome dropdowns that let reps change deal stage without logging a meeting. Fix: remove all inline stage/outcome dropdowns from Revenue Tracker and all deal tables. Stage can only change through touchpoint logging.
+
+**Note on home screen — do not change**
+The home screen showing RO Management and OTV CRM cards is intentional and stays exactly as is for all roles. When any user clicks RO Management, redirect them to the external RO Parser app at dealroreader.replit.app. When they click OTV CRM, take them to My Plan. Do not bypass or remove the home screen.
+
+---
+
+## PART 1 — DATA MODEL
+### Rebuild the core objects. Keep existing data, migrate alongside.
+
+The current system is built around meetings as the primary object. This is wrong. The new foundation has three objects: Client Account, Deal, and Touchpoint.
+
+Do not delete existing data. Run migration in parallel — old records stay, new objects created alongside. Switch dashboards to read from new objects after migration is verified.
+
+---
+
+### Object 1: Client Account
+
+One per client per rep per fiscal year. Never duplicated.
+
+Fields:
+- `id` — unique identifier
+- `clientName` — string. Free text with strict naming convention for now. Zoho lookup will replace this in a future sprint.
+- `repId` — linked to rep
+- `region` — inherited from rep's region
+- `fiscalYear` — e.g. "FY26". Targets are annual, not quarterly.
+- `annualTarget` — from approved target submission. Locked after CRO approval. See Part 7 for rules.
+- `currentStage` — enum. See Part 3 for all valid stages.
+- `lastContactDate` — auto-updated from any touchpoint. Never manually editable.
+- `lastDealMeetingDate` — auto-updated from Deal Meeting touchpoints only. Used for escalation clock. Relationship touchpoints do NOT update this field.
+- `totalAchieved` — computed from revenue entries. Never stored directly.
+- `createdAt`
+- `updatedAt`
+
+---
+
+### Object 2: Deal (within a client account)
+
+One client account can have multiple deals if different deal types.
+
+Fields:
+- `id`
+- `clientAccountId` — linked to client account. Always required.
+- `dealType` — Linear TV / IPs / Digital / Media Solutions / Integrated Packages
+- `annualTargetAmount` — target for this specific deal type this fiscal year
+- `stage` — same enum as client account stage
+- `pipelineAmount` — what the rep expects to close on this deal
+- `achievedAmount` — computed from revenue entries. Never stored directly.
+- `lossReason` — required if stage is Lost. Free text. Visible to RH and NSH.
+- `createdAt`
+
+---
+
+### Object 3: Touchpoint
+
+Every interaction with a client. Replaces the current meeting log entirely.
+
+Fields:
+- `id`
+- `clientAccountId` — always required. Rep must select from their existing client accounts.
+- `dealId` — required if touchpointType is Deal Meeting. Optional if Relationship.
+- `repId`
+- `date`
+- `time`
+- `meetingType` — Physical / Online / Phone Call
+- `touchpointType` — enum: Relationship or Deal Meeting. Relationship = Hi Hello, PR, courtesy call. No pipeline impact. Deal Meeting = substantive discussion. Updates stage. Triggers escalation logic.
+- `contactName`
+- `contactDesignation`
+- `contactLevel` — C-Suite / VP-GM / Marketing Head / Brand Manager / Agency Lead / Junior
+- `whatHappened` — free text. Required.
+- `clientFeedback` — free text. Optional.
+- `stageUpdate` — if touchpointType is Deal Meeting, what stage is the deal moving to. Required for deal meetings.
+- `actionItems` — array. See Part 2.
+- `loggedAt` — server timestamp at time of submission
+- `loggedLate` — boolean. True if logged after 11:30 PM on the meeting date.
+
+---
+
+### Migration mapping for existing records
+
+Existing meetings → Touchpoint object. Map outcome values to nearest new stage:
+- "Mail Confirmed" → Mail Confirmed
+- "Very Interested" → In Discussion
+- "Negotiation" → Negotiation
+- "Proposal Shared" → Negotiation
+- "Interested — Needs Revision" → Negotiation
+- "Price Concern" → Negotiation
+- "Needs Callback" → Prospect
+- "Not Interested" → Lost
+- All existing meetings default to touchpointType: Deal Meeting
+
+Existing deals → Deal object. Group by clientCompany + repId → create one Client Account per unique combination.
+
+Existing revenue entries → keep as is. Link to client accounts by clientCompany + repId match.
+
+Existing target submissions → keep as is. Link to client accounts by clientCompany + repId match. Map `totalTarget` to `annualTarget` on the client account.
+
+---
+
+## PART 2 — ACTION ITEM SYSTEM
+
+Each touchpoint can have multiple action items. Each routes automatically based on its type.
+
+### The five action types
+
+Each action item has four mandatory fields:
+
+**ACTION TYPE** — dropdown with exactly five options:
+1. Approval needed
+2. Document / plan needed
+3. Attend a meeting
+4. Client introduction needed
+5. Flag for follow-up
+
+**SPECIFIC DETAILS** — free text. 150 character max.
+
+**WHO** — dropdown: Region Head / NSH / Sales Strategy / Digital Team / Content Team / Legal / Finance / Another Rep (with rep selector) / Self
+
+**BY WHEN** — date picker. Required.
+
+---
+
+### Routing rules
+
+**Approval needed →**
+- Goes to: Approvals tab of the tagged person
+- Rep sees: Internal Requests → "Approval sent to [Person] — Pending"
+- Tagged person sees: client name, deal value, what is being approved, who requested it, due date
+- Tagged person action: Approve or Reject with mandatory note
+- Rep notified immediately on decision
+- SLA: 48 hours. If no response → auto-escalate one level up
+- If due date is missed without action: moves to Escalations tab of the tagged person. Their manager sees it in War Room under "Overdue in my team." Tagged person gets notification: "You have an overdue approval — [Client] — [Details]."
+- Use cases: Rate exception, discount, credit period, large deal sign-off, CXO attendance
+
+**Document / plan needed →**
+- Goes to: My Tasks of tagged person
+- Task title format: "[Doc needed] — [Client] — [Details] — by [Date] — from [Rep Name]"
+- Rep sees: Internal Requests → "Document requested from [Person] — Pending"
+- Tagged person marks Done, can add a note
+- Rep notified when done
+- SLA: 48 hours. If due date missed: moves to Escalations tab of tagged person. Manager notified.
+- Use cases: Pitch deck, digital media plan, content proposal, rate card, contract
+
+**Attend a meeting →**
+- Goes to: My Plan of tagged person as unscheduled meeting request
+- Tagged person must confirm a date. Meeting appears on both people's My Plan.
+- Rep sees: Internal Requests → "Meeting requested with [Person] — Awaiting confirmation"
+- SLA: 48 hours to confirm. If due date missed: moves to Escalations tab of tagged person.
+- Use cases: Senior presence at client meeting, co-pitch, strategy discussion
+
+**Client introduction needed →**
+- Goes to: My Tasks of tagged person
+- Task title format: "[Intro needed] — [Client] — [Details] — from [Rep Name]"
+- Tagged person's RH gets informational note in War Room only. No action required from RH.
+- Rep sees: Internal Requests → "Introduction requested from [Person] — Pending"
+- If due date missed: moves to Escalations tab of tagged person.
+- Use cases: Cross-region relationship, referral, access to a contact
+
+**Flag for follow-up →**
+- Goes to: My Tasks of tagged person (Legal or Finance only)
+- Task title format: "[Follow-up] — [Client] — [Issue] — Flagged by [Rep Name]"
+- That team acts independently. Rep is not further involved.
+- If due date missed: moves to Escalations tab of tagged person.
+- Use cases: Payment default, outstanding dues check, invoice request
+
+---
+
+### Missed due date rule — applies to ALL action types
+
+If any task, approval, or action item is not completed by its due date:
+- It automatically moves to the Escalations tab of the person it was assigned to
+- Their manager sees it in War Room under "Overdue in my team"
+- The original assignee gets a notification: "Overdue — [Action type] — [Client] — [Details]"
+- It stays in Escalations until it is resolved or explicitly dismissed with a note
+
+---
+
+### Self-assigned actions
+
+If rep selects Self as WHO:
+- Create task in rep's My Tasks only
+- No Internal Request created
+- No one else notified
+- If rep misses their own due date: appears in their own Escalations tab and RH sees it in War Room
+
+---
+
+### Multiple action items per touchpoint
+
+A rep can add as many action items as needed in one touchpoint log. Each routes independently.
+
+---
+
+### Adding action items after logging
+
+On the touchpoint detail view, show:
+- Read-only summary of all action items raised — type, details, assignee, current status
+- "+ Add Action Item" button that opens action item form without re-logging the touchpoint
+
+---
+
+### Task title format
+
+Every auto-created task:
+"[Action type] — [Client Company] — [Specific details] — by [Date] — from [Rep Name]"
+
+Example: "Approval needed — Daikin India — 12% rate discount — by 03 Apr — from Arjun Mishra"
+
+Never use free text alone as the task title.
+
+---
+
+### Internal Requests badge
+
+Shows only requests waiting on the rep's own action. Requests sent to others do not count towards the badge.
+
+---
+
+## PART 3 — DEAL STAGES
+
+Six stages. These are the only valid stages. No other values allowed.
+
+**Prospect**
+- Meaning: First contact made. No serious deal discussion yet.
+- Pipeline impact: None.
+- Escalation: None.
+- Default when a new client account is created.
+
+**In Discussion**
+- Meaning: Substantive deal discussion has happened. Client is interested.
+- Pipeline impact: Deal pipelineAmount enters IN PLAY.
+- Escalation: Both triggers in Part 4 active.
+
+**Negotiation**
+- Meaning: Proposal shared. Price and terms being discussed.
+- Pipeline impact: Amount stays in IN PLAY.
+- Escalation: Both triggers active. Higher priority in War Room.
+
+**Mail Confirmed**
+- Meaning: Client confirmed via email. RO not yet received.
+- Pipeline impact: Amount moves from IN PLAY to COMMITTED.
+- Escalation: No-contact trigger still active. Day 7 without revenue logged: alert to rep. Day 14: RH notified. Meeting-volume trigger paused.
+
+**RO Received**
+- Meaning: RO received. Rep logs revenue in Revenue Log.
+- Pipeline impact: Amount moves to ACHIEVED.
+- Escalation: None. Deal closed.
+- This stage is set automatically when rep logs revenue for this client.
+
+**Lost**
+- Meaning: Deal did not close.
+- Pipeline impact: Amount removed from all calculations.
+- Loss reason is MANDATORY. Rep cannot mark Lost without entering a reason.
+- Loss reason visible to RH and NSH in client account view.
+- Escalation: None.
+
+---
+
+## PART 4 — ESCALATION ENGINE
+
+Four automatic escalation triggers. All run as background checks. All configurable by Admin in System Config.
+
+---
+
+### Escalation Trigger 1 — No deal meeting contact
+
+Applies to deals at stage: In Discussion, Negotiation, Mail Confirmed.
+
+Measured by `lastDealMeetingDate`. Relationship touchpoints do NOT reset this clock. Only Deal Meeting touchpoints reset it.
+
+- Day 7: At Risk card at top of rep's My Plan. "Daikin India — 7 days since last deal meeting." Stays until rep logs a deal meeting.
+- Day 10: RH sees alert in War Room. "[Rep] — [Client] — 10 days no deal meeting. Monitor."
+- Day 14: RH gets task in My Tasks. "Intervene — [Client] — 14 days no contact — [Rep]." Escalation recorded in client account thread.
+
+Configurable thresholds: 7 / 10 / 14 days. Admin can change.
+
+---
+
+### Escalation Trigger 2A — Too many meetings, no progress
+
+Applies to deals at stage: In Discussion, Negotiation.
+
+If rep has logged 4 or more deal meeting touchpoints with the same client in a rolling 30-day window AND deal stage has not moved forward in those 30 days:
+
+- RH gets alert in War Room: "[Rep] — [N] deal meetings with [Client] in 30 days — still at [Stage]. May need senior support."
+- RH can Intervene (creates action item for themselves) or Dismiss (logs a note). Dismissed alerts do not reappear for 14 days.
+
+Configurable threshold: 4 meetings with same client in 30 days. Admin can change.
+
+---
+
+### Escalation Trigger 2B — Too few meetings overall
+
+If a rep logs fewer than 15 total touchpoints (any type) in a calendar month:
+
+- RH gets alert in War Room on the last day of the month: "[Rep Name] — only [N] meetings logged this month. Below minimum activity threshold of 15."
+- This is informational only for the RH — no automatic action.
+
+Configurable threshold: 15 meetings per month. Admin can change.
+
+---
+
+### Escalation Trigger 3 — Missed due dates
+
+Covered in Part 2. Any task, approval, or action item not completed by due date moves to Escalations tab and notifies manager.
+
+---
+
+## PART 5 — DASHBOARD NUMBERS
+
+Four numbers. Everywhere. Always the same source.
+
+**ACHIEVED**
+Definition: Sum of revenue entries in `revenueEntries` for that rep and fiscal year.
+Source: `revenueEntries` only. Never from `d.amount`.
+Color: Green.
+
+**COMMITTED**
+Definition: Sum of `pipelineAmount` for deals at stage Mail Confirmed.
+Color: Blue.
+
+**IN PLAY**
+Definition: Sum of `pipelineAmount` for deals at stage In Discussion or Negotiation.
+Color: Amber.
+
+**SHORTFALL**
+Definition: Annual Target minus Achieved minus Committed minus In Play.
+Color: Red if positive. Green if zero or negative.
+
+These four numbers appear on My Targets, War Room, and Revenue Tracker. All four update immediately when any touchpoint is logged, any stage changes, or any revenue entry is submitted. No refresh required.
+
+---
+
+## PART 6 — CLIENT ACCOUNT THREAD
+
+When anyone clicks a client account, they see a single scrollable thread.
+
+**Top of thread — always visible:**
+- Client name and current stage badge
+- Days since last deal meeting
+- Annual Target / Achieved / Committed / In Play / Shortfall for this client
+- All pending action items with status and assignee
+
+**Thread entries — newest at top. Each shows:**
+- Date, time, meeting type icon
+- Touchpoint type badge: Relationship or Deal Meeting
+- Contact name and designation
+- Stage change if any: "Stage moved: In Discussion → Negotiation"
+- What happened: rep's notes
+- Client feedback if entered
+- Action items raised: type, details, assignee, current status
+- Revenue logged if any: "₹45L logged — RO ref INV-2024-001"
+
+**Thread rules:**
+- Read only. Rep cannot edit past entries.
+- Rep can only add new touchpoints or add action items to past touchpoints via "+ Add Action Item."
+
+---
+
+## PART 7 — TARGETS SYSTEM
+
+Targets are annual. Set once at start of fiscal year. Never resubmitted per quarter. Quarterly views are filters on the annual target — not separate targets.
+
+---
+
+### Target approval chain
+
+Sales Strategy uploads → Region Head approves by region → NSH approves nationally → Sales Strategy confirms alignment → CRO gives final approval → targets freeze permanently.
+
+---
+
+### Targets are sacrosanct
+
+Once CRO approves, the `annualTarget` on each client account is locked. It cannot be changed by anyone — not the rep, not RH, not NSH, not Sales Strategy, not CRO. Only Admin can change an approved target through Data Management with a mandatory reason logged and an audit trail. This is hard system enforcement, not a UI warning. The field is read-only at the database level after CRO approval.
+
+---
+
+### Adding revenue beyond the original target
+
+If a rep falls short on a client and compensates with a new client:
+- Original client target stays unchanged with shortfall visible.
+- New client is added as an Additional Revenue Opportunity — clearly labelled, separate from approved targets.
+- Additional Revenue Opportunities do not go through the approval chain. Rep adds directly.
+- Total achievement correctly aggregates both.
+
+---
+
+### System states
+
+**Pre-launch:**
+- Admin has created user accounts but reps cannot access the CRM.
+- Sales Strategy is uploading targets. Approval chain is running.
+- Reps who try to log in see: "Platform launching on [date]. Your targets are being finalised."
+
+**Live:**
+- CRO has approved all targets.
+- Admin toggles "Go Live" in System Config.
+- Reps get access and land on My Plan.
+
+---
+
+### Sales Strategy oversight dashboard
+
+Sales Strategy sees:
+- How many target submissions are at each stage (Pending RH / Pending NSH / Pending Strategy / Pending CRO / Approved)
+- Which regions are complete, which are pending
+- Total annual target across all reps once approved
+- Deal type mix: Linear TV vs IPs vs Digital vs Media Solutions vs Integrated
+
+---
+
+## PART 8 — MY PLAN BEHAVIOUR
+
+### Priority order of what appears on My Plan
+
+1. At Risk cards — any client with no deal meeting in 7+ days. Highest value deal shown first. Tap to see all.
+2. Action items due today — approvals, documents, meetings due today.
+3. Today's touchpoints — chronological by planned time.
+4. Tomorrow's touchpoints — plan ahead section.
+
+---
+
+### After logging a touchpoint
+
+Do not navigate away. Show inline:
+- If more touchpoints to log today: "[Client] logged. [N] remaining. Next: [Client] at [time]."
+- If stage moved to Mail Confirmed: "Mail Confirmed. Waiting for RO? Set a reminder." Options: 3 / 5 / 7 days. Reminder card appears on My Plan on that date.
+- If stage moved to Lost: "Logged as Lost. Reason recorded."
+- If all done: "All logged today. Tomorrow: [N] meetings planned."
+
+---
+
+### Deadline countdown behaviour
+
+- Before 6 PM: Small in topbar only.
+- After 6 PM: Amber, more prominent.
+- After 9 PM: Red banner at top of My Plan.
+- After 11 PM: Full-width red banner. Rep must log remaining touchpoints or tap "Nothing more to log today" before banner dismisses. This confirmation is recorded.
+
+---
+
+### Meeting card visual states
+
+- Planned, not yet time: grey border, hollow circle
+- Time passed, not logged: red border, hollow circle, pulsing
+- Logged: green background, filled circle
+
+---
+
+### Tomorrow's meeting logged today
+
+"This is planned for tomorrow. Did it happen today?"
+- Yes → log form opens. On submission, auto-removed from tomorrow's plan.
+- No → close and keep for tomorrow.
+
+---
+
+### Weekly summary — every Monday morning
+
+Rep sees on My Plan:
+- Touchpoints logged last week
+- Clients contacted
+- Deals moved forward
+- Revenue logged
+- At risk clients
+
+RH sees the same for their entire region in War Room.
+
+---
+
+## PART 9 — TRIGGER MAP
+
+Every rep action causes a reaction. Complete map:
+
+**Rep PLANS a touchpoint →**
+- Appears on rep's My Plan
+- Appears on RH's Team Plan (read only)
+
+**Rep LOGS a Relationship touchpoint →**
+- Added to client account thread
+- `lastContactDate` updates
+- `lastDealMeetingDate` does NOT update
+- Meeting card turns green
+- No dashboard numbers change
+
+**Rep LOGS a Deal Meeting touchpoint →**
+- Added to client account thread
+- `lastContactDate` updates
+- `lastDealMeetingDate` updates — resets escalation clock
+- Deal stage updates
+- Meeting card turns green
+- All four dashboard numbers update immediately
+- At Risk card for this client disappears from My Plan
+
+**Rep LOGS touchpoint — action item tagged to SELF →**
+- Task in rep's My Tasks only
+- No Internal Request
+- No one else notified
+
+**Rep LOGS touchpoint — action item tagged to another person →**
+- Routed per Part 2 rules
+- Rep's Internal Requests shows as sent
+- Tagged person sees in correct location
+- Does NOT appear in RH's My Plan
+- Does NOT appear in rep's My Tasks
+
+**Rep LOGS REVENUE in Revenue Log →**
+- Revenue entry created in `revenueEntries`
+- Client account stage auto-updates to RO Received
+- My Targets ACHIEVED updates immediately
+- War Room MY CLOSED QTD updates immediately
+- Revenue Tracker ACHIEVED updates immediately
+- All three from same `revenueEntries` source
+- Screen shows: "₹X logged for [Client]. Your total this fiscal year: ₹Y"
+- If annual target reached: "Annual target achieved. ₹[amount] this fiscal year." No animation. No sound.
+
+**Deal has NO DEAL MEETING for 7 days →**
+- At Risk card at top of rep's My Plan
+
+**Deal has NO DEAL MEETING for 10 days →**
+- RH informational alert in War Room
+
+**Deal has NO DEAL MEETING for 14 days →**
+- RH task in My Tasks: "Intervene — [Client] — 14 days — [Rep]"
+
+**Rep has 4+ deal meetings with same client in 30 days, no stage movement →**
+- RH alert in War Room. RH can Intervene or Dismiss.
+
+**Rep logs fewer than 15 touchpoints in a calendar month →**
+- RH alert in War Room on last day of month
+
+**Any task or approval misses due date →**
+- Moves to Escalations tab of assigned person
+- Manager sees in War Room under "Overdue in my team"
+- Assigned person gets notification
+
+**Deal is AWAITING APPROVAL →**
+- Stays in IN PLAY calculation
+- Shows lock icon: "Waiting for [Person's] approval"
+- Does not disappear from any view
+
+**Rep marks deal LOST →**
+- Loss reason mandatory before submission
+- Amount removed from all calculations
+- Loss reason visible to RH and NSH
+
+---
+
+## PART 10 — ROLE-SPECIFIC VIEWS
+
+### Sales Rep sees:
+- Home screen (unchanged) → clicks OTV CRM → lands on My Plan
+- My Plan
+- Revenue Log (second item in sidebar, always visible)
+- Revenue Tracker — IPs tab read only with message "IP inventory managed centrally by Sales Strategy." No New Package button on Media Solutions. Empty deal type tabs show "No target set for this category" not zero cards.
+- My Targets — annual target view. Quarterly filter shows pro-rated view.
+- Tasks
+- Internal Requests — badge shows only items waiting on rep's own action
+- HR Reports — own records only
+- Leaderboard — My Team, By Region, All Sales Reps
+
+### Region Head sees:
+- Home screen → OTV CRM → My Plan
+- My Plan — own touchpoints only
+- Team's Plan — all reps in their region, read only
+- War Room — region view: four-number dashboard, at-risk clients, pending approvals, escalation alerts, overdue items, weekly summary, activity alerts (Trigger 2A and 2B)
+- Revenue Tracker — region view
+- Approvals — target submissions pending RH approval, deal approvals pending RH sign-off
+- My Tasks — action items assigned to them from reps
+- Escalations — all overdue items from their region
+- Team's Targets — all rep submissions with approval chain status
+- Team's Tasks
+- Internal Requests
+- My HR Report
+- Team's HR Reports
+- Leaderboard — My Region, All Regions, All Sales Reps
+
+### NSH sees:
+- Home screen → OTV CRM → War Room
+- My Plan
+- RH's Plan (read only)
+- Rep's Plan (read only)
+- War Room — national view, all regions
+- Revenue Tracker — national view
+- Targets — all region submissions pending NSH approval
+- Approvals — deals requiring NSH sign-off
+- My Tasks
+- Escalations — national
+- Compliance
+- Internal Requests
+- HR Reports
+- All leaderboard views
+
+### Sales Strategy sees:
+- Home screen → OTV CRM → Target oversight dashboard
+- Target upload and oversight dashboard (see Part 7)
+- War Room — national read only
+- Revenue Tracker — national read only
+- Approvals — pending Strategy approval
+- Escalations
+- Internal Requests
+- Approval Settings — configure SLA thresholds, escalation days, deal value thresholds, meeting activity thresholds
+
+### CRO sees:
+- Everything NSH sees
+- Final approval on all targets
+- Final approval on deals above CXO threshold
+- Full national revenue picture
+
+### Admin sees:
+- Access Management — approve signups, assign roles and regions
+- Data Management — add/edit reps, client master list, bulk import, edit approved targets with mandatory reason and audit log
+- System Config — Go Live toggle, approval thresholds, escalation day thresholds, SLA hours, meeting activity thresholds
+- Reset-All — Admin only, requires typing RESET, logs who triggered it and when
+
+---
+
+## PART 11 — REGION CONFIGURATION
+
+Six regions: North, South, East, West, National, Central.
+
+Must be consistent across all role assignments, target submissions, War Room region views, leaderboard, and all dropdowns throughout the app.
+
+---
+
+## PART 12 — NAVIGATION FIXES
+
+Revenue Log is second item in rep's sidebar directly below My Plan. Always visible. When accessed from a touchpoint prompt, opens pre-filled with client name and deal type.
+
+IPs tab in Revenue Tracker — read only for reps. Message: "IP inventory is managed centrally by Sales Strategy. Speak to your Region Head to link an IP deal to your targets."
+
+Media Solutions tab — no New Package button for Sales Rep role.
+
+Empty deal type tabs — show "No target set for this category this fiscal year" instead of zero cards.
+
+Remove all inline stage/outcome dropdowns from Revenue Tracker and all deal tables. Stage changes only through touchpoint logging.
+
+Home screen stays as is. RO Management redirects to dealroreader.replit.app. OTV CRM takes all roles to their correct landing page.
+
+---
+
+## PART 13 — SEED DATA AND PRODUCTION READINESS
+
+All seed and demo data must be wiped before any real user logs in. This includes all demo deals, meetings, tasks, internal requests, revenue entries, target submissions, absence reports, and attendance records.
+
+The reset-all endpoint is already gated with Admin role check, typed RESET confirmation, and audit log. Verify this works correctly before production.
+
+After reset the system starts completely empty. Sales Strategy uploads real targets. Approval chain runs. CRO approves. Admin toggles Go Live. Reps get access.
+
+Demo user accounts (rep_arjun, rep_priya, rh_north etc.) must be disabled before production. Real users log in with OTV email addresses only.
+
+---
+
+## PART 14 — WHAT NOT TO BUILD
+
+Do not build any of the following:
+- RO Parser integration with revenue crediting
+- Google Calendar background API sync
+- Email notifications to HR
+- Sound effects, animations, confetti, points, badges, gamification elements
+- Zoho CRM live client name lookup (separate sprint)
+- Any feature not explicitly listed in this document
+
+---
+
+## PART 15 — BUILD ORDER
+
+Build in this exact order. Do not start the next part until the current part is complete and tested.
+
+1. Part 0 — Immediate bug fixes
+2. Part 1 — New data model and migration
+3. Part 2 — Action item system
+4. Part 3 — Deal stages
+5. Part 4 — Escalation engine
+6. Part 5 — Dashboard numbers
+7. Part 6 — Client account thread
+8. Part 7 — Targets system rebuild
+9. Part 8 — My Plan behaviour
+10. Part 9 — Trigger map implementation
+11. Part 10 — Role-specific view fixes
+12. Part 11 — Region configuration
+13. Part 12 — Navigation fixes
+14. Part 13 — Seed data and production readiness
+
+---
+
+## FINAL INSTRUCTION TO REPLIT
+
+Read this entire document before writing any code. Every decision is made. Every edge case is specified. Do not ask clarifying questions. Do not add features not listed here. Do not change the build order. Build one part at a time. After each part is complete, run the application and verify it works before starting the next part. If something in the existing code conflicts with this specification, the specification wins.

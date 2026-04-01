@@ -15,7 +15,7 @@ const SLA = { "Sales Strategy": 24, "Digital": 24, "Production": 48, "National H
 const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26", "FY26 Annual"];
 const STAGE_PROB = { "Mail Confirmed": 100, "Very Interested": 70, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 20, "Not Interested": 0 };
 const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
-const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Closed"];
+const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Mail Confirmed"];
 const MEETING_TYPES  = ["Physical Meeting", "Online Meeting", "Phone Call"];
 const CLIENT_OR_AGENCY = ["Client", "Agency"];
 const TASK_PRIORITIES = ["High", "Medium", "Low"];
@@ -2028,6 +2028,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   const handleLogMeeting = () => {
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
+    if (!logForm.dealId) { showToast("Select a client from your pipeline — if they're not there, add a deal in Revenue Tracker first", "err"); return; }
     const rep  = reps.find(r => r.id === parseInt(logForm.repId));
     const deal = deals.find(d => d.id === logForm.dealId);
     const now  = new Date();
@@ -2306,6 +2307,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
   const handleLogMeetingWithCalendar = async () => {
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
+    if (!logForm.dealId) { showToast("Select a client from your pipeline — if they're not there, add a deal in Revenue Tracker first", "err"); return; }
 
     // ── HARD BLOCK VALIDATION ──
     if (!logForm.discussion?.trim()) { showToast("'What you pitched' is required", "err"); return; }
@@ -5135,9 +5137,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div style={{flex:1}}><span className="sans" style={{fontWeight:700}}>{d.clientCompany}</span><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span><span className="pill" style={{background:`${oColor(d.outcome)}22`,color:oColor(d.outcome),marginLeft:8,fontSize:10}}>{d.outcome}</span></div>
                           <span style={{color:C.red,fontSize:11,whiteSpace:"nowrap"}}>{daysSince(d.lastContact)}d idle</span>
                           <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.amount)}</span>
-                          <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)} style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>
-                            {OUTCOMES.map(o=><option key={o}>{o}</option>)}
-                          </select>
                         </div>
                       );})}
                     </div>
@@ -5170,9 +5169,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </div>
                             <div style={{display:"flex",gap:6,alignItems:"center"}}>
                               <span style={{fontSize:10,color:C.dim}}>{rep?.name}</span>
-                              <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)} style={{fontSize:10,padding:"1px 5px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:3,color:C.text,marginLeft:"auto"}}>
-                                {OUTCOMES.map(o=><option key={o}>{o}</option>)}
-                              </select>
+                              <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace",marginLeft:"auto"}}>{d.outcome}</span>
                             </div>
                           </div>
                         );
@@ -5277,10 +5274,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
                               {openDeals.map(d=>(
                                 <div key={d.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                                  <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)}
-                                    style={{padding:"2px 6px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                    {OUTCOMES.map(o=><option key={o} style={{background:"#0d1117",color:"#e6edf3"}}>{o}</option>)}
-                                  </select>
+                                  <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
                                   <span style={{fontSize:11,color:C.dim,flex:1}}>{d.nextStep||"No next step set"}</span>
                                   {d.awaitingApproval&&<span style={{background:`${C.orange}22`,color:C.orange,fontSize:10,padding:"1px 7px",borderRadius:6}}>⏳ {d.awaitingApproval}</span>}
                                   <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(d.repId),dealId:d.id,clientAgencyName:d.clientCompany,contactName:d.contactName||""}));setLogOpen(true);}}
@@ -5893,11 +5887,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       <td>{d.awaitingApproval?<span style={{background:ov?`${C.red}22`:`${C.orange}22`,color:ov?C.red:C.orange,padding:"1px 7px",borderRadius:6,fontSize:10,fontWeight:600}}>{d.awaitingApproval} {dw>0?`${dw}d`:""}</span>:<span style={{color:C.muted,fontSize:10}}>—</span>}</td>
                                       <td style={{fontSize:11,color:C.dim,maxWidth:180}}>{d.nextStep||"—"}</td>
                                       <td>
-                                        <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)}
-                                          onClick={e=>e.stopPropagation()}
-                                          style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>
-                                          {OUTCOMES.map(o=><option key={o}>{o}</option>)}
-                                        </select>
+                                        <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
                                       </td>
                                     </tr>
                                   );
@@ -11574,19 +11564,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {deals.filter(d=>!logForm.repId||d.repId===parseInt(logForm.repId)).map(d=><option key={d.id} value={d.id}>{d.clientCompany}</option>)}
                 </select>
               </div>
-              <div>
-                <label>Or type name (new client)</label>
-                <input placeholder="Not in CRM yet?" value={logForm.clientAgencyName||""} onChange={e=>setLogForm(p=>({...p,clientAgencyName:e.target.value,dealId:""}))} />
-              </div>
-              {/* Deal value prompt — shown when selected deal has ₹0 or when it's a new client */}
+              {/* Helper: if no deal selected yet, nudge rep to add client in Revenue Tracker first */}
+              {!logForm.dealId && (
+                <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:6,padding:"8px 10px",fontSize:11,color:C.blue}}>
+                  Client not in your pipeline yet? <strong>Add a deal in Revenue Tracker first</strong>, then come back to log this meeting.
+                </div>
+              )}
+              {/* Deal value prompt — only shown when selected deal has ₹0 amount */}
               {(()=>{
                 const selDeal = logForm.dealId ? deals.find(d=>d.id===logForm.dealId) : null;
-                const needsValue = (selDeal && (selDeal.amount===0||!selDeal.amount)) || (!logForm.dealId && (logForm.clientAgencyName||"").trim());
-                if (!needsValue) return null;
+                if (!selDeal || (selDeal.amount && selDeal.amount > 0)) return null;
                 return (
                   <div style={{background:`${C.accent}10`,border:`1px solid ${C.accent}44`,borderRadius:6,padding:"8px 10px"}}>
                     <div style={{fontSize:10,color:C.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>
-                      {selDeal ? "This deal has no value — set it now so it appears in your pipeline" : "Set expected deal value (appears in pipeline immediately)"}
+                      This deal has no value — set it now so it appears in your pipeline
                     </div>
                     <input
                       placeholder="e.g. 15,00,000"
