@@ -4035,7 +4035,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               {!isFuture&&isOpen&&(()=>{
                                 // Auto-detect if deal is closed
                                 const matchDealInline=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
-                                const isClosed = inlineLogStatus === "Closed" || matchDealInline?.outcome==="Mail Confirmed";
+                                const isClosed = ["Mail Confirmed","Lost","RO Received","Closed"].includes(inlineLogStatus) || matchDealInline?.outcome==="Mail Confirmed";
                                 return (
                                 <div style={{background:`${C.accent}06`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"14px 14px",marginTop:4}}>
                                   <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:12}}>Log This Meeting</div>
