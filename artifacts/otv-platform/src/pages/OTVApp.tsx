@@ -2233,7 +2233,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   const handleLogMeeting = () => {
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
-    if (!logForm.dealId) { showToast("Select a client from your pipeline — if they're not there, add a deal in Revenue Tracker first", "err"); return; }
+    if (!logForm.dealId && !logForm.clientAgencyName?.trim()) { showToast("Select a client deal or enter a client company name to proceed", "err"); return; }
     // Part 1+3: Stage Update required for Deal Meeting
     if ((logForm.touchpointType || "Deal Meeting") === "Deal Meeting" && !logForm.stageUpdate && !logForm.status) {
       showToast("Select a Stage Update for this Deal Meeting", "err"); return;
@@ -2550,7 +2550,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
   const handleLogMeetingWithCalendar = async () => {
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
-    if (!logForm.dealId) { showToast("Select a client from your pipeline — if they're not there, add a deal in Revenue Tracker first", "err"); return; }
+    if (!logForm.dealId && !logForm.clientAgencyName?.trim()) { showToast("Select a client deal or enter a client company name to proceed", "err"); return; }
 
     // ── HARD BLOCK VALIDATION ──
     if (!logForm.discussion?.trim()) { showToast("'What you pitched' is required", "err"); return; }
@@ -4680,7 +4680,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const repPcts      = myReps.map(r=>{
                     const rd=rhDeals.filter(d=>d.repId===r.id);
                     const t=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                    const c=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                    const c=revenueEntries.filter(e=>e.repId===r.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                     return {name:r.name,pct:t>0?Math.round((c/t)*100):null};
                   }).filter(r=>r.pct!==null);
                   const laggingReps  = repPcts.filter(r=>r.pct<40);
@@ -4748,7 +4748,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <tbody>
                       {myReps.map(rep=>{
                         const rd  = rhDeals.filter(d=>d.repId===rep.id);
-                        const rC  = rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
+                        const rC  = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                         const rP  = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
                         const rT  = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
                         const rPct= rT>0?Math.round((rC/rT)*100):0;
@@ -5246,7 +5246,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const regionStats = regions.map(r=>{
               const rd = allD.filter(d=>d.region===r);
               const rT = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-              const rC = rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+              const rRepIds=[...new Set(rd.map(d=>d.repId))];
+              const rC = revenueEntries.filter(e=>rRepIds.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
               const rPct = rT>0?Math.round((rC/rT)*100):0;
               const rRisk = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
               return {region:r, rT, rC, rPct, rRisk};
@@ -5509,7 +5510,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const regionAnalysis = GEOS.map(reg=>{
                     const rd  = allD.filter(d=>d.region===reg);
                     const rT  = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                    const rC  = rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                    const rRegIds=[...new Set(rd.map(d=>d.repId))];
+                    const rC  = revenueEntries.filter(e=>rRegIds.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                     const rPct= rT>0?Math.round((rC/rT)*100):null;
                     const hasDigital = rd.some(d=>d.dealType==="Digital"&&d.outcome!=="Not Interested");
                     return {reg, rT, rC, rPct, hasDigital, count:rd.length};
@@ -5521,7 +5523,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const repPcts = reps.map(r=>{
                     const rd=allD.filter(d=>d.repId===r.id);
                     const t=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                    const c=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                    const c=revenueEntries.filter(e=>e.repId===r.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                     return {name:r.name,region:r.region,pct:t>0?Math.round((c/t)*100):null};
                   }).filter(r=>r.pct!==null);
                   const laggingReps = repPcts.filter(r=>r.pct<30);
@@ -12266,7 +12268,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div><label>Deal Type</label><select value={dealForm.dealType} onChange={e=>setDealForm(p=>({...p,dealType:e.target.value}))}><option value="">Select</option>{DEAL_TYPES.map(d=><option key={d}>{d}</option>)}</select></div>
               <div><label>Contact Level</label><select value={dealForm.contactLevel} onChange={e=>setDealForm(p=>({...p,contactLevel:e.target.value}))}><option value="">Select</option>{CONTACT_LEVELS.map(c=><option key={c}>{c}</option>)}</select></div>
               <div><label>Priority</label><select value={dealForm.priority} onChange={e=>setDealForm(p=>({...p,priority:e.target.value}))}><option>Top 5</option><option>Regular</option></select></div>
-              <div><label>Stage</label><select value={dealForm.outcome} onChange={e=>setDealForm(p=>({...p,outcome:e.target.value}))}>{OUTCOMES.map(o=><option key={o}>{o}</option>)}</select></div>
               <div><label>Quarter</label><select value={dealForm.quarter} onChange={e=>setDealForm(p=>({...p,quarter:e.target.value}))}>{QUARTERS.map(q=><option key={q}>{q}</option>)}</select></div>
             </div>
             <div><label>Notes / Context</label><textarea rows={2} placeholder="Competitor intel, history, strategy..." value={dealForm.notes} onChange={e=>setDealForm(p=>({...p,notes:e.target.value}))} style={{resize:"none"}} /></div>

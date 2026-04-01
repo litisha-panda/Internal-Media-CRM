@@ -1,0 +1,195 @@
+You're right. I've been reactive — waiting for you to find problems instead of thinking ahead like a proper product owner.
+
+Let me do what I should have done from the start. Let me read the full current codebase properly and give you one complete, final, proactive list of everything that needs to be fixed, built, and anticipated — including things you haven't raised yet.Now I have the complete picture from the actual code. Here is my honest assessment of everything that is wrong, everything that is missing, and everything that will break — including things you haven't raised yet. I'm telling you all of it now, not piece by piece.
+
+---
+
+## The fundamental problem
+
+The new brief was sent to Replit and Replit made surface-level changes without rebuilding the foundation. The old data model is still running underneath. Here is the evidence from the code:
+
+---
+
+## Critical issues still in the code right now
+
+**1. Achievement calculation is wrong in at least 6 places**
+
+The code still calculates achievement like this in multiple locations:
+`const ach = d.outcome === "Proposal Accepted" ? d.amount : 0`
+
+This means achievement = deal amount when outcome is Proposal Accepted. Not revenue entries. This is exactly why you saw 129%. This pattern exists on lines 4232, 4544, 5151, 5563, 5618 and in the totalClosed calculation on line 1847. Replit patched one place. Five others are still broken.
+
+**2. Old outcome values are still the foundation**
+
+The OUTCOMES constant still reads:
+`["Proposal Accepted", "Very Interested", "Interested – Needs Revision", "Price Concern", "Needs Callback", "Not Interested"]`
+
+The new six stages (Prospect, In Discussion, Negotiation, Mail Confirmed, RO Received, Lost) were added somewhere but the old OUTCOMES array is still being used for dropdowns on lines 4958, 4993, 5679, 5718. Reps can still see and select the old stage names.
+
+**3. Inline stage dropdowns confirmed still in code**
+
+Lines 5718 and 4958 show `{OUTCOMES.map(o=><option key={o}>{o}</option>)}` — these are live dropdowns in Revenue Tracker tables. Not removed.
+
+**4. MEETING_STATUS still has "Closed" not "Mail Confirmed"**
+
+Line 18: `const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Closed"]`
+
+"Closed" is still there. "Mail Confirmed" was only renamed in one dropdown, not this constant.
+
+**5. A tooltip actively tells managers to override rep outcomes**
+
+Line 1221 says in the onboarding guide: "You can update outcomes here if a rep hasn't logged the result of a meeting yet."
+
+This directly contradicts the rule that stage only changes through touchpoint logging. It's telling managers to bypass the system.
+
+**6. d.amount is still being used for pipeline calculations**
+
+Lines 1828-1833 and 1847 still read from d.amount for pipeline totals. The d.amount mutation bug will continue affecting calculations even if Revenue Log was fixed, because pipeline numbers still come from d.amount.
+
+---
+
+## What this means in plain terms
+
+Replit did not rebuild the data model. It patched individual screens while leaving the broken foundation in place. The system has two models running simultaneously — the old outcome-based model and the new stage-based model — and they conflict with each other. This will produce inconsistent numbers, broken views, and confusing behaviour for real users.
+
+---
+
+## The complete list of everything that needs fixing — send this once
+
+---
+
+**Tell Replit:**
+
+We have reviewed the actual code and found that the core data model was not rebuilt as specified. The old OUTCOMES array and d.amount-based calculations are still running underneath the new UI. Everything below must be fixed before this system is ready for real users. This is a complete list. Fix everything.
+
+---
+
+**BLOCK 1 — Fix the data foundation**
+
+**1.1 — Replace OUTCOMES with new stages everywhere**
+
+Delete the OUTCOMES constant entirely:
+`["Proposal Accepted", "Very Interested", "Interested – Needs Revision", "Price Concern", "Needs Callback", "Not Interested"]`
+
+Replace with the new STAGES constant:
+`["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"]`
+
+Replace every reference to OUTCOMES throughout the codebase with STAGES. Every dropdown, every filter, every calculation.
+
+**1.2 — Replace STAGE_PROB**
+
+The current STAGE_PROB maps old outcomes to weighted probabilities. Replace with:
+```
+STAGE_PROB = {
+  "Prospect": 10,
+  "In Discussion": 40,
+  "Negotiation": 70,
+  "Mail Confirmed": 90,
+  "RO Received": 100,
+  "Lost": 0
+}
+```
+
+**1.3 — Fix MEETING_STATUS**
+
+Replace "Closed" with "Mail Confirmed" in the MEETING_STATUS constant:
+`["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Mail Confirmed"]`
+
+**1.4 — Define IN PLAY and COMMITTED correctly**
+
+Add two new computed sets:
+- IN PLAY stages: Prospect, In Discussion, Negotiation
+- COMMITTED stages: Mail Confirmed
+- ACHIEVED source: revenueEntries only — never deal amounts
+- CLOSED/WON: RO Received
+
+---
+
+**BLOCK 2 — Fix achievement calculation everywhere**
+
+This is the most critical fix. Achievement is wrong in at least 6 places.
+
+Create one single shared function at the top of the component:
+
+```
+const calculateAchieved = (repId, fiscalYear) => {
+  return revenueEntries
+    .filter(e => e.repId === repId && (e.fiscalYear === fiscalYear || e.quarter?.startsWith(fiscalYear.replace("FY",""))))
+    .reduce((s, e) => s + (e.amount || 0), 0);
+}
+```
+
+Then find and fix every single place in the codebase that calculates achievement using deal amounts. Specifically find and remove every instance of this pattern:
+`d.outcome === "Proposal Accepted" ? d.amount : 0`
+
+Replace all of them with calls to calculateAchieved. Do not leave a single instance of the old pattern anywhere.
+
+The specific lines that are broken and must be fixed: 1847, 4232, 4544, 5151, 5563, 5618. There may be more — search the entire file.
+
+**BLOCK 3 — Remove all inline stage dropdowns**
+
+Search the entire codebase for every instance of:
+`{OUTCOMES.map(o=><option key={o}>{o}</option>)}`
+and
+`{STAGES.map(s=><option key={s}>{s}</option>)}`
+
+Remove every one of these that appears inside Revenue Tracker views, deal tables, account cards, or any view other than the touchpoint log form. Stage dropdowns must only exist inside the touchpoint/meeting log form. Nowhere else.
+
+**BLOCK 4 — Remove the tooltip that tells managers to override stages**
+
+Find and delete this text from the onboarding guide or any tooltip:
+"You can update outcomes here if a rep hasn't logged the result of a meeting yet."
+
+This instruction contradicts the system rules. Remove it entirely.
+
+**BLOCK 5 — Fix the four-number dashboard consistently**
+
+The four numbers must be calculated identically everywhere using these exact definitions:
+
+ACHIEVED = `calculateAchieved(repId, fiscalYear)` — from revenueEntries only
+
+COMMITTED = sum of `d.pipelineAmount` or `d.amount` where `d.stage === "Mail Confirmed"` — never from revenueEntries
+
+IN PLAY = sum of `d.pipelineAmount` or `d.amount` where stage is "Prospect", "In Discussion", or "Negotiation"
+
+SHORTFALL = annualTarget minus ACHIEVED minus COMMITTED minus IN PLAY
+
+Apply these four calculations identically on: My Targets, War Room, Revenue Tracker all deal type tabs, and the NSH/CRO national views. Use one shared set of functions called consistently. Never inline the calculation separately in each view.
+
+**BLOCK 6 — Import templates**
+
+Replace the current deals import template with three separate import types in Bulk Import. Sales Strategy only.
+
+**Import Type 1 — Client Targets**
+Columns: Rep Name, Region, Client Company, Channel, Deal Type, Annual Target Amount
+When imported: creates one Client Account per unique Client Company + Rep combination. Creates one Deal per row. All start as Pending RH in the approval chain.
+
+**Import Type 2 — IP Inventory**
+Columns: IP Name, Channel, IP Type, Slot Type, Slot Value, Total Slots Available, Quarter, Notes
+When imported: creates IP slot entries visible in Revenue Tracker IPs tab. Each slot shows Available / In Discussion / Committed status. Reps pitch existing slots to their clients — they do not create new IP entries.
+
+**Import Type 3 — Digital Products**
+Columns: Product Name, Platform, Description, Rate, Unit, Available From, Available To, Quarter, Max Units Available
+When imported: creates digital product entries visible in Revenue Tracker Digital tab. Reps link these products to client deals.
+
+Remove the old deals import template entirely. These three templates are the only import types Sales Strategy needs.
+
+**BLOCK 7 — Revenue Tracker shows all deals**
+
+When a rep logs a touchpoint and sets any stage, the client account must immediately appear in Revenue Tracker Accounts tab. Currently deals are only appearing in some cases. Fix: Revenue Tracker Accounts tab must show all client accounts for that rep where at least one deal exists, regardless of stage. Filter by rep and fiscal year only. No stage filter.
+
+**BLOCK 8 — Pre-launch enforcement**
+
+When Platform State is set to Pre-launch in System Config, Sales Reps must see a holding screen when they log in: "The platform is being set up. Your targets are being finalised. You will receive access on [Go Live date]." They cannot proceed to any other screen until Admin toggles Go Live. All other roles (Admin, Sales Strategy, RH, NSH, CRO) can still access the system during Pre-launch to set up targets and run the approval chain.
+
+**BLOCK 9 — Loss reason mandatory**
+
+When a rep sets a deal stage to Lost in the touchpoint log form, a mandatory text field must appear: "Reason for loss." The form cannot be submitted without this field filled. The loss reason must be visible to RH and NSH in the client account thread view.
+
+**BLOCK 10 — Weekly summary**
+
+Every Monday morning, when a rep opens My Plan they see a summary card for the previous week showing: touchpoints logged, clients contacted, deals moved forward, revenue logged, at-risk clients. RH sees the same for their entire region in War Room. This card dismisses after the rep acknowledges it.
+
+---
+
+Fix everything in BLOCK 1 and BLOCK 2 first. They are the foundation everything else depends on. Then BLOCK 3, 4, 5 in order. Then the remaining blocks. Report back when all ten blocks are complete.
