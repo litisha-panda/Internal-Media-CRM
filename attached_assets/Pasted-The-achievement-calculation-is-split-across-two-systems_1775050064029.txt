@@ -1,0 +1,16 @@
+The achievement calculation is split across two systems and they conflict. getAchieved uses revenueEntries correctly and is used in some views. But many views still use d.amount on Mail Confirmed deals for their closed/achieved figures. This causes number mismatches across the app.
+Find every instance of this pattern in the codebase:
+.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0)
+and this pattern:
+.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0)
+These appear on lines 2044, 2055, 5235, 5277, 5504, 6504, 10282, 10370, 10416, 11261 and possibly others.
+Replace every single one of them with a call to getAchieved passing the correct repId or set of repIds.
+Specifically:
+Line 2044 — totalClosed used in the global forecast. Replace with closedRevenue which already exists on line 2036 and correctly reads from revenueEntries. Delete totalClosed and use closedRevenue everywhere totalClosed is currently used.
+Line 2055 in repScores — replace with revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0)
+Lines 5235 and 5277 in NSH War Room — replace allD.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0) with revenueEntries.filter(e=>visibleRepIdsSet.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0)
+Lines 10282, 10370, 10416, 11261 in CRO/Strategy/Admin views — same replacement using revenueEntries filtered by the relevant rep set and quarter.
+Line 6504 in leaderboard — replace with revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0)
+After fixing, the rule is: the word "closed" or "achieved" anywhere in the codebase must only ever be calculated from revenueEntries. Never from deal amounts. Never from Mail Confirmed stage. Search for every remaining instance of Mail Confirmed in a reduce/filter calculation and replace it.
+Also fix line 2046: const forecast = totalClosed + weightedPipe — replace totalClosed with closedRevenue here too.
+This is the last data integrity fix. Once done, every number in the system — rep view, RH view, NSH view, CRO view, leaderboard — will come from the same source.

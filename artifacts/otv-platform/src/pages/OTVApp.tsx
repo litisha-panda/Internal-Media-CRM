@@ -2041,18 +2041,17 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const todayMtgs    = meetings.filter(m=>m.date===TODAY);
 
   const totalTarget  = visibleDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-  const totalClosed  = closedDeals.reduce((s,d)=>s+(d.amount||0),0);
   const weightedPipe = activeDeals.filter(d=>d.outcome!=="Mail Confirmed").reduce((s,d)=>s+((d.amount||0)*(STAGE_PROB[d.outcome]||0)/100),0);
-  const forecast     = totalClosed+weightedPipe;
+  const forecast     = closedRevenue+weightedPipe;
   const gap          = Math.max(0,totalTarget-forecast);
-  const closePct     = totalTarget>0?Math.round((totalClosed/totalTarget)*100):0;
+  const closePct     = totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0;
   const fcastPct     = totalTarget>0?Math.round((forecast/totalTarget)*100):0;
 
   const repScores = useMemo(() => reps
     .filter(r => user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId)
     .map(rep => {
       const rd      = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
-      const closed  = rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
+      const closed  = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
       const pipe    = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
       const rm      = meetings.filter(m=>m.repId===rep.id);
       const seniorM = rm.filter(m=>["C-Suite / Owner","VP / GM","Marketing Head","Brand Manager"].includes(m.contactLevel)).length;
@@ -5232,7 +5231,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {view==="warroom" && isNSHDashboard && (()=>{
             const allD = deals.filter(d=>qMatch(d.quarter));
             const totT = allD.reduce((s,d)=>s+(d.targetAmount||0),0);
-            const totC = allD.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+            const totC = revenueEntries.filter(e=>qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const totP = allD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
             const totW = allD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+((d.amount||0)*(STAGE_PROB[d.outcome]||0)/100),0);
             const forecast = totC + totW;
@@ -5274,7 +5273,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div style={{display:"flex",gap:8}}>
                     <button className="btn btn-ghost" onClick={()=>{
                       const allD = deals.filter(d=>qMatch(d.quarter));
-                      const totC = allD.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                      const totC = revenueEntries.filter(e=>qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const totT = allD.reduce((s,d)=>s+(d.targetAmount||0),0);
                       const blocked = allD.filter(d=>d.awaitingApproval&&d.outcome!=="Mail Confirmed");
                       const atRiskD = allD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7);
@@ -6501,7 +6500,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             // ── Always rank ALL reps for the leaderboard (activity + target% only, no revenue amounts) ──
             const lbAllReps = reps.map(rep => {
               const rd      = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
-              const closed  = rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
+              const closed  = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
               const rm      = meetings.filter(m=>m.repId===rep.id);
               const seniorM = rm.filter(m=>["C-Suite / Owner","VP / GM","Marketing Head","Brand Manager"].includes(m.contactLevel)).length;
               const risk    = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
@@ -7255,7 +7254,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 }
                 // Rep tiles view
                 const regionT=visibleDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-                const regionC=visibleDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                const regionRepIds=new Set(myReps.map(r=>r.id));
+                const regionC=revenueEntries.filter(e=>regionRepIds.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                 const regionPct=regionT>0?Math.round((regionC/regionT)*100):0;
                 const rsc=regionPct>=100?C.green:regionPct>=60?C.accent:C.red;
                 return (
@@ -7277,7 +7277,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       {myReps.map(rep=>{
                         const rd=visibleDeals.filter(d=>d.repId===rep.id);
                         const rT2=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                        const rC2=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                        const rC2=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                         const rP2=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                         const rPct2=rT2>0?Math.round((rC2/rT2)*100):0;
                         const sc2=rPct2>=80?C.green:rPct2>=50?C.accent:C.red;
@@ -7725,7 +7725,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {myReps.map((rep,rank)=>{
                   const rd   = rhDeals.filter(d=>d.repId===rep.id);
-                  const rC   = rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
+                  const rC   = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const rT   = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
                   const rP   = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
                   const rPct = rT>0?Math.round((rC/rT)*100):0;
@@ -10279,13 +10279,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {view==="ceo-kpi" && isCEORole && (()=>{
             const allD=deals.filter(d=>qMatch(d.quarter));
             const totT=allD.reduce((s,d)=>s+(d.targetAmount||0),0);
-            const totC=allD.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+            const totC=revenueEntries.filter(e=>qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const totW=allD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+((d.amount||0)*(STAGE_PROB[d.outcome]||0)/100),0);
             const forecast=totC+totW; const fcastPct=totT>0?Math.round((forecast/totT)*100):0; const closePct=totT>0?Math.round((totC/totT)*100):0;
             const fsc=fcastPct>=80?C.green:fcastPct>=60?C.accent:C.red;
             const top5=allD.filter(d=>d.priority==="Top 5").sort((a,b)=>b.amount-a.amount);
             const regions=["National","North","South","East","West"];
-            const regionStats=regions.map(r=>{const rd=allD.filter(d=>d.region===r);const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);const rC=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);const rPct=rT>0?Math.round((rC/rT)*100):0;return{r,rT,rC,rPct};});
+            const regionStats=regions.map(r=>{const rd=allD.filter(d=>d.region===r);const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);const rRepIdsR=new Set(rd.map(d=>d.repId));const rC=revenueEntries.filter(e=>rRepIdsR.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const rPct=rT>0?Math.round((rC/rT)*100):0;return{r,rT,rC,rPct};});
             const compliantReps=reps.filter(r=>att[TODAY]?.[r.id]).length;
             const openEsc=deals.filter(d=>d.awaitingApproval&&daysSince(d.awaitingApprovalSince||TODAY)>=APPROVAL_SLA_DAYS).length;
             return(<div className="fin">
@@ -10367,7 +10367,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ══════════════ MD VIEWS ══════════════ */}
           {view==="md-accounts" && isMDRole && (()=>{
             const allD=deals.filter(d=>qMatch(d.quarter)&&d.priority==="Top 5");
-            const totT=allD.reduce((s,d)=>s+(d.targetAmount||0),0); const totC=allD.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+            const totT=allD.reduce((s,d)=>s+(d.targetAmount||0),0); const top5RepIds=new Set(allD.map(d=>d.repId)); const totC=revenueEntries.filter(e=>top5RepIds.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const totPct=totT>0?Math.round((totC/totT)*100):0; const sc=totPct>=80?C.green:totPct>=50?C.accent:C.red;
             const seniorReqs=meetings.filter(m=>m.seniorRequested==="Yes");
             return(<div className="fin">
@@ -10413,10 +10413,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const closed=allD.filter(d=>d.outcome==="Mail Confirmed");
             const open=allD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome));
             const totT=allD.reduce((s,d)=>s+(d.targetAmount||0),0);
-            const totC=closed.reduce((s,d)=>s+(d.amount||0),0);
+            const totC=revenueEntries.filter(e=>qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const totP=open.reduce((s,d)=>s+(d.amount||0),0);
             const dealTypes=[...new Set(allD.map(d=>d.dealType).filter(Boolean))];
-            const typeStats=dealTypes.map(t=>{const td=allD.filter(d=>d.dealType===t);const tClosed=td.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);const tPipe=td.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);const tT=td.reduce((s,d)=>s+(d.targetAmount||0),0);const pct=tT>0?Math.round((tClosed/tT)*100):0;return{t,count:td.length,tClosed,tPipe,tT,pct};}).sort((a,b)=>b.tT-a.tT);
+            const typeStats=dealTypes.map(t=>{const td=allD.filter(d=>d.dealType===t);const tdRepIds=new Set(td.map(d=>d.repId));const tClosed=revenueEntries.filter(e=>tdRepIds.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const tPipe=td.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);const tT=td.reduce((s,d)=>s+(d.targetAmount||0),0);const pct=tT>0?Math.round((tClosed/tT)*100):0;return{t,count:td.length,tClosed,tPipe,tT,pct};}).sort((a,b)=>b.tT-a.tT);
             const stageFunnel=OUTCOMES.map(stage=>{const sd=allD.filter(d=>d.outcome===stage);return{stage,count:sd.length,value:sd.reduce((s,d)=>s+(d.amount||0),0)};}).filter(s=>s.count>0);
             return(<div className="fin">
               <div style={{marginBottom:16}}><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>ANALYTICS DASHBOARD</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>{filterQ} · Pipeline intelligence</div></div>
@@ -10526,7 +10526,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             return(<div className="fin">
               <div style={{marginBottom:16}}><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>DIGITAL DEALS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>{filterQ} · All deals with a digital component</div></div>
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
-                {[{l:"TOTAL DIGITAL",v:fmtR(digiDeals.reduce((s,d)=>s+(d.amount||0),0)),c:C.blue},{l:"CLOSED",v:fmtR(digiDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0)),c:C.green},{l:"OPEN PIPELINE",v:fmtR(digiDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0)),c:C.accent},{l:"WAITING ON YOU",v:blocked.length,c:blocked.length>0?C.orange:C.green}].map(k=>(<div key={k.l} className="card" style={{padding:13,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div></div>))}
+                {[{l:"TOTAL DIGITAL",v:fmtR(digiDeals.reduce((s,d)=>s+(d.amount||0),0)),c:C.blue},{l:"CLOSED",v:fmtR(revenueEntries.filter(e=>new Set(digiDeals.map(d=>d.repId)).has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0)),c:C.green},{l:"OPEN PIPELINE",v:fmtR(digiDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0)),c:C.accent},{l:"WAITING ON YOU",v:blocked.length,c:blocked.length>0?C.orange:C.green}].map(k=>(<div key={k.l} className="card" style={{padding:13,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div></div>))}
               </div>
               {digiTasks.length>0&&(<div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}><div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📋 {digiTasks.length} Task{digiTasks.length!==1?"s":""} Assigned to Digital</div>{digiTasks.slice(0,4).map(t=>{const rep=reps.find(r=>r.id===t.repId);return(<div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:C.s2,borderRadius:5,marginBottom:5}}><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{t.title}</div><div style={{fontSize:10,color:C.dim}}>{t.clientCompany&&`${t.clientCompany} · `}{rep&&`from ${rep.name} · `}Due {t.dueDate}</div></div><span style={{background:t.dueDate<TODAY?`${C.red}22`:`${C.orange}18`,color:t.dueDate<TODAY?C.red:C.orange,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.dueDate<TODAY?"OVERDUE":t.priority}</span><button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button></div>);})}{digiTasks.length>4&&<div style={{fontSize:10,color:C.dim,textAlign:"center",marginTop:5}}>+{digiTasks.length-4} more · see My Tasks</div>}</div>)}
               <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Region","Type","Amount","Needs from Digital","Stage","Idle"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{digiDeals.length===0&&<tr><td colSpan={8} style={{padding:24,textAlign:"center",color:C.muted}}>No digital deals for {filterQ} yet</td></tr>}{digiDeals.map(d=>{const rep=reps.find(r=>r.id===d.repId);const idle=daysSince(d.lastContact);const digiReqs=(d.reqs||[]).filter(r=>r.dept==="Digital");const waitingOnUs=d.awaitingApproval==="Digital";return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:waitingOnUs?`${C.blue}06`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=waitingOnUs?`${C.blue}06`:"transparent"}><td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div>{waitingOnUs&&<span style={{background:`${C.blue}22`,color:C.blue,padding:"1px 5px",borderRadius:3,fontSize:9,fontWeight:700}}>Needs your action</span>}</td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"9px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{d.dealType}</td><td style={{padding:"9px 12px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"9px 12px"}}>{digiReqs.length>0?<div>{digiReqs.map((r,i)=><div key={i} style={{fontSize:10,color:C.blue}}>{r.desc}</div>)}</div>:waitingOnUs?<span style={{color:C.blue,fontSize:11}}>Approval needed</span>:<span style={{color:C.muted}}>—</span>}</td><td style={{padding:"9px 12px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"9px 12px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11}}>{idle===0?"Today":`${idle}d`}</td></tr>);})}</tbody></table></div>
@@ -10718,7 +10718,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {myReps.map(rep=>{
                   const rd=visibleDeals.filter(d=>d.repId===rep.id&&d.outcome!=="Not Interested");
                   if(!rd.length) return null;
-                  const rC=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
+                  const rC=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const rP=rd.filter(d=>d.outcome!=="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
                   return (
                     <div key={rep.id} style={{marginBottom:16}}>
@@ -10803,7 +10803,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {myReps.map(rep=>{
                       const rd=visibleDeals.filter(d=>d.repId===rep.id);
                       const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                      const rC=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                      const rC=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const rPct=rT>0?Math.round((rC/rT)*100):0;
                       const rsc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
                       return (
@@ -11089,7 +11089,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <span className="sans" style={{fontWeight:700,fontSize:13}}>{region}</span>
                         <span style={{fontSize:10,color:C.dim}}>{rReps.length} reps · {todayPlanned.length} today · {tmrwPlanned.length} tomorrow</span>
                         <span style={{marginLeft:"auto",fontSize:11,color:C.green,fontWeight:600}}>
-                          {fmtR(regionDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0))} closed
+                          {fmtR(revenueEntries.filter(e=>rRepIds.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0))} closed
                         </span>
                       </div>
 
@@ -11165,7 +11165,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{fontSize:11,color:C.dim,marginBottom:16}}>{filterQ} · How each region is performing</div>
                 {RH_USERS.map((rhu,rank)=>{
                   const rd=deals.filter(d=>d.region===rhu.region&&qMatch(d.quarter));
-                  const rC=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
+                  const rhRepIdSet=new Set(rd.map(d=>d.repId));
+                  const rC=revenueEntries.filter(e=>rhRepIdSet.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
                   const rP=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
                   const rPct=rT>0?Math.round((rC/rT)*100):0;
@@ -11222,12 +11223,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {(nshRHDrill?[nshRHDrill]:regions).map(region=>{
                   const rd=deals.filter(d=>d.region===region&&qMatch(d.quarter)&&d.outcome!=="Not Interested");
                   const blocked=rd.filter(d=>d.awaitingApproval);
+                  const rdRepIds2=new Set(rd.map(d=>d.repId));
+                  const rdClosed=revenueEntries.filter(e=>rdRepIds2.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   return (
                     <div key={region} style={{marginBottom:16}}>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,padding:"8px 12px",background:C.s2,borderRadius:6,borderLeft:`3px solid ${C.accent}`}}>
                         <span className="sans" style={{fontWeight:700,fontSize:13}}>{region}</span>
                         <span style={{fontSize:11,color:C.dim}}>{rd.length} deals</span>
-                        <span style={{color:C.green,fontWeight:600,fontSize:11,marginLeft:"auto"}}>{fmtR(rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0))} closed</span>
+                        <span style={{color:C.green,fontWeight:600,fontSize:11,marginLeft:"auto"}}>{fmtR(rdClosed)} closed</span>
                         <span style={{color:C.accent,fontSize:11}}>{fmtR(rd.filter(d=>d.outcome!=="Mail Confirmed").reduce((s,d)=>s+d.amount,0))} pipeline</span>
                         {blocked.length>0&&<span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{blocked.length} blocked</span>}
                       </div>
@@ -11281,7 +11284,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <tbody>{regions.map(region=>{
                       const rd=deals.filter(d=>d.region===region&&qMatch(d.quarter));
                       const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                      const rC=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                      const rRegionRepIds=new Set(rd.map(d=>d.repId));
+                      const rC=revenueEntries.filter(e=>rRegionRepIds.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const rP=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                       const rPct=rT>0?Math.round((rC/rT)*100):0;
                       const rRisk=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
@@ -11417,7 +11421,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
                 {reps.filter(r=>nshRegion==="all"||r.region===nshRegion).map((rep,rank)=>{
                   const rd=filterDeals.filter(d=>d.repId===rep.id);
-                  const rC=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
+                  const rC=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
                   const rP=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
                   const rPct=rT>0?Math.round((rC/rT)*100):0;
@@ -11505,7 +11509,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <tbody>{fReps.map(rep=>{
                       const rd=deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
                       const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                      const rC=rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                      const rC=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const rP=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                       const rG=Math.max(0,rT-rC);const rPct=rT>0?Math.round((rC/rT)*100):0;const sc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
                       return (<tr key={rep.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
@@ -11811,7 +11815,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const rhScores = rhList.map((rhu,rank)=>{
               const rd  = deals.filter(d=>d.region===rhu.region&&qMatch(d.quarter));
               const rT  = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-              const rC  = rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+              const rhScoreRepIds=new Set(rd.map(d=>d.repId));
+              const rC  = revenueEntries.filter(e=>rhScoreRepIds.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
               const rPct = rT>0?Math.round((rC/rT)*100):0;
               const isMe = rhu.region===user_role?.region;
               return {...rhu, rT, rC, rPct, isMe};
@@ -11860,7 +11865,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const allReps  = reps.map(rep=>{
               const rd   = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
               const rT   = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-              const rC   = rd.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+              const rC   = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
               const rPct = rT>0?Math.round((rC/rT)*100):0;
               const isMe = rep.id===myRepId;
               return {...rep, rPct, isMe};
