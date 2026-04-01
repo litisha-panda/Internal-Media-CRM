@@ -1,0 +1,20 @@
+Good questions. Here are the answers. Send these back to Replit exactly as written.
+
+1. Rebuild vs refactor
+Option B. Refactor the current OTVApp.tsx step by step. Do not start a parallel file. The current file stays as the working app throughout. Fix it section by section in the build order specified.
+2. “Do not build” items that already exist
+Do not remove anything that is already working. The “Do not build” list means do not add new work on those features right now. If IP pitch-to-client flow exists and works, keep it. If weekly summary card exists, keep it. The list is about prioritisation, not deletion.
+3. Seed data
+Keep the seed data and demo logins for now. We need them for testing. We will wipe seed data as a separate step immediately before real users are onboarded. Do not remove it yet.
+4. Real database vs persisted state
+Keep usePersistedState architecture. Do not migrate to Drizzle ORM + PostgreSQL right now. That is a future sprint. The spec described the ideal end state but the immediate priority is fixing the feature gaps and data connections within the existing architecture. Focus on making the six objects in the data model consistent within localStorage, not migrating to a relational database.
+5. Client name — Zoho fallback
+The Zoho-down fallback to free text is acceptable. The rule is: always try Zoho first. If Zoho is unavailable, allow free text with a visible warning. This is what the ZohoSearchInput component already does. Keep it exactly as is.
+
+The actual priority given all of the above:
+Fix these in order and nothing else:
+One — achievement calculation. Every screen must read ACHIEVED from revenueEntries only using one shared calcNumbers function. Fix all eight places where d.amount on Mail Confirmed deals is used instead.
+Two — hide action items after Mail Confirmed. Wrap Section 5 of the touchpoint log form so it only renders for Prospect, In Discussion, Negotiation. For Mail Confirmed show the RO reminder prompt instead.
+Three — Zoho token refresh. Implement auto refresh using ZOHO_REFRESH_TOKEN so the client master list actually loads.
+Four — guided tour content. Update all tour text to use current stage names only. Remove the line that says managers can update outcomes if a rep hasn’t logged yet.
+These four fixes make the existing app correct and deployable. Everything else is post-launch.​​​​​​​​​​​​​​​​
