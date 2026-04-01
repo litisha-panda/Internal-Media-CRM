@@ -1,0 +1,33 @@
+What the import should actually be
+At year start, Sales Strategy knows three things per client per rep:
+
+Which client
+Which channel they're buying (OTV / Tarang / Tarang Music / Alankar / Prarthana)
+Which deal type (Linear TV / IPs / Digital / Media Solutions / Integrated Packages)
+How much revenue is expected from them this year
+Which rep owns them
+
+That's it. Five columns. Everything else — contact details, meeting notes, next steps, stage — gets built up through daily rep activity after the system goes live.
+
+Tell Replit:
+The deals bulk import template is wrong. Replace it with a targets import template that matches how annual planning actually works.
+New targets import template — exactly these columns, nothing else:
+| Rep Name | Region | Client Company | Channel | Deal Type | Annual Target Amount |
+
+Rep Name — must match an existing rep in otv_reps
+Region — North / South / East / West / National / Central
+Client Company — the advertiser name
+Channel — OTV / Tarang / Tarang Music / Alankar / Prarthana / All Channels
+Deal Type — Linear TV / IPs / Digital / Media Solutions / Integrated Packages
+Annual Target Amount — number in rupees. Accepts formats like 5000000 or 50L or 0.5Cr
+
+When this CSV is imported:
+
+One Client Account is created per unique Client Company + Rep combination
+One Deal is created per row under that client account with the specified deal type and annual target
+If the same client appears twice with different deal types, both deals are created under the same client account
+All imported targets start with status "Pending RH" and go through the normal approval chain
+Contact details, stage, next steps, notes are NOT part of this import — they are added by reps through daily activity
+
+Remove the old deals import template entirely. The new template should be downloadable from the Bulk Import screen with one sample row pre-filled so Sales Strategy knows the exact format.
+Also remove these columns from any import template in the system: Stage, Next Step, Next Step Date, Notes, Priority, Expected Amount, Contact Name, Designation, Phone, Email. These are never imported — they are generated through rep activity.

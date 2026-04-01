@@ -1731,7 +1731,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
-  const [importTab, setImportTab]                       = useState("deals");
+  const [importTab, setImportTab]                       = useState("targets");
   const [dmTab, setDmTab]                               = useState<"reps"|"clients"|"bulk">("reps");
   const [repEditId, setRepEditId]                       = useState<number|null>(null);
   const [repEditForm, setRepEditForm]                   = useState<any>({});
@@ -4572,6 +4572,38 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const rh10d      = rhDeals.filter(d=>{const ds=dealStage(d);return !["Mail Confirmed","RO Received","Lost"].includes(ds)&&daysSince(d.lastDealMeetingDate||d.lastContact)>=10;});
             const rh14d      = rhDeals.filter(d=>{const ds=dealStage(d);return !["Mail Confirmed","RO Received","Lost"].includes(ds)&&daysSince(d.lastDealMeetingDate||d.lastContact)>=14;});
             const rhOverdue  = rhDeals.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&dealStage(d)!=="Mail Confirmed");
+
+            // Part 4 — Trigger 2A: 4+ Deal Meeting touchpoints with same client in 30 days, no stage movement
+            const thirtyDaysAgo = new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+            const trigger2A: {repName:string,clientCompany:string,count:number,stageNow:string}[] = [];
+            {
+              const dealMeetings30 = touchpoints.filter(t=>t.touchpointType==="Deal Meeting"&&(t.date||"")>=thirtyDaysAgo&&myRepIds.includes(t.repId as any));
+              const byDealId: Record<string,typeof touchpoints> = {};
+              dealMeetings30.forEach(t=>{if(t.dealId){if(!byDealId[t.dealId])byDealId[t.dealId]=[];byDealId[t.dealId].push(t);}});
+              Object.entries(byDealId).forEach(([dealId,tps])=>{
+                if(tps.length>=4){
+                  const deal=rhDeals.find(d=>d.id===dealId);
+                  if(!deal||["Mail Confirmed","RO Received","Lost"].includes(dealStage(deal)))return;
+                  const stages=new Set(tps.map(t=>t.stageUpdate).filter(Boolean));
+                  const noMovement=stages.size<=1;
+                  if(noMovement){
+                    const rep=reps.find(r=>r.id===deal.repId);
+                    trigger2A.push({repName:rep?.name||"Unknown",clientCompany:deal.clientCompany,count:tps.length,stageNow:dealStage(deal)});
+                  }
+                }
+              });
+            }
+
+            // Part 4 — Trigger 2B: <15 touchpoints in current calendar month for any rep in region
+            const monthStart = TODAY.slice(0,7)+"-01";
+            const trigger2B: {repName:string,count:number,repId:number}[] = [];
+            {
+              myReps.forEach(r=>{
+                const monthTPs=touchpoints.filter(t=>t.repId===r.id&&(t.date||"")>=monthStart).length;
+                if(monthTPs<15) trigger2B.push({repName:r.name,count:monthTPs,repId:r.id});
+              });
+            }
+
             const totalActions = myApprovals.length + myTasks_rh.length;
 
             return (
@@ -4791,6 +4823,36 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                       );
                     })}
+                  </div>
+                )}
+
+                {/* Part 4 — Trigger 2A: Stalling deals (4+ meetings, no stage movement in 30d) */}
+                {trigger2A.length>0&&(
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⚠ STALLING DEALS — 4+ MEETINGS, NO STAGE MOVEMENT IN 30 DAYS</div>
+                    {trigger2A.map((t,i)=>(
+                      <div key={i} style={{background:`${C.orange}08`,border:`1px solid ${C.orange}44`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                        <span style={{fontSize:13,color:C.orange}}>🔁</span>
+                        <span style={{flex:1}}><strong>{t.clientCompany}</strong><span style={{color:C.dim,fontSize:11}}> · {t.repName}</span></span>
+                        <span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{t.count} meetings</span>
+                        <span style={{background:`${oColor(t.stageNow)}18`,color:oColor(t.stageNow),padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.stageNow}</span>
+                        <span style={{fontSize:10,color:C.muted}}>No stage change in 30d</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {/* Part 4 — Trigger 2B: Reps below 15 touchpoints this month */}
+                {trigger2B.length>0&&(
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📉 LOW ACTIVITY — UNDER 15 TOUCHPOINTS THIS MONTH</div>
+                    {trigger2B.map((t,i)=>(
+                      <div key={i} style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                        <span style={{flex:1}}><strong>{t.repName}</strong></span>
+                        <span style={{background:`${C.red}22`,color:C.red,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{t.count} touchpoints this month</span>
+                        <span style={{fontSize:10,color:C.muted}}>Minimum expected: 15</span>
+                      </div>
+                    ))}
                   </div>
                 )}
 
@@ -8949,6 +9011,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       clientCompany:cl.clientCompany, contactName:"", designation:"",
                                       contactLevel:"", phone:"", email:"",
                                       dealType:cl.dealType||"Linear TV",
+                                      channel:cl.channel||"",
                                       outcome:"Needs Callback",
                                       amount:cl.targetAmount, targetAmount:cl.targetAmount,
                                       priority:"Regular", quarter:sub.quarter,
@@ -9846,20 +9909,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               {/* ── BULK IMPORT TAB (original CSV upload) ── */}
               {dmTab==="bulk" && (()=>{
                 const tabs = [
-                  {id:"deals",      label:"Deals",          icon:"◈", desc:"Client deals, pipeline, targets"},
+                  {id:"targets",    label:"Targets",        icon:"✦", desc:"Annual client-wise targets per rep — 6 columns only"},
                   {id:"reps",       label:"Sales Reps",     icon:"◇", desc:"Rep names, regions, roles"},
                   {id:"clients",    label:"Clients",        icon:"◎", desc:"Client master list"},
-                  {id:"targets",    label:"Targets",        icon:"✦", desc:"Client-wise targets per rep"},
                   {id:"revenue",    label:"Revenue Entries",icon:"₹", desc:"Actual revenue logged"},
                   {id:"properties", label:"Properties/IPs", icon:"⬡", desc:"Sponsorship inventory"},
                 ];
                 const [impTab, setImpTab] = [importTab, setImportTab];
 
                 const TEMPLATES = {
-                  deals:      ["Client Company","Contact Name","Designation","Phone","Email","Rep Name","Region","Deal Type","Stage","Target Amount","Expected Amount","Quarter","Priority","Notes","Next Step","Next Step Date"],
+                  targets:    ["Rep Name","Region","Client Company","Channel","Deal Type","Annual Target Amount"],
                   reps:       ["Rep Name","Email","Region","Role","Target Amount"],
                   clients:    ["Client Company","Industry","Primary Contact","Designation","Phone","Email","Assigned Rep","Region"],
-                  targets:    ["Rep Name","Region","Client Company","Deal Type","Target Amount","Quarter"],
                   revenue:    ["Rep Name","Client Company","Deal Type","Amount","Invoice Ref","Date","Quarter","Notes"],
                   properties: ["Property Name","Type","Channel","Quarter","Total Value","Slot Label","Slot Value","Status","Client Company"],
                 };
@@ -9867,10 +9928,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const downloadTemplate = (type) => {
                   const headers = TEMPLATES[type] || [];
                   const sampleRow = {
-                    deals:      ["Havells India","Deepa Menon","VP Marketing","9823401234","deepa@havells.com","Vikram Sen","National","IPs","Very Interested","15000000","12000000","Q1 FY26","Top 5","Budget confirmed","Send deck","2026-04-15"],
+                    targets:    ["Vikram Sen","National","Havells India","OTV","Linear TV","15000000"],
                     reps:       ["Arjun Mishra","arjun@odishatv.com","North","SALES REP","10000000"],
                     clients:    ["Havells India","FMCG","Deepa Menon","VP Marketing","9823401234","deepa@havells.com","Vikram Sen","National"],
-                    targets:    ["Vikram Sen","National","Havells India","IPs","15000000","Q1 FY26"],
                     revenue:    ["Vikram Sen","Havells India","IPs","5000000","INV-2024-001","2026-04-10","Q1 FY26","First instalment"],
                     properties: ["Odia Idol S3","Reality Show","OTV","Q1 FY26","12000000","Title Sponsor","5000000","Available",""],
                   }[type] || [];
@@ -9901,15 +9961,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const {rows, type} = importData;
                   const parseCur = v => { if(!v)return 0; const s=String(v).replace(/[,₹]/g,"").trim(); if(/[0-9]+[Cc][Rr]$/.test(s))return parseFloat(s)*10000000; if(/[0-9]+[Ll]$/.test(s))return parseFloat(s)*100000; return parseFloat(s)||0; };
 
-                  if (type==="deals") {
-                    const newDeals = rows.map((row,i)=>{
-                      const repName = row["Rep Name"]||"";
-                      const rep = reps.find(r=>r.name.toLowerCase().includes(repName.toLowerCase().slice(0,5))) || reps[0];
-                      return {id:`imp_${Date.now()}_${i}`,repId:rep.id,clientCompany:row["Client Company"]||"Unknown",contactName:row["Contact Name"]||"",designation:row["Designation"]||"",phone:row["Phone"]||"",email:row["Email"]||"",dealType:row["Deal Type"]||"Linear TV",outcome:row["Stage"]||"Needs Callback",amount:parseCur(row["Expected Amount"]),targetAmount:parseCur(row["Target Amount"]),region:row["Region"]||rep.region||"North",priority:row["Priority"]||"Regular",quarter:row["Quarter"]||"Q1 FY26",notes:row["Notes"]||"",nextStep:row["Next Step"]||"",nextStepDate:row["Next Step Date"]||null,lastContact:null,reqs:[]};
-                    });
-                    setDeals(p=>[...p,...newDeals]);
-                    showToast(`✓ ${newDeals.length} deals imported`);
-                  } else if (type==="revenue") {
+                  if (type==="revenue") {
                     const repLookup = r => reps.find(rep=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
                     const entries = rows.map((row,i)=>{
                       const rep = repLookup(row["Rep Name"]);
@@ -9918,12 +9970,41 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     setRevenueEntries(p=>[...p,...entries]);
                     showToast(`✓ ${entries.length} revenue entries imported`);
                   } else if (type==="targets") {
-                    const newSubs = rows.map((row,i)=>{
-                      const rep = reps.find(r=>r.name.toLowerCase().includes((row["Rep Name"]||"").toLowerCase().slice(0,5)));
-                      return {id:`ts_imp_${Date.now()}_${i}`,repId:rep?.id||null,repName:row["Rep Name"]||"",region:row["Region"]||"",quarter:row["Quarter"]||"Q1 FY26",clients:[{clientCompany:row["Client Company"]||"",dealType:row["Deal Type"]||"Linear TV",targetAmount:parseCur(row["Target Amount"])}],totalTarget:parseCur(row["Target Amount"]),status:"Pending RH",submittedAt:TODAY,approvalLog:[]};
+                    // Group rows by rep — one targetSub per rep, multiple client+deal entries per sub
+                    const repGroups: Record<string, {rep:any, repName:string, region:string, rows:any[]}> = {};
+                    rows.forEach(row => {
+                      const repName = (row["Rep Name"]||"").trim();
+                      const rep = reps.find(r=>r.name.toLowerCase()===repName.toLowerCase())
+                               || reps.find(r=>r.name.toLowerCase().includes(repName.toLowerCase().slice(0,6)));
+                      const key = rep?.id || repName;
+                      if (!repGroups[key]) repGroups[key] = {rep, repName, region: rep?.region||row["Region"]||"", rows:[]};
+                      repGroups[key].rows.push(row);
+                    });
+                    const now = Date.now();
+                    const newSubs = Object.values(repGroups).map((g, i) => {
+                      const clients = g.rows.map(row => ({
+                        clientCompany: (row["Client Company"]||"").trim(),
+                        channel:       (row["Channel"]||"OTV").trim(),
+                        dealType:      (row["Deal Type"]||"Linear TV").trim(),
+                        targetAmount:  parseCur(row["Annual Target Amount"]),
+                        clientStatus:  "Pending",
+                      }));
+                      return {
+                        id: `ts_imp_${now}_${i}`,
+                        repId:      g.rep?.id||null,
+                        repName:    g.rep?.name||g.repName,
+                        region:     g.region,
+                        quarter:    "FY26 Annual",
+                        clients,
+                        totalTarget: clients.reduce((s,c)=>s+c.targetAmount,0),
+                        status:     "Pending RH",
+                        submittedAt: TODAY,
+                        approvalLog: [],
+                      };
                     });
                     setTargetSubs(p=>[...p,...newSubs]);
-                    showToast(`✓ ${newSubs.length} target rows imported → pending RH approval`);
+                    const totalClients = newSubs.reduce((s,sub)=>s+sub.clients.length,0);
+                    showToast(`✓ ${totalClients} client targets imported for ${newSubs.length} rep${newSubs.length!==1?"s":""} → pending RH approval`);
                   } else if (type==="properties") {
                     const grouped = {};
                     rows.forEach(row=>{
@@ -12928,6 +13009,33 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                       )}
                       {entry.nextSteps&&<div style={{fontSize:10,color:C.dim,marginTop:4}}>Next: {entry.nextSteps}</div>}
+                      {/* Part 6: + Add Action Item on each thread entry */}
+                      {isTp&&(
+                        <div style={{marginTop:8}}>
+                          <button onClick={()=>{
+                            const detail=window.prompt("Action item details:");
+                            if(!detail?.trim())return;
+                            const dueDate=window.prompt("Due date (YYYY-MM-DD):",TOMORROW)||TOMORROW;
+                            const newTask={
+                              id:`ai_${Date.now()}`,
+                              assignedTo:null, assignedToUserId:null, assignedDept:"Self",
+                              repId:clientDeals[0]?.repId||null,
+                              clientCompany:clientName,
+                              title:`[Follow-up] — ${clientName} — ${detail}`.slice(0,120),
+                              description:detail,
+                              priority:"High", status:"Open",
+                              dueDate, createdAt:TODAY,
+                              assignedBy:activeUser,
+                              assignedByName:user_role?.name||"",
+                              fromMeetingLog:true,
+                            };
+                            setTasks(p=>[...p,newTask]);
+                            showToast(`Action item added for ${clientName}`);
+                          }} style={{background:`${C.blue}10`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                            + Add Action Item
+                          </button>
+                        </div>
+                      )}
                     </div>
                   );
                 })}
