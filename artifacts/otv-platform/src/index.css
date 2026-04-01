@@ -364,3 +364,9 @@
     inset: -1px;
   }
 }
+
+/* Part 8: pulsing red circle for overdue/time-passed meetings */
+@keyframes planPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(1.3); }
+}

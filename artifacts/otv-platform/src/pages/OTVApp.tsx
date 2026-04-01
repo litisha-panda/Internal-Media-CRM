@@ -8,12 +8,17 @@ const REGIONS   = ["North", "South", "East", "West", "National", "Central"];
 const ALL_ROLES = ["SALES REP","REGION HEAD","SALES HEAD","CRO","SALES STRATEGY","DIGI OPS","ADMIN"];
 const DEAL_TYPES = ["Linear TV", "IPs", "Digital", "Media Solutions", "Integrated Packages"];
 const CONTACT_LEVELS = ["C-Suite / Owner", "VP / GM", "Marketing Head", "Brand Manager", "Agency Lead", "Junior/Exec"];
-const OUTCOMES = ["Mail Confirmed", "Very Interested", "Interested – Needs Revision", "Price Concern", "Needs Callback", "Not Interested"];
+// Part 3 — canonical deal stages (replaces old OUTCOMES enum)
+const DEAL_STAGES = ["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"];
+// Keep OUTCOMES as legacy alias so old deal records still render until fully migrated
+const OUTCOMES = DEAL_STAGES;
 const DEPARTMENTS = ["Sales Strategy", "Digital", "Production", "National Head", "Finance", "Legal"];
 const REQ_STATUS = ["Pending", "In Progress", "Done", "Overdue"];
 const SLA = { "Sales Strategy": 24, "Digital": 24, "Production": 48, "National Head": 12, "Finance": 48, "Legal": 72 };
 const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26", "FY26 Annual"];
-const STAGE_PROB = { "Mail Confirmed": 100, "Very Interested": 70, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 20, "Not Interested": 0 };
+const STAGE_PROB = { "Prospect": 10, "In Discussion": 40, "Negotiation": 70, "Mail Confirmed": 90, "RO Received": 100, "Lost": 0,
+  // legacy mapping so old records still resolve
+  "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 10, "Not Interested": 0 };
 const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
 const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Mail Confirmed"];
 const MEETING_TYPES  = ["Physical Meeting", "Online Meeting", "Phone Call"];
@@ -154,10 +159,30 @@ const C = { bg:"#f0f4f9", surface:"#ffffff", s2:"#e8eef7", s3:"#dde5f0", border:
 const fmt = (n) => { if (n == null || n === "") return "—"; if (n===0) return "0"; if (n>=10000000) return `${(n/10000000).toFixed(1)}Cr`; if (n>=100000) return `${(n/100000).toFixed(1)}L`; return `${(n/1000).toFixed(0)}K`; };
 const fmtR = (n) => (n == null || n === "") ? "—" : `₹${fmt(n)}`;
 const daysSince = (d) => { if (!d) return 999; return Math.floor((Date.now()-new Date(d).getTime())/86400000); };
-const riskColor = (d) => { if (d.outcome==="Not Interested") return C.muted; if (d.outcome==="Mail Confirmed") return C.green; const x=daysSince(d.lastContact); return x>=7?C.red:x>=3?C.orange:C.green; };
-const riskLabel = (d) => { if (d.outcome==="Not Interested") return "Lost"; if (d.outcome==="Mail Confirmed") return "Won"; if (d.atRisk) return "At Risk"; const x=daysSince(d.lastContact); return x>=7?"At Risk":x>=3?"Cooling":"Active"; };
-const oColor = (o) => ({ "Mail Confirmed":C.green, "Very Interested":"#4ade80", "Interested – Needs Revision":C.accent, "Price Concern":C.orange, "Needs Callback":C.blue, "Not Interested":C.muted }[o]||C.dim);
+// Part 1: helper to read stage from either new `stage` field or legacy `outcome` field
+const dealStage = (d) => d.stage || d.outcome || "Prospect";
+// Part 3: oColor supports both new and legacy stage values
+const oColor = (o) => ({
+  "Prospect": C.muted, "In Discussion": C.blue, "Negotiation": C.accent,
+  "Mail Confirmed": C.green, "RO Received": "#0f6b2f", "Lost": C.red,
+  // legacy
+  "Very Interested": C.blue, "Interested – Needs Revision": C.accent,
+  "Price Concern": C.orange, "Needs Callback": C.blue, "Not Interested": C.muted,
+}[o] || C.dim);
+const riskColor = (d) => { const s=dealStage(d); if (s==="Lost") return C.muted; if (s==="Mail Confirmed"||s==="RO Received") return C.green; const x=daysSince(d.lastDealMeetingDate||d.lastContact); return x>=7?C.red:x>=3?C.orange:C.green; };
+const riskLabel = (d) => { const s=dealStage(d); if (s==="Lost") return "Lost"; if (s==="RO Received") return "Closed"; if (s==="Mail Confirmed") return "Committed"; if (d.atRisk) return "At Risk"; const x=daysSince(d.lastDealMeetingDate||d.lastContact); return x>=7?"At Risk":x>=3?"Cooling":"Active"; };
 const lColor = (l) => ({ "C-Suite / Owner":C.purple, "VP / GM":C.blue, "Marketing Head":C.green, "Brand Manager":C.accent, "Agency Lead":"#6366f1", "Junior/Exec":C.red }[l]||C.dim);
+// Part 1: map legacy outcome values → new canonical stage (used during migration and legacy rendering)
+const mapLegacyOutcome = (o: string): string => ({
+  "Mail Confirmed": "Mail Confirmed", "Very Interested": "In Discussion",
+  "Interested – Needs Revision": "Negotiation", "Proposal Shared": "Negotiation",
+  "Negotiation": "Negotiation", "Price Concern": "Negotiation",
+  "Needs Callback": "Prospect", "Not Interested": "Lost",
+  "Prospect": "Prospect", "In Discussion": "In Discussion",
+  "RO Received": "RO Received", "Lost": "Lost",
+}[o] || "Prospect");
+// Simple unique ID generator — avoids dependency on nanoid
+const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
 
 // ═══════════════════════════════════════════════════════════════════
 // RO PARSER ENGINE — full v9.5 embedded
@@ -1142,7 +1167,7 @@ function HomeScreen({ user, onSelect, onLogout }) {
         <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, width:"100%", maxWidth:720 }}>
 
           {/* RO MANAGEMENT TILE */}
-          <div className="home-tile home-tile-ro" onClick={() => onSelect("ro")}>
+          <div className="home-tile home-tile-ro" onClick={() => window.open("https://dealroreader.replit.app", "_blank")}>
             <div style={{ width:48, height:48, borderRadius:12, background:"#7920e818", border:"1px solid #7920e840", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
               📋
             </div>
@@ -1282,7 +1307,16 @@ const TOUR_DATA = {
 };
 
 function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlans, setWeeklyPlans, sharedMeetings, setSharedMeetings, sharedDeals, setSharedDeals }) {
-  const [view, setView] = useState(section === "ro" ? "ro-parser" : (user?.email==="admin@odishatv.com" ? "admin-access" : "my-plan"));
+  // T009: Correct CRM landing per role
+  const getCRMDefaultView = () => {
+    if (section === "ro") return "ro-parser";
+    const role = user?.role || "";
+    if (role === "ADMIN" || user?.email==="admin@odishatv.com") return "admin-access";
+    if (role === "REGION HEAD") return "rh-war-room";
+    if (["SALES HEAD","CRO","SALES STRATEGY"].includes(role)) return "nsh-war-room";
+    return "my-plan"; // Sales Rep and others
+  };
+  const [view, setView] = useState(getCRMDefaultView);
   // Persist deals + meetings directly — no more sync bug
   const [deals, _setDeals]        = usePersistedState("otv_deals",    sharedDeals   || SEED_DEALS);
   const [meetings, _setMeetings]  = usePersistedState("otv_meetings", sharedMeetings|| SEED_MEETINGS);
@@ -1375,6 +1409,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [loginProvider, setLoginProvider] = useState<"google"|"zoho"|"demo">("demo");
   const planInlineState                   = useState(null); // [inlineLogPlan, setInlineLogPlan]
   const planInlineStatusState             = useState<string>(""); // [inlineLogStatus, setInlineLogStatus]
+  const [planLoggedMsg, setPlanLoggedMsg] = useState<Record<string,string>>({}); // Part 8: post-log messages
   const [rhRepDrill, setRhRepDrill]       = useState(null); // Region Head targets drilldown
   const [nshRHDrill,  setNshRHDrill]      = useState(null); // NSH drills into specific RH region
   const [nshRegion,   setNshRegion]       = useState("all"); // NSH rep-CRM region filter
@@ -1421,16 +1456,22 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   }, [tourStep, tourActive, tourKey]);
   const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
 
-  const BLANK_DEAL = { clientCompany:"", repId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Needs Callback", amount:"", targetAmount:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", reqs:[], auditLog:[] };
-  const BLANK_NEXT_STEP_ITEM = {action:"", neededFrom:"", remarks:"", dueDate:""};
+  // Part 1+3: `stage` is the canonical field; `outcome` kept for legacy compat
+  const BLANK_DEAL = { clientCompany:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", reqs:[], auditLog:[] };
+  const BLANK_NEXT_STEP_ITEM = {action:"", actionType:"", details:"", neededFrom:"", remarks:"", dueDate:""};
+  const ACTION_TYPES = ["Approval needed","Document / plan needed","Attend a meeting","Client introduction needed","Flag for follow-up"];
   const BLANK_LOG = {
     repId:"",
     meetingTime:"", clientOrAgency:"Client",
     dealId:"", clientAgencyName:"", dealAmount:"",
     contactName:"", designation:"", mobile:"",
     meetingType:"Physical Meeting",
-    pitchType:"", discussion:"", clientFeedback:"",
-    nextSteps:"", followUpDate:"", status:"",
+    // Part 1: new Touchpoint fields
+    touchpointType:"Deal Meeting",    // "Deal Meeting" | "Relationship"
+    contactLevel:"",                  // C-Suite / VP-GM / etc.
+    discussion:"", clientFeedback:"", // `discussion` = whatHappened (kept for legacy)
+    stageUpdate:"",                   // required for Deal Meeting
+    pitchType:"", nextSteps:"", followUpDate:"", status:"",
     nextStepItems:[{...BLANK_NEXT_STEP_ITEM}],
     seniorRequested:"No", seniorRequestedName:"", seniorRequestedRole:"",
     scheduleNext:false,
@@ -1448,6 +1489,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     inactivityDaysRisk: 7,
     inactivityDaysEscalate: 14,
     webhookUrl: "",
+    platformLive: true,   // Part 7: Pre-launch / Live state (true = Live)
+    launchDate: "",       // Part 7: Shown to reps during pre-launch
   });
   const [clientMasterList, setClientMasterList] = usePersistedState<string[]>("otv_clientMaster", []);
   const [masterNewName, setMasterNewName]         = useState("");
@@ -1461,9 +1504,14 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const escalateDays = adminConfig?.inactivityDaysEscalate || 14;
     const riskDays     = adminConfig?.inactivityDaysRisk     || 7;
     setDeals(prev => prev.map(d => {
-      if (d.outcome === "Mail Confirmed" || d.outcome === "Not Interested") return d;
-      const idle = daysSince(d.lastContact);
-      // 7+ days idle → mark at risk (if not already)
+      const ds = dealStage(d);
+      // Closed deals never escalate
+      if (ds === "RO Received" || ds === "Mail Confirmed" || ds === "Lost") return d;
+      // Part 4: Escalation clock is only reset by Deal Meeting touchpoints
+      // Use lastDealMeetingDate if available, else fall back to lastContact
+      const idleClock = d.lastDealMeetingDate || d.lastContact;
+      const idle = daysSince(idleClock);
+      // 7+ days without a Deal Meeting → mark at risk
       if (idle >= riskDays && idle < escalateDays && !d.atRisk) {
         return { ...d, atRisk: true };
       }
@@ -1476,11 +1524,11 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
           auditLog: [...(d.auditLog || []), {
             at: TODAY, by: "System", role: "AUTO",
             action: "Auto-escalated", from: null, to: "NSH",
-            note: `No contact for ${idle} days — auto-escalated (threshold: ${escalateDays}d)`,
+            note: `No Deal Meeting for ${idle} days — auto-escalated (threshold: ${escalateDays}d)`,
           }],
         };
       }
-      // Clear atRisk if contact was made recently
+      // Clear atRisk if a Deal Meeting was logged recently
       if (idle < riskDays && d.atRisk) {
         return { ...d, atRisk: false };
       }
@@ -1517,6 +1565,73 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [lbTab, setLbTab]                              = useState("team");
   const [targetSubs, setTargetSubs]                    = usePersistedState("otv_targetSubs", SEED_TARGET_SUBMISSIONS);
   const [revenueEntries, setRevenueEntries]             = usePersistedState("otv_revenueEntries", SEED_REVENUE_ENTRIES);
+  // ── Part 1: New data model objects ──────────────────────────────────────
+  const [clientAccounts, setClientAccounts] = usePersistedState("otv_clientAccounts", []);
+  const [touchpoints,    setTouchpoints]    = usePersistedState("otv_touchpoints",    []);
+
+  // Part 1: One-time migration — runs when clientAccounts is empty but deals/meetings exist
+  useEffect(() => {
+    if (clientAccounts.length > 0) return; // already migrated
+    if (deals.length === 0 && meetings.length === 0) return; // nothing to migrate
+    const accountMap: Record<string, any> = {}; // key: `${clientCompany}|${repId}`
+    deals.forEach(d => {
+      const key = `${d.clientCompany}|${d.repId}`;
+      if (!accountMap[key]) {
+        const rep = USER_ROLES.find(r => r.repId === d.repId);
+        accountMap[key] = {
+          id: uid(), clientName: d.clientCompany, repId: d.repId,
+          region: rep?.region || d.region || "",
+          fiscalYear: d.quarter?.slice(-3) === "FY26" ? "FY26" : "FY26",
+          annualTarget: parseCurrency(d.targetAmount || "0") || 0,
+          currentStage: mapLegacyOutcome(d.outcome || "Prospect"),
+          lastContactDate: d.lastContact || "",
+          lastDealMeetingDate: d.lastContact || "",
+          createdAt: d.createdAt || TODAY, updatedAt: TODAY,
+        };
+      }
+      // link deal back to its account
+      if (!d.clientAccountId) {
+        setDeals(prev => prev.map(x => x.id === d.id ? {...x, clientAccountId: accountMap[key].id, stage: mapLegacyOutcome(x.outcome||"Prospect"), pipelineAmount: parseCurrency(x.amount||"0")||0} : x));
+      }
+    });
+    const newAccounts = Object.values(accountMap);
+    if (newAccounts.length > 0) setClientAccounts(newAccounts);
+    // Migrate meetings → touchpoints
+    const newTouchpoints = meetings.map(m => {
+      const deal = deals.find(d => d.id === m.dealId || d.clientCompany === m.clientAgencyName);
+      const acctKey = deal ? `${deal.clientCompany}|${deal.repId}` : null;
+      const acct = acctKey ? accountMap[acctKey] : null;
+      return {
+        id: m.id, clientAccountId: acct?.id || "", dealId: m.dealId || deal?.id || "",
+        repId: m.repId, date: m.date, time: m.meetingTime || "",
+        meetingType: m.meetingType || "Physical Meeting",
+        touchpointType: "Deal Meeting", contactName: m.contactName || "",
+        contactDesignation: m.designation || "", contactLevel: m.contactLevel || "",
+        whatHappened: m.discussion || "", clientFeedback: m.clientFeedback || "",
+        stageUpdate: mapLegacyOutcome(m.outcome || "Prospect"),
+        actionItems: m.actionItems || [],
+        loggedAt: m.loggedAt || m.date, loggedLate: m.loggedLate || false,
+        loggedByUserId: m.loggedByUserId || String(m.repId),
+      };
+    }).filter(t => t.clientAccountId);
+    if (newTouchpoints.length > 0) setTouchpoints(newTouchpoints);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Part 5: 4-number dashboard helpers ──────────────────────────────────
+  const CURRENT_FY = "FY26";
+  const getAchieved   = (repId?: number, fy = CURRENT_FY) =>
+    revenueEntries.filter(e => (repId == null || e.repId === repId) && (e.fiscalYear === fy || fy === "all")).reduce((s, e) => s + (parseCurrency(e.amount||"0")||0), 0);
+  const getCommitted  = (repId?: number) =>
+    deals.filter(d => (repId == null || d.repId === repId) && (dealStage(d) === "Mail Confirmed")).reduce((s, d) => s + (d.pipelineAmount || parseCurrency(d.amount||"0")||0), 0);
+  const getInPlay     = (repId?: number) =>
+    deals.filter(d => (repId == null || d.repId === repId) && ["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s, d) => s + (d.pipelineAmount || parseCurrency(d.amount||"0")||0), 0);
+  const getShortfall  = (target: number, repId?: number) => Math.max(0, target - getAchieved(repId) - getCommitted(repId) - getInPlay(repId));
+  // Part 9: Return total approved annual target for a rep (sum of all approved targetSubs for CURRENT_FY)
+  const getAnnualTarget = (repId?: number) => {
+    const subs = targetSubs.filter(s => (repId == null || s.repId === repId) && s.status === "Approved");
+    return { amount: subs.reduce((s, sub) => s + (sub.totalTarget || 0), 0) };
+  };
+
   const [targetSubTab, setTargetSubTab]                 = useState("mine");
   const [revTab, setRevTab]                             = useState("log");
   const BLANK_IR_FORM = {type:"Send Proposal",dept:"NSH",subject:"",details:"",clientCompany:""};
@@ -1543,6 +1658,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
+  // Part 6: Client Account Thread modal
+  const [accountThreadOpen, setAccountThreadOpen]       = useState(false);
+  const [accountThreadClient, setAccountThreadClient]   = useState<string|null>(null);
   const [planUploadOpen, setPlanUploadOpen]             = useState(false);
   const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,quarter:string,clients:{clientCompany:string,dealType:string,targetAmount:string}[]}>({repId:"",quarter:"Q1 FY26",clients:[{clientCompany:"",dealType:"Linear TV",targetAmount:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
@@ -1844,7 +1962,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   const closedDeals  = visibleDeals.filter(d=>d.outcome==="Mail Confirmed");
   const activeDeals  = visibleDeals.filter(d=>d.outcome!=="Not Interested");
-  const atRisk       = activeDeals.filter(d=>d.outcome!=="Mail Confirmed" && daysSince(d.lastContact)>=7);
+  // Part 4: escalation clock is lastDealMeetingDate (not generic lastContact)
+  const atRisk       = activeDeals.filter(d=>{ const s=dealStage(d); return !["RO Received","Mail Confirmed","Lost"].includes(s) && daysSince(d.lastDealMeetingDate||d.lastContact)>=7; });
   const overdueNext  = activeDeals.filter(d=>d.nextStepDate && d.nextStepDate<TODAY && d.outcome!=="Mail Confirmed");
   const allReqs      = deals.flatMap((d,_)=>d.reqs.map((r,i)=>({...r,dealId:d.id,reqIdx:i,clientCompany:d.clientCompany,amount:d.amount,repId:d.repId})));
   const todayMtgs    = meetings.filter(m=>m.date===TODAY);
@@ -2029,6 +2148,14 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const handleLogMeeting = () => {
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
     if (!logForm.dealId) { showToast("Select a client from your pipeline — if they're not there, add a deal in Revenue Tracker first", "err"); return; }
+    // Part 1+3: Stage Update required for Deal Meeting
+    if ((logForm.touchpointType || "Deal Meeting") === "Deal Meeting" && !logForm.stageUpdate && !logForm.status) {
+      showToast("Select a Stage Update for this Deal Meeting", "err"); return;
+    }
+    // Part 9: Loss reason mandatory when stage is Lost
+    if (logForm.stageUpdate === "Lost" && !logForm.lossReason?.trim()) {
+      showToast("Loss reason is required when marking a deal as Lost", "err"); return;
+    }
     const rep  = reps.find(r => r.id === parseInt(logForm.repId));
     const deal = deals.find(d => d.id === logForm.dealId);
     const now  = new Date();
@@ -2055,6 +2182,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       .map(i=>`${i.action}${i.neededFrom?" (→ "+i.neededFrom+")":""}${i.remarks?" — "+i.remarks:""}`)
       .join("; ");
 
+    const tpType = logForm.touchpointType || "Deal Meeting";
+    const stageNow = tpType === "Deal Meeting" ? (logForm.stageUpdate || mapLegacyOutcome(logForm.status||"Prospect")) : dealStage(deal||{});
     setMeetings(p => [{
       id: `ml${Date.now()}`,
       ...logForm,
@@ -2067,49 +2196,63 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       late,
       loggedByUserId: activeUser,
       nextSteps: nextStepsSummary || logForm.nextSteps,
-      outcome: logForm.status === "Closed" ? "Mail Confirmed" : logForm.status || "Needs Callback",
+      outcome: stageNow,
+      touchpointType: tpType,
     }, ...p]);
 
-    // Auto-create tasks for each action item — routed to the right person's task list
+    // Part 1: Create Touchpoint record alongside the legacy meeting record
+    const touchpointId = `tp${Date.now()}`;
+    setTouchpoints(p => [{
+      id: touchpointId, clientAccountId: deal?.clientAccountId || "",
+      dealId: logForm.dealId, repId: parseInt(logForm.repId), date: TODAY,
+      time: logForm.meetingTime || loggedAt, meetingType: logForm.meetingType,
+      touchpointType: tpType, contactName: logForm.contactName,
+      contactDesignation: logForm.designation, contactLevel: logForm.contactLevel,
+      whatHappened: logForm.discussion, clientFeedback: logForm.clientFeedback,
+      stageUpdate: tpType === "Deal Meeting" ? stageNow : "",
+      actionItems: (logForm.nextStepItems||[]).filter(i=>i.action),
+      loggedAt, loggedLate: late, loggedByUserId: activeUser,
+    }, ...p]);
+
+    // Part 2: Auto-route action items by their type (5 types from spec)
     const repIdInt = parseInt(logForm.repId);
-    const newTasks = (logForm.nextStepItems||[])
-      .filter(i => i.action && i.neededFrom && i.neededFrom !== "Self" && i.neededFrom !== "Client")
-      .map(i => ({
-        id: `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        assignedTo: null,
-        assignedToUserId: getNeededFromUserId(i.neededFrom, repIdInt),
-        assignedDept: i.neededFrom,
-        repId: repIdInt,
-        clientCompany,
-        title: i.action,
-        description: `${i.remarks ? i.remarks+" — " : ""}Raised from meeting log by ${rep?.name} on ${TODAY}. Client: ${clientCompany}.`,
-        priority: "High",
-        status: "Open",
-        dueDate: i.dueDate || TOMORROW,
-        createdAt: TODAY,
-        assignedBy: activeUser,
-        assignedByName: user_role?.name || "Sales Rep",
-        fromMeetingLog: true,
-      }));
-
+    const repName = rep?.name||"Rep";
+    const newTasks: any[] = [];
+    const newIRsFromLog: any[] = [];
+    const attendPlans: any[] = [];
+    (logForm.nextStepItems||[]).filter(i=>(i.actionType||i.action)&&i.neededFrom).forEach(i=>{
+      const aType = i.actionType||i.action;
+      const details = i.details||i.remarks||"";
+      const ts = `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+      if (i.neededFrom==="Self") {
+        // Self-assigned: goes only to rep's own tasks
+        newTasks.push({id:ts,assignedTo:null,assignedToUserId:null,assignedDept:"Self",repId:repIdInt,clientCompany,title:`${aType==="Approval needed"?"[Approval]":aType==="Document / plan needed"?"[Doc needed]":aType==="Attend a meeting"?"[Meeting]":aType==="Client introduction needed"?"[Intro]":"[Follow-up]"} — ${clientCompany} — ${details}`.slice(0,120),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
+      } else if (i.neededFrom!=="Client") {
+        if (aType==="Approval needed") {
+          // → Approvals tab (Internal Request of type Approval)
+          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:i.neededFrom,subject:`[Approval] — ${clientCompany} — ${details}`.slice(0,120),details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
+        } else if (aType==="Attend a meeting") {
+          // → My Plan of tagged person as unscheduled meeting request
+          attendPlans.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserId(i.neededFrom,repIdInt)||i.neededFrom,date:i.dueDate||TOMORROW,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repName}] ${details||`Re: ${clientCompany}`}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repName});
+          // Also create task for confirmation tracking
+          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+        } else if (aType==="Document / plan needed") {
+          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+        } else if (aType==="Client introduction needed") {
+          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+        } else if (aType==="Flag for follow-up") {
+          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — Flagged by ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+        } else {
+          // Legacy fallback for old "action" type
+          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:i.action||aType,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
+        }
+      }
+    });
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
-
-    // Auto-create internal requests from next step items (same as calendar path)
-    const newIRsFromLog = (logForm.nextStepItems||[])
-      .filter(i => i.action && i.neededFrom && !["Self","Client"].includes(i.neededFrom))
-      .map(i => ({
-        id: `ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        type: ["Region Head","NSH","CXO"].includes(i.neededFrom) ? "Approval" : "Support",
-        dept: i.neededFrom, subject: i.action,
-        details: (i.remarks||"") + (clientCompany ? ` — Re: ${clientCompany}` : ""),
-        raisedBy: activeUser, raisedByName: user_role?.name||"",
-        repId: parseInt(logForm.repId)||null,
-        dealId: logForm.dealId||null, clientCompany,
-        status: "Pending", raisedAt: TODAY, slaHours: 48, resolvedAt: null, resolverNote: ""
-      }));
     if (newIRsFromLog.length) setInternalReqs(p => [...newIRsFromLog, ...p]);
+    if (attendPlans.length) setPlans(p => [...p, ...attendPlans]);
 
-    // Update deal last contact, outcome, and next step
+    // Update deal last contact, outcome, stage (Part 3), and next step
     const firstFollowUpItem = (logForm.nextStepItems||[]).find(i=>i.action);
     if (deal) {
       const approvalItem2 = (logForm.nextStepItems||[]).find(i =>
@@ -2119,9 +2262,11 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       setDeals(p => p.map(d => d.id === logForm.dealId ? {
         ...d,
         lastContact: TODAY,
-        outcome: logForm.status === "Closed" ? "Mail Confirmed" : d.outcome,
+        // Part 3: stage is the canonical field; also keep outcome as alias
+        ...(tpType === "Deal Meeting" ? { stage: stageNow, outcome: stageNow } : {}),
         // Update deal value if it was ₹0 and rep entered one
         amount: (newAmt && (!d.amount||d.amount===0)) ? newAmt : d.amount,
+        pipelineAmount: (newAmt && (!d.pipelineAmount||d.pipelineAmount===0)) ? newAmt : (d.pipelineAmount || parseCurrency(d.amount||"0")||0),
         targetAmount: (newAmt && (!d.targetAmount||d.targetAmount===0)) ? newAmt : d.targetAmount,
         nextStep: nextStepsSummary || firstFollowUpItem?.action || logForm.nextSteps,
         nextStepDate: firstFollowUpItem?.dueDate || logForm.followUpDate || d.nextStepDate,
@@ -2129,6 +2274,16 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         awaitingApprovalSince: approvalItem2 ? TODAY : d.awaitingApprovalSince,
         auditLog: [...(d.auditLog||[]), ...(approvalItem2?[{at:TODAY,by:user_role?.name||"Rep",role:user_role?.role||"",action:"Flagged",from:null,to:approvalItem2.neededFrom,note:approvalItem2.action}]:[])],
       } : d));
+      // Part 1: Update client account dates
+      if (deal.clientAccountId) {
+        setClientAccounts(p => p.map(a => a.id === deal.clientAccountId ? {
+          ...a,
+          lastContactDate: TODAY,
+          // Only Deal Meeting touchpoints reset the escalation clock
+          ...(tpType === "Deal Meeting" ? { lastDealMeetingDate: TODAY, currentStage: stageNow } : {}),
+          updatedAt: TODAY,
+        } : a));
+      }
     } else if (clientCompany) {
       // No deal yet — create a pipeline stub for follow-up
       const stubAmt = logForm.dealAmount ? parseCurrency(logForm.dealAmount) : 0;
@@ -2317,6 +2472,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     const hasValidNextStep = (logForm.nextStepItems||[]).some(i => i.action && i.neededFrom);
     if (!hasValidNextStep) { showToast("At least one next step with an owner is required", "err"); return; }
     if (logForm.seniorRequested === "Yes" && !logForm.seniorRequestedName?.trim()) { showToast("Senior's name is required when escalation is Yes", "err"); return; }
+    // Part 1+3: Stage Update required for Deal Meeting touchpoint
+    if ((logForm.touchpointType || "Deal Meeting") === "Deal Meeting" && !logForm.stageUpdate && !logForm.status) {
+      showToast("Select a Stage Update for this Deal Meeting", "err"); return;
+    }
+    // Part 9: Loss reason mandatory when stage is Lost
+    if (logForm.stageUpdate === "Lost" && !logForm.lossReason?.trim()) {
+      showToast("Loss reason is required when marking a deal as Lost", "err"); return;
+    }
 
     let calResult = null;
     if (logForm.scheduleNext && logForm.nextMeetingDate) {
@@ -2329,6 +2492,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     const late = now.getHours() >= 23;
     const loggedAt = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
     const clientCompany = deal?.clientCompany || updatedForm.clientAgencyName || "";
+    const tpTypeC = updatedForm.touchpointType || "Deal Meeting";
+    const stageNowC = tpTypeC === "Deal Meeting"
+      ? (updatedForm.stageUpdate || mapLegacyOutcome(updatedForm.status||"Prospect"))
+      : dealStage(deal||{});
 
     const nextStepsSummary = (updatedForm.nextStepItems||[])
       .filter(i=>i.action)
@@ -2345,7 +2512,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       clientCompany, date: TODAY, loggedAt, late,
       loggedByUserId: activeUser,
       nextSteps: nextStepsSummary || updatedForm.nextSteps,
-      outcome: updatedForm.status === "Closed" ? "Mail Confirmed" : updatedForm.status || "Needs Callback",
+      outcome: stageNowC,
+      touchpointType: tpTypeC,
+    }, ...p]);
+
+    // Part 1: Create Touchpoint record (same as non-calendar path)
+    setTouchpoints(p => [{
+      id: `tp${Date.now()}`, clientAccountId: deal?.clientAccountId || "",
+      dealId: updatedForm.dealId, repId: parseInt(updatedForm.repId), date: TODAY,
+      time: updatedForm.meetingTime || loggedAt, meetingType: updatedForm.meetingType,
+      touchpointType: tpTypeC, contactName: updatedForm.contactName,
+      contactDesignation: updatedForm.designation, contactLevel: updatedForm.contactLevel,
+      whatHappened: updatedForm.discussion, clientFeedback: updatedForm.clientFeedback,
+      stageUpdate: tpTypeC === "Deal Meeting" ? stageNowC : "",
+      actionItems: (updatedForm.nextStepItems||[]).filter(i=>i.action),
+      loggedAt, loggedLate: late, loggedByUserId: activeUser,
     }, ...p]);
 
     // Auto-create tasks from next step items
@@ -2385,52 +2566,42 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         isSelfTask: true,
       }));
 
-    // Routed items → structured title + assignee task
-    const newTasks = (updatedForm.nextStepItems||[])
-      .filter(i => i.action && i.neededFrom && i.neededFrom !== "Self" && i.neededFrom !== "Client")
-      .map(i => ({
-        id: `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        assignedTo: null,
-        assignedToUserId: getNeededFromUserIdC(i.neededFrom, repIdIntC),
-        assignedDept: i.neededFrom,
-        repId: repIdIntC,
-        clientCompany,
-        title: `${i.action} — ${clientCompany} — Raised by ${rep?.name||""}`,
-        description: `${i.remarks ? i.remarks+" — " : ""}Raised from meeting log by ${rep?.name} on ${TODAY}. Client: ${clientCompany}.`,
-        priority: "High",
-        status: "Open",
-        dueDate: i.dueDate || TOMORROW,
-        createdAt: TODAY,
-        assignedBy: activeUser,
-        assignedByName: user_role?.name || "Sales Rep",
-        fromMeetingLog: true,
-        meetingLogId: meetingId,
-      }));
-    if (selfTasks.length) setTasks(p => [...selfTasks, ...p]);
-    if (newTasks.length) setTasks(p => [...newTasks, ...p]);
-
-    // Auto-create internal requests (routed items only — Self stays in My Tasks)
+    // Part 2: Auto-route action items by type (5 types from spec) + self tasks
     const getSlaHours = (dept: string) =>
       (adminConfig.slaHours as Record<string,number>)?.[dept] ??
       (adminConfig.slaHours as Record<string,number>)?.default ?? 48;
-
-    const newIRs = (updatedForm.nextStepItems||[])
-      .filter(i => i.action && i.neededFrom && !["Self","Client"].includes(i.neededFrom))
-      .map(i => ({
-        id: `ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        type: ["Region Head","NSH","CXO"].includes(i.neededFrom) ? "Approval" : "Support",
-        dept: i.neededFrom,
-        subject: `${i.action} — ${clientCompany} — Raised by ${rep?.name||""}`,
-        details: (i.remarks||"") + (clientCompany ? ` — ${clientCompany}` : ""),
-        raisedBy: activeUser, raisedByName: user_role?.name||"",
-        repId: parseInt(updatedForm.repId)||null,
-        dealId: updatedForm.dealId||null, clientCompany,
-        status: "Pending", raisedAt: TODAY,
-        slaHours: getSlaHours(i.neededFrom),
-        resolvedAt: null, resolverNote: "",
-        meetingLogId: meetingId,
-      }));
+    const repNameC = rep?.name||"Rep";
+    const newTasksC: any[] = [];
+    const newIRs: any[] = [];
+    const attendPlansC: any[] = [];
+    if (selfTasks.length) setTasks(p => [...selfTasks, ...p]);
+    (updatedForm.nextStepItems||[]).filter(i=>(i.actionType||i.action)&&i.neededFrom).forEach(i=>{
+      const aType = i.actionType||i.action;
+      const details = i.details||i.remarks||"";
+      const ts = `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+      if (i.neededFrom==="Self") {
+        // Self-assigned already handled above in selfTasks
+      } else if (i.neededFrom!=="Client") {
+        if (aType==="Approval needed") {
+          newIRs.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:i.neededFrom,subject:`[Approval] — ${clientCompany} — ${details}`.slice(0,120),details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repNameC,repId:repIdIntC,dealId:updatedForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:getSlaHours(i.neededFrom),resolvedAt:null,resolverNote:"",meetingLogId:meetingId});
+        } else if (aType==="Attend a meeting") {
+          attendPlansC.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserIdC(i.neededFrom,repIdIntC)||i.neededFrom,date:i.dueDate||TOMORROW,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repNameC}] ${details||`Re: ${clientCompany}`}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repNameC});
+          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
+        } else if (aType==="Document / plan needed") {
+          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
+        } else if (aType==="Client introduction needed") {
+          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
+        } else if (aType==="Flag for follow-up") {
+          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — Flagged by ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
+        } else {
+          // Legacy fallback
+          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:i.action||aType,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId});
+        }
+      }
+    });
+    if (newTasksC.length) setTasks(p => [...newTasksC, ...p]);
     if (newIRs.length) setInternalReqs(p => [...newIRs, ...p]);
+    if (attendPlansC.length) setPlans(p => [...p, ...attendPlansC]);
 
     const firstFollowUpItem = (updatedForm.nextStepItems||[]).find(i=>i.action);
     if (deal) {
@@ -2447,8 +2618,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       const newAmtC = updatedForm.dealAmount ? parseCurrency(updatedForm.dealAmount) : null;
       setDeals(p => p.map(d => d.id === updatedForm.dealId ? {
         ...d, lastContact: TODAY,
-        outcome: updatedForm.status === "Closed" ? "Mail Confirmed" : d.outcome,
+        // Part 3: canonical stage update (only Deal Meeting type)
+        ...(tpTypeC === "Deal Meeting" ? { stage: stageNowC, outcome: stageNowC } : {}),
         amount: (newAmtC && (!d.amount||d.amount===0)) ? newAmtC : d.amount,
+        pipelineAmount: (newAmtC && (!d.pipelineAmount||d.pipelineAmount===0)) ? newAmtC : (d.pipelineAmount || parseCurrency(d.amount||"0")||0),
         targetAmount: (newAmtC && (!d.targetAmount||d.targetAmount===0)) ? newAmtC : d.targetAmount,
         nextStep: nextStepsSummary || firstFollowUpItem?.action || updatedForm.nextSteps,
         nextStepDate: firstFollowUpItem?.dueDate || updatedForm.followUpDate || d.nextStepDate,
@@ -2456,6 +2629,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         awaitingApprovalSince: approvalItem ? TODAY : d.awaitingApprovalSince,
         auditLog: [...(d.auditLog||[]), ...auditEntry],
       } : d));
+      // Part 1: Update client account dates + escalation clock
+      if (deal.clientAccountId) {
+        setClientAccounts(p => p.map(a => a.id === deal.clientAccountId ? {
+          ...a,
+          lastContactDate: TODAY,
+          ...(tpTypeC === "Deal Meeting" ? { lastDealMeetingDate: TODAY, currentStage: stageNowC } : {}),
+          updatedAt: TODAY,
+        } : a));
+      }
     } else if (clientCompany) {
       const stubAmtC = updatedForm.dealAmount ? parseCurrency(updatedForm.dealAmount) : 0;
       const stubC = {
@@ -2681,11 +2863,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
     // ── SALES REP ──
     if (isRep) return [
-      { label:"PLANNING",    items:[N("my-plan","My Plan","◎")] },
+      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("revenue-log","Revenue Log","₹")] },
       { label:"MY CRM",      items:[
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
         N("pipeline","Revenue Tracker","◈"),
-        N("revenue-log","Revenue Log","₹"),
         N("target-submit","My Targets","◎",targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
         N("tasks","Tasks","✓",myRepTaskBadge),
         N("internal-requests","Internal Requests","⬆",irBadge),
@@ -3213,8 +3394,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         {/* MAIN */}
         <div data-tour="content-area" style={{flex:1,overflow:"auto",padding: isMobile ? 12 : 20}}>
 
+          {/* Part 7: Pre-launch gate — Sales Reps blocked until Admin goes live */}
+          {isRep && adminConfig.platformLive === false && (
+            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"60vh",gap:20,textAlign:"center"}}>
+              <div style={{fontSize:48}}>🚀</div>
+              <div className="sans" style={{fontSize:22,fontWeight:800,color:C.text}}>Platform launching soon</div>
+              <div style={{fontSize:14,color:C.dim,maxWidth:360,lineHeight:1.7}}>
+                Your targets are being finalised. The platform will be ready{adminConfig.launchDate ? ` on ${adminConfig.launchDate}` : " shortly"}.
+              </div>
+              <div style={{fontSize:12,color:C.muted}}>Contact your Region Head if you have questions.</div>
+            </div>
+          )}
+
           {/* ═══ MY PLAN ═══ */}
-          {view==="my-plan" && (()=>{
+          {!(isRep && adminConfig.platformLive === false) && view==="my-plan" && (()=>{
             // ── SALES STRATEGY / CRO: monthly overview (read-only, no daily limits) ──
             if (isStrategy || isCRORole) {
               const allMeetings = meetings;
@@ -3341,13 +3534,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const [inlineLogPlan, setInlineLogPlan] = planInlineState;
             const [inlineLogStatus, setInlineLogStatus] = planInlineStatusState;
 
-            // ── At-risk deal detection ──
+            // ── Part 4: At-risk deal detection (escalation clock = lastDealMeetingDate) ──
             const riskThreshold = adminConfig?.inactivityDaysRisk ?? 7;
-            const atRiskDeals = deals.filter(d =>
-              d.repId === myRepId &&
-              !["Mail Confirmed","Not Interested"].includes(d.outcome) &&
-              daysSince(d.lastContact) >= riskThreshold
-            ).sort((a,b) => daysSince(b.lastContact) - daysSince(a.lastContact));
+            const atRiskDeals = deals.filter(d => {
+              const ds = dealStage(d);
+              if (d.repId !== myRepId) return false;
+              if (["RO Received","Mail Confirmed","Lost"].includes(ds)) return false;
+              const idleClock = d.lastDealMeetingDate || d.lastContact;
+              return daysSince(idleClock) >= riskThreshold;
+            }).sort((a,b) => daysSince(b.lastDealMeetingDate||b.lastContact) - daysSince(a.lastDealMeetingDate||a.lastContact));
 
             return (
               <div className="fin">
@@ -3380,13 +3575,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                     <div style={{display:"flex",flexDirection:"column",gap:5}}>
                       {atRiskDeals.map(d => {
-                        const idle = daysSince(d.lastContact);
+                        const idleClock = d.lastDealMeetingDate || d.lastContact;
+                        const idle = daysSince(idleClock);
+                        const ds = dealStage(d);
                         return (
                           <div key={d.id} style={{display:"flex",alignItems:"center",gap:10,background:`${C.red}08`,borderRadius:5,padding:"6px 10px"}}>
                             <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{d.clientCompany}</span>
-                            <span style={{fontSize:11,color:C.dim}}>{d.outcome}</span>
+                            <span style={{background:`${oColor(ds)}18`,color:oColor(ds),padding:"2px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{ds}</span>
                             <span style={{background:`${C.red}22`,color:C.red,padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>
-                              No contact for {idle} day{idle!==1?"s":""}
+                              No deal meeting {idle}d
                             </span>
                             <button
                               onClick={()=>{ setMeetingForm(f=>({...f,dealId:d.id,clientAgencyName:d.clientCompany})); setMeetingOpen(true); }}
@@ -3514,10 +3711,37 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <span style={{fontSize:11,color:C.dim,marginLeft:"auto"}}>{todayLogged&&tmrwPlanned?"All done ✓":"Complete both before 11:30 PM"}</span>
                 </div>
 
-                {/* After 6 PM nudge banner */}
+                {/* Part 8: Time-based deadline countdown banner (6PM / 9PM / 11PM levels) */}
                 {(()=>{
                   const unlogged = todayPlans.filter(p=>p.status==="Planned").length;
-                  if (new Date().getHours() >= 18 && unlogged > 0) {
+                  const hr = new Date().getHours();
+                  if (unlogged === 0) return null;
+                  if (hr >= 23) {
+                    return (
+                      <div style={{width:"100%",background:C.red,borderRadius:7,padding:"14px 20px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
+                        <div>
+                          <div style={{fontSize:14,fontWeight:800,color:"#fff",letterSpacing:.5}}>🔴 FINAL DEADLINE — LOG NOW</div>
+                          <div style={{fontSize:12,color:"#ffd7d7",marginTop:3}}>{unlogged} meeting{unlogged!==1?"s":""} not logged. You must log or confirm nothing more to log before midnight.</div>
+                        </div>
+                        <button onClick={()=>{
+                          const note = {id:`eod${Date.now()}`,repId:myRepId,type:"EOD Confirm",note:"Rep confirmed: nothing more to log today",date:TODAY,createdAt:TODAY};
+                          setTouchpoints(p=>[...p,note as any]);
+                          showToast("Confirmed — no more meetings today. Record saved.");
+                        }} style={{background:"#fff",color:C.red,border:"none",borderRadius:5,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
+                          Nothing more to log today
+                        </button>
+                      </div>
+                    );
+                  }
+                  if (hr >= 21) {
+                    return (
+                      <div style={{background:C.red,borderRadius:7,padding:"10px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
+                        <span style={{fontSize:16,color:"#fff"}}>🔴</span>
+                        <span style={{fontSize:13,color:"#fff",fontWeight:700}}>After 9 PM — {unlogged} meeting{unlogged!==1?"s":""} not logged. Log before 11:30 PM.</span>
+                      </div>
+                    );
+                  }
+                  if (hr >= 18) {
                     return (
                       <div style={{background:`${C.orange}12`,border:`1px solid ${C.orange}44`,borderRadius:7,padding:"10px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
                         <span style={{fontSize:16}}>⚠</span>
@@ -3599,10 +3823,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {planList.map(p=>{
                           const isOpen = inlineLogPlan===p.id;
                           const isFuture = p.date > TODAY && p.status !== "Done";
+                          // Part 8: Meeting card visual states
+                          const nowHHMM = new Date().toTimeString().slice(0,5); // "HH:MM"
+                          const timePassed = p.date===TODAY && p.status!=="Done" && !isFuture && p.time && p.time < nowHHMM;
+                          const isDone = p.status==="Done";
                           // Find linked deal for this plan — shows blocking info
                           const linkedDeal = deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===(p.clientAgencyName||"").toLowerCase());
                           const blocked = linkedDeal?.awaitingApproval && p.status!=="Done";
                           const dealNextStep = linkedDeal?.nextStep && linkedDeal.nextStep !== p.agenda ? linkedDeal.nextStep : null;
+                          // Card border/bg based on visual state
+                          const cardBg   = isDone?`${C.green}10`:blocked?`${C.orange}06`:timePassed?`${C.red}08`:isOpen?`${C.accent}10`:C.s2;
+                          const cardBrd  = isDone?`2px solid ${C.green}55`:timePassed?`2px solid ${C.red}55`:blocked?`1px solid ${C.orange}44`:isOpen?`1px solid ${C.accent}55`:`1px solid ${C.border}`;
+                          // Circle indicator
+                          const circleColor = isDone?C.green:timePassed?C.red:C.muted;
+                          const circleFill  = isDone?"filled":"hollow";
                           return (
                             <div key={p.id} style={{marginBottom:8}}>
                               {/* Meeting chip — click to expand */}
@@ -3614,7 +3848,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     showToast(`This meeting is on ${p.date}. Come back on the day to log it.`);
                                   } else { if (!isOpen) setInlineLogStatus(""); setInlineLogPlan(isOpen?null:p.id); }
                                 }}
-                                style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 10px",background:p.status==="Done"?`${C.green}08`:blocked?`${C.orange}06`:isFuture?C.s2:isOpen?`${C.accent}10`:C.s2,borderRadius:6,border:`1px solid ${p.status==="Done"?C.green+"33":blocked?C.orange+"44":isFuture?C.border:isOpen?C.accent+"55":C.border}`,cursor:isFuture?"default":"pointer",transition:"all .1s",opacity:isFuture?0.8:1}}>
+                                style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 10px",background:cardBg,borderRadius:6,border:cardBrd,cursor:isFuture?"default":"pointer",transition:"all .1s",opacity:isFuture?0.8:1}}>
+                                {/* Circle indicator */}
+                                <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${circleColor}`,background:circleFill==="filled"?circleColor:"transparent",flexShrink:0,marginTop:2,animation:timePassed?"planPulse 1.5s ease-in-out infinite":undefined}}/>
                                 <span style={{fontSize:10,color:C.dim,whiteSpace:"nowrap",marginTop:1}}>🕐 {p.time}</span>
                                 <div style={{flex:1,minWidth:0}}>
                                   <div style={{fontSize:12,fontWeight:600,color:C.text}}>{p.clientAgencyName}</div>
@@ -3665,6 +3901,43 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   📅 Scheduled for <strong>{p.date}</strong>. Come back on the day to log the outcome. Use ✎ Edit to change details.
                                 </div>
                               )}
+
+                              {/* Part 8: Post-log inline message */}
+                              {planLoggedMsg[p.id]&&(()=>{
+                                const msg = planLoggedMsg[p.id];
+                                if (msg==="mail-confirmed") {
+                                  return (
+                                    <div style={{background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"12px 14px",marginTop:4}}>
+                                      <div style={{fontSize:12,fontWeight:700,color:C.green,marginBottom:8}}>Mail Confirmed. Waiting for RO?</div>
+                                      <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Set a reminder to follow up:</div>
+                                      <div style={{display:"flex",gap:8}}>
+                                        {[3,5,7].map(days=>{
+                                          const rDate = new Date(); rDate.setDate(rDate.getDate()+days);
+                                          const rStr = rDate.toISOString().slice(0,10);
+                                          return (
+                                            <button key={days} onClick={()=>{
+                                              setPlans(q=>[...q,{id:`rem${Date.now()}_${days}`,repId:myRepId,date:rStr,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow up on RO — ${p.clientAgencyName}`,pitchType:"",meetingType:"Call",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"}]);
+                                              setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;});
+                                              showToast(`Reminder set for ${rStr} ✓`);
+                                            }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"5px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                              {days}d
+                                            </button>
+                                          );
+                                        })}
+                                        <button onClick={()=>setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;})} style={{background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 14px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                          Skip
+                                        </button>
+                                      </div>
+                                    </div>
+                                  );
+                                }
+                                return (
+                                  <div style={{background:msg.startsWith("All logged")?`${C.green}10`:`${C.blue}08`,border:`1px solid ${msg.startsWith("All logged")?C.green:C.blue}33`,borderRadius:6,padding:"10px 14px",marginTop:4,fontSize:12,color:msg.startsWith("All logged")?C.green:C.blue,fontWeight:600}}>
+                                    {msg}
+                                    <button onClick={()=>setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;})} style={{marginLeft:12,background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:11}}>✕</button>
+                                  </div>
+                                );
+                              })()}
 
                               {/* Inline log form */}
                               {!isFuture&&isOpen&&(()=>{
@@ -3802,6 +4075,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       if (newAutoPlans.length > 0) setPlans(q=>[...q,...newAutoPlans]);
                                       setAtt(q=>({...q,[TODAY]:{...(q[TODAY]||{}),[(myRepId||reps[0]?.id)]:true}}));
                                       setInlineLogPlan(null);
+                                      // Part 8: Post-log inline messages
+                                      const remaining = todayPlans.filter(pl=>pl.id!==p.id&&pl.status==="Planned");
+                                      const tmrwCount = tmrwPlans.length;
+                                      let logMsg = "";
+                                      if (st==="Closed"||st==="Mail Confirmed") {
+                                        logMsg = "mail-confirmed";
+                                      } else if (st==="Lost") {
+                                        logMsg = `Logged as Lost. Reason recorded.`;
+                                      } else if (remaining.length>0) {
+                                        const nxt = remaining.sort((a,b)=>(a.time||"").localeCompare(b.time||""))[0];
+                                        logMsg = `${p.clientAgencyName} logged. ${remaining.length} remaining. Next: ${nxt.clientAgencyName}${nxt.time?` at ${nxt.time}`:""}`;
+                                      } else {
+                                        logMsg = `All logged today. Tomorrow: ${tmrwCount} meeting${tmrwCount!==1?"s":""} planned.`;
+                                      }
+                                      setPlanLoggedMsg(prev=>({...prev,[p.id]:logMsg}));
                                       const planCount = (act&&bywhen?1:0)+(nm?1:0)+(fu?1:0);
                                       showToast((act&&frm?"Meeting logged + task created ✓":"Meeting logged ✓")+(planCount>0?` · ${planCount} calendar entry added`:""));
                                     }}>Log Meeting ✓</button>
@@ -4022,6 +4310,46 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   );
                 })()}
 
+                {/* Part 8: Monday Weekly Summary */}
+                {(()=>{
+                  const dayOfWeek = new Date().getDay(); // 1 = Monday
+                  if (dayOfWeek !== 1) return null;
+                  // Last week = Mon–Sun of previous week
+                  const now = new Date();
+                  const lastMonday = new Date(now); lastMonday.setDate(now.getDate()-7);
+                  const lastSunday = new Date(now); lastSunday.setDate(now.getDate()-1);
+                  const lmStr = lastMonday.toISOString().slice(0,10);
+                  const lsStr = lastSunday.toISOString().slice(0,10);
+                  const inRange = (d) => d && d >= lmStr && d <= lsStr;
+                  const lastWeekTPs = touchpoints.filter(t=>t.repId===myRepId&&inRange(t.date||t.createdAt));
+                  const lastWeekMtgs = meetings.filter(m=>m.repId===myRepId&&inRange(m.date));
+                  const lastWeekClients = new Set([...lastWeekTPs.map(t=>t.clientCompany||t.dealId), ...lastWeekMtgs.map(m=>m.clientCompany)].filter(Boolean)).size;
+                  const lastWeekDealsForward = deals.filter(d=>d.repId===myRepId&&inRange(d.updatedAt||d.lastContact)&&!["Lost","RO Received"].includes(dealStage(d))).length;
+                  const lastWeekRevenue = revenueEntries.filter(e=>e.repId===myRepId&&inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0);
+                  const lastWeekAtRisk = atRisk.filter(d=>d.repId===myRepId).length;
+                  return (
+                    <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"14px 18px",marginBottom:16}}>
+                      <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>
+                        📊 LAST WEEK SUMMARY · {lmStr} – {lsStr}
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
+                        {[
+                          {label:"Touchpoints",value:lastWeekTPs.length,color:C.blue},
+                          {label:"Clients",    value:lastWeekClients,   color:C.green},
+                          {label:"Deals Moved",value:lastWeekDealsForward,color:C.accent},
+                          {label:"Revenue",    value:lastWeekRevenue>0?`₹${(lastWeekRevenue/100000).toFixed(1)}L`:"—",color:C.green},
+                          {label:"At Risk",    value:lastWeekAtRisk,    color:lastWeekAtRisk>0?C.red:C.green},
+                        ].map(({label,value,color})=>(
+                          <div key={label} style={{textAlign:"center",background:C.surface,borderRadius:6,padding:"10px 4px",border:`1px solid ${C.border}`}}>
+                            <div style={{fontSize:18,fontWeight:800,color}}>{value}</div>
+                            <div style={{fontSize:9,color:C.dim,marginTop:2,letterSpacing:".05em",textTransform:"uppercase"}}>{label}</div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* Plan modal */}
                 {addPlanFor&&(
                   <div className="overlay" onClick={()=>setAddPlanFor(null)}>
@@ -4156,8 +4484,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const rhC  = revenueEntries.filter(e=>myRepIds.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const rhP  = rhDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
             const rhPct= rhT>0?Math.round((rhC/rhT)*100):0;
-            const rhAtRisk = rhDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7);
-            const rhOverdue = rhDeals.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Mail Confirmed");
+            // Part 4+9: escalation clock = lastDealMeetingDate, tiered at 7/10/14 days
+            const rhAtRisk   = rhDeals.filter(d=>{const ds=dealStage(d);return !["Mail Confirmed","RO Received","Lost"].includes(ds)&&daysSince(d.lastDealMeetingDate||d.lastContact)>=7;});
+            const rh10d      = rhDeals.filter(d=>{const ds=dealStage(d);return !["Mail Confirmed","RO Received","Lost"].includes(ds)&&daysSince(d.lastDealMeetingDate||d.lastContact)>=10;});
+            const rh14d      = rhDeals.filter(d=>{const ds=dealStage(d);return !["Mail Confirmed","RO Received","Lost"].includes(ds)&&daysSince(d.lastDealMeetingDate||d.lastContact)>=14;});
+            const rhOverdue  = rhDeals.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&dealStage(d)!=="Mail Confirmed");
             const totalActions = myApprovals.length + myTasks_rh.length;
 
             return (
@@ -4317,16 +4648,62 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </table>
                 </div>
 
-                {/* Team at-risk deals */}
-                {rhAtRisk.length>0&&(
-                  <div>
-                    <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NO CONTACT 7+ DAYS — TEAM AT RISK</div>
-                    {rhAtRisk.slice(0,4).map(d=>{
+                {/* Part 9: Tiered escalation alerts — 7 / 10 / 14 day triggers */}
+                {rh14d.length>0&&(
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⚠ INTERVENE REQUIRED — 14+ DAYS NO DEAL MEETING</div>
+                    {rh14d.map(d=>{
                       const rep=reps.find(r=>r.id===d.repId);
+                      const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
+                      const taskId=`rh14-${d.id}`;
+                      const alreadyTasked=tasks.some(t=>t.id===taskId);
+                      return (
+                        <div key={d.id} style={{background:`${C.red}10`,border:`1.5px solid ${C.red}55`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                          <span style={{fontSize:13,color:C.red}}>🔴</span>
+                          <span style={{flex:1}}><strong>{d.clientCompany}</strong><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span></span>
+                          <span style={{background:`${C.red}22`,color:C.red,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{idle}d no deal meeting</span>
+                          <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.amount)}</span>
+                          {!alreadyTasked&&(
+                            <button onClick={()=>{
+                              setTasks(p=>[...p,{id:taskId,title:`Intervene — ${d.clientCompany} — ${idle}d — ${rep?.name||""}`,dept:"Region Head",status:"Open",dueDate:TODAY,repId:d.repId,createdAt:TODAY,priority:"High"}]);
+                              showToast(`Task created: Intervene — ${d.clientCompany}`);
+                            }} style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                              Create Task
+                            </button>
+                          )}
+                          {alreadyTasked&&<span style={{color:C.green,fontSize:10,fontWeight:700}}>✓ Task created</span>}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {rh10d.filter(d=>!rh14d.includes(d)).length>0&&(
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>ℹ 10+ DAYS NO DEAL MEETING — MONITOR CLOSELY</div>
+                    {rh10d.filter(d=>!rh14d.includes(d)).map(d=>{
+                      const rep=reps.find(r=>r.id===d.repId);
+                      const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
+                      return (
+                        <div key={d.id} style={{background:`${C.orange}06`,border:`1px solid ${C.orange}33`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                          <span style={{fontSize:13,color:C.orange}}>⚡</span>
+                          <span style={{flex:1}}><strong>{d.clientCompany}</strong><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span></span>
+                          <span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{idle}d no deal meeting</span>
+                          <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.amount)}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+                {rhAtRisk.filter(d=>!rh10d.includes(d)).length>0&&(
+                  <div style={{marginBottom:10}}>
+                    <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NO DEAL MEETING 7+ DAYS — TEAM AT RISK</div>
+                    {rhAtRisk.filter(d=>!rh10d.includes(d)).map(d=>{
+                      const rep=reps.find(r=>r.id===d.repId);
+                      const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       return (
                         <div key={d.id} style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                           <span style={{flex:1}}><strong>{d.clientCompany}</strong><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span></span>
-                          <span style={{color:C.red,fontSize:11}}>{daysSince(d.lastContact)}d idle</span>
+                          <span style={{color:C.red,fontSize:11}}>{idle}d idle</span>
                           <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.amount)}</span>
                         </div>
                       );
@@ -5281,8 +5658,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Meeting</button>
                                   <button onClick={()=>openAddDeal(d.dealType)}
                                     style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>+ Deal</button>
-                                  <button onClick={()=>{showToast("Note feature coming soon","ok");}}
-                                    style={{background:C.s3,border:"none",color:C.dim,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Note</button>
+                                  <button onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}}
+                                    style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Thread</button>
                                   <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Support",dept:"Sales Strategy",subject:`Deck needed for ${d.clientCompany}`,details:"Please prepare a customised pitch deck.",raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Request raised → Sales Strategy ✓");}}
                                     style={{background:`${C.purple}18`,border:"none",color:C.purple,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Deck</button>
                                 </div>
@@ -5316,7 +5693,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",marginBottom:14}}>
                         <div style={{height:"100%",width:`${Math.min(dPct,100)}%`,background:dsc,borderRadius:2}}/>
                       </div>
-                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No Linear TV deals for {filterQ}.</div>:(
+                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No target set for this category this fiscal year.</div>:(
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
@@ -5334,9 +5711,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)} style={{padding:"2px 6px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                        {OUTCOMES.map(o=><option key={o} style={{background:"#0d1117",color:"#e6edf3"}}>{o}</option>)}
-                                      </select>
+                                      <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
                                     </td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
                                   </tr>
@@ -5352,6 +5727,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* ── PROPERTIES / IPs TAB ── */}
                 {rtTab==="properties" && (()=>{
+                  // Part 10+12: IPs tab is read-only for Sales Reps
+                  if (isRep) return (
+                    <div style={{textAlign:"center",padding:"48px 24px",color:C.dim,background:C.s2,borderRadius:10,marginTop:8}}>
+                      <div style={{fontSize:24,marginBottom:12}}>📋</div>
+                      <div className="sans" style={{fontSize:15,fontWeight:700,color:C.text,marginBottom:8}}>IP Inventory — Read Only</div>
+                      <div style={{fontSize:12,color:C.dim,maxWidth:400,margin:"0 auto",lineHeight:1.7}}>
+                        IP inventory is managed centrally by Sales Strategy. Speak to your Region Head to link an IP deal to your targets.
+                      </div>
+                    </div>
+                  );
                   const visibleIPs = IP_CATALOG.filter(ip=>qMatch(ip.quarter));
                   const canApprove  = isStrategy || isNSH || isCRORole || isAdmin;
                   const stColor = s => s==="Committed"?C.green:s==="In Discussion"?C.orange:C.muted;
@@ -5642,7 +6027,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                       <div style={{fontSize:11,color:C.dim}}>Custom packages combining TV + Digital + On-ground + Content for brand campaigns</div>
-                      <button className="btn btn-primary" onClick={()=>{
+                      {/* Part 12: No New Package button for Sales Rep */}
+                      {!isRep && <button className="btn btn-primary" onClick={()=>{
                         const client = "New Client";  // use inline deal form
                         const pkg = "Custom Package";
                         const val = "1000000";
@@ -5650,7 +6036,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         const newDeal = {...BLANK_DEAL,clientCompany:client,dealType:"Media Solutions",outcome:"Needs Callback",amount:parseCurrency(val||"0"),targetAmount:parseCurrency(val||"0"),quarter:entryQ,repId:user_role?.repId||"",lastContact:TODAY,notes:pkg};
                         setDeals(p=>[{id:`d${Date.now()}`,...newDeal,repId:parseInt(newDeal.repId)||5,region:user_role?.region||"National",reqs:[]},...p]);
                         showToast("Brand Solutions deal created ✓");
-                      }}>+ New Package</button>
+                      }}>+ New Package</button>}
                     </div>
 
                     {/* Brand Solutions deals */}
@@ -5658,9 +6044,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const bsDeals = visibleDeals.filter(d=>d.dealType==="Media Solutions"||d.dealType==="Integrated Packages");
                       if(!bsDeals.length) return (
                         <div style={{textAlign:"center",padding:"50px 20px",color:C.muted}}>
-                          <div style={{fontSize:32,marginBottom:12}}>🎯</div>
-                          <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:6}}>No Brand Solutions packages yet</div>
-                          <div style={{fontSize:12,color:C.dim}}>Create a custom package combining TV + Digital + On-ground + Content</div>
+                          <div style={{fontWeight:700,fontSize:14,color:C.text,marginBottom:6}}>No target set for this category this fiscal year.</div>
                         </div>
                       );
                       return bsDeals.map(d=>{
@@ -5728,7 +6112,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",marginBottom:14}}>
                         <div style={{height:"100%",width:`${Math.min(dPct,100)}%`,background:dsc,borderRadius:2}}/>
                       </div>
-                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No Digital deals for {filterQ}.</div>:(
+                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No target set for this category this fiscal year.</div>:(
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
@@ -5746,9 +6130,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)} style={{padding:"2px 6px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                        {OUTCOMES.map(o=><option key={o} style={{background:"#0d1117",color:"#e6edf3"}}>{o}</option>)}
-                                      </select>
+                                      <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
                                     </td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
                                   </tr>
@@ -5783,7 +6165,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",marginBottom:14}}>
                         <div style={{height:"100%",width:`${Math.min(dPct,100)}%`,background:dsc,borderRadius:2}}/>
                       </div>
-                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No Integrated Package deals for {filterQ}.</div>:(
+                      {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No target set for this category this fiscal year.</div>:(
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
@@ -5801,9 +6183,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <select value={d.outcome} onChange={e=>updateOutcome(d.id,e.target.value)} style={{padding:"2px 6px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                        {OUTCOMES.map(o=><option key={o} style={{background:"#0d1117",color:"#e6edf3"}}>{o}</option>)}
-                                      </select>
+                                      <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
                                     </td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
                                   </tr>
@@ -6559,9 +6939,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const myRepId = user_role?.repId;
                 const myDeals = deals.filter(d=>d.repId===myRepId&&qMatch(d.quarter));
                 const mT=myDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-                const mC=myDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
-                const mP=myDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
-                const mG=Math.max(0,mT-mC);
+                // Part 5: 4-number dashboard
+                const mC=getAchieved(myRepId);
+                const mCommitted=getCommitted(myRepId);
+                const mInPlay=getInPlay(myRepId);
+                const mG=getShortfall(mT,myRepId);
                 const mPct=mT>0?Math.round((mC/mT)*100):0;
                 const sc=mPct>=100?C.green:mPct>=50?C.accent:C.red;
                 return (
@@ -6569,8 +6951,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{background:C.surface,border:`2px solid ${sc}`,borderRadius:10,padding:"18px 22px",marginBottom:16}}>
                       <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:12,textTransform:"uppercase"}}>My Targets · {filterQ}</div>
                       <div style={{display:"flex",gap:20,flexWrap:"wrap",alignItems:"flex-end"}}>
-                        {[["TARGET",fmtR(mT),C.text],["CLOSED",fmtR(mC),C.green],["PIPELINE",fmtR(mP),C.accent],["SHORTFALL",fmtR(mG),mG===0?C.green:C.red]].map(([l,v,c])=>(
-                          <div key={l}><div style={{fontSize:9,color:C.dim,marginBottom:2,letterSpacing:".06em"}}>{l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:c}}>{v}</div></div>
+                        {[["TARGET",fmtR(mT),C.text],["ACHIEVED",fmtR(mC),C.green],["COMMITTED",fmtR(mCommitted),C.blue],["IN PLAY",fmtR(mInPlay),C.accent],["SHORTFALL",fmtR(mG),mG===0?C.green:C.red]].map(([l,v,c])=>(
+                          <div key={l}><div style={{fontSize:9,color:C.dim,marginBottom:2,letterSpacing:".06em"}}>{l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:c as string}}>{v}</div></div>
                         ))}
                         <div style={{marginLeft:"auto",textAlign:"right"}}><div className="sans" style={{fontSize:48,fontWeight:800,color:sc,lineHeight:1}}>{mPct}%</div><div style={{fontSize:10,color:C.dim}}>achieved</div></div>
                       </div>
@@ -6582,8 +6964,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <tbody>
                           {myDeals.length===0&&<tr><td colSpan={7} style={{padding:28,textAlign:"center",color:C.muted,fontSize:12}}>No deals for {filterQ} yet.</td></tr>}
                           {myDeals.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
-                            const ach=d.outcome==="Mail Confirmed"?d.amount:0;
-                            const pip=!["Mail Confirmed","Not Interested"].includes(d.outcome)?d.amount:0;
+                            const ds=dealStage(d);
+                            const ach=revenueEntries.filter(e=>e.clientCompany===d.clientCompany&&(isRep?e.repId===myRepId:true)).reduce((s,e)=>s+(e.amount||0),0);
+                            const pip=d.pipelineAmount||parseCurrency(d.amount||"0")||0;
                             const sf=Math.max(0,(d.targetAmount||0)-ach);
                             const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                             return (
@@ -6594,7 +6977,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 <td style={{padding:"10px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
                                 <td style={{padding:"10px 14px",color:pip>0?C.accent:C.muted}}>{pip>0?fmtR(pip):"—"}</td>
                                 <td style={{padding:"10px 14px",color:sf===0?C.green:C.red,fontWeight:600}}>{sf===0?"✓":fmtR(sf)}</td>
-                                <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
+                                <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(ds)}18`,color:oColor(ds),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{ds}</span></td>
                               </tr>
                             );
                           })}
@@ -6612,8 +6995,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const repObj = reps.find(r=>r.id===rhRepDrill);
                   const repDeals = visibleDeals.filter(d=>d.repId===rhRepDrill);
                   const rT=repDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-                  const rC=repDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
-                  const rP=repDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
+                  // Part 5: 4-number dashboard for rep drill
+                  const rC=getAchieved(rhRepDrill);
+                  const rCommitted=getCommitted(rhRepDrill);
+                  const rInPlay=getInPlay(rhRepDrill);
+                  const rG=getShortfall(rT,rhRepDrill);
                   const rPct=rT>0?Math.round((rC/rT)*100):0;
                   const sc=rPct>=100?C.green:rPct>=50?C.accent:C.red;
                   return (
@@ -6625,8 +7011,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                       <div style={{background:C.surface,border:`2px solid ${sc}`,borderRadius:10,padding:"14px 20px",marginBottom:16}}>
                         <div style={{display:"flex",gap:20,flexWrap:"wrap",alignItems:"flex-end"}}>
-                          {[["TARGET",fmtR(rT),C.text],["CLOSED",fmtR(rC),C.green],["PIPELINE",fmtR(rP),C.accent],["SHORTFALL",fmtR(Math.max(0,rT-rC)),rT-rC<=0?C.green:C.red]].map(([l,v,c])=>(
-                            <div key={l}><div style={{fontSize:9,color:C.dim,marginBottom:2}}>{l}</div><div className="sans" style={{fontSize:20,fontWeight:700,color:c}}>{v}</div></div>
+                          {[["TARGET",fmtR(rT),C.text],["ACHIEVED",fmtR(rC),C.green],["COMMITTED",fmtR(rCommitted),C.blue],["IN PLAY",fmtR(rInPlay),C.accent],["SHORTFALL",fmtR(rG),rG===0?C.green:C.red]].map(([l,v,c])=>(
+                            <div key={l}><div style={{fontSize:9,color:C.dim,marginBottom:2}}>{l}</div><div className="sans" style={{fontSize:20,fontWeight:700,color:c as string}}>{v}</div></div>
                           ))}
                           <div style={{marginLeft:"auto"}}><div className="sans" style={{fontSize:40,fontWeight:800,color:sc,lineHeight:1}}>{rPct}%</div><div style={{fontSize:10,color:C.dim}}>achieved</div></div>
                         </div>
@@ -6933,7 +7319,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                                 <thead><tr>{cols.map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                                 <tbody>
-                                  {td.length===0&&<tr><td colSpan={colSpan} style={{padding:24,textAlign:"center",color:C.muted}}>No deals.</td></tr>}
+                                  {td.length===0&&<tr><td colSpan={colSpan} style={{padding:24,textAlign:"center",color:C.muted}}>No target set for this category this fiscal year.</td></tr>}
                                   {td.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
                                     const rep=reps.find(r=>r.id===d.repId);
                                     const ach=d.outcome==="Mail Confirmed"?d.amount:0;
@@ -8026,25 +8412,29 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 )}
 
-                {/* Summary stats row */}
+                {/* Summary stats row — Part 5 four-number dashboard */}
                 {activeSub && (
-                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:20}}>
                     {(()=>{
-                      const shortfall = Math.max(0, totalTarget - totalAchieved);
+                      const committed = getCommitted(myRepId);
+                      const inPlay    = getInPlay(myRepId);
+                      const shortfall = getShortfall(totalTarget, myRepId);
                       const sfColor   = shortfall===0 ? C.green : C.red;
                       return [
-                        {label:"TOTAL TARGET", value:fmtR(totalTarget), color:C.accent, locked:isFrozen},
-                        {label:"ACHIEVED",      value:fmtR(totalAchieved), color:pctColor},
-                        {label:"SHORTFALL",     value:fmtR(shortfall),     color:sfColor},
-                        {label:"% COMPLETE",    value:`${pct}%`,           color:pctColor},
+                        {label:"TOTAL TARGET", value:fmtR(totalTarget), color:C.accent, locked:isFrozen, sub:"Official quota"},
+                        {label:"ACHIEVED",      value:fmtR(totalAchieved), color:pctColor,           sub:"RO received"},
+                        {label:"COMMITTED",     value:fmtR(committed),     color:C.blue,             sub:"Mail confirmed"},
+                        {label:"IN PLAY",       value:fmtR(inPlay),        color:"#d97706",          sub:"Active pipeline"},
+                        {label:"SHORTFALL",     value:fmtR(shortfall),     color:sfColor,            sub:shortfall===0?"On target":"Gap remaining"},
                       ];
                     })().map(s=>(
                       <div key={s.label} className="card" style={{padding:"12px 16px"}}>
-                        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:4}}>
+                        <div style={{display:"flex",alignItems:"center",gap:5,marginBottom:2}}>
                           <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em"}}>{s.label}</div>
                           {(s as any).locked && <span title="CRO-approved and frozen — cannot change" style={{fontSize:10,color:C.green}}>🔒</span>}
                         </div>
                         <div className="sans" style={{fontSize:20,fontWeight:800,color:s.color}}>{s.value}</div>
+                        <div style={{fontSize:9,color:C.muted,marginTop:2}}>{(s as any).sub}</div>
                       </div>
                     ))}
                   </div>
@@ -8098,6 +8488,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           const {clientCompany,dealType,targetAmount} = addClientForm;
                           if(!clientCompany.trim()||!targetAmount){showToast("Fill in client name and target amount","err");return;}
                           const amt = parseCurrency(targetAmount);
+                          // Part 7: When frozen, Additional Revenue Opportunity — no approval chain needed
+                          if (isFrozen) {
+                            const newEntry = {clientCompany:clientCompany.trim(),dealType,targetAmount:amt,isAdditionalRevOp:true};
+                            const sub = {id:`ts${Date.now()}`,repId:myRepId,repName:user_role?.name||"",region:user_role?.region||"",quarter:entryQ,clients:[newEntry],totalTarget:amt,status:"Approved",submittedAt:TODAY,approvalLog:[{at:TODAY,by:user_role?.name||"Rep",action:"Auto-approved as Additional Revenue Opportunity",note:"No approval chain — rep adds directly"}],isAdditionalRevOp:true};
+                            setTargetSubs(p=>[sub,...p]);
+                            setAddClientModalOpen(false);
+                            showToast(`${clientCompany.trim()} added as Additional Revenue Opportunity ✓`);
+                            return;
+                          }
                           const newEntry = {clientCompany:clientCompany.trim(),dealType,targetAmount:amt};
                           // Find existing pending sub for this quarter to append, or create new one
                           const existingSub = mySubs.find(s=>qMatch(s.quarter)&&s.status==="Pending RH");
@@ -8110,8 +8509,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           }
                           setAddClientModalOpen(false);
                           showToast(`${clientCompany.trim()} added → submitted for approval ✓`);
-                        }} style={{padding:"9px 22px",background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:6,color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                          Submit for Approval →
+                        }} style={{padding:"9px 22px",background:isFrozen?"linear-gradient(135deg,#15803d,#16a34a)":"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:6,color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                          {isFrozen ? "Add as Additional Revenue Opportunity →" : "Submit for Approval →"}
                         </button>
                       </div>
                     </div>
@@ -8155,7 +8554,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 <tr key={i} style={{borderBottom:`1px solid ${C.s2}`,opacity:isPending?0.7:1}}>
                                   <td style={{padding:"10px 14px",fontWeight:700}}>
                                     {cl.clientCompany}
-                                    {cl.submittedByRole && <span style={{marginLeft:6,background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,verticalAlign:"middle"}}>by {cl.submittedByRole}</span>}
+                                    {cl.isAdditionalRevOp && <span style={{marginLeft:6,background:`${C.green}18`,color:C.green,padding:"1px 7px",borderRadius:4,fontSize:9,fontWeight:700,verticalAlign:"middle"}}>Additional Revenue Opportunity</span>}
+                                    {cl.submittedByRole && !cl.isAdditionalRevOp && <span style={{marginLeft:6,background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,verticalAlign:"middle"}}>by {cl.submittedByRole}</span>}
                                   </td>
                                   <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{cl.dealType}</span></td>
                                   <td style={{padding:"10px 14px",color:isPending?C.muted:C.dim}}>{isPending?"—":fmtR(cl.targetAmount)}</td>
@@ -8603,17 +9003,26 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           if(!client||!rf.amount){showToast("Client and amount are required","err");return;}
                           const amt = parseCurrency(rf.amount);
                           if(!amt){showToast("Invalid amount","err");return;}
-                          const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,notes:rf.notes};
+                          const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
                           setRevenueEntries(p=>[entry,...p]);
-                          // Update matching deal's achieved amount
+                          // Part 3+9: Auto-set deal stage to "RO Received" when revenue is logged
                           const matchDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&d.clientCompany===client&&qMatch(d.quarter));
                           if(matchDeal){
-                            const allForDeal = [...revenueEntries.filter(e=>e.clientCompany===client&&qMatch(e.quarter)),entry];
-                            const total = allForDeal.reduce((s,e)=>s+(e.amount||0),0);
-                            setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,outcome:total>=(d.targetAmount||d.amount)?"Mail Confirmed":d.outcome}:d));
+                            setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,stage:"RO Received",outcome:"RO Received",lastContact:TODAY}:d));
+                            // Update client account stage too
+                            if (matchDeal.clientAccountId) {
+                              setClientAccounts(p=>p.map(a=>a.id===matchDeal.clientAccountId?{...a,currentStage:"RO Received",lastContactDate:TODAY,updatedAt:TODAY}:a));
+                            }
                           }
                           setRf({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
-                          showToast(`₹${(amt/100000).toFixed(1)}L logged for ${client} ✓`);
+                          const totalFY = [...revenueEntries.filter(e=>(isRep?e.repId===myRepId:true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
+                          // Part 9: Check if annual target reached
+                          const annualTarget = isRep ? (getAnnualTarget(myRepId)?.amount||0) : 0;
+                          if (annualTarget>0 && totalFY>=annualTarget) {
+                            showToast(`Annual target achieved. ₹${(totalFY/100000).toFixed(1)}L this fiscal year.`);
+                          } else {
+                            showToast(`₹${(amt/100000).toFixed(1)}L logged for ${client} ✓  Your total ${CURRENT_FY}: ₹${(totalFY/100000).toFixed(1)}L`);
+                          }
                         }} style={{background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:5,padding:"8px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                           ✓ Log Revenue
                         </button>
@@ -8740,6 +9149,35 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             <div className="fin">
               <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>SYSTEM CONFIGURATION</div>
               <div style={{fontSize:11,color:C.dim,marginBottom:20}}>Approval thresholds, SLA hours, inactivity rules — no code deploy needed.</div>
+
+              {/* Part 7: Platform State — Pre-launch / Live */}
+              <div className="card" style={{padding:"18px 20px",marginBottom:14,border:`2px solid ${adminConfig.platformLive===false?C.orange:C.green}44`}}>
+                <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                  <div className="sans" style={{fontWeight:700}}>Platform State</div>
+                  <span style={{background:adminConfig.platformLive===false?`${C.orange}22`:`${C.green}22`,color:adminConfig.platformLive===false?C.orange:C.green,padding:"3px 12px",borderRadius:6,fontSize:11,fontWeight:700}}>{adminConfig.platformLive===false?"PRE-LAUNCH":"LIVE"}</span>
+                </div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:14}}>Controls whether Sales Reps can access the CRM. Set to Pre-launch while targets are being finalised. Go Live after CRO approves all targets.</div>
+                <div style={{display:"flex",gap:12,alignItems:"end",flexWrap:"wrap"}}>
+                  <div>
+                    <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:5}}>PLATFORM STATE</div>
+                    <div style={{display:"flex",gap:6}}>
+                      {["Pre-launch","Live"].map(s=>(
+                        <button key={s} onClick={()=>setAdminConfig(p=>({...p,platformLive:s==="Live"}))}
+                          style={{padding:"7px 16px",fontSize:11,fontWeight:700,borderRadius:5,border:`1px solid ${((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?s==="Live"?C.green:C.orange:C.border}`,background:((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?`${s==="Live"?C.green:C.orange}18`:C.s2,color:((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?s==="Live"?C.green:C.orange:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                          {s==="Live"?"✓ Go Live":"🚀 Pre-launch"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                  {adminConfig.platformLive===false&&(
+                    <div>
+                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:5}}>LAUNCH DATE (shown to reps)</div>
+                      <input type="date" value={adminConfig.launchDate||""} onChange={e=>setAdminConfig(p=>({...p,launchDate:e.target.value}))}
+                        style={{padding:"6px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {/* Approval Thresholds */}
               <div className="card" style={{padding:"18px 20px",marginBottom:14}}>
@@ -11509,6 +11947,19 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
             <div style={{height:1,background:C.border,margin:"12px 0"}} />
 
+            {/* Part 1: Touchpoint Type selector */}
+            <div style={{display:"flex",gap:8,marginBottom:14}}>
+              {(["Deal Meeting","Relationship"] as const).map(tt=>(
+                <button key={tt} onClick={()=>setLogForm(p=>({...p,touchpointType:tt}))}
+                  style={{flex:1,padding:"9px 14px",borderRadius:6,border:`1px solid ${logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.border}`,background:logForm.touchpointType===tt?(tt==="Deal Meeting"?`${C.blue}14`:`${C.green}14`):"transparent",color:logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:12,textAlign:"center"}}>
+                  {tt==="Deal Meeting"?"💼 Deal Meeting":"🤝 Relationship"}
+                  <div style={{fontSize:9,fontWeight:400,marginTop:2,color:"inherit",opacity:.8}}>
+                    {tt==="Deal Meeting"?"Updates stage · Resets escalation clock":"Hi-Hello · No pipeline impact"}
+                  </div>
+                </button>
+              ))}
+            </div>
+
             {/* SECTION 1 — Who */}
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Who</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
@@ -11599,6 +12050,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <input placeholder="e.g. VP Marketing" value={logForm.designation||""} onChange={e=>setLogForm(p=>({...p,designation:e.target.value}))} />
               </div>
               <div>
+                <label>Contact Level</label>
+                <select value={logForm.contactLevel||""} onChange={e=>setLogForm(p=>({...p,contactLevel:e.target.value}))}>
+                  <option value="">Select level</option>
+                  <option>C-Suite / Owner</option><option>VP / GM</option><option>Marketing Head</option>
+                  <option>Brand Manager</option><option>Agency Lead</option><option>Junior/Exec</option>
+                </select>
+              </div>
+              <div>
                 <label>Mobile No</label>
                 <input placeholder="Contact number" value={logForm.mobile||""} onChange={e=>setLogForm(p=>({...p,mobile:e.target.value}))} />
               </div>
@@ -11606,6 +12065,38 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             {/* SECTION 3 — Meeting Content (GK decision: free text, no discussion dropdown) */}
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Meeting Content</div>
+            {/* Part 3: Stage Update — required for Deal Meeting, hidden for Relationship */}
+            {logForm.touchpointType === "Deal Meeting" && (
+              <div style={{marginBottom:14,background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"10px 14px"}}>
+                <label style={{color:C.blue}}>Stage Update * <span style={{fontWeight:400,color:C.dim,fontSize:10}}>(required — where is this deal now?)</span></label>
+                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
+                  {DEAL_STAGES.filter(s=>s!=="RO Received").map(s=>(
+                    <button key={s} onClick={()=>setLogForm(p=>({...p,stageUpdate:s,status:s}))}
+                      style={{padding:"5px 12px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.stageUpdate===s?oColor(s):C.border}`,background:logForm.stageUpdate===s?`${oColor(s)}18`:C.s2,color:logForm.stageUpdate===s?oColor(s):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:logForm.stageUpdate===s?700:400}}>
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                {/* Part 9: Loss reason mandatory when Lost selected */}
+                {logForm.stageUpdate==="Lost"&&(
+                  <div style={{marginTop:10}}>
+                    <label style={{color:C.red,fontWeight:700}}>Loss Reason * <span style={{fontWeight:400,color:C.dim,fontSize:10}}>(required — why was this deal lost?)</span></label>
+                    <select value={logForm.lossReason||""} onChange={e=>setLogForm(p=>({...p,lossReason:e.target.value}))} style={{marginTop:4,borderColor:!logForm.lossReason?C.red:C.border}}>
+                      <option value="">Select reason...</option>
+                      <option>Budget cut / Budget not available</option>
+                      <option>Went to competitor</option>
+                      <option>Client postponed</option>
+                      <option>No response / Client went silent</option>
+                      <option>Decision not made</option>
+                      <option>Price too high</option>
+                      <option>Campaign cancelled</option>
+                      <option>Agency overruled</option>
+                      <option>Other</option>
+                    </select>
+                  </div>
+                )}
+              </div>
+            )}
             <div style={{marginBottom:10}}>
               <label>Pitch Type (Darpan's dropdown — only structured field)</label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -11670,58 +12161,59 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 Action Items — each row auto-creates a task for the dept + follow-up in your pipeline
               </div>
 
-              {/* Column headers */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 120px 28px",gap:6,marginBottom:6}}>
-                {["Action / What needs to happen","Who do you need it from","Remarks","Due Date",""].map((h,i)=>(
-                  <div key={i} style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",padding:"0 2px"}}>{h}</div>
-                ))}
-              </div>
-
               {(logForm.nextStepItems||[{...BLANK_NEXT_STEP_ITEM}]).map((item,idx)=>(
-                <div key={idx} style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 120px 28px",gap:6,marginBottom:6,alignItems:"center"}}>
-                  {/* Action type dropdown */}
-                  <select value={item.action} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],action:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}}>
-                    <option value="">Select action…</option>
-                    <option value="Send Proposal">Send Proposal</option>
-                    <option value="Send FCT Grid">Send FCT Grid</option>
-                    <option value="Send Revised Rate Card">Send Revised Rate Card</option>
-                    <option value="Send Sponsorship Deck">Send Sponsorship Deck</option>
-                    <option value="Get Budget Approval">Get Budget Approval</option>
-                    <option value="Arrange Senior Meeting">Arrange Senior Meeting</option>
-                    <option value="Get Rate Approval">Get Rate Approval</option>
-                    <option value="Follow Up with Client">Follow Up with Client</option>
-                    <option value="Share Digital Plan">Share Digital Plan</option>
-                    <option value="Content / Script Needed">Content / Script Needed</option>
-                    <option value="Legal / Contract Review">Legal / Contract Review</option>
-                    <option value="Get PO / Release">Get PO / Release</option>
-                    <option value="Other">Other</option>
-                  </select>
-
-                  {/* Who do you need it from */}
-                  <select value={item.neededFrom} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],neededFrom:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}}>
-                    <option value="">Needed from…</option>
-                    <optgroup label="Internal Departments">
-                      {APPROVAL_TARGETS.map(t=><option key={t} value={t}>{t}</option>)}
-                    </optgroup>
-                    <optgroup label="Self">
-                      <option value="Self">Myself</option>
-                    </optgroup>
-                    <optgroup label="Client">
-                      <option value="Client">Client</option>
-                    </optgroup>
-                  </select>
-
-                  {/* Remarks */}
-                  <input placeholder="Any notes…" value={item.remarks} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],remarks:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
-
-                  {/* Due date */}
-                  <input type="date" min="2020-01-01" max="2099-12-31" value={item.dueDate} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],dueDate:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
-
-                  {/* Remove row */}
-                  <button onClick={()=>{const arr=(logForm.nextStepItems||[]).filter((_,i)=>i!==idx);setLogForm(p=>({...p,nextStepItems:arr.length?arr:[{...BLANK_NEXT_STEP_ITEM}]}));}}
-                    style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,padding:0,lineHeight:1,textAlign:"center"}}>
-                    ✕
-                  </button>
+                <div key={idx} style={{background:C.surface||"#fff",border:`1px solid ${C.border}`,borderRadius:7,padding:"10px 12px",marginBottom:8}}>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
+                    {/* Action Type — 5 types from spec */}
+                    <div>
+                      <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Action Type *</div>
+                      <select value={item.actionType||item.action||""} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],actionType:e.target.value,action:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}}>
+                        <option value="">Select type…</option>
+                        {ACTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                      </select>
+                    </div>
+                    {/* Who */}
+                    <div>
+                      <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Who *</div>
+                      <select value={item.neededFrom} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],neededFrom:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}}>
+                        <option value="">Needed from…</option>
+                        <optgroup label="Internal Departments">
+                          {APPROVAL_TARGETS.map(t=><option key={t} value={t}>{t}</option>)}
+                        </optgroup>
+                        <optgroup label="Self">
+                          <option value="Self">Myself</option>
+                        </optgroup>
+                        <optgroup label="Client">
+                          <option value="Client">Client</option>
+                        </optgroup>
+                      </select>
+                    </div>
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 150px 28px",gap:8,alignItems:"end"}}>
+                    {/* Specific Details */}
+                    <div>
+                      <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Specific Details <span style={{fontWeight:400,color:C.muted}}>(max 150 chars)</span></div>
+                      <input maxLength={150} placeholder="What exactly is needed…" value={item.details||item.remarks||""} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],details:e.target.value,remarks:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
+                    </div>
+                    {/* By When */}
+                    <div>
+                      <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>By When *</div>
+                      <input type="date" min="2020-01-01" max="2099-12-31" value={item.dueDate} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],dueDate:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
+                    </div>
+                    {/* Remove */}
+                    <button onClick={()=>{const arr=(logForm.nextStepItems||[]).filter((_,i)=>i!==idx);setLogForm(p=>({...p,nextStepItems:arr.length?arr:[{...BLANK_NEXT_STEP_ITEM}]}));}}
+                      style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,padding:0,lineHeight:1,textAlign:"center",height:34}}>
+                      ✕
+                    </button>
+                  </div>
+                  {/* Routing indicator */}
+                  {(item.actionType||item.action)&&item.neededFrom&&(
+                    <div style={{marginTop:6,fontSize:10,color:C.blue,fontWeight:600}}>
+                      {(item.actionType||item.action)==="Approval needed" && `→ Approvals tab of ${item.neededFrom}`}
+                      {(item.actionType||item.action)==="Attend a meeting" && `→ My Plan of ${item.neededFrom} (unscheduled meeting request)`}
+                      {["Document / plan needed","Client introduction needed","Flag for follow-up"].includes(item.actionType||item.action) && `→ My Tasks of ${item.neededFrom}`}
+                    </div>
+                  )}
                 </div>
               ))}
 
@@ -12190,6 +12682,130 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           </div>
         </div>
       )}
+
+      {/* ═══ PART 6: CLIENT ACCOUNT THREAD MODAL ═══ */}
+      {accountThreadOpen && accountThreadClient && (()=>{
+        const clientName = accountThreadClient;
+        const clientDeals = deals.filter(d => d.clientCompany === clientName);
+        const clientTPs   = touchpoints.filter(t => clientDeals.some(d => d.id === t.dealId) || t.clientAccountId === clientDeals[0]?.clientAccountId);
+        const clientRevs  = revenueEntries.filter(e => e.clientCompany === clientName);
+        const account     = clientAccounts.find(a => a.clientName === clientName) || clientDeals[0];
+        const currentStage = account?.currentStage || dealStage(clientDeals[0]||{});
+        const repObj      = reps.find(r => r.id === (clientDeals[0]?.repId));
+        // 4-number metrics for this client
+        const cTarget     = clientDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
+        const cAchieved   = clientRevs.reduce((s,e)=>s+(e.amount||0),0);
+        const cCommitted  = clientDeals.filter(d=>dealStage(d)==="Mail Confirmed").reduce((s,d)=>s+(d.pipelineAmount||parseCurrency(d.amount||"0")||0),0);
+        const cInPlay     = clientDeals.filter(d=>["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s,d)=>s+(d.pipelineAmount||parseCurrency(d.amount||"0")||0),0);
+        const cShortfall  = Math.max(0, cTarget - cAchieved - cCommitted - cInPlay);
+        // Merge meetings + touchpoints into thread (touchpoints preferred)
+        const legacyMeetings = meetings.filter(m => m.clientCompany === clientName && !clientTPs.some(t => t.meetingLogId === m.id));
+        const allEntries  = [
+          ...clientTPs.map(t => ({...t, _type:"tp"})),
+          ...legacyMeetings.map(m => ({...m, _type:"meeting"})),
+          ...clientRevs.map(r => ({...r, _type:"revenue"})),
+        ].sort((a,b) => ((b.date||"") > (a.date||"") ? 1 : -1));
+        // Pending action items from tasks
+        const pendingAIs  = tasks.filter(t => t.clientCompany === clientName && t.status !== "Done" && t.status !== "Closed");
+        return (
+          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:9500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}}
+            onClick={e=>{if(e.target===e.currentTarget){setAccountThreadOpen(false);setAccountThreadClient(null);}}}>
+            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,width:"100%",maxWidth:660,boxShadow:"0 24px 60px rgba(0,0,0,.5)",padding:"24px 28px"}}>
+              {/* Header */}
+              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
+                <div>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
+                    <div className="sans" style={{fontSize:18,fontWeight:800,letterSpacing:1}}>{clientName}</div>
+                    <span style={{background:`${oColor(currentStage)}18`,color:oColor(currentStage),padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:700}}>{currentStage}</span>
+                  </div>
+                  <div style={{fontSize:11,color:C.dim}}>
+                    {repObj?.name} · {clientDeals[0]?.region}
+                    {(()=>{const idleClock=account?.lastDealMeetingDate||clientDeals[0]?.lastDealMeetingDate||clientDeals[0]?.lastContact; const idle=daysSince(idleClock); return idleClock ? <span style={{color:idle>=7?C.red:idle>=3?C.orange:C.green,fontWeight:600,marginLeft:8}}>{idle===0?"Deal meeting today":`Last deal meeting: ${idle}d ago`}</span> : null;})()}
+                  </div>
+                </div>
+                <button onClick={()=>{setAccountThreadOpen(false);setAccountThreadClient(null);}}
+                  style={{background:"none",border:"none",color:C.dim,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
+              </div>
+              {/* 4-number metrics row */}
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:16}}>
+                {[["TARGET",fmtR(cTarget),C.dim],["ACHIEVED",fmtR(cAchieved),C.green],["COMMITTED",fmtR(cCommitted),C.blue],["IN PLAY",fmtR(cInPlay),"#d97706"],["SHORTFALL",fmtR(cShortfall),cShortfall===0?C.green:C.red]].map(([l,v,c])=>(
+                  <div key={l} style={{background:C.s2,borderRadius:7,padding:"8px 10px",textAlign:"center"}}>
+                    <div style={{fontSize:8,color:C.muted,letterSpacing:".07em",marginBottom:3,textTransform:"uppercase"}}>{l}</div>
+                    <div className="sans" style={{fontSize:15,fontWeight:800,color:c as string}}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              {/* Pending action items */}
+              {pendingAIs.length>0&&(
+                <div style={{background:`${C.orange}10`,border:`1px solid ${C.orange}33`,borderRadius:8,padding:"10px 14px",marginBottom:14}}>
+                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".07em",marginBottom:6}}>PENDING ACTION ITEMS ({pendingAIs.length})</div>
+                  {pendingAIs.slice(0,3).map(ai=>(
+                    <div key={ai.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
+                      <span style={{fontSize:11,color:C.text,flex:1}}>{ai.title}</span>
+                      <span style={{fontSize:10,color:C.dim}}>→ {ai.assignedDept||"Self"}</span>
+                      <span style={{background:`${C.orange}18`,color:C.orange,padding:"1px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{ai.status}</span>
+                    </div>
+                  ))}
+                  {pendingAIs.length>3&&<div style={{fontSize:10,color:C.muted,marginTop:4}}>+{pendingAIs.length-3} more</div>}
+                </div>
+              )}
+              {/* Thread entries */}
+              <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".07em",marginBottom:10,textTransform:"uppercase"}}>Activity Thread · {allEntries.length} entries</div>
+              {allEntries.length===0&&<div style={{textAlign:"center",padding:32,color:C.muted,fontSize:12}}>No activity logged yet for this client.</div>}
+              <div style={{display:"flex",flexDirection:"column",gap:10}}>
+                {allEntries.map((entry,i)=>{
+                  if(entry._type==="revenue") return (
+                    <div key={entry.id||i} style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:"10px 14px",display:"flex",alignItems:"center",gap:12}}>
+                      <span style={{fontSize:16}}>💰</span>
+                      <div style={{flex:1}}>
+                        <div style={{fontSize:12,fontWeight:700,color:C.green}}>₹{((entry.amount||0)/100000).toFixed(1)}L revenue logged</div>
+                        <div style={{fontSize:10,color:C.dim,marginTop:2}}>{entry.date} · Ref: {entry.invoiceRef||"—"} · {entry.dealType}</div>
+                        {entry.notes&&<div style={{fontSize:11,color:C.dim,marginTop:3}}>{entry.notes}</div>}
+                      </div>
+                    </div>
+                  );
+                  const isTp = entry._type==="tp";
+                  const tpBadgeColor = entry.touchpointType==="Relationship"?C.blue:C.accent;
+                  const stageChangeText = isTp && entry.stageUpdate ? `Stage: ${entry.stageUpdate}` : entry.outcome ? `Stage: ${entry.outcome}` : null;
+                  return (
+                    <div key={entry.id||i} style={{background:C.s2,borderRadius:8,padding:"12px 14px",borderLeft:`3px solid ${tpBadgeColor}`}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+                        <span style={{fontSize:10,color:C.dim,fontWeight:600}}>{entry.date}</span>
+                        {entry.time&&<span style={{fontSize:10,color:C.muted}}>{entry.time}</span>}
+                        <span style={{background:`${tpBadgeColor}18`,color:tpBadgeColor,padding:"1px 7px",borderRadius:5,fontSize:10,fontWeight:700}}>{entry.touchpointType||"Deal Meeting"}</span>
+                        {entry.meetingType&&<span style={{fontSize:10,color:C.muted,background:C.s3,padding:"1px 6px",borderRadius:4}}>{entry.meetingType}</span>}
+                        {stageChangeText&&<span style={{fontSize:10,color:C.accent,fontWeight:600,background:`${C.accent}12`,padding:"1px 7px",borderRadius:4}}>{stageChangeText}</span>}
+                      </div>
+                      {(entry.contactName||entry.contactDesignation)&&(
+                        <div style={{fontSize:11,color:C.dim,marginBottom:4}}>
+                          Contact: <span style={{color:C.text,fontWeight:600}}>{entry.contactName}</span>
+                          {entry.contactDesignation&&<span style={{color:C.muted}}> · {entry.contactDesignation}</span>}
+                          {(entry.contactLevel||entry.designation)&&<span style={{color:C.muted}}> · {entry.contactLevel||entry.designation}</span>}
+                        </div>
+                      )}
+                      {(entry.whatHappened||entry.discussion)&&(
+                        <div style={{fontSize:12,color:C.text,marginBottom:4,lineHeight:1.5}}>{entry.whatHappened||entry.discussion}</div>
+                      )}
+                      {entry.clientFeedback&&(
+                        <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:5,padding:"4px 8px",fontSize:11,color:C.blue,marginTop:4}}>
+                          💬 {entry.clientFeedback}
+                        </div>
+                      )}
+                      {entry.nextSteps&&<div style={{fontSize:10,color:C.dim,marginTop:4}}>Next: {entry.nextSteps}</div>}
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{marginTop:16,paddingTop:14,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end"}}>
+                <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,clientAgencyName:clientName,repId:String(clientDeals[0]?.repId||"")}));setLogOpen(true);setAccountThreadOpen(false);}}
+                  style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:6,padding:"7px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                  + Log New Meeting
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* NOTE MODAL */}
       {noteModal && (
