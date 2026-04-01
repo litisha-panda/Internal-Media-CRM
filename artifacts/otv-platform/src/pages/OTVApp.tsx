@@ -12505,7 +12505,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               </div>
             </div>
 
-            {/* SECTION 5 — Next Steps */}
+            {/* SECTION 5 — Next Steps — hidden for terminal stages */}
+            {!["Mail Confirmed","Lost","RO Received"].includes(logForm.stageUpdate||"") && (<>
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Next Steps</div>
 
             {/* Structured action items — one row per action */}
@@ -12575,6 +12576,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 + Add another action item
               </button>
             </div>
+            </>)}
 
             {/* Follow-up date + meeting status side by side */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
