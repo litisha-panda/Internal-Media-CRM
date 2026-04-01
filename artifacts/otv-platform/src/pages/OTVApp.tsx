@@ -2064,6 +2064,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       date: TODAY,
       loggedAt,
       late,
+      loggedByUserId: activeUser,
       nextSteps: nextStepsSummary || logForm.nextSteps,
       outcome: logForm.status === "Closed" ? "Mail Confirmed" : logForm.status || "Needs Callback",
     }, ...p]);
@@ -2340,6 +2341,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       repId: parseInt(updatedForm.repId),
       repName: rep.name, region: rep.region,
       clientCompany, date: TODAY, loggedAt, late,
+      loggedByUserId: activeUser,
       nextSteps: nextStepsSummary || updatedForm.nextSteps,
       outcome: updatedForm.status === "Closed" ? "Mail Confirmed" : updatedForm.status || "Needs Callback",
     }, ...p]);
@@ -3259,10 +3261,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             }
 
             const myRepId = user_role?.repId || null;
+            // isMyMeeting: prefer the explicit loggedByUserId field (set on all new meetings);
+            // fall back to repId match for older records logged by reps before this field existed.
+            // Without this fix, RH (no repId) would see every rep's meetings.
+            const isMyMeeting = (m) =>
+              m.loggedByUserId
+                ? m.loggedByUserId === activeUser
+                : myRepId ? m.repId === myRepId : false;
             const allPlans = plans || [];
             const todayPlans  = allPlans.filter(p => (myRepId ? p.repId===myRepId : true) && p.date===TODAY);
             const tmrwPlans   = allPlans.filter(p => (myRepId ? p.repId===myRepId : true) && p.date===TOMORROW);
-            const todayLogged = meetings.some(m=>(myRepId?m.repId===myRepId:true)&&m.date===TODAY) || todayPlans.some(p=>p.status==="Done");
+            const todayLogged = meetings.some(m=>isMyMeeting(m)&&m.date===TODAY) || todayPlans.some(p=>p.status==="Done");
             const tmrwPlanned = tmrwPlans.length > 0;
 
             // Weekly timer — due Saturday 11:30 PM
@@ -3438,7 +3447,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* ── MEETING LOG TAB ── */}
                 {myPlanTab==="log" && (()=>{
                   const myMeetings = meetings
-                    .filter(m=>myRepId?m.repId===myRepId:true)
+                    .filter(m=>isMyMeeting(m))
                     .sort((a,b)=>b.date>a.date?1:-1);
                   const outcomeColor = (o) => o?.includes("Accepted")?C.green:o?.includes("Interested")?C.blue:o?.includes("Concern")||o?.includes("Objection")?C.orange:o?.includes("Not")||o?.includes("Lost")?C.red:C.dim;
                   if (!myMeetings.length) return (
