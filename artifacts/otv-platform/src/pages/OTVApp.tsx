@@ -1003,17 +1003,26 @@ function usePersistedState(key, initial) {
   });
 
   // Track when we last wrote, to avoid polling overwriting in-progress edits
-  const lastWriteRef   = useRef<number>(0);
+  const lastWriteRef    = useRef<number>(0);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout>|null>(null);
+  // Skip the very first effect run (mount) so we don't falsely mark as "user write"
+  const isFirstRunRef   = useRef(true);
 
   // 2. On every state change: mirror to localStorage immediately,
-  //    then debounce-write to server after 1s
+  //    then debounce-write to server after 1s.
+  //    IMPORTANT: mark lastWriteRef immediately (not inside the 1s timer) so that
+  //    an in-flight initial server load cannot race and overwrite a just-logged entry.
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
+    if (!isFirstRunRef.current) {
+      // User-initiated change (or server-load triggered re-render after first mount):
+      // stamp the write time NOW so the load grace-period check sees it immediately.
+      lastWriteRef.current = Date.now();
+    }
+    isFirstRunRef.current = false;
     if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
     pendingTimerRef.current = setTimeout(async () => {
       try {
-        lastWriteRef.current = Date.now();
         await fetch(`/api/state/${key}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
@@ -1026,7 +1035,9 @@ function usePersistedState(key, initial) {
 
   // 3. On mount: load from server (may override localStorage with newer shared data).
   //    If server has nothing, migrate localStorage/seed to server.
-  // 4. Poll every 20s — only accept server value if it's newer than our last local write
+  // 4. Poll every 20s — only accept server value if it's newer than our last local write.
+  //    The grace-period check now applies to BOTH initial loads AND polls to prevent
+  //    a slow initial fetch from overwriting an entry the user just logged.
   useEffect(() => {
     const load = async (isPoll = false) => {
       try {
@@ -1034,11 +1045,9 @@ function usePersistedState(key, initial) {
         if (!res.ok) return;
         const data = await res.json();
         if (data.ok && data.value !== null) {
-          // On poll: skip if we wrote more recently (within 5s grace)
-          if (isPoll) {
-            const serverTs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
-            if (lastWriteRef.current > serverTs - 5000) return;
-          }
+          // Skip if we have a pending local write that is newer than the server data
+          const serverTs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+          if (lastWriteRef.current > serverTs - 5000) return;
           setState(data.value);
           try { localStorage.setItem(key, JSON.stringify(data.value)); } catch {}
         } else if (!isPoll) {
@@ -1618,6 +1627,24 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (newTouchpoints.length > 0) setTouchpoints(newTouchpoints);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Normalise adminConfig.slaHours: rename legacy short keys (RH→Region Head, etc.) ──
+  useEffect(() => {
+    const CANONICAL: Record<string,string> = { RH:"Region Head", NSH:"NSH", CXO:"CXO", "Sales Strategy":"Sales Strategy" };
+    const DEFAULTS:  Record<string,number> = { "Region Head":48, NSH:48, "Sales Strategy":48, CXO:72, default:48 };
+    const sla = (adminConfig?.slaHours || {}) as Record<string,number>;
+    let changed = false;
+    const next: Record<string,number> = {};
+    for (const [k,v] of Object.entries(sla)) {
+      const canonical = CANONICAL[k] ?? k;
+      next[canonical] = v;
+      if (canonical !== k) changed = true;
+    }
+    for (const [k,def] of Object.entries(DEFAULTS)) {
+      if (next[k] === undefined || next[k] === 0) { next[k] = def; changed = true; }
+    }
+    if (changed) setAdminConfig((p:any) => ({...p, slaHours: next}));
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Part 5: 4-number dashboard helpers ──────────────────────────────────
   const CURRENT_FY = "FY26";
   const getAchieved   = (repId?: number, fy = CURRENT_FY) =>
@@ -1983,6 +2010,10 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   const closedDeals  = visibleDeals.filter(d=>d.outcome==="Mail Confirmed");
   const activeDeals  = visibleDeals.filter(d=>d.outcome!=="Not Interested");
+  // Bug 5 fix: CLOSED QTD in War Room must equal sum of actual revenue entries, not deal pipeline amounts.
+  // We determine visible reps from visibleDeals, then sum their revenue entries for the current quarter.
+  const visibleRepIdsSet = new Set(visibleDeals.map(d=>d.repId));
+  const closedRevenue = revenueEntries.filter(e => visibleRepIdsSet.has(e.repId) && qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
   // Part 4: escalation clock is lastDealMeetingDate (not generic lastContact)
   const atRisk       = activeDeals.filter(d=>{ const s=dealStage(d); return !["RO Received","Mail Confirmed","Lost"].includes(s) && daysSince(d.lastDealMeetingDate||d.lastContact)>=7; });
   const overdueNext  = activeDeals.filter(d=>d.nextStepDate && d.nextStepDate<TODAY && d.outcome!=="Mail Confirmed");
@@ -5508,7 +5539,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {label:"MY PIPELINE",     value:fmtR(visibleDeals.filter(d=>d.repId===user_role?.repId&&!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0)), color:C.accent},
                   {label:"MY OPEN ACTIONS", value:tasks.filter(t=>t.assignedTo===user_role?.repId&&t.status!=="Done").length, color:C.blue},
                 ] : [
-                  {label:"CLOSED QTD",    value:fmtR(totalClosed),     sub:`${closePct}% of target`, color:C.green,  bar:closePct},
+                  {label:"CLOSED QTD",    value:fmtR(closedRevenue),   sub:`${totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0}% of target`, color:C.green,  bar:totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0},
                   {label:"FORECAST",      value:fmtR(forecast),         sub:`${fcastPct}% likely`,    color:fcastPct>=80?C.green:fcastPct>=60?C.accent:C.red, bar:fcastPct},
                   {label:"GAP TO TARGET", value:fmtR(gap),             sub:gap===0?"on track":"uncovered", color:gap===0?C.green:C.red},
                   {label:"AT RISK",       value:atRisk.length,          sub:`${fmtR(atRisk.reduce((s,d)=>s+d.amount,0))} at stake`, color:atRisk.length>0?C.red:C.green},
@@ -11813,11 +11844,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
               <div>
                 <div style={{fontSize:10,color:C.dim,marginBottom:5,letterSpacing:".05em",fontWeight:700}}>SALES REP *</div>
-                <select value={planUploadForm.repId} onChange={e=>setPlanUploadForm(p=>({...p,repId:e.target.value}))}
-                  style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:planUploadForm.repId?C.text:C.muted,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
-                  <option value="">Select rep…</option>
-                  {reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
-                </select>
+                {reps.filter(r=>isRH?r.region===user_role?.region:true).length===0
+                  ? <div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>
+                  : <select value={planUploadForm.repId} onChange={e=>setPlanUploadForm(p=>({...p,repId:e.target.value}))}
+                    style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:planUploadForm.repId?C.text:C.muted,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
+                    <option value="">Select rep…</option>
+                    {reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
+                  </select>
+                }
               </div>
               <div>
                 <div style={{fontSize:10,color:C.dim,marginBottom:5,letterSpacing:".05em",fontWeight:700}}>QUARTER *</div>
@@ -11963,7 +11997,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               ].map(f=>(
                 <div key={f.key}><label>{f.label}</label><input type={f.type} placeholder={f.ph} value={dealForm[f.key]||""} onChange={e=>setDealForm(p=>({...p,[f.key]:e.target.value}))} /></div>
               ))}
-              <div><label>Assign Rep *</label>{isRep?(<input readOnly value={reps.find(r=>r.id===parseInt(dealForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />):(<select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select>)}</div>
+              <div><label>Assign Rep *</label>{isRep?(<input readOnly value={reps.find(r=>r.id===parseInt(dealForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />):(reps.filter(r=>isRH?r.region===user_role?.region:true).length===0?(<div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>):(<select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select>))}</div>
               <div><label>Deal Type</label><select value={dealForm.dealType} onChange={e=>setDealForm(p=>({...p,dealType:e.target.value}))}><option value="">Select</option>{DEAL_TYPES.map(d=><option key={d}>{d}</option>)}</select></div>
               <div><label>Contact Level</label><select value={dealForm.contactLevel} onChange={e=>setDealForm(p=>({...p,contactLevel:e.target.value}))}><option value="">Select</option>{CONTACT_LEVELS.map(c=><option key={c}>{c}</option>)}</select></div>
               <div><label>Priority</label><select value={dealForm.priority} onChange={e=>setDealForm(p=>({...p,priority:e.target.value}))}><option>Top 5</option><option>Regular</option></select></div>
@@ -12014,6 +12048,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {isRep ? (
                   // Rep sees their own name — no dropdown
                   <input readOnly value={reps.find(r=>r.id===parseInt(logForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />
+                ) : reps.length===0 ? (
+                  <div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>
                 ) : (
                   <select value={logForm.repId} onChange={e=>setLogForm(p=>({...p,repId:e.target.value}))}>
                     <option value="">Select rep</option>

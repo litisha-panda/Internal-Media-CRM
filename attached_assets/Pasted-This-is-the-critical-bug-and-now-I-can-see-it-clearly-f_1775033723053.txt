@@ -1,0 +1,15 @@
+This is the critical bug — and now I can see it clearly from the numbers.
+Havells India: Target ₹5.0L, showing Achieved ₹25.0L. That's 5x the target — it has counted revenue entries AND the deal closure amount on top.
+Maruti Suzuki: Target ₹1.0Cr, showing Achieved ₹1.1Cr. Over target because of the same issue.
+Total shows 129% which is impossible if achievement only comes from real revenue logged.
+What's happening: When a deal is marked Mail Confirmed or closed, the system is adding the deal's target or pipeline amount directly to ACHIEVED on top of whatever was already in revenue entries. So if you logged ₹5L in Revenue Log AND the deal closed, it counts ₹5L from revenue entries plus ₹5L from the deal closure — double counting. Or it's adding the full deal amount on close regardless of what was actually logged.
+
+Tell Replit:
+
+Critical bug in achievement calculation. When a deal is marked Mail Confirmed or closed, the system is incorrectly adding the deal amount or target amount to ACHIEVED in addition to revenue entries. This causes achievement to exceed target and show inflated percentages like 129%.
+The rule is absolute: ACHIEVED must only ever equal the sum of revenue entries in revenueEntries for that rep and fiscal year. Nothing else contributes to ACHIEVED. Not deal closure. Not stage changes. Not deal amount. Not target amount.
+Specifically fix these three things:
+1. When a deal stage changes to Mail Confirmed or RO Received, do NOT add any amount to ACHIEVED. Stage changes never affect ACHIEVED. Only a revenue entry logged in Revenue Log affects ACHIEVED.
+2. Find every place in the codebase where d.amount, d.targetAmount, d.pipelineAmount, or any deal field is added to an achievement calculation. Remove all of these. Replace all achievement calculations with a single consistent function: sum of revenueEntries where repId matches and fiscalYear matches.
+3. The achievement calculation must be identical in all three places — My Targets ACHIEVED, War Room CLOSED QTD, Revenue Tracker ACHIEVED. Use one shared function called calculateAchieved(repId, fiscalYear) that reads from revenueEntries only. Call this same function in all three places. Never inline the calculation separately in each view.
+After fixing, verify: log ₹10L in Revenue Log for Havells India. ACHIEVED should show exactly ₹10L — not ₹15L, not ₹25L, not any other number. If it shows anything other than the exact sum of revenue entries, the bug is not fixed.
