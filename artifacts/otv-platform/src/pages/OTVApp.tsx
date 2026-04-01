@@ -1645,6 +1645,22 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (changed) setAdminConfig((p:any) => ({...p, slaHours: next}));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── One-time cleanup: remove any auto-stub revenue entries created by the old
+  //    broken logic that added deal.amount to revenueEntries on Mail Confirmed.
+  //    Safe to run repeatedly — only fires when stubs exist.
+  const stubsCleanedRef = useRef(false);
+  useEffect(() => {
+    if (stubsCleanedRef.current) return;
+    const hasStubs = revenueEntries.some(
+      e => e.invoiceRef === "PO Pending" && String(e.notes||"").startsWith("Auto-stub:")
+    );
+    if (!hasStubs) return;
+    stubsCleanedRef.current = true;
+    setRevenueEntries(p => p.filter(
+      e => !(e.invoiceRef === "PO Pending" && String(e.notes||"").startsWith("Auto-stub:"))
+    ));
+  }, [revenueEntries]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // ── Part 5: 4-number dashboard helpers ──────────────────────────────────
   const CURRENT_FY = "FY26";
   const getAchieved   = (repId?: number, fy = CURRENT_FY) =>
@@ -2129,19 +2145,11 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         auditLog: [...(d.auditLog||[]), ...entry],
       };
     }));
-    // Revenue auto-stub — create PO Pending entry when deal is won
     if (closed) {
       const deal = deals.find(d => d.id === id);
       if (deal) {
-        const stub = {
-          id: `re${Date.now()}`, repId: deal.repId, clientCompany: deal.clientCompany,
-          dealType: deal.dealType, amount: deal.amount, invoiceRef: "PO Pending",
-          date: TODAY, quarter: deal.quarter || filterQ,
-          notes: `Auto-stub: deal closed by ${user_role?.name||"manager"}. Confirm PO amount when received.`,
-        };
-        setRevenueEntries(p => [stub, ...p]);
         pushNotification({ event: "deal_closed", client: deal.clientCompany, amount: deal.amount, rep: deal.repName, message: `Deal won: ${deal.clientCompany} — ${fmtR(deal.amount)}` });
-        showToast(`Revenue entry created for ${deal.clientCompany} — confirm PO amount in Revenue Log`);
+        showToast(`Deal marked won: ${deal.clientCompany}. Log the booked amount in Revenue Log.`);
       }
     }
   };
@@ -5153,7 +5161,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const highRisk = allD
               .filter(d=>d.outcome!=="Mail Confirmed"&&d.outcome!=="Not Interested")
               .map(d=>{
-                const pct = d.targetAmount>0?Math.round(((d.outcome==="Mail Confirmed"?d.amount:0)/d.targetAmount)*100):0;
+                const achieved=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                const pct = d.targetAmount>0?Math.round((achieved/d.targetAmount)*100):0;
                 return {...d, pct};
               })
               .sort((a,b)=> (b.targetAmount - a.targetAmount) || (a.pct - b.pct)) // biggest target first, then lowest achieved
@@ -5728,7 +5737,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {(()=>{
                   const dtDeals = visibleDeals.filter(d=>d.dealType==="Linear TV");
                   const dT=dtDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-                  const dC=dtDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                  const dC=revenueEntries.filter(e=>visibleRepIdsSet.has(e.repId)&&e.dealType==="Linear TV"&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const dP=dtDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                   const dG=Math.max(0,dT-dC); const dPct=dT>0?Math.round((dC/dT)*100):0;
                   const dsc=dPct>=80?C.green:dPct>=50?C.accent:C.red;
@@ -5752,7 +5761,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=d.outcome==="Mail Confirmed"?d.amount:0;
+                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
@@ -6148,7 +6157,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {(()=>{
                   const dtDeals = visibleDeals.filter(d=>d.dealType==="Digital");
                   const dT=dtDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-                  const dC=dtDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                  const dC=revenueEntries.filter(e=>visibleRepIdsSet.has(e.repId)&&e.dealType==="Digital"&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const dG=Math.max(0,dT-dC); const dPct=dT>0?Math.round((dC/dT)*100):0;
                   const dsc=dPct>=80?C.green:dPct>=50?C.accent:C.red;
                   return rtTab==="digital" ? (
@@ -6171,7 +6180,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=d.outcome==="Mail Confirmed"?d.amount:0;
+                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
@@ -6200,7 +6209,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {(()=>{
                   const dtDeals = visibleDeals.filter(d=>d.dealType==="Integrated Packages");
                   const dT=dtDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-                  const dC=dtDeals.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                  const dC=revenueEntries.filter(e=>visibleRepIdsSet.has(e.repId)&&e.dealType==="Integrated Packages"&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const dG=Math.max(0,dT-dC); const dPct=dT>0?Math.round((dC/dT)*100):0;
                   const dsc=dPct>=80?C.green:dPct>=50?C.accent:C.red;
                   return rtTab==="integrated" ? (
@@ -6224,7 +6233,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <tbody>
                               {dtDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=d.outcome==="Mail Confirmed"?d.amount:0;
+                                const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
@@ -7076,7 +7085,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <tbody>
                             {repDeals.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No deals for {filterQ}.</td></tr>}
                             {repDeals.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
-                              const ach=d.outcome==="Mail Confirmed"?d.amount:0;
+                              const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                               const pip=!["Mail Confirmed","Not Interested"].includes(d.outcome)?d.amount:0;
                               const sf=Math.max(0,(d.targetAmount||0)-ach);
                               const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
@@ -7325,7 +7334,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const tile     = TILES.find(t=>t.key===targetDrilldown.key);
                       const td       = getTileDeals(targetDrilldown.key);
                       const tT=td.reduce((s,d)=>s+(d.targetAmount||0),0);
-                      const tC=td.filter(d=>d.outcome==="Mail Confirmed").reduce((s,d)=>s+(d.amount||0),0);
+                      const tRepIds2=[...new Set(td.map(d=>d.repId))];
+                      const tC=revenueEntries.filter(e=>tRepIds2.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const tG=Math.max(0,tT-tC);
                       const tPct=tT>0?Math.round((tC/tT)*100):0;
                       const tsc=tPct>=80?C.green:tPct>=50?C.accent:C.red;
@@ -7374,7 +7384,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {td.length===0&&<tr><td colSpan={colSpan} style={{padding:24,textAlign:"center",color:C.muted}}>No target set for this category this fiscal year.</td></tr>}
                                   {td.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
                                     const rep=reps.find(r=>r.id===d.repId);
-                                    const ach=d.outcome==="Mail Confirmed"?d.amount:0;
+                                    const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                     const sf=Math.max(0,(d.targetAmount||0)-ach);
                                     const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                     return (
@@ -10517,7 +10527,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead><tr>{["Client","Target","Achieved","Pipeline","Shortfall","Stage"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                          <tbody>{rd.map(d=>{const ach=d.outcome==="Mail Confirmed"?d.amount:0;const sf=Math.max(0,(d.targetAmount||0)-ach);return(
+                          <tbody>{rd.map(d=>{const ach=revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const sf=Math.max(0,(d.targetAmount||0)-ach);return(
                             <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                               <td style={{padding:"9px 12px",fontWeight:700}}>{d.clientCompany}</td>
                               <td style={{padding:"9px 12px"}}>{fmtR(d.targetAmount)}</td>
