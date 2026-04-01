@@ -1,0 +1,267 @@
+Fixed. Won’t happen again.
+Now the simplified rebuild prompt. Clean, connected, nothing superficial.
+
+OTV CRM — Rebuild Prompt
+Read everything before writing a single line of code. The most important principle: every screen reads from the same data. No isolated tabs. No separate arrays. One change anywhere updates everything everywhere.
+
+What this app is
+An internal sales operating system for Odisha Television Network. Two companies:
+	∙	Odisha Television Ltd — channels: OTV, Odisha TV
+	∙	Tarang Broadcasting Company Ltd — channels: Tarang TV, Tarang Music, Alankar, Prarthana
+Stack: React + Vite frontend, Express + PostgreSQL backend, Drizzle ORM, usePersistedState for all state, Claude proxy at port 8080.
+
+The one rule everything depends on
+
+ACHIEVED = sum of RevenueEntries only.
+Never from deal stages. Never from deal amounts.
+One entry in Revenue Log = one credit to ACHIEVED.
+Nothing else. Ever.
+
+
+Every screen — rep view, manager view, leaderboard, every tab — reads from this same calculation. This is what makes everything talk to each other.
+
+Constants
+
+REGIONS = ["North", "South", "East", "West", "National", "Central"]
+
+ROLES = ["SALES REP", "REGION HEAD", "SALES HEAD", "CRO", "SALES STRATEGY", "ADMIN"]
+
+CHANNELS = ["OTV", "Odisha TV", "Tarang TV", "Tarang Music", "Alankar", "Prarthana"]
+
+DEAL_TYPES = ["Linear TV", "IPs", "Digital", "Media Solutions", "Integrated Packages"]
+
+DEAL_STAGES = ["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"]
+
+TOUCHPOINT_TYPES = ["Relationship", "Deal Meeting"]
+
+ACTION_TYPES = ["Approval needed", "Document needed", "Attend a meeting", "Introduction needed", "Flag for follow-up"]
+
+APPROVAL_TARGETS = ["Region Head", "NSH", "Sales Strategy", "Digital", "Content", "Finance", "Legal", "CXO", "Self"]
+
+
+Data model — six objects, everything connects through these
+1. User
+
+id, name, email, role, region, repId (reps only), active, passwordHash
+
+
+2. ClientAccount
+The thread for one client relationship. Opens on first contact. Never closes until RO Received or Lost.
+
+id
+clientName          — from Zoho master list only, never free text
+zohoAccountId       — Zoho record ID
+repId               — owning rep
+region              — from rep
+fiscalYear          — "FY26"
+annualTarget        — LOCKED after CRO approval, never changes
+dealType            — Linear TV / IPs / Digital / Media Solutions / Integrated Packages
+channel             — which OTV/Tarang channel
+currentStage        — DEAL_STAGES (updated only from touchpoint logs)
+lastContactDate     — auto-updated from any touchpoint
+lastDealMeetingDate — auto-updated from Deal Meeting touchpoints only
+approvalStatus      — Pending RH / Pending NSH / Pending Strategy / Pending CRO / Approved
+isAdditional        — true if rep added outside approved targets
+lossReason
+
+
+3. Touchpoint
+Every rep-client interaction. The meeting log.
+
+id
+clientAccountId     — always required, links to ClientAccount
+repId
+date, time
+meetingType         — Physical / Online / Phone Call
+touchpointType      — Relationship or Deal Meeting
+contactName, contactDesignation, contactLevel
+whatHappened        — required
+clientFeedback      — optional
+stageUpdate         — required for Deal Meeting, null for Relationship
+lossReason          — required if stageUpdate = Lost
+actionItems         — array of ActionItem
+loggedAt, loggedLate
+
+
+4. ActionItem (lives inside Touchpoint)
+
+id
+touchpointId, clientAccountId, repId
+actionType          — one of ACTION_TYPES
+details             — max 150 chars
+assignedTo          — one of APPROVAL_TARGETS
+dueDate
+status              — Open / Done / Escalated
+resolverNote, resolvedAt
+
+
+5. RevenueEntry
+The only source of ACHIEVED.
+
+id
+clientAccountId     — links to ClientAccount
+repId
+dealType, channel
+amount
+invoiceRef          — required
+date, quarter, fiscalYear
+notes
+editHistory         — array of {editedAt, editedBy, oldAmount}
+
+
+6. TargetSubmission
+Annual plan per rep, goes through approval chain.
+
+id
+repId, repName, region
+clients: [{clientName, zohoAccountId, channel, dealType, targetAmount}]
+totalTarget
+status              — Pending RH / Pending NSH / Pending Strategy / Pending CRO / Approved
+approvalLog         — [{approvedBy, role, timestamp, note}]
+submittedAt
+
+
+The four numbers — one shared function
+Build one function calcNumbers(repIds, fiscalYear, quarter). Call it from every screen. Never inline the calculation.
+
+ACHIEVED   = sum of RevenueEntries where repId in repIds AND fiscalYear matches
+COMMITTED  = sum of ClientAccount.annualTarget where currentStage = "Mail Confirmed"
+IN PLAY    = sum of ClientAccount.annualTarget where currentStage in ["In Discussion", "Negotiation"]
+SHORTFALL  = totalTarget - ACHIEVED - COMMITTED - IN PLAY
+
+
+When revenue is logged: ACHIEVED goes up, COMMITTED goes down (that account moves to RO Received). Everything recalculates immediately. No refresh.
+
+Deal stages — how they work
+Stage changes in ONE place only: the touchpoint log form when touchpointType = Deal Meeting. No dropdowns anywhere else.
+
+Prospect      → no pipeline impact, no escalation
+In Discussion → enters IN PLAY
+Negotiation   → stays IN PLAY, higher urgency
+Mail Confirmed → moves to COMMITTED, hide action items, show RO reminder
+RO Received   → set automatically when revenue logged, moves to ACHIEVED
+Lost          → mandatory loss reason, removed from all calculations
+
+
+The touchpoint log form
+The most important form. Fields in order:
+	1.	Client — Zoho search, required
+	2.	Touchpoint type — Relationship or Deal Meeting toggle
+	3.	If Deal Meeting — Stage dropdown (Prospect/In Discussion/Negotiation/Mail Confirmed/Lost)
+	∙	If Lost → loss reason field, mandatory
+	∙	If Mail Confirmed → hide action items, show “Waiting for RO? Set a reminder (3/5/7 days)”
+	4.	Contact — name, designation, level
+	5.	What happened — required
+	6.	Client feedback — optional
+	7.	Action items — shown ONLY for Prospect/In Discussion/Negotiation. Hidden for everything else.
+On submit: clientAccount thread updated, stage updated, lastDealMeetingDate updated (if Deal Meeting), all four numbers recalculate everywhere, meeting card turns green, action items route automatically.
+
+Action item routing
+
+Approval needed    → assignee's Approvals tab + My Tasks. SLA 48h. Breach → Escalations.
+Document needed    → assignee's My Tasks. SLA 48h. Breach → Escalations.
+Attend a meeting   → assignee's My Plan as unscheduled request. SLA 48h to confirm.
+Introduction needed → assignee's My Tasks. No SLA.
+Flag for follow-up → Legal or Finance My Tasks only.
+Self               → rep's My Tasks only. No notification to anyone.
+
+
+Missed due date on any type → Escalations tab of assignee → manager War Room “Overdue in my team.”
+Task title format always: [Action type] — [Client] — [Details] — by [Date] — from [Rep]
+
+My Plan
+Priority order every morning:
+	1.	At Risk cards (no deal meeting 7+ days on active account) — red, highest value first
+	2.	Action items due today
+	3.	Today’s meetings — grey=upcoming, red pulsing=overdue unlogged, green=logged
+	4.	Tomorrow’s meetings
+After logging: inline prompt showing next action. Never navigate away automatically.
+11:30 PM rule: countdown grows from subtle → amber (6pm) → red banner (9pm) → fullscreen block (11pm). Must log or confirm “nothing to log.” Else: marked absent.
+
+Revenue Log
+Second item in sidebar. Always visible.
+Fields: Client (dropdown of approved accounts), Amount, Invoice Ref (required), Date, Deal Type, Notes.
+On submit: RevenueEntry created → clientAccount.currentStage = RO Received → calcNumbers() runs everywhere immediately → screen shows “₹X logged for [Client]. Fiscal year total: ₹Y.”
+Edit button on each row. Rep and Admin only. Every edit logged with who/when/old amount.
+
+Client account thread
+Click any client anywhere in the app → opens full thread.
+Top: current stage, days since last deal meeting, four numbers for this client, open action items.
+Thread (newest first): every touchpoint — date, type badge (Relationship/Deal Meeting), contact, stage change, what happened, action items raised, revenue logged.
+Read only. Add new touchpoints or “+ Add Action Item” to past touchpoints only.
+
+Screens per role
+Sales Rep: My Plan, Revenue Log, War Room (personal), Revenue Tracker, My Targets, Tasks, Internal Requests, HR Reports (own), Leaderboard
+Region Head: My Plan, Team’s Plan, War Room (region), Revenue Tracker, Revenue Log, My Targets, Approvals, My Tasks, Escalations, Team’s Targets, Team’s Tasks, HR Reports, Leaderboard
+NSH: My Plan, RH Plans, Rep Plans, War Room (national), Revenue Tracker, Targets, Approvals, My Tasks, Escalations, Compliance, HR Reports, Leaderboard
+Sales Strategy: Target oversight, War Room (read only), Revenue Tracker (read only), Approvals, Escalations, Approval Settings
+CRO: Everything NSH sees + final target approval + national revenue picture
+Admin: Access Management, Data Management, System Config, Reset-All
+
+Escalation engine (background, automatic)
+	1.	No deal meeting 7 days → At Risk on rep’s My Plan. Day 10 → RH War Room. Day 14 → RH task.
+	2.	4+ deal meetings same client in 30 days, no stage movement → RH War Room alert.
+	3.	Under 15 touchpoints in a month → RH War Room alert last day of month.
+	4.	Any task/approval past due date → Escalations tab of assignee → manager notified.
+All thresholds configurable in Admin System Config.
+
+Admin System Config
+	∙	Platform State: Pre-launch / Live. When Pre-launch: reps see holding screen only.
+	∙	Inactivity thresholds: 7 / 10 / 14 days (configurable)
+	∙	Minimum meetings per month: 15 (configurable)
+	∙	SLA hours: RH 48h, NSH 48h, Legal 72h, others 48h
+	∙	Approval thresholds by deal value
+
+Bulk Import (Admin — Data Management)
+Five templates. Download CSV → fill → upload → preview → confirm.
+	1.	Targets — Rep Name, Region, Client Company, Channel, Deal Type, Annual Target Amount
+	2.	Sales Reps — Rep Name, Email, Region, Role, Annual Quota
+	3.	Clients — Client Company, Industry, Primary Contact, Phone, Email, Assigned Rep, Region
+	4.	Revenue Entries — Rep Name, Client Company, Deal Type, Amount, Invoice Ref, Date, Quarter
+	5.	IP Inventory — IP Name, Channel, IP Type, Air Date, Duration (weeks), Slot Type, Slot Rate, Total Slots Available. No client, no rep.
+
+Zoho integration
+Server-side only. Never expose credentials to browser.
+GET /api/zoho/clients?q= — searches Zoho Accounts, returns name + zohoAccountId
+Auto token refresh using ZOHO_REFRESH_TOKEN from Replit Secrets.
+ZohoSearchInput component: rep types 3+ chars, dropdown shows Zoho results, rep selects. Stores clientName + zohoAccountId. If Zoho down: free text with warning.
+Two base URLs:
+	∙	https://crmsandbox.zoho.in/crm/v2 — all lookups
+	∙	https://crmsandbox.zoho.in/crm/broadcast/v2 — deal pushes only
+
+Guided tour
+Every role sees a tour on first login. Replayable via ? in topbar. Uses current stage names only. No old terminology.
+
+No seed data
+App starts empty. Reset-All wipes everything. Requires typing “RESET.” Logs who/when.
+
+Do not build
+	∙	IP pitch-to-client flow
+	∙	Digital products inventory
+	∙	Weekly summary card
+	∙	Google Calendar sync
+	∙	Email to HR
+	∙	Sounds, animations, confetti, badges
+	∙	Anything not listed above
+
+Build order
+	1.	Database schema — all six objects
+	2.	Auth — login, sessions, role routing
+	3.	Shared functions — calcNumbers(), daysSince(), formatCurrency()
+	4.	Admin — Access Management, System Config, Data Management, Bulk Import, Reset-All
+	5.	Zoho — server endpoints, token refresh, ZohoSearchInput component
+	6.	Target submission and approval chain
+	7.	ClientAccount creation and thread view
+	8.	Touchpoint log form
+	9.	Revenue Log
+	10.	My Plan
+	11.	War Room (all role variants)
+	12.	Revenue Tracker (all tabs)
+	13.	My Targets
+	14.	Approvals tab
+	15.	Escalations tab
+	16.	Internal Requests and Tasks
+	17.	Escalation engine
+	18.	Guided tours
+	19.	HR Reports and Leaderboard
+	20.	Pre-launch enforcement​​​​​​​​​​​​​​​​
