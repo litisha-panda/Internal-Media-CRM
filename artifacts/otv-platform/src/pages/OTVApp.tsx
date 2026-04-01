@@ -1995,7 +1995,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   // Annual mode helpers — when "FY26 Annual" is selected the quarter filter spans all quarters
   const isAnnual = filterQ === "FY26 Annual";
-  const qMatch   = (q: string) => isAnnual || q === filterQ;
+  // "FY26 Annual" deals/targets must be visible under any quarterly filter within FY26.
+  const qMatch   = (q: string) => isAnnual || q === filterQ || q === "FY26 Annual";
   // When logging new entries in annual mode, store under the current real quarter
   const entryQ   = isAnnual ? "Q4 FY26" : filterQ;
 
@@ -3553,8 +3554,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 ? m.loggedByUserId === activeUser
                 : myRepId ? m.repId === myRepId : false;
             const allPlans = plans || [];
-            const todayPlans  = allPlans.filter(p => (myRepId ? p.repId===myRepId : true) && p.date===TODAY);
-            const tmrwPlans   = allPlans.filter(p => (myRepId ? p.repId===myRepId : true) && p.date===TOMORROW);
+            // For reps: match by numeric repId. For non-rep roles (RH, NSH, etc.): match by role id string.
+            // The old `(myRepId ? ... : true)` caused ALL plans to show for non-rep roles.
+            const myPlanRepId = myRepId ?? user_role?.id;
+            const todayPlans  = allPlans.filter(p => p.repId===myPlanRepId && p.autoCreatedFrom!=="action-item" && p.date===TODAY);
+            const tmrwPlans   = allPlans.filter(p => p.repId===myPlanRepId && p.autoCreatedFrom!=="action-item" && p.date===TOMORROW);
             const todayLogged = meetings.some(m=>isMyMeeting(m)&&m.date===TODAY) || todayPlans.some(p=>p.status==="Done");
             const tmrwPlanned = tmrwPlans.length > 0;
 
@@ -3575,7 +3579,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const doAddPlan = (date) => {
               if (!pf.clientAgencyName.trim()) return;
               const planTime = pf.time||"10:00";
-              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myRepId||(reps[0]?.id),date,time:planTime,clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
+              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myPlanRepId,date,time:planTime,clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -4245,7 +4249,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
                             {week.map((date, di) => {
                               if (!date) return <div key={di} style={{background:C.s2,borderRadius:6,opacity:.3,minHeight:120}} />;
-                              const dayPlans = allPlans.filter(p=>(myRepId?p.repId===myRepId:true)&&p.date===date);
+                              const dayPlans = allPlans.filter(p=>p.repId===myPlanRepId&&p.autoCreatedFrom!=="action-item"&&p.date===date);
                               const isToday = date===TODAY;
                               const isTmrw  = date===TOMORROW;
                               const isPast  = date<TODAY;
@@ -4304,7 +4308,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* DAY VIEW MODAL */}
                 {calDayView&&(()=>{
                   const dvDate = calDayView;
-                  const dvPlans = allPlans.filter(p=>(myRepId?p.repId===myRepId:true)&&p.date===dvDate).sort((a,b)=>a.time.localeCompare(b.time));
+                  const dvPlans = allPlans.filter(p=>p.repId===myPlanRepId&&p.autoCreatedFrom!=="action-item"&&p.date===dvDate).sort((a,b)=>a.time.localeCompare(b.time));
                   const dvIsPast = dvDate < TODAY;
                   const dvLabel = new Date(dvDate+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
                   const hours = Array.from({length:24},(_,i)=>i);
@@ -5889,6 +5893,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                     </div>
                   );
+                  // Deals-based metrics (mirrors Linear TV tab structure)
+                  const ipDeals = visibleDeals.filter(d=>d.dealType==="IPs");
+                  const ipDT = ipDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
+                  const ipDC = revenueEntries.filter(e=>visibleRepIdsSet.has(e.repId)&&e.dealType==="IPs"&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                  const ipDG = Math.max(0,ipDT-ipDC); const ipPct = ipDT>0?Math.round((ipDC/ipDT)*100):0;
+                  const ipDsc = ipPct>=80?C.green:ipPct>=50?C.accent:C.red;
+
                   const visibleIPs = IP_CATALOG.filter(ip=>qMatch(ip.quarter));
                   const canApprove  = isStrategy || isNSH || isCRORole || isAdmin;
                   const stColor = s => s==="Committed"?C.green:s==="In Discussion"?C.orange:C.muted;
@@ -5938,6 +5949,48 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                   return (
                     <div>
+                      {/* ── IPs DEALS PIPELINE (deals-based, mirrors Linear TV) ── */}
+                      {ipDT>0&&(
+                        <div style={{marginBottom:20}}>
+                          <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:12}}>
+                            {[{label:"TARGET",value:fmtR(ipDT),color:C.accent},{label:"ACHIEVED",value:fmtR(ipDC),color:C.green},{label:"SHORTFALL",value:fmtR(ipDG),color:ipDG===0?C.green:C.red},{label:"% COMPLETE",value:`${ipPct}%`,color:ipDsc}].map(card=>(
+                              <div key={card.label} className="card" style={{padding:"12px 16px"}}>
+                                <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                                <div className="sans" style={{fontSize:22,fontWeight:800,color:card.color}}>{card.value}</div>
+                              </div>
+                            ))}
+                          </div>
+                          <div style={{height:4,background:C.s3,borderRadius:2,overflow:"hidden",marginBottom:14}}>
+                            <div style={{height:"100%",width:`${Math.min(ipPct,100)}%`,background:ipDsc,borderRadius:2}}/>
+                          </div>
+                          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",marginBottom:16}}>
+                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                              <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                              <tbody>
+                                {ipDeals.sort((a,b)=>Math.max(0,(b.targetAmount||0)-(b.outcome==="Mail Confirmed"?b.amount:0))-Math.max(0,(a.targetAmount||0)-(a.outcome==="Mail Confirmed"?a.amount:0))).map(d=>{
+                                  const rep=reps.find(r=>r.id===d.repId);
+                                  const ach=revenueEntries.filter(e=>e.repId===d.repId&&(d.zohoAccountId&&e.zohoAccountId?d.zohoAccountId===e.zohoAccountId:e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const sf=Math.max(0,(d.targetAmount||0)-ach);
+                                  const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                  return (
+                                    <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                      <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
+                                      <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                      <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
+                                      <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                      <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
+                                      <td style={{padding:"9px 14px"}}><span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span></td>
+                                      <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
+                                    </tr>
+                                  );
+                                })}
+                              </tbody>
+                            </table>
+                          </div>
+                          <div style={{height:1,background:C.border,marginBottom:20}}/>
+                        </div>
+                      )}
+                      {/* ── IP CATALOG / INVENTORY ── */}
                       {visibleIPs.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No IPs scheduled for {filterQ}.</div>}
                       {visibleIPs.map(ip=>{
                         // Live per-element status (proposals override static)

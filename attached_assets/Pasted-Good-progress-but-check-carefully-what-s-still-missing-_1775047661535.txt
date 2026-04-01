@@ -1,0 +1,40 @@
+Good progress but check carefully what's still missing. Cross-referencing the fixes against our known bugs:
+
+What got fixed ✓
+
+Task title format — correct
+Approval needed now routes to both Approvals tab AND My Tasks — correct
+RH Approvals tab shows incoming requests — correct
+Revenue entry editing — correct
+IN PLAY metric now filters correctly — correct
+
+
+What is NOT mentioned and still likely broken ✗
+Not fixed 1 — Revenue Tracker ACHIEVED still not updating
+Test 1 was PARTIAL. Replit fixed War Room and My Targets but never mentioned fixing Revenue Tracker. This is still likely broken.
+Not fixed 2 — Deals not appearing in Revenue Tracker after touchpoint
+Test 2 was FAIL. Not mentioned in the fix list at all.
+Not fixed 3 — Action items still appearing in RH My Plan
+Replit fixed the Approvals tab routing but never explicitly said they removed action items from RH My Plan. Test 3 showed they were appearing there. This may still be happening.
+Not fixed 4 — Inline stage dropdown still exists in Revenue Tracker
+Test 5 was FAIL. Not mentioned anywhere in the fix list.
+Not fixed 5 — Achievement calculation inflating to 129%
+The critical bug where deal closure adds to ACHIEVED on top of revenue entries. Not mentioned in the fix list.
+Not fixed 6 — IPs deals not showing in IPs tab
+Reported separately. Not mentioned.
+
+Tell Replit:
+Thank you for the fixes. Six issues are still outstanding from our testing. Please fix all six.
+Issue 1 — Revenue Tracker ACHIEVED not updating
+When a rep logs revenue in Revenue Log, War Room and My Targets update correctly but Revenue Tracker ACHIEVED on the deal type tabs (Linear TV, Digital etc.) does not update. All three must use the identical calculation — sum of revenueEntries for that rep and fiscal year. Fix Revenue Tracker to use the same shared calculateAchieved function as War Room and My Targets.
+Issue 2 — Deals not appearing in Revenue Tracker after touchpoint is logged
+When a rep logs a touchpoint and sets a deal stage, the client account and deal do not appear in Revenue Tracker. Revenue Tracker should show all client accounts for that rep regardless of stage. A deal at Prospect should appear. A deal at In Discussion should appear. All deals must be visible. Find why the connection between touchpoint logging and Revenue Tracker display is broken and fix it.
+Issue 3 — Action items still appearing in RH My Plan
+When a rep raises an action item tagged to Region Head, it appears in RH's My Plan. My Plan must only contain meetings the RH themselves will have with clients. Action items raised by reps must never appear in My Plan for any role. Remove all action item entries from My Plan entirely for all roles.
+Issue 4 — Inline stage dropdown still exists in Revenue Tracker
+Reps can still change deal stage directly from a dropdown in Revenue Tracker tables and account cards. This must be removed completely. No dropdown, no clickable stage label, no way to change stage from Revenue Tracker. Stage can only change through touchpoint logging. Remove the inline stage control from every table row and every card in Revenue Tracker.
+Issue 5 — Achievement calculation inflating beyond actual revenue
+When a deal is marked Mail Confirmed or any closed stage, the system is adding the deal amount or target amount to ACHIEVED in addition to revenue entries. This causes achievement to show 129% or other inflated numbers. ACHIEVED must only ever equal the sum of revenueEntries. Stage changes must never affect ACHIEVED. Find every place in the codebase where d.amount, d.targetAmount, d.pipelineAmount or any deal field is added to an achievement calculation and remove it. Replace with a single shared calculateAchieved function that reads only from revenueEntries.
+Issue 6 — IPs deals not showing in IPs tab of Revenue Tracker
+Deals with dealType "IPs" are not appearing in the IPs tab. The filter may be using an old deal type name. Fix the IPs tab filter to correctly show all deals where dealType equals "IPs."
+Fix all six and report back with confirmation that each one was addressed.

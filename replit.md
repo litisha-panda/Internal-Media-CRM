@@ -89,3 +89,24 @@ Live client/agency lookup against Zoho CRM sandbox. Credentials: `ZOHO_CLIENT_ID
 - All `<input type="date">` elements carry `min="2020-01-01" max="2099-12-31"` to prevent 6-digit years
 - Sales Strategy nav has "Approval Settings" (view `strategy-config`) — edits adminConfig.approvalThresholds, inactivityDaysRisk, inactivityDaysEscalate, slaHours
 - ACHIEVED calculation: always sourced from `revenueEntries` (never from deal.amount + outcome). No auto-stub on deal close.
+
+## Bug Fixes Applied (Session)
+
+### `qMatch` — "FY26 Annual" deals visible in quarterly filter
+`qMatch` now returns `true` for entries with `q === "FY26 Annual"` regardless of `filterQ`.
+This fixes: Revenue Tracker showing empty deal tables and ACHIEVED = 0 when target submissions
+were approved as "FY26 Annual" deals but `filterQ` is set to a specific quarter (Q1–Q4).
+
+### My Plan — non-rep roles no longer see all plans
+Introduced `myPlanRepId = myRepId ?? user_role?.id`.
+- For reps: `myRepId` (number) — unchanged
+- For RH/NSH/etc.: `user_role.id` string (e.g. "rh_north") — was `null` before, causing `(null ? ... : true)` to show ALL plans
+- All 4 plan filters (todayPlans, tmrwPlans, calendar dayPlans, day-view dvPlans) updated
+- `autoCreatedFrom !== "action-item"` exclusion added to all My Plan filters
+- `doAddPlan()` now uses `myPlanRepId` for the plan's `repId` field
+
+### IPs tab — deals pipeline metrics added for management roles
+When any deals with `dealType: "IPs"` exist in `visibleDeals`, the IPs tab now shows:
+- TARGET / ACHIEVED / SHORTFALL / % COMPLETE cards (same structure as Linear TV tab)
+- Per-deal breakdown table with client, rep, target, achieved, shortfall, stage, next step
+- A horizontal rule separating this from the existing IP Catalog / inventory section
