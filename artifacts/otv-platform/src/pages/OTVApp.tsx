@@ -2269,8 +2269,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
     const tpType = logForm.touchpointType || "Deal Meeting";
     const stageNow = tpType === "Deal Meeting" ? (logForm.stageUpdate || mapLegacyOutcome(logForm.status||"Prospect")) : dealStage(deal||{});
+    const newMeetingId = `ml${Date.now()}`;
     setMeetings(p => [{
-      id: `ml${Date.now()}`,
+      id: newMeetingId,
       ...logForm,
       repId: parseInt(logForm.repId),
       repName: rep.name,
@@ -2284,6 +2285,15 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       outcome: stageNow,
       touchpointType: tpType,
     }, ...p]);
+    // Mark the matching plan entry as Done so Team's Plan reflects the log
+    setPlans(q=>q.map(pl=>
+      pl.repId===parseInt(logForm.repId) &&
+      pl.date===TODAY &&
+      pl.status!=="Done" &&
+      (pl.clientAgencyName||"").toLowerCase()===(clientCompany||"").toLowerCase()
+        ? {...pl, status:"Done", loggedMeetingId: newMeetingId}
+        : pl
+    ));
 
     // Part 1: Create Touchpoint record alongside the legacy meeting record
     const touchpointId = `tp${Date.now()}`;
@@ -2321,17 +2331,23 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         } else if (aType==="Attend a meeting") {
           // → My Plan of tagged person as unscheduled meeting request
           attendPlans.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserId(i.neededFrom,repIdInt)||i.neededFrom,date:i.dueDate||TOMORROW,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repName}] ${details||`Re: ${clientCompany}`}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repName});
-          // Also create task for confirmation tracking
+          // Task for the tagged person to confirm
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+          // IR so rep can track this request
+          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Attend Meeting",dept:i.neededFrom,subject:`[Meeting request] ${clientCompany} — ${details||"Attend meeting"} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
         } else if (aType==="Document / plan needed") {
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Document needed",dept:i.neededFrom,subject:`[Doc needed] ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
         } else if (aType==="Client introduction needed") {
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Introduction needed",dept:i.neededFrom,subject:`[Intro needed] ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
         } else if (aType==="Flag for follow-up") {
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — Flagged by ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Flag for follow-up",dept:i.neededFrom,subject:`[Follow-up] ${clientCompany} — ${details} — Flagged by ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
         } else {
           // Legacy fallback for old "action" type
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:i.action||aType,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
+          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:aType,dept:i.neededFrom,subject:`${aType} — ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
         }
       }
     });
@@ -4135,7 +4151,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,nextMeetingTime:nm_time||"",meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Mail Confirmed":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
-                                        setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:myRepId,assignedByName:reps.find(r=>r.id===myRepId)?.name||""},...q]);
+                                        const _rhMap: Record<string,string>={North:"rh_north",South:"rh_south",East:"rh_east",West:"rh_west",National:"rh_national",Central:"rh_central"};
+                                        const _frmUid = frm==="Region Head"?(_rhMap[user_role?.region||""]||null):frm==="NSH"?"sales_head":frm==="CXO"?"admin":frm==="Sales Strategy"?"sales_strategy":frm==="CRO"?"sales_analysis":null;
+                                        const _repNm = user_role?.name||"Rep";
+                                        setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,assignedToUserId:_frmUid,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:_repNm,fromMeetingLog:true},...q]);
+                                        setInternalReqs(q=>[{id:`ir${Date.now()}`,type:act,dept:frm,subject:`${act} — ${p.clientAgencyName}${rmk?` — ${rmk}`:""} — by ${bywhen||fu||TOMORROW} — from ${_repNm}`.slice(0,160),details:rmk,raisedBy:activeUser,raisedByName:_repNm,repId:myRepId,dealId:md?.id||null,clientCompany:p.clientAgencyName,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""},...q]);
                                         if(md) {
                                           // Route approval based on deal amount thresholds
                                           const amt = md.amount || 0;
@@ -10565,9 +10585,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ RH TEAM PLAN ═══ */}
           {view==="rh-team-plan" && isRH && (()=>{
-            const myReps  = reps.filter(r=>r.region===rhRegion);
-            const myRepIds= myReps.map(r=>r.id);
-            const tPlans  = (plans||[]).filter(p=>myRepIds.includes(p.repId));
+            const myUserReps = USER_ROLES.filter(u=>u.role==="SALES REP"&&u.region===rhRegion);
+            const myRepIds   = myUserReps.map(u=>u.repId);
+            const tPlans     = (plans||[]).filter(p=>myRepIds.includes(p.repId));
             const todayTP = tPlans.filter(p=>p.date===TODAY);
             const tmrwTP  = tPlans.filter(p=>p.date===TOMORROW);
             const weekPlan= tPlans.filter(p=>p.date>=TODAY);
@@ -10584,7 +10604,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{padding:"10px 14px",minHeight:60}}>
                         {dp.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:12}}>Nothing planned</div>}
                         {dp.map(p=>{
-                          const rep=reps.find(r=>r.id===p.repId);
+                          const rep=reps.find(r=>r.id===p.repId)||USER_ROLES.find(u=>u.repId===p.repId);
                           return (
                             <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"7px 10px",background:C.s2,borderRadius:5}}>
                               <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent,flexShrink:0}}>{(rep?.name||"?")[0]}</div>
@@ -10610,7 +10630,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <tbody>
                       {weekPlan.length===0&&<tr><td colSpan={6} style={{padding:24,textAlign:"center",color:C.muted}}>No meetings planned this week</td></tr>}
                       {weekPlan.sort((a,b)=>a.date>b.date?1:a.time>b.time?1:-1).map(p=>{
-                        const rep=reps.find(r=>r.id===p.repId);
+                        const rep=reps.find(r=>r.id===p.repId)||USER_ROLES.find(u=>u.repId===p.repId);
                         const isToday=p.date===TODAY;
                         return (
                           <tr key={p.id} style={{borderBottom:`1px solid ${C.s2}`,background:isToday?`${C.accent}06`:"transparent"}}
