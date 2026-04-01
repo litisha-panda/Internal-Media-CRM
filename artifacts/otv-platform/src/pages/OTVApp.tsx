@@ -1731,6 +1731,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
+  const [editingRevId, setEditingRevId]                 = useState<string|null>(null);
+  const [editRevData, setEditRevData]                   = useState<any>({});
   const [importTab, setImportTab]                       = useState("targets");
   const [dmTab, setDmTab]                               = useState<"reps"|"clients"|"bulk">("reps");
   const [repEditId, setRepEditId]                       = useState<number|null>(null);
@@ -2309,11 +2311,13 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       const ts = `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
       if (i.neededFrom==="Self") {
         // Self-assigned: goes only to rep's own tasks
-        newTasks.push({id:ts,assignedTo:null,assignedToUserId:null,assignedDept:"Self",repId:repIdInt,clientCompany,title:`${aType==="Approval needed"?"[Approval]":aType==="Document / plan needed"?"[Doc needed]":aType==="Attend a meeting"?"[Meeting]":aType==="Client introduction needed"?"[Intro]":"[Follow-up]"} — ${clientCompany} — ${details}`.slice(0,120),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
+        newTasks.push({id:ts,assignedTo:null,assignedToUserId:null,assignedDept:"Self",repId:repIdInt,clientCompany,title:`${aType} — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
       } else if (i.neededFrom!=="Client") {
         if (aType==="Approval needed") {
-          // → Approvals tab (Internal Request of type Approval)
-          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:i.neededFrom,subject:`[Approval] — ${clientCompany} — ${details}`.slice(0,120),details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
+          // → Approvals tab (Internal Request of type Approval) + Task for approver
+          const irSubject = `Approval needed — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160);
+          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:i.neededFrom,subject:irSubject,details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
+          newTasks.push({id:`t_appr_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:irSubject,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
         } else if (aType==="Attend a meeting") {
           // → My Plan of tagged person as unscheduled meeting request
           attendPlans.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserId(i.neededFrom,repIdInt)||i.neededFrom,date:i.dueDate||TOMORROW,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repName}] ${details||`Re: ${clientCompany}`}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repName});
@@ -2666,7 +2670,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         // Self-assigned already handled above in selfTasks
       } else if (i.neededFrom!=="Client") {
         if (aType==="Approval needed") {
-          newIRs.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:i.neededFrom,subject:`[Approval] — ${clientCompany} — ${details}`.slice(0,120),details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repNameC,repId:repIdIntC,dealId:updatedForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:getSlaHours(i.neededFrom),resolvedAt:null,resolverNote:"",meetingLogId:meetingId});
+          const irSubjectC = `Approval needed — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,160);
+          newIRs.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:i.neededFrom,subject:irSubjectC,details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repNameC,repId:repIdIntC,dealId:updatedForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:getSlaHours(i.neededFrom),resolvedAt:null,resolverNote:"",meetingLogId:meetingId});
+          newTasksC.push({id:`t_appr_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:irSubjectC,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
         } else if (aType==="Attend a meeting") {
           attendPlansC.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserIdC(i.neededFrom,repIdIntC)||i.neededFrom,date:i.dueDate||TOMORROW,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repNameC}] ${details||`Re: ${clientCompany}`}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repNameC});
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
@@ -2970,7 +2976,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("pipeline","Revenue Tracker","◈"),
         N("revenue-log","Revenue Log","₹"),
         N("targets","My Targets","◎"),
-        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length||null),
+        N("target-approvals","Approvals","◎",(targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length)||null),
         N("my-tasks","My Tasks","✓"),
         N("rh-escalations","Escalations","▲",rhEscBadge),
         N("internal-requests","Internal Requests","⬆",irBadge),
@@ -5630,8 +5636,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{display:"grid",gridTemplateColumns:isRep?"repeat(3,1fr)":"repeat(5,1fr)",gap:10,marginBottom:16}}>
                 {(isRep ? [
                   {label:"MY CLOSED QTD",   value:fmtR(revenueEntries.filter(e=>e.repId===user_role?.repId&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0)), color:C.green},
-                  {label:"MY PIPELINE",     value:fmtR(visibleDeals.filter(d=>d.repId===user_role?.repId&&!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0)), color:C.accent},
-                  {label:"MY OPEN ACTIONS", value:tasks.filter(t=>t.assignedTo===user_role?.repId&&t.status!=="Done").length, color:C.blue},
+                  {label:"IN PLAY",         value:fmtR(visibleDeals.filter(d=>d.repId===user_role?.repId&&["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s,d)=>s+(d.pipelineAmount||parseCurrency(d.amount||"0")||0),0)), color:C.accent},
+                  {label:"MY OPEN ACTIONS", value:tasks.filter(t=>(t.assignedTo===user_role?.repId||t.assignedToUserId===activeUser)&&t.status!=="Done").length, color:C.blue},
                 ] : [
                   {label:"CLOSED QTD",    value:fmtR(closedRevenue),   sub:`${totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0}% of target`, color:C.green,  bar:totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0},
                   {label:"FORECAST",      value:fmtR(forecast),         sub:`${fcastPct}% likely`,    color:fcastPct>=80?C.green:fcastPct>=60?C.accent:C.red, bar:fcastPct},
@@ -8877,11 +8883,39 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   );
                 })()}
 
-                {/* Pending approvals */}
+                {/* Incoming Approval Requests from Reps (for Region Heads) */}
+                {isRH && (()=>{
+                  const incomingApprovals = internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval");
+                  if (!incomingApprovals.length) return null;
+                  return (
+                    <div style={{marginBottom:18}}>
+                      <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Approval Requests from Reps ({incomingApprovals.length})</div>
+                      {incomingApprovals.map(r=>(
+                        <div key={r.id} className="card" style={{padding:"14px 16px",marginBottom:8,borderLeft:`3px solid ${C.orange}`}}>
+                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
+                            <div style={{flex:1}}>
+                              <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{r.subject}</div>
+                              <div style={{fontSize:11,color:C.dim}}>{r.details}</div>
+                              <div style={{fontSize:10,color:C.muted,marginTop:4}}>Raised: {r.raisedAt} · Client: {r.clientCompany||"—"}</div>
+                            </div>
+                            <div style={{display:"flex",gap:8,flexShrink:0}}>
+                              <button onClick={()=>{setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Approved by "+user_role?.name}:x));showToast("Approved ✓");}}
+                                style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Approve</button>
+                              <button onClick={()=>{const note=prompt("Rejection reason (optional):")||"Rejected by "+user_role?.name;setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:note}:x));showToast("Request rejected");}}
+                                style={{background:`${C.red}15`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✗ Reject</button>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
+
+                {/* Pending Target Submission Approvals */}
                 {myPending.length===0 ? (
                   <div style={{textAlign:"center",padding:50,color:C.muted}}>
                     <div style={{fontSize:28,marginBottom:8}}>✓</div>
-                    <div style={{fontWeight:700,color:C.green}}>No pending approvals at your level</div>
+                    <div style={{fontWeight:700,color:C.green}}>No pending target submissions at your level</div>
                   </div>
                 ) : myPending.map(sub=>{
                   const approvedClients = sub.clients.filter(cl=>(cl.clientStatus||"Pending")==="Approved");
@@ -9205,12 +9239,58 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div className="card" style={{overflow:"hidden"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr>
-                          {["Client","Deal Type","Amount","Invoice Ref","Date","Notes"].map(h=>(
+                          {["Client","Deal Type","Amount","Invoice Ref","Date","Notes",""].map(h=>(
                             <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                           ))}
                         </tr></thead>
                         <tbody>
                           {myEntries.filter(e=>qMatch(e.quarter)).sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(
+                            editingRevId===e.id ? (
+                              <tr key={e.id} style={{borderBottom:`1px solid ${C.border}`,background:C.s2}}>
+                                <td colSpan={7} style={{padding:"12px 14px"}}>
+                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:8,marginBottom:8,alignItems:"end"}}>
+                                    <div>
+                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>AMOUNT ₹</div>
+                                      <input value={editRevData.amount||""} onChange={e=>setEditRevData(p=>({...p,amount:e.target.value}))}
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                                    </div>
+                                    <div>
+                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
+                                      <select value={editRevData.dealType||"Linear TV"} onChange={ev=>setEditRevData(p=>({...p,dealType:ev.target.value}))}
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                                        {dealTypes.map(d=><option key={d}>{d}</option>)}
+                                      </select>
+                                    </div>
+                                    <div>
+                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>INVOICE REF</div>
+                                      <input value={editRevData.invoiceRef||""} onChange={e=>setEditRevData(p=>({...p,invoiceRef:e.target.value}))}
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                                    </div>
+                                    <div>
+                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>DATE</div>
+                                      <input type="date" value={editRevData.date||TODAY} onChange={e=>setEditRevData(p=>({...p,date:e.target.value}))}
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                                    </div>
+                                    <div>
+                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>NOTES</div>
+                                      <input value={editRevData.notes||""} onChange={e=>setEditRevData(p=>({...p,notes:e.target.value}))}
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                                    </div>
+                                  </div>
+                                  <div style={{display:"flex",gap:8}}>
+                                    <button onClick={()=>{
+                                      const amt=parseCurrency(editRevData.amount);
+                                      if(!amt){showToast("Invalid amount","err");return;}
+                                      setRevenueEntries(p=>p.map(x=>x.id===e.id?{...x,...editRevData,amount:amt}:x));
+                                      setEditingRevId(null);showToast("Entry updated ✓");
+                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Save</button>
+                                    <button onClick={()=>setEditingRevId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                                    <button onClick={()=>{if(!confirm("Delete this revenue entry?"))return;setRevenueEntries(p=>p.filter(x=>x.id!==e.id));setEditingRevId(null);showToast("Entry deleted");}}
+                                      style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginLeft:"auto"}}>🗑 Delete</button>
+                                  </div>
+                                </td>
+                              </tr>
+                            ) : (
                             <tr key={e.id} style={{borderBottom:`1px solid ${C.s2}`}}
                               onMouseOver={ev=>ev.currentTarget.style.background=C.s2}
                               onMouseOut={ev=>ev.currentTarget.style.background="transparent"}>
@@ -9220,7 +9300,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{e.invoiceRef||"—"}</td>
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{e.date}</td>
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11,maxWidth:160}}>{e.notes||"—"}</td>
+                              <td style={{padding:"10px 14px",textAlign:"right"}}>
+                                <button onClick={()=>{setEditingRevId(e.id);setEditRevData({amount:(e.amount/100000)+"L",dealType:e.dealType,invoiceRef:e.invoiceRef||"",date:e.date,notes:e.notes||""});}}
+                                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✏ Edit</button>
+                              </td>
                             </tr>
+                            )
                           ))}
                         </tbody>
                       </table>
@@ -13021,7 +13106,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               assignedTo:null, assignedToUserId:null, assignedDept:"Self",
                               repId:clientDeals[0]?.repId||null,
                               clientCompany:clientName,
-                              title:`[Follow-up] — ${clientName} — ${detail}`.slice(0,120),
+                              title:`Flag for follow-up — ${clientName} — ${detail} — by ${dueDate} — from ${user_role?.name||"Rep"}`.slice(0,160),
                               description:detail,
                               priority:"High", status:"Open",
                               dueDate, createdAt:TODAY,

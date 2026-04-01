@@ -1,0 +1,334 @@
+Here is the exact brief you hand to whoever is testing. Print it or send it as a document.
+
+---
+
+# OTV CRM — Tester Brief
+## What you are testing and how to do it
+
+---
+
+## Before you start
+
+You are testing whether the OTV CRM works correctly end to end before we go live with the real sales team. You are not testing design or how it looks. You are testing whether the data flows correctly and whether every action by one person causes the right reaction for another person.
+
+You will need to log in as different roles. The login credentials will be given to you separately.
+
+You will need two browser windows open at the same time — one for the rep, one for the manager. Use one normal window and one incognito window.
+
+The app is at mediacrm.replit.app.
+
+Take a screenshot of every step. If something fails, write exactly what you saw versus what you expected to see.
+
+---
+
+## PHASE 1 — Admin sets up the system
+### Log in as Admin
+
+**Step 1**
+Go to System Config. Check these exact values:
+- Platform State must be set to Pre-launch. If it says Live, change it to Pre-launch.
+- RH SLA Hours must be 48. If it says 24, change it to 48.
+- Flag as At Risk after must be 7 days.
+- Auto-escalate to NSH after must be 14 days.
+
+Write PASS or FAIL for each value.
+
+**Step 2**
+Go to Data Management → Sales Reps. Add two test reps:
+- Rep 1: Name "Test Rep North", Region "North", Role "SALES REP", Target 5000000
+- Rep 2: Name "Test Rep South", Region "South", Role "SALES REP", Target 3000000
+
+Save both. Confirm they appear in the list as Active.
+
+**Step 3**
+Go to Data Management → Clients. Add three clients to the master list:
+- Daikin India
+- Apollo Hospitals
+- Havells India
+
+These will be the clients used throughout the test. Confirm all three appear in the list.
+
+**Step 4**
+Do NOT click Go Live yet. The system must stay in Pre-launch until targets are approved.
+
+---
+
+## PHASE 2 — Sales Strategy uploads targets
+### Log in as Sales Strategy
+
+**Step 5**
+Go to the target upload section. Download the CSV template.
+
+Open the template. Fill in exactly four rows:
+- Test Rep North, North, Daikin India, OTV, Linear TV, 5000000
+- Test Rep North, North, Havells India, OTV, Linear TV, 3000000
+- Test Rep South, South, Apollo Hospitals, OTV, Digital, 3000000
+- Test Rep South, South, Daikin India, Tarang, IPs, 2000000
+
+Save the file. Upload it.
+
+**Step 6**
+Confirm that four target submissions appear with status "Pending RH." Screenshot this.
+
+---
+
+## PHASE 3 — Approval chain
+### This tests whether targets travel through the chain correctly
+
+**Step 7**
+Log in as Region Head North. Go to Approvals. You should see two pending submissions — Daikin India and Havells India for Test Rep North. If you do not see them, write FAIL.
+
+Approve both. Add a note: "Approved by RH North."
+
+**Step 8**
+Log in as Region Head South. Go to Approvals. You should see two pending submissions — Apollo Hospitals and Daikin India for Test Rep South. Approve both.
+
+**Step 9**
+Log in as NSH. Go to Approvals. All four submissions should now show "Pending NSH." Approve all four.
+
+**Step 10**
+Log in as Sales Strategy. Go to Approvals. All four should show "Pending Strategy." Approve all four.
+
+**Step 11**
+Log in as CRO. Go to Approvals. All four should show "Pending CRO." Approve all four.
+
+**Step 12**
+Log in as Test Rep North. Go to My Targets. You should see:
+- Total Target: ₹80L (5000000 + 3000000)
+- Daikin India — Linear TV — ₹50L target
+- Havells India — Linear TV — ₹30L target
+- Status: Fully Approved
+- ACHIEVED: ₹0 or —
+- SHORTFALL: ₹80L
+
+Screenshot this. Write PASS or FAIL.
+
+**Step 13**
+While still on My Targets, try to edit the target amount for Daikin India. Click on it, try to change the number. You should not be able to. The field should be completely read only.
+
+Write PASS if you cannot edit it. Write FAIL if you can change the number.
+
+---
+
+## PHASE 4 — Admin goes live
+### Log in as Admin
+
+**Step 14**
+Go to System Config. Click Go Live. Confirm the status changes to Live.
+
+---
+
+## PHASE 5 — Rep daily workflow
+### Log in as Test Rep North
+
+**Step 15**
+After login you should land directly on My Plan. If you see a home screen asking you to choose between RO Management and OTV CRM, click OTV CRM. You should then see My Plan. Note whether you had to click through a home screen or landed directly — write which happened.
+
+**Step 16**
+Go to My Plan. Add a planned meeting for today:
+- Client: Daikin India
+- Contact: Deepa Menon
+- Time: 10:00 AM
+- Meeting type: Physical
+- Agenda: FCT grid discussion for H2
+
+Confirm it appears in today's plan.
+
+**Step 17**
+Tap the meeting to log it. Fill in:
+- Touchpoint type: Deal Meeting
+- What happened: "Client confirmed budget of ₹50L for H2. Very interested in primetime slots."
+- Client feedback: "Positive. Wants revised grid by Friday."
+- Stage: In Discussion
+- Add one action item:
+  - Type: Approval needed
+  - Details: 12% discount on rate card
+  - WHO: Region Head
+  - Due date: tomorrow
+
+Submit the log.
+
+**Step 18**
+Check that the meeting card turns green on My Plan. Write PASS or FAIL.
+
+**Step 19**
+Go to Revenue Tracker. Daikin India should appear in the Accounts tab. The stage should show "In Discussion." Write PASS or FAIL.
+
+**Step 20**
+Go to War Room. IN PLAY should show ₹50L. Write PASS or FAIL.
+
+---
+
+## PHASE 6 — Region Head sees the action item
+### Open a second browser window in incognito. Log in as Region Head North.
+
+**Step 21**
+Go to My Plan. The action item "Approval needed — Daikin India — 12% discount" should NOT be here. If it appears in My Plan, write FAIL.
+
+**Step 22**
+Go to My Tasks. The action item should appear here with the title: "Approval needed — Daikin India — 12% discount on rate card — by [tomorrow's date] — from Test Rep North." Write PASS if it appears with the correct title. Write FAIL if missing or title is wrong.
+
+**Step 23**
+Go to Approvals tab. The same item should appear here. Write PASS or FAIL.
+
+**Step 24**
+Go to War Room. There should be a section showing pending approvals or actions needed from the RH. Write PASS or FAIL.
+
+**Step 25**
+Approve the action item from the Approvals tab. Add note: "Approved — 12% discount for Q1 only."
+
+**Step 26**
+Go back to rep's browser. Go to Internal Requests. The item should show as resolved with the RH's note visible. Write PASS or FAIL.
+
+---
+
+## PHASE 7 — Deal progresses to Mail Confirmed
+### Still logged in as Test Rep North
+
+**Step 27**
+Log another touchpoint for Daikin India:
+- Touchpoint type: Deal Meeting
+- What happened: "Client sent email confirmation. Deal is on."
+- Stage: Mail Confirmed
+
+Submit.
+
+**Step 28**
+Go to War Room. Daikin India amount should now show under COMMITTED, not IN PLAY. Write PASS or FAIL.
+
+**Step 29**
+Go to Revenue Tracker. Daikin India stage should now show Mail Confirmed. Write PASS or FAIL.
+
+---
+
+## PHASE 8 — Revenue is logged
+### Still as Test Rep North
+
+**Step 30**
+Go to Revenue Log. Log revenue:
+- Client: Daikin India
+- Amount: ₹40L (4000000)
+- Invoice reference: INV-2026-001
+- Date: today
+
+Submit.
+
+**Step 31**
+Immediately check three places. Write the exact number you see for ACHIEVED in each:
+
+- My Targets ACHIEVED: ____________
+- War Room CLOSED QTD: ____________
+- Revenue Tracker ACHIEVED (Linear TV tab): ____________
+
+All three must show exactly ₹40L. If any shows a different number, write FAIL and note what number it shows.
+
+**Step 32**
+Go to Revenue Tracker Accounts tab. Click on Daikin India. The deal pipeline value should still show the original target amount ₹50L — NOT ₹40L. If it shows ₹40L, write FAIL.
+
+**Step 33**
+Go to My Targets. The numbers should show:
+- TOTAL TARGET: ₹80L
+- ACHIEVED: ₹40L
+- SHORTFALL: ₹40L
+- % COMPLETE: 50%
+
+Write PASS or FAIL. If fail, write what numbers you actually see.
+
+---
+
+## PHASE 9 — Client account thread
+### Still as Test Rep North
+
+**Step 34**
+Go to Revenue Tracker. Click on the Daikin India client account card. A detailed view should open showing:
+- Top section: Target ₹50L, Achieved ₹40L, stage Mail Confirmed, days since last contact
+- Thread below: All touchpoints logged in reverse order — the revenue entry, the Mail Confirmed log, the In Discussion log
+
+Write PASS or FAIL. If fail, describe what you see instead.
+
+---
+
+## PHASE 10 — At Risk escalation
+### Still as Test Rep North
+
+**Step 35**
+Go to Revenue Tracker. Find the Havells India account. This is a target client with no touchpoints logged yet. Log a touchpoint for Havells India:
+- Touchpoint type: Deal Meeting
+- What happened: "Initial meeting. Showed interest."
+- Stage: In Discussion
+
+Submit.
+
+**Step 36**
+The system cannot simulate 7 days passing automatically during a test. So instead, check this: go to System Config as Admin and temporarily change "Flag as At Risk after" from 7 days to 0 days. Save.
+
+Go back to rep's My Plan. An At Risk card should now appear at the top for Havells India showing "0 days since last deal meeting."
+
+Write PASS or FAIL. Then change the threshold back to 7 days.
+
+---
+
+## PHASE 11 — HR compliance
+### Still as Test Rep North
+
+**Step 37**
+Go to My Plan. Check the deadline countdown in the topbar. It should show how many hours are left until 11:30 PM. Write what it shows.
+
+**Step 38**
+Look at your meeting cards for today. The Daikin India meeting you logged should have a green background and filled circle. Any unlogged meetings should have a grey or red border. Write PASS or FAIL.
+
+---
+
+## PHASE 12 — Leaderboard and manager views
+### Log in as NSH
+
+**Step 39**
+Go to War Room. You should see a national view showing all regions. North region should show Achieved ₹40L. Write PASS or FAIL.
+
+**Step 40**
+Go to Revenue Tracker national view. Should show all reps and their targets. Write PASS or FAIL.
+
+**Step 41**
+Go to the All Sales Reps leaderboard. Test Rep North should appear with their achievement percentage. Write PASS or FAIL.
+
+---
+
+## PHASE 13 — Data integrity final check
+
+**Step 42**
+Log in as Test Rep North. Go to My Targets. Try one more time to edit the Daikin India target amount. Confirm it is read only. Write PASS or FAIL.
+
+**Step 43**
+Go to Revenue Log. Find the ₹40L entry you logged for Daikin India. Click Edit. Change the amount to ₹35L. Save. Go to My Targets. ACHIEVED should now show ₹35L not ₹40L. Write PASS or FAIL.
+
+**Step 44**
+Go back to Revenue Log. Change it back to ₹40L. Confirm My Targets ACHIEVED returns to ₹40L.
+
+---
+
+## How to report results
+
+When you are done, fill in this table and send it back:
+
+| Step | PASS / FAIL | What you saw if FAIL |
+|------|-------------|----------------------|
+| 1 | | |
+| 2 | | |
+| 3 | | |
+...and so on for all 44 steps.
+
+If you see anything unexpected that is not covered by the steps above — write it separately at the bottom under "Other issues found."
+
+---
+
+## What you do NOT need to test
+
+- How the app looks or its design
+- The RO Parser — that is a separate app
+- Google Calendar sync
+- Email notifications
+- The leaderboard rankings — only check that data appears, not the ranking order
+
+---
+
+That is the complete test brief. Hand this to your tester exactly as written. They do not need any technical knowledge — just the ability to follow steps and note what they see.
