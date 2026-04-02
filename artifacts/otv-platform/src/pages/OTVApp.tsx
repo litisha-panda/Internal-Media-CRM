@@ -1733,6 +1733,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // Part 6: Client Account Thread modal
   const [accountThreadOpen, setAccountThreadOpen]       = useState(false);
   const [accountThreadClient, setAccountThreadClient]   = useState<string|null>(null);
+  const [threadAIForm, setThreadAIForm]                 = useState<{entryId:string,actionType:string,details:string,neededFrom:string,dueDate:string}|null>(null);
   const [planUploadOpen, setPlanUploadOpen]             = useState(false);
   const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,quarter:string,clients:{clientCompany:string,dealType:string,targetAmount:string}[]}>({repId:"",quarter:"Q1 FY26",clients:[{clientCompany:"",dealType:"Linear TV",targetAmount:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
@@ -12809,8 +12810,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               </div>
             )}
 
-            {/* SECTION 5 — Next Steps — hidden for terminal stages */}
-            {!["Mail Confirmed","Lost","RO Received"].includes(logForm.stageUpdate||"") && (<>
+            {/* SECTION 5 — Next Steps — hidden for Relationship type and terminal stages */}
+            {(logForm.touchpointType||"Deal Meeting")==="Deal Meeting" && !["Mail Confirmed","Lost","RO Received"].includes(logForm.stageUpdate||"") && (<>
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Next Steps</div>
 
             {/* Structured action items — one row per action */}
@@ -13459,31 +13460,71 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                       )}
                       {entry.nextSteps&&<div style={{fontSize:10,color:C.dim,marginTop:4}}>Next: {entry.nextSteps}</div>}
-                      {/* Part 6: + Add Action Item on each thread entry */}
+                      {/* Part 6: + Add Action Item on each thread entry — proper inline form */}
                       {isTp&&(
                         <div style={{marginTop:8}}>
-                          <button onClick={()=>{
-                            const detail=window.prompt("Action item details:");
-                            if(!detail?.trim())return;
-                            const dueDate=window.prompt("Due date (YYYY-MM-DD):",TOMORROW)||TOMORROW;
-                            const newTask={
-                              id:`ai_${Date.now()}`,
-                              assignedTo:null, assignedToUserId:null, assignedDept:"Self",
-                              repId:clientDeals[0]?.repId||null,
-                              clientCompany:clientName,
-                              title:`Flag for follow-up — ${clientName} — ${detail} — by ${dueDate} — from ${user_role?.name||"Rep"}`.slice(0,160),
-                              description:detail,
-                              priority:"High", status:"Open",
-                              dueDate, createdAt:TODAY,
-                              assignedBy:activeUser,
-                              assignedByName:user_role?.name||"",
-                              fromMeetingLog:true,
-                            };
-                            setTasks(p=>[...p,newTask]);
-                            showToast(`Action item added for ${clientName}`);
-                          }} style={{background:`${C.blue}10`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                            + Add Action Item
-                          </button>
+                          {threadAIForm?.entryId===entry.id ? (
+                            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",marginTop:4}}>
+                              <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>Add Action Item to this Touchpoint</div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                                <div>
+                                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Action Type *</div>
+                                  <select value={threadAIForm.actionType} onChange={e=>setThreadAIForm(p=>p?({...p,actionType:e.target.value}):null)}>
+                                    <option value="">Select type…</option>
+                                    {ACTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                                  </select>
+                                </div>
+                                <div>
+                                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Who *</div>
+                                  <select value={threadAIForm.neededFrom} onChange={e=>setThreadAIForm(p=>p?({...p,neededFrom:e.target.value}):null)}>
+                                    <option value="">Needed from…</option>
+                                    {APPROVAL_TARGETS.map(t=><option key={t} value={t}>{t}</option>)}
+                                    <option value="Self">Myself</option>
+                                  </select>
+                                </div>
+                              </div>
+                              <div style={{marginBottom:8}}>
+                                <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Details <span style={{fontWeight:400}}>(max 150 chars)</span></div>
+                                <input maxLength={150} placeholder="What exactly is needed…" value={threadAIForm.details} onChange={e=>setThreadAIForm(p=>p?({...p,details:e.target.value}):null)} />
+                              </div>
+                              <div style={{marginBottom:10}}>
+                                <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>By When *</div>
+                                <input type="date" min="2020-01-01" max="2099-12-31" value={threadAIForm.dueDate} onChange={e=>setThreadAIForm(p=>p?({...p,dueDate:e.target.value}):null)} />
+                              </div>
+                              {threadAIForm.actionType&&threadAIForm.neededFrom&&(
+                                <div style={{fontSize:10,color:C.blue,fontWeight:600,marginBottom:8}}>
+                                  {threadAIForm.actionType==="Approval needed"&&`→ Approvals tab of ${threadAIForm.neededFrom}`}
+                                  {threadAIForm.actionType==="Attend a meeting"&&`→ My Plan of ${threadAIForm.neededFrom}`}
+                                  {["Document needed","Introduction needed","Flag for follow-up"].includes(threadAIForm.actionType)&&`→ My Tasks of ${threadAIForm.neededFrom}`}
+                                  {threadAIForm.neededFrom==="Self"&&" (personal reminder — no one else notified)"}
+                                </div>
+                              )}
+                              <div style={{display:"flex",gap:8}}>
+                                <button onClick={()=>setThreadAIForm(null)} style={{flex:1,background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                                <button onClick={()=>{
+                                  if(!threadAIForm.actionType||!threadAIForm.neededFrom||!threadAIForm.dueDate){showToast("Fill all required fields");return;}
+                                  const aType=threadAIForm.actionType;
+                                  const neededFrom=threadAIForm.neededFrom;
+                                  const details=threadAIForm.details;
+                                  const dueDate=threadAIForm.dueDate;
+                                  const repName=user_role?.name||"Rep";
+                                  const ts=`ai_tp_${Date.now()}`;
+                                  const baseTask:any={id:ts,assignedTo:null,assignedToUserId:null,assignedDept:neededFrom==="Self"?"Self":neededFrom,repId:clientDeals[0]?.repId||null,clientCompany:clientName,title:`${aType} — ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType};
+                                  setTasks(p=>[baseTask,...p]);
+                                  if(aType==="Approval needed"&&neededFrom!=="Self"){
+                                    setInternalReqs(p=>[{id:`ir_tp_${Date.now()}`,type:"Approval",dept:neededFrom,subject:`[Approval needed] ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:clientDeals[0]?.repId||null,dealId:clientDeals[0]?.id||null,clientCompany:clientName,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""},...p]);
+                                  }
+                                  setThreadAIForm(null);
+                                  showToast(`Action item → ${neededFrom} ✓`);
+                                }} style={{flex:2,background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Add Item</button>
+                              </div>
+                            </div>
+                          ):(
+                            <button onClick={()=>setThreadAIForm({entryId:entry.id,actionType:"",details:"",neededFrom:"",dueDate:TOMORROW})}
+                              style={{background:`${C.blue}10`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                              + Add Action Item
+                            </button>
+                          )}
                         </div>
                       )}
                     </div>
