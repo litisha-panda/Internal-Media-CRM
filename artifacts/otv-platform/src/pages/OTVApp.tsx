@@ -1115,6 +1115,7 @@ export default function OTVApp() {
   if (section === "home") return <HomeScreen user={loginUser} onSelect={handleSelect} onLogout={handleLogout} />;
 
   return <CROApp
+    key={loginUser?.email || loginUser?.id}
     user={loginUser} onLogout={handleLogout}
     section={section} onGoHome={handleBack}
     plans={plans} setPlans={setPlans}
@@ -1328,6 +1329,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     return "my-plan"; // Sales Rep and others
   };
   const [view, setView] = useState(getCRMDefaultView);
+  // T009: Reset landing view whenever the logged-in user switches roles
+  useEffect(() => { setView(getCRMDefaultView()); }, [user?.email]);
   // Persist deals + meetings directly — no more sync bug
   const [deals, _setDeals]        = usePersistedState("otv_deals",    sharedDeals   || SEED_DEALS);
   const [meetings, _setMeetings]  = usePersistedState("otv_meetings", sharedMeetings|| SEED_MEETINGS);
@@ -3744,9 +3747,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* ── T007: Action Items Due Today ── */}
                 {(()=>{
+                  // Only show: self-assigned tasks, OR tasks not from meeting-log routing
+                  // Routed action items (approval/document/attend) go to My Tasks, not My Plan
                   const dueToday = tasks.filter(t =>
+                    !["Done","Closed"].includes(t.status) &&
+                    t.dueDate === TODAY &&
                     (t.assignedToUserId === activeUser || t.repId === myRepId) &&
-                    t.dueDate === TODAY && !["Done","Closed"].includes(t.status)
+                    (t.assignedDept === "Self" || !t.fromMeetingLog)
                   );
                   if (!dueToday.length) return null;
                   return (
@@ -3931,8 +3938,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* DUE DATE ALERTS */}
                 {(()=>{
+                  // Only self-assigned or non-routed tasks — routed items go to My Tasks / Approvals
                   const repTasks = tasks.filter(t =>
-                    (t.repId===myRepId||t.assignedTo===myRepId||t.assignedToUserId===activeUser) && t.status!=="Done"
+                    (t.repId===myRepId||t.assignedTo===myRepId||t.assignedToUserId===activeUser) &&
+                    t.status!=="Done" &&
+                    (t.assignedDept === "Self" || !t.fromMeetingLog)
                   );
                   const autoDuePlans = (plans||[]).filter(p =>
                     p.repId===myRepId &&
@@ -4023,7 +4033,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     if (m) setViewMeetingId(m.id);
                                   } else if (isFuture) {
                                     showToast(`This meeting is on ${p.date}. Come back on the day to log it.`);
-                                  } else { if (!isOpen) setInlineLogStatus(""); setInlineLogPlan(isOpen?null:p.id); }
+                                  } else {
+                                    // T007: Open full log modal pre-filled from plan chip
+                                    setLogForm(f=>({...BLANK_LOG,repId:String(myRepId),clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",meetingType:p.meetingType||"Physical"}));
+                                    setLogOpen(true);
+                                  }
                                 }}
                                 style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 10px",background:cardBg,borderRadius:6,border:cardBrd,cursor:isFuture?"default":"pointer",transition:"all .1s",opacity:isFuture?0.8:1}}>
                                 {/* Circle indicator */}
