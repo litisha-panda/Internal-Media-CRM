@@ -1994,6 +1994,31 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     }
   }, [logOpen, activeUser]);
 
+  // Section 18 — Trigger 3: actionItems & tasks where dueDate < today AND status = "Open" → set status = "Escalated"
+  useEffect(() => {
+    const hasOpenTasks = tasks.some(t => t.dueDate && t.dueDate < TODAY && t.status === "Open");
+    if (hasOpenTasks) {
+      setTasks(prev => prev.map(t =>
+        t.dueDate && t.dueDate < TODAY && t.status === "Open"
+          ? { ...t, status: "Escalated" }
+          : t
+      ));
+    }
+    const hasTpOverdue = touchpoints.some(tp =>
+      (tp.actionItems || []).some((ai: any) => ai.dueDate && ai.dueDate < TODAY && ai.status === "Open")
+    );
+    if (hasTpOverdue) {
+      setTouchpoints(prev => prev.map(tp => ({
+        ...tp,
+        actionItems: (tp.actionItems || []).map((ai: any) =>
+          ai.dueDate && ai.dueDate < TODAY && ai.status === "Open"
+            ? { ...ai, status: "Escalated" }
+            : ai
+        )
+      })));
+    }
+  }, []); // Run once on page load
+
   // Annual mode helpers — when "FY26 Annual" is selected the quarter filter spans all quarters
   const isAnnual = filterQ === "FY26 Annual";
   // "FY26 Annual" deals/targets must be visible under any quarterly filter within FY26.
@@ -5949,7 +5974,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
-                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                     <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
                                     <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
@@ -6082,7 +6107,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   const sf=Math.max(0,(d.targetAmount||0)-ach);
                                   const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                   return (
-                                    <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                    <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                       <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                       <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
                                       <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
@@ -6437,7 +6462,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
-                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                     <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
                                     <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
@@ -6490,7 +6515,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 return (
-                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                  <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                     <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
                                     <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
@@ -7284,7 +7309,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             const sf=Math.max(0,(d.targetAmount||0)-ach);
                             const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                             return (
-                              <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                              <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                 <td style={{padding:"10px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.contactName&&<div style={{fontSize:10,color:C.dim}}>{d.contactName}</div>}</td>
                                 <td style={{padding:"10px 14px"}}><span style={{background:C.s3,color:C.dim,padding:"2px 6px",borderRadius:4,fontSize:10}}>{d.dealType||"—"}</span></td>
                                 <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
@@ -7343,7 +7368,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               const sf=Math.max(0,(d.targetAmount||0)-ach);
                               const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                               return (
-                                <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                   <td style={{padding:"10px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.contactName&&<div style={{fontSize:10,color:C.dim}}>{d.contactName}</div>}</td>
                                   <td style={{padding:"10px 14px"}}><span style={{background:C.s3,color:C.dim,padding:"2px 6px",borderRadius:4,fontSize:10}}>{d.dealType||"—"}</span></td>
                                   <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
@@ -7560,7 +7585,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   const sf=Math.max(0,(d.targetAmount||0)-ach);
                                   const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                   return (
-                                    <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                    <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                       <td style={{padding:"10px 14px"}}>
                                         <div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>
                                         {d.contactName&&<div style={{fontSize:10,color:C.dim}}>{d.contactName}</div>}
@@ -7642,7 +7667,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     const sf=Math.max(0,(d.targetAmount||0)-ach);
                                     const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                     return (
-                                      <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                      <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                         <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:5,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                         <td style={{padding:"9px 14px",fontSize:11,color:C.dim}}>{rep?.name||"—"}</td>
                                         <td style={{padding:"9px 14px"}}><span style={{background:C.s3,color:C.dim,padding:"2px 6px",borderRadius:4,fontSize:10}}>{d.dealType||"—"}</span></td>
@@ -7769,7 +7794,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               const rep=reps.find(r=>r.id===d.repId);
                               const dw=daysSince(d.awaitingApprovalSince);
                               return (
-                                <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                   <td style={{padding:"10px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div></td>
                                   <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td>
                                   <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td>
@@ -7800,7 +7825,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <tbody>{overdueRepTasks.map(t=>{
                               const rep=reps.find(r=>r.id===(t.repId||t.assignedTo));
                               return (
-                                <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                   <td style={{padding:"10px 14px",fontWeight:600}}>{t.title}</td>
                                   <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
                                   <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td>
@@ -8531,7 +8556,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Date","Generated","Status","Exception"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>{visReports.map(r=>(
-                              <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                              <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                 <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
                                 <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.generatedAt}</td>
                                 <td style={{padding:"9px 14px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
@@ -9409,6 +9434,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <button onClick={()=>{
                           const client = rf.clientCompany;
                           if(!client||!rf.amount){showToast("Client and amount are required","err");return;}
+                          if(!rf.invoiceRef){showToast("Invoice / RO reference is required — cannot submit without it","err");return;}
                           const amt = parseCurrency(rf.amount);
                           if(!amt){showToast("Invalid amount","err");return;}
                           const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,zohoAccountId:rf.zohoAccountId||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
@@ -9512,7 +9538,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <button onClick={()=>{
                                       const amt=parseCurrency(editRevData.amount);
                                       if(!amt){showToast("Invalid amount","err");return;}
-                                      setRevenueEntries(p=>p.map(x=>x.id===e.id?{...x,...editRevData,amount:amt}:x));
+                                      setRevenueEntries(p=>p.map(x=>x.id===e.id?{...x,...editRevData,amount:amt,editHistory:[...(x.editHistory||[]),{editedAt:new Date().toISOString(),editedBy:user_role?.name||activeUser,oldAmount:x.amount}]}:x));
                                       setEditingRevId(null);showToast("Entry updated ✓");
                                     }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Save</button>
                                     <button onClick={()=>setEditingRevId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
@@ -10621,7 +10647,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:16}}>
                 {[{l:"NO CONTACT 30D+",v:allD.filter(d=>daysSince(d.lastContact)>=30&&d.outcome!=="Mail Confirmed").length,c:C.red},{l:"HIGH-VALUE STALLED",v:highValueStalled.length,c:C.orange},{l:"VALUE AT RISK",v:fmtR(highValueStalled.reduce((s,d)=>s+(d.amount||0),0)),c:C.accent}].map(k=>(<div key={k.l} className="card" style={{padding:13,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div></div>))}
               </div>
-              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Region","Target","Last Contact","Days Idle","Stage"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{[...highValueStalled].sort((a,b)=>daysSince(b.lastContact)-daysSince(a.lastContact)).map(d=>{const rep=reps.find(r=>r.id===d.repId);const idle=daysSince(d.lastContact);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}><td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{d.lastContact||"Never"}</td><td style={{padding:"10px 14px",color:idle>=30?C.red:idle>=14?C.orange:C.dim,fontWeight:700}}>{idle}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td></tr>);})} {highValueStalled.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No stalled high-value accounts!</td></tr>}</tbody></table></div>
+              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Region","Target","Last Contact","Days Idle","Stage"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{[...highValueStalled].sort((a,b)=>daysSince(b.lastContact)-daysSince(a.lastContact)).map(d=>{const rep=reps.find(r=>r.id===d.repId);const idle=daysSince(d.lastContact);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}><td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{d.lastContact||"Never"}</td><td style={{padding:"10px 14px",color:idle>=30?C.red:idle>=14?C.orange:C.dim,fontWeight:700}}>{idle}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td></tr>);})} {highValueStalled.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No stalled high-value accounts!</td></tr>}</tbody></table></div>
             </div>);
           })()}
 
@@ -10910,7 +10936,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <tbody>
                             {rd.sort((a,b)=>b.amount-a.amount).map(d=>(
                               <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}}
-                                onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} style={{cursor:"pointer"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                 <td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
                                 <td style={{padding:"9px 12px",fontWeight:600}}>{fmtR(d.amount)}</td>
                                 <td style={{padding:"9px 12px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
@@ -10961,7 +10987,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead><tr>{["Client","Target","Achieved","Pipeline","Shortfall","Stage"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                           <tbody>{rd.map(d=>{const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const sf=Math.max(0,(d.targetAmount||0)-ach);return(
-                            <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                            <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                               <td style={{padding:"9px 12px",fontWeight:700}}>{d.clientCompany}</td>
                               <td style={{padding:"9px 12px"}}>{fmtR(d.targetAmount)}</td>
                               <td style={{padding:"9px 12px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}</td>
@@ -11071,7 +11097,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>{["Rep","Date","Status","Exception","Notes"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{teamAbs.map(r=>(
-                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"9px 12px",fontWeight:600}}>{r.repName}</td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{r.date}</td>
                           <td style={{padding:"9px 12px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
@@ -11415,7 +11441,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <thead><tr>{["Client","Rep","Amount","Stage","Next Step","Awaiting"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                           <tbody>
                             {rd.sort((a,b)=>b.amount-a.amount).map(d=>{const rep=reps.find(r=>r.id===d.repId);return(
-                              <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                              <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                 <td style={{padding:"8px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
                                 <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{rep?.name}</td>
                                 <td style={{padding:"8px 12px",fontWeight:600}}>{fmtR(d.amount)}</td>
@@ -11467,7 +11493,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const rRisk=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
                       const nReps=reps.filter(r=>r.region===region).length;
                       const sc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
-                      return(<tr key={region} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                      return(<tr key={region} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                         <td style={{padding:"10px 14px"}}><div className="sans" style={{fontWeight:700}}>{region}</div></td>
                         <td style={{padding:"10px 14px",color:C.dim}}>{fmtR(rT)}</td>
                         <td style={{padding:"10px 14px",color:C.green,fontWeight:600}}>{fmtR(rC)}</td>
@@ -11503,7 +11529,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <thead><tr>{["Task","Client","Region","Priority","Status","Due","Update"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{rhTasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
                         const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
-                        return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:1,maxWidth:200,whiteSpace:"normal"}}>{t.description}</div>}</td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?reps.find(r=>r.id===rep.id)?.region:"—"}</td>
@@ -11565,7 +11591,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead><tr>{["Rep","Date","Status","Exception"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                           <tbody>{rAbs.map(r=>(
-                            <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                            <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                               <td style={{padding:"8px 12px",fontWeight:600}}>{r.repName}</td>
                               <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{r.date}</td>
                               <td style={{padding:"8px 12px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
@@ -11652,7 +11678,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <tbody>
                       {fd.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No deals found</td></tr>}
                       {fd.sort((a,b)=>b.amount-a.amount).map(d=>{const rep=reps.find(r=>r.id===d.repId);return(
-                        <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name}</td>
                           <td style={{padding:"9px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 6px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.region}</span></td>
@@ -11688,7 +11714,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const rC=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const rP=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                       const rG=Math.max(0,rT-rC);const rPct=rT>0?Math.round((rC/rT)*100):0;const sc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
-                      return (<tr key={rep.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                      return (<tr key={rep.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                         <td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{rep.name}</div></td>
                         <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 6px",borderRadius:5,fontSize:10,fontWeight:600}}>{rep.region}</span></td>
                         <td style={{padding:"10px 14px",color:C.dim}}>{fmtR(rT)}</td>
@@ -11729,7 +11755,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <thead><tr>{["Rep","Region","Task","Client","Priority","Status","Due"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{fTasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
                         const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
-                        return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"8px 12px",fontWeight:600,fontSize:11}}>{rep?.name||"—"}</td>
                           <td style={{padding:"8px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{rep?.region||"—"}</span></td>
                           <td style={{padding:"8px 12px"}}><div style={{fontWeight:600}}>{t.title}</div></td>
@@ -11766,7 +11792,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>{["Rep","Region","Date","Status","Exception"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{fAbs.map(r=>(
-                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"8px 12px",fontWeight:600}}>{r.repName}</td>
                           <td style={{padding:"8px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.region}</span></td>
                           <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{r.date}</td>
