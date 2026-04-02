@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import healthRouter from "./health";
 import authRouter from "./auth";
+import adminRouter from "./admin";
 import roParserRouter from "./ro-parser";
 import claudeProxyRouter from "./claude-proxy";
 import stateRouter from "./state";
@@ -10,6 +11,7 @@ const router: IRouter = Router();
 
 router.use(healthRouter);
 router.use(authRouter);
+router.use(adminRouter);
 router.use(roParserRouter);
 router.use(claudeProxyRouter);
 router.use(stateRouter);
