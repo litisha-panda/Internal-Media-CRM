@@ -1140,6 +1140,38 @@ function HomeScreen({ user, onSelect, onLogout }) {
         .home-tile-crm:hover{border-color:#c47d00;background:#fffbf0}
       `}</style>
 
+      {/* 11 PM FULLSCREEN BLOCK — reps must confirm before EOD fires at 11:30 PM */}
+      {(()=>{
+        const hourNow = new Date().getHours();
+        const myMtgToday = meetings.some(m=>(m.loggedByUserId===activeUser||(user_role?.repId&&m.repId===user_role.repId))&&m.date===TODAY);
+        const showBlock = isRep && hourNow >= 23 && !countdown.includes("passed") && !eodBlockDismissed && !myMtgToday && !nothingMoreToday;
+        if (!showBlock) return null;
+        return (
+          <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(10,18,35,.95)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:24,padding:32}}>
+            <div style={{fontSize:48,marginBottom:4}}>🌙</div>
+            <div className="sans" style={{fontSize:28,fontWeight:800,color:"#fff",textAlign:"center",lineHeight:1.25}}>It's past 11 PM</div>
+            <div style={{fontSize:14,color:"#8a97ae",textAlign:"center",maxWidth:420,lineHeight:1.6}}>
+              You haven't logged any meetings today. Please confirm before 11:30 PM — otherwise the system will mark you <strong style={{color:"#c92828"}}>Absent</strong> for today.
+            </div>
+            <div style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginTop:8}}>
+              <button
+                onClick={()=>{setEodBlockDismissed(true);setLogOpen(true);}}
+                style={{background:"#c47d00",border:"none",color:"#fff",borderRadius:8,padding:"14px 28px",fontSize:14,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>
+                📝 Log remaining
+              </button>
+              <button
+                onClick={()=>{setNothingMoreToday(true);setEodBlockDismissed(true);showToast("Confirmed — no more meetings today. EOD check satisfied.");}}
+                style={{background:"transparent",border:"2px solid #4d5e78",color:"#8a97ae",borderRadius:8,padding:"14px 28px",fontSize:14,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>
+                ✓ Nothing more today
+              </button>
+            </div>
+            <div style={{fontSize:11,color:"#4d5e78",marginTop:4}}>
+              ⏱ EOD auto-marks absent at 11:30 PM if no action is taken.
+            </div>
+          </div>
+        );
+      })()}
+
       {/* TOPBAR */}
       <div style={{ background:"#ffffff", borderBottom:"1px solid #c8d3e5", padding:"0 32px", height:48, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -1350,6 +1382,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   // Countdown to 11:30 PM — shown in topbar for all users
   const [countdown, setCountdown] = useState("");
+  // 11 PM fullscreen block — dismissed when rep taps "Log remaining" or "Nothing more today"
+  const [eodBlockDismissed, setEodBlockDismissed] = useState(false);
+  const [nothingMoreToday,  setNothingMoreToday]  = useState(false);
   useEffect(() => {
     const tick = () => {
       const now = new Date(), dl = new Date();
@@ -3713,14 +3748,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         const idle = daysSince(idleClock);
                         const ds = dealStage(d);
                         return (
-                          <div key={d.id} style={{display:"flex",alignItems:"center",gap:10,background:`${C.red}08`,borderRadius:5,padding:"6px 10px"}}>
+                          <div key={d.id} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} style={{display:"flex",alignItems:"center",gap:10,background:`${C.red}08`,borderRadius:5,padding:"6px 10px",cursor:"pointer"}}>
                             <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{d.clientCompany}</span>
                             <span style={{background:`${oColor(ds)}18`,color:oColor(ds),padding:"2px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{ds}</span>
                             <span style={{background:`${C.red}22`,color:C.red,padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>
                               No deal meeting {idle}d
                             </span>
                             <button
-                              onClick={()=>{ setMeetingForm(f=>({...f,dealId:d.id,clientAgencyName:d.clientCompany})); setMeetingOpen(true); }}
+                              onClick={e=>{e.stopPropagation();setMeetingForm(f=>({...f,dealId:d.id,clientAgencyName:d.clientCompany}));setMeetingOpen(true);}}
                               style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
                               Log Meeting →
                             </button>
@@ -5750,19 +5785,58 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 );
               })()}
 
-              {/* KPIs — 4 clean cards for management, 3 for reps */}
-              <div style={{display:"grid",gridTemplateColumns:isRep?"repeat(3,1fr)":"repeat(5,1fr)",gap:10,marginBottom:16}}>
-                {(isRep ? [
-                  {label:"MY CLOSED QTD",   value:fmtR(revenueEntries.filter(e=>e.repId===user_role?.repId&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0)), color:C.green},
-                  {label:"IN PLAY",         value:fmtR(visibleDeals.filter(d=>d.repId===user_role?.repId&&["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s,d)=>s+(d.pipelineAmount||parseCurrency(d.amount||"0")||0),0)), color:C.accent},
-                  {label:"MY OPEN ACTIONS", value:tasks.filter(t=>(t.assignedTo===user_role?.repId||t.assignedToUserId===activeUser)&&t.status!=="Done").length, color:C.blue},
-                ] : [
+              {/* KPIs — rep: 4 calcNumbers cards + 2 count tiles; management: 5 cards */}
+              {isRep ? (()=>{
+                const wrRepId  = user_role?.repId;
+                const wrTarget = targetSubs.filter(t=>t.repId===wrRepId&&t.status==="Approved").reduce((s,t)=>s+(t.totalTarget||t.clients?.reduce((ss,c)=>ss+(c.targetAmount||0),0)||0),0);
+                const wrAch    = getAchieved(wrRepId);
+                const wrCmt    = getCommitted(wrRepId);
+                const wrInp    = getInPlay(wrRepId);
+                const wrSf     = getShortfall(wrTarget,wrRepId);
+                const wrPct    = wrTarget>0?Math.round((wrAch/wrTarget)*100):0;
+                const wrOpenAI = tasks.filter(t=>(t.assignedTo===wrRepId||t.assignedToUserId===activeUser)&&t.status!=="Done").length;
+                const wrAtRisk = visibleDeals.filter(d=>d.repId===wrRepId&&!["Mail Confirmed","Not Interested"].includes(dealStage(d))&&daysSince(d.lastContact||d.lastDealMeetingDate)>=7).length;
+                return (<>
+                  <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
+                    {[
+                      {label:"ACHIEVED",  value:fmtR(wrAch), color:C.green,  sub:`${wrPct}% of target`},
+                      {label:"COMMITTED", value:fmtR(wrCmt), color:C.blue,   sub:"Mail Confirmed"},
+                      {label:"IN PLAY",   value:fmtR(wrInp), color:C.accent, sub:"In Discussion / Negotiation"},
+                      {label:"SHORTFALL", value:fmtR(wrSf),  color:wrSf===0?C.green:C.red, sub:wrSf===0?"On track":"Gap remaining"},
+                    ].map(k=>(
+                      <div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}>
+                        <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:5}}>{k.label}</div>
+                        <div className="sans" style={{fontSize:21,fontWeight:700,color:k.color,lineHeight:1}}>{k.value}</div>
+                        {k.sub&&<div style={{fontSize:10,color:C.dim,marginTop:4}}>{k.sub}</div>}
+                      </div>
+                    ))}
+                  </div>
+                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
+                    <div className="card" style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div>
+                        <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>Open Action Items</div>
+                        <div className="sans" style={{fontSize:26,fontWeight:800,color:wrOpenAI>0?C.orange:C.green}}>{wrOpenAI}</div>
+                      </div>
+                      <span style={{fontSize:28,opacity:.25}}>📋</span>
+                    </div>
+                    <div className="card" style={{padding:"12px 16px",display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                      <div>
+                        <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>At-Risk Clients</div>
+                        <div className="sans" style={{fontSize:26,fontWeight:800,color:wrAtRisk>0?C.red:C.green}}>{wrAtRisk}</div>
+                      </div>
+                      <span style={{fontSize:28,opacity:.25}}>⚠</span>
+                    </div>
+                  </div>
+                </>);
+              })() : (
+              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:10,marginBottom:16}}>
+                {[
                   {label:"CLOSED QTD",    value:fmtR(closedRevenue),   sub:`${totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0}% of target`, color:C.green,  bar:totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0},
                   {label:"FORECAST",      value:fmtR(forecast),         sub:`${fcastPct}% likely`,    color:fcastPct>=80?C.green:fcastPct>=60?C.accent:C.red, bar:fcastPct},
                   {label:"GAP TO TARGET", value:fmtR(gap),             sub:gap===0?"on track":"uncovered", color:gap===0?C.green:C.red},
                   {label:"AT RISK",       value:atRisk.length,          sub:`${fmtR(atRisk.reduce((s,d)=>s+d.amount,0))} at stake`, color:atRisk.length>0?C.red:C.green},
                   {label:"OVERDUE",       value:overdueNext.length,     sub:"next steps past due",    color:overdueNext.length>0?C.orange:C.green},
-                ]).map(k=>(
+                ].map(k=>(
                   <div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}>
                     <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:5}}>{k.label}</div>
                     <div className="sans" style={{fontSize:21,fontWeight:700,color:k.color,lineHeight:1}}>{k.value}</div>
@@ -5770,7 +5844,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {k.bar!=null&&<div className="pbar" style={{marginTop:7}}><div className="pfill" style={{width:`${Math.min(k.bar,100)}%`,background:k.color}} /></div>}
                   </div>
                 ))}
-              </div>
+              </div>)}
 
               {/* MANAGEMENT SECTIONS — hidden from reps */}
               {!isRep && (
@@ -5966,24 +6040,30 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No target set for this category this fiscal year.</div>:(
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                            <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                            <thead><tr>{["Client","Rep","Channel","Annual Target","Achieved","Committed","In Play","Shortfall","Stage","Days"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
                               {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
                                 const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-                                const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                const cmt=(dealStage(d)==="Mail Confirmed")?(d.targetAmount||0):0;
+                                const inp=(["In Discussion","Negotiation"].includes(dealStage(d)))?(d.targetAmount||0):0;
+                                const idle=daysSince(d.lastContact||d.lastDealMeetingDate||TODAY);
+                                const sf=Math.max(0,(d.targetAmount||0)-ach-cmt-inp);
                                 return (
                                   <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                     <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{d.channel||"—"}</td>
                                     <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
                                     <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                    <td style={{padding:"9px 14px",color:cmt>0?C.green:C.muted,fontWeight:cmt>0?700:400}}>{cmt>0?fmtR(cmt):"—"}</td>
+                                    <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
+                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{dealStage(d)}</span>
                                     </td>
-                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
+                                    <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                   </tr>
                                 );
                               })}
@@ -6099,22 +6179,28 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           </div>
                           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",marginBottom:16}}>
                             <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                              <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                              <thead><tr>{["Client","Rep","Channel","Annual Target","Achieved","Committed","In Play","Shortfall","Stage","Days"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                               <tbody>
                                 {ipDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                   const rep=reps.find(r=>r.id===d.repId);
                                   const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-                                  const sf=Math.max(0,(d.targetAmount||0)-ach);
                                   const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                  const cmt=(dealStage(d)==="Mail Confirmed")?(d.targetAmount||0):0;
+                                  const inp=(["In Discussion","Negotiation"].includes(dealStage(d)))?(d.targetAmount||0):0;
+                                  const idle=daysSince(d.lastContact||d.lastDealMeetingDate||TODAY);
+                                  const sf=Math.max(0,(d.targetAmount||0)-ach-cmt-inp);
                                   return (
                                     <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                       <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                       <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                      <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{d.channel||"—"}</td>
                                       <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
                                       <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                      <td style={{padding:"9px 14px",color:cmt>0?C.green:C.muted,fontWeight:cmt>0?700:400}}>{cmt>0?fmtR(cmt):"—"}</td>
+                                      <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                       <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
-                                      <td style={{padding:"9px 14px"}}><span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span></td>
-                                      <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
+                                      <td style={{padding:"9px 14px"}}><span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{dealStage(d)}</span></td>
+                                      <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                     </tr>
                                   );
                                 })}
@@ -6454,24 +6540,30 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No target set for this category this fiscal year.</div>:(
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                            <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                            <thead><tr>{["Client","Rep","Channel","Annual Target","Achieved","Committed","In Play","Shortfall","Stage","Days"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
                               {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
                                 const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-                                const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                const cmt=(dealStage(d)==="Mail Confirmed")?(d.targetAmount||0):0;
+                                const inp=(["In Discussion","Negotiation"].includes(dealStage(d)))?(d.targetAmount||0):0;
+                                const idle=daysSince(d.lastContact||d.lastDealMeetingDate||TODAY);
+                                const sf=Math.max(0,(d.targetAmount||0)-ach-cmt-inp);
                                 return (
                                   <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                     <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{d.channel||"—"}</td>
                                     <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
                                     <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                    <td style={{padding:"9px 14px",color:cmt>0?C.green:C.muted,fontWeight:cmt>0?700:400}}>{cmt>0?fmtR(cmt):"—"}</td>
+                                    <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
+                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{dealStage(d)}</span>
                                     </td>
-                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
+                                    <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                   </tr>
                                 );
                               })}
@@ -6507,24 +6599,30 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       {dtDeals.length===0?<div style={{textAlign:"center",padding:40,color:C.muted}}>No target set for this category this fiscal year.</div>:(
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                            <thead><tr>{["Client","Rep","Target","Achieved","Shortfall","Stage","Next Step"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                            <thead><tr>{["Client","Rep","Channel","Annual Target","Achieved","Committed","In Play","Shortfall","Stage","Days"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>
                               {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
                                 const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-                                const sf=Math.max(0,(d.targetAmount||0)-ach);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
+                                const cmt=(dealStage(d)==="Mail Confirmed")?(d.targetAmount||0):0;
+                                const inp=(["In Discussion","Negotiation"].includes(dealStage(d)))?(d.targetAmount||0):0;
+                                const idle=daysSince(d.lastContact||d.lastDealMeetingDate||TODAY);
+                                const sf=Math.max(0,(d.targetAmount||0)-ach-cmt-inp);
                                 return (
                                   <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                     <td style={{padding:"9px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div>{d.priority==="Top 5"&&<span style={{background:`${C.accent}22`,color:C.accent,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>TOP 5</span>}</td>
                                     <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{d.channel||"—"}</td>
                                     <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(d.targetAmount)}</td>
                                     <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>{ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}</td>
+                                    <td style={{padding:"9px 14px",color:cmt>0?C.green:C.muted,fontWeight:cmt>0?700:400}}>{cmt>0?fmtR(cmt):"—"}</td>
+                                    <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
+                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{dealStage(d)}</span>
                                     </td>
-                                    <td style={{padding:"9px 14px",color:C.dim,fontSize:11,maxWidth:180}}>{d.nextStep||<span style={{color:C.muted,fontStyle:"italic"}}>Not set</span>}</td>
+                                    <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                   </tr>
                                 );
                               })}
@@ -9121,25 +9219,31 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   );
                 })()}
 
-                {/* Incoming Approval Requests from Reps (for Region Heads) */}
-                {isRH && (()=>{
-                  const incomingApprovals = internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval");
-                  if (!incomingApprovals.length) return null;
+                {/* SECTION 2 — Action Item Approvals (all approver roles) */}
+                {(()=>{
+                  const myDept = isRH?"Region Head":isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isAdmin?"":null;
+                  if (myDept===null) return null; // reps don't see this
+                  const actionApprovals = myDept===""
+                    ? internalReqs.filter(r=>r.status==="Pending"&&r.type==="Approval")
+                    : internalReqs.filter(r=>r.dept===myDept&&r.status==="Pending"&&r.type==="Approval");
                   return (
-                    <div style={{marginBottom:18}}>
-                      <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Approval Requests from Reps ({incomingApprovals.length})</div>
-                      {incomingApprovals.map(r=>(
+                    <div style={{marginBottom:24}}>
+                      <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>Section 2 — Action Item Approvals</div>
+                      <div style={{fontSize:11,color:C.dim,marginBottom:12}}>Approval requests from reps tagged to your role. Each requires your sign-off.</div>
+                      {actionApprovals.length===0 ? (
+                        <div style={{textAlign:"center",padding:"20px 0",color:C.muted,fontSize:12}}>✓ No pending approval requests at your level</div>
+                      ) : actionApprovals.map(r=>(
                         <div key={r.id} className="card" style={{padding:"14px 16px",marginBottom:8,borderLeft:`3px solid ${C.orange}`}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10,flexWrap:"wrap"}}>
                             <div style={{flex:1}}>
                               <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{r.subject}</div>
                               <div style={{fontSize:11,color:C.dim}}>{r.details}</div>
-                              <div style={{fontSize:10,color:C.muted,marginTop:4}}>Raised: {r.raisedAt} · Client: {r.clientCompany||"—"}</div>
+                              <div style={{fontSize:10,color:C.muted,marginTop:4}}>Raised by: {r.raisedByName||"—"} · {r.raisedAt} · Client: {r.clientCompany||"—"}</div>
                             </div>
                             <div style={{display:"flex",gap:8,flexShrink:0}}>
                               <button onClick={()=>{setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Approved by "+user_role?.name}:x));showToast("Approved ✓");}}
                                 style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Approve</button>
-                              <button onClick={()=>{const note=prompt("Rejection reason (optional):")||"Rejected by "+user_role?.name;setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:note}:x));showToast("Request rejected");}}
+                              <button onClick={()=>{const note=prompt("Rejection reason (required):")||"";if(!note.trim()){showToast("Rejection reason is required","err");return;}setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:x));showToast("Request rejected — rep notified");}}
                                 style={{background:`${C.red}15`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✗ Reject</button>
                             </div>
                           </div>
@@ -9149,7 +9253,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   );
                 })()}
 
-                {/* Pending Target Submission Approvals */}
+                {/* SECTION 1 — Target Submission Approvals */}
+                <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>Section 1 — Target Submissions</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:14}}>Target proposals from reps / Region Heads requiring approval at your level.</div>
                 {myPending.length===0 ? (
                   <div style={{textAlign:"center",padding:50,color:C.muted}}>
                     <div style={{fontSize:28,marginBottom:8}}>✓</div>
@@ -10255,16 +10361,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {id:"reps",       label:"Sales Reps",     icon:"◇", desc:"Rep names, regions, roles"},
                   {id:"clients",    label:"Clients",        icon:"◎", desc:"Client master list"},
                   {id:"revenue",    label:"Revenue Entries",icon:"₹", desc:"Actual revenue logged"},
-                  {id:"properties", label:"Properties/IPs", icon:"⬡", desc:"Sponsorship inventory"},
+                  {id:"properties", label:"IP Inventory",   icon:"⬡", desc:"IP / sponsorship inventory"},
                 ];
                 const [impTab, setImpTab] = [importTab, setImportTab];
 
                 const TEMPLATES = {
                   targets:    ["Rep Name","Region","Client Company","Channel","Deal Type","Annual Target Amount"],
-                  reps:       ["Rep Name","Email","Region","Role","Target Amount"],
-                  clients:    ["Client Company","Industry","Primary Contact","Designation","Phone","Email","Assigned Rep","Region"],
-                  revenue:    ["Rep Name","Client Company","Deal Type","Amount","Invoice Ref","Date","Quarter","Notes"],
-                  properties: ["Property Name","Type","Channel","Quarter","Total Value","Slot Label","Slot Value","Status","Client Company"],
+                  reps:       ["Rep Name","Email","Region","Role","Annual Quota"],
+                  clients:    ["Client Company","Industry","Primary Contact","Phone","Email","Assigned Rep","Region"],
+                  revenue:    ["Rep Name","Client Company","Deal Type","Amount","Invoice Ref","Date","Quarter"],
+                  properties: ["IP Name","Channel","IP Type","Air Date","Duration (weeks)","Slot Type","Slot Rate","Total Slots Available"],
                 };
 
                 const downloadTemplate = (type) => {
@@ -10272,9 +10378,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const sampleRow = {
                     targets:    ["Vikram Sen","National","Havells India","OTV","Linear TV","15000000"],
                     reps:       ["Arjun Mishra","arjun@odishatv.com","North","SALES REP","10000000"],
-                    clients:    ["Havells India","FMCG","Deepa Menon","VP Marketing","9823401234","deepa@havells.com","Vikram Sen","National"],
-                    revenue:    ["Vikram Sen","Havells India","IPs","5000000","INV-2024-001","2026-04-10","Q1 FY26","First instalment"],
-                    properties: ["Odia Idol S3","Reality Show","OTV","Q1 FY26","12000000","Title Sponsor","5000000","Available",""],
+                    clients:    ["Havells India","FMCG","Deepa Menon","9823401234","deepa@havells.com","Vikram Sen","National"],
+                    revenue:    ["Vikram Sen","Havells India","IPs","5000000","INV-2024-001","2026-04-10","Q1 FY26"],
+                    properties: ["Odia Idol S3","OTV","Reality Show","2026-07-15","8","Title Sponsor","5000000","4"],
                   }[type] || [];
                   const csv = [headers.join(","), sampleRow.join(",")].join("\n");
                   const blob = new Blob([csv], {type:"text/csv"});
@@ -10935,8 +11041,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <thead><tr>{["Client","Amount","Stage","Next Step","Awaiting"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                           <tbody>
                             {rd.sort((a,b)=>b.amount-a.amount).map(d=>(
-                              <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}}
-                                onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} style={{cursor:"pointer"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                              <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}
+                                onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                 <td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
                                 <td style={{padding:"9px 12px",fontWeight:600}}>{fmtR(d.amount)}</td>
                                 <td style={{padding:"9px 12px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
