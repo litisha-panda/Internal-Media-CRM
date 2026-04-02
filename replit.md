@@ -110,3 +110,25 @@ When any deals with `dealType: "IPs"` exist in `visibleDeals`, the IPs tab now s
 - TARGET / ACHIEVED / SHORTFALL / % COMPLETE cards (same structure as Linear TV tab)
 - Per-deal breakdown table with client, rep, target, achieved, shortfall, stage, next step
 - A horizontal rule separating this from the existing IP Catalog / inventory section
+
+## Parts 1–13 Implementation Status
+
+All 13 parts of the CRM spec are now implemented:
+
+- **T001 (Parts 1+3 — Data model + Deal stages)**: `DEAL_STAGES` constant, `oColor` updated, `clientAccounts` + `touchpoints` persisted state, one-time migration useEffect from deals/meetings, `pipelineAmount` + `lossReason` on deals, `mapLegacyOutcome` for backward compat.
+- **T002 (Part 5 — Dashboard numbers)**: `getAchieved/getCommitted/getInPlay/getShortfall` helpers. ACHIEVED = revenueEntries only. COMMITTED = clientAccounts at "Mail Confirmed". IN PLAY = "In Discussion"/"Negotiation". 4-number grids in My Targets, War Room, Revenue Tracker.
+- **T003 (Part 4 — Escalation engine)**: `atRisk` from clientAccounts (not deals). 7/10/14-day tiered War Room alerts. Trigger 2A (4+ meetings, no stage movement in 30d). Trigger 2B (<15 touchpoints/month). 14d alert includes "Create Task" button for RH My Tasks.
+- **T004 (Part 6 — Client account thread)**: `accountThreadOpen`/`accountThreadClient` state. Full modal with 4-number metrics, touchpoint thread (newest first), badges, revenue entries, "+ Add Action Item" per entry.
+- **T005 (Part 2 — Action item routing)**: `ACTION_TYPES` array. Routing: Approval→tasks+IR, Attend→plans+task, Document/Intro→tasks+IR, Flag for follow-up→Task only (no IR — personal reminder).
+- **T006 (Part 7 — Targets system)**: `platformLive` + `launchDate` in adminConfig. Pre-launch gate for reps. "Additional Revenue Opportunity" label for frozen targets. Admin toggle in System Config.
+- **T007 (Part 8 — My Plan behaviour)**: At-risk cards at top of My Plan. Action items due today section. Deadline countdown: 6PM amber, 9PM red, 11PM full-width + "Nothing more to log today" button.
+- **T008 (Parts 9+10+11 — Trigger map, role views, regions)**: Relationship TPs don't update `lastDealMeetingDate`. Revenue log auto-sets stage to "RO Received". Revenue Log is 2nd item in rep PLANNING sidebar. IPs tab read-only for reps. No New Package button for reps. "No target set for this category" empty state. Six regions: North, South, East, West, National, Central.
+- **T009 (Parts 12+13 — Navigation)**: RO Management card → `dealroreader.replit.app`. `getCRMDefaultView()` routes per role: ADMIN→admin-access, RH→warroom, NSH/CRO/Strategy→warroom, DIGI OPS→digi-deals, SALES REP→my-plan. Reset-All endpoint gated with `role !== "ADMIN"` check.
+
+## Session Bug Fixes
+
+### HomeScreen crash — "meetings is not defined"
+The 11 PM fullscreen block was incorrectly placed inside `HomeScreen` where `meetings`, `isRep`, `countdown`, `eodBlockDismissed`, `nothingMoreToday` are undefined. Removed from HomeScreen — the block correctly lives in CROApp's My Plan view.
+
+### getCRMDefaultView — wrong view names
+`"rh-war-room"` and `"nsh-war-room"` were returned but no renderer matched them → blank screen for RH and NSH on first login. Fixed to return `"warroom"` for both. Added `"DIGI OPS"` case returning `"digi-deals"`.

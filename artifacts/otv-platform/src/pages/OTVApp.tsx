@@ -1140,38 +1140,6 @@ function HomeScreen({ user, onSelect, onLogout }) {
         .home-tile-crm:hover{border-color:#c47d00;background:#fffbf0}
       `}</style>
 
-      {/* 11 PM FULLSCREEN BLOCK — reps must confirm before EOD fires at 11:30 PM */}
-      {(()=>{
-        const hourNow = new Date().getHours();
-        const myMtgToday = meetings.some(m=>(m.loggedByUserId===activeUser||(user_role?.repId&&m.repId===user_role.repId))&&m.date===TODAY);
-        const showBlock = isRep && hourNow >= 23 && !countdown.includes("passed") && !eodBlockDismissed && !myMtgToday && !nothingMoreToday;
-        if (!showBlock) return null;
-        return (
-          <div style={{position:"fixed",inset:0,zIndex:9999,background:"rgba(10,18,35,.95)",display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:24,padding:32}}>
-            <div style={{fontSize:48,marginBottom:4}}>🌙</div>
-            <div className="sans" style={{fontSize:28,fontWeight:800,color:"#fff",textAlign:"center",lineHeight:1.25}}>It's past 11 PM</div>
-            <div style={{fontSize:14,color:"#8a97ae",textAlign:"center",maxWidth:420,lineHeight:1.6}}>
-              You haven't logged any meetings today. Please confirm before 11:30 PM — otherwise the system will mark you <strong style={{color:"#c92828"}}>Absent</strong> for today.
-            </div>
-            <div style={{display:"flex",gap:14,flexWrap:"wrap",justifyContent:"center",marginTop:8}}>
-              <button
-                onClick={()=>{setEodBlockDismissed(true);setLogOpen(true);}}
-                style={{background:"#c47d00",border:"none",color:"#fff",borderRadius:8,padding:"14px 28px",fontSize:14,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>
-                📝 Log remaining
-              </button>
-              <button
-                onClick={()=>{setNothingMoreToday(true);setEodBlockDismissed(true);showToast("Confirmed — no more meetings today. EOD check satisfied.");}}
-                style={{background:"transparent",border:"2px solid #4d5e78",color:"#8a97ae",borderRadius:8,padding:"14px 28px",fontSize:14,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,letterSpacing:".05em"}}>
-                ✓ Nothing more today
-              </button>
-            </div>
-            <div style={{fontSize:11,color:"#4d5e78",marginTop:4}}>
-              ⏱ EOD auto-marks absent at 11:30 PM if no action is taken.
-            </div>
-          </div>
-        );
-      })()}
-
       {/* TOPBAR */}
       <div style={{ background:"#ffffff", borderBottom:"1px solid #c8d3e5", padding:"0 32px", height:48, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
@@ -1354,8 +1322,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (section === "ro") return "ro-parser";
     const role = user?.role || "";
     if (role === "ADMIN" || user?.email==="admin@odishatv.com") return "admin-access";
-    if (role === "REGION HEAD") return "rh-war-room";
-    if (["SALES HEAD","CRO","SALES STRATEGY"].includes(role)) return "nsh-war-room";
+    if (role === "REGION HEAD") return "warroom";
+    if (["SALES HEAD","CRO","SALES STRATEGY"].includes(role)) return "warroom";
+    if (role === "DIGI OPS") return "digi-deals";
     return "my-plan"; // Sales Rep and others
   };
   const [view, setView] = useState(getCRMDefaultView);
@@ -2097,8 +2066,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // We determine visible reps from visibleDeals, then sum their revenue entries for the current quarter.
   const visibleRepIdsSet = new Set(visibleDeals.map(d=>d.repId));
   const closedRevenue = revenueEntries.filter(e => visibleRepIdsSet.has(e.repId) && qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-  // Part 4: escalation clock is lastDealMeetingDate (not generic lastContact)
-  const atRisk       = activeDeals.filter(d=>{ const s=dealStage(d); return !["RO Received","Mail Confirmed","Lost"].includes(s) && daysSince(d.lastDealMeetingDate||d.lastContact)>=7; });
+  // Part 4: at-risk = clientAccounts (spec: In Discussion / Negotiation / Mail Confirmed, 7+ days since last DEAL meeting)
+  const atRisk       = clientAccounts.filter(a => visibleRepIdsSet.has(a.repId) && ["In Discussion","Negotiation","Mail Confirmed"].includes(a.currentStage||"") && daysSince(a.lastDealMeetingDate||a.lastContactDate) >= 7);
   const overdueNext  = activeDeals.filter(d=>d.nextStepDate && d.nextStepDate<TODAY && d.outcome!=="Mail Confirmed");
   const allReqs      = deals.flatMap((d,_)=>d.reqs.map((r,i)=>({...r,dealId:d.id,reqIdx:i,clientCompany:d.clientCompany,amount:d.amount,repId:d.repId})));
   const todayMtgs    = meetings.filter(m=>m.date===TODAY);
@@ -2405,8 +2374,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
           newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Introduction needed",dept:i.neededFrom,subject:`[Intro needed] ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
         } else if (aType==="Flag for follow-up") {
-          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — Flagged by ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Flag for follow-up",dept:i.neededFrom,subject:`[Follow-up] ${clientCompany} — ${details} — Flagged by ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
+          // T005: Flag for follow-up → Task only (no IR — it's a personal reminder, not a departmental request)
+          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt)||activeUser,assignedDept:i.neededFrom||"Self",repId:repIdInt,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW}`.slice(0,150),description:`Flagged by ${repName}. ${details}`,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
         } else {
           // Legacy fallback for old "action" type
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:i.action||aType,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
@@ -5840,7 +5809,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {label:"CLOSED QTD",    value:fmtR(closedRevenue),   sub:`${totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0}% of target`, color:C.green,  bar:totalTarget>0?Math.round((closedRevenue/totalTarget)*100):0},
                   {label:"FORECAST",      value:fmtR(forecast),         sub:`${fcastPct}% likely`,    color:fcastPct>=80?C.green:fcastPct>=60?C.accent:C.red, bar:fcastPct},
                   {label:"GAP TO TARGET", value:fmtR(gap),             sub:gap===0?"on track":"uncovered", color:gap===0?C.green:C.red},
-                  {label:"AT RISK",       value:atRisk.length,          sub:`${fmtR(atRisk.reduce((s,d)=>s+d.amount,0))} at stake`, color:atRisk.length>0?C.red:C.green},
+                  {label:"AT RISK",       value:atRisk.length,          sub:`${fmtR(atRisk.reduce((s,a)=>s+(a.annualTarget||0),0))} at stake`, color:atRisk.length>0?C.red:C.green},
                   {label:"OVERDUE",       value:overdueNext.length,     sub:"next steps past due",    color:overdueNext.length>0?C.orange:C.green},
                 ].map(k=>(
                   <div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}>
@@ -5859,11 +5828,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {atRisk.length>0&&(
                     <div style={{marginBottom:14}}>
                       <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",marginBottom:7}}>NO CONTACT 7+ DAYS</div>
-                      {atRisk.map(d=>{const rep=reps.find(r=>r.id===d.repId);return(
-                        <div key={d.id} style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:5,padding:"9px 14px",marginBottom:5,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
-                          <div style={{flex:1}}><span className="sans" style={{fontWeight:700}}>{d.clientCompany}</span><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span><span className="pill" style={{background:`${oColor(d.outcome)}22`,color:oColor(d.outcome),marginLeft:8,fontSize:10}}>{d.outcome}</span></div>
-                          <span style={{color:C.red,fontSize:11,whiteSpace:"nowrap"}}>{daysSince(d.lastContact)}d idle</span>
-                          <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.amount)}</span>
+                      {atRisk.map(a=>{const rep=reps.find(r=>r.id===a.repId);return(
+                        <div key={a.id} style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:5,padding:"9px 14px",marginBottom:5,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
+                          <div style={{flex:1}}><span className="sans" style={{fontWeight:700}}>{a.clientName}</span><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span><span className="pill" style={{background:`${oColor(a.currentStage)}22`,color:oColor(a.currentStage),marginLeft:8,fontSize:10}}>{a.currentStage}</span></div>
+                          <span style={{color:C.red,fontSize:11,whiteSpace:"nowrap"}}>{daysSince(a.lastDealMeetingDate||a.lastContactDate)}d idle</span>
+                          <span style={{color:C.accent,fontWeight:700}}>{fmtR(a.annualTarget)}</span>
                         </div>
                       );})}
                     </div>
@@ -5960,67 +5929,63 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   ))}
                 </div>
 
-                {/* ── ACCOUNTS TAB ── */}
-                {rtTab==="accounts" && (
+                {/* ── ACCOUNTS TAB ── spec: all clientAccounts for visible reps, per-account numbers ── */}
+                {rtTab==="accounts" && (()=>{
+                  const visibleAccts = clientAccounts
+                    .filter(a => visibleRepIdsSet.has(a.repId))
+                    .sort((a,b) => daysSince(b.lastDealMeetingDate||b.lastContactDate) - daysSince(a.lastDealMeetingDate||a.lastContactDate));
+                  return (
                   <div>
-                    {rtClients.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No accounts yet. Add a deal to get started.</div>}
-                    {rtClients.map(c=>{
-                      const rep = reps.find(r=>r.id===c.repId);
-                      const idle = daysSince(c.lastContact);
-                      const idleColor = idle>=7?C.red:idle>=3?C.orange:C.green;
-                      const pct = c.target>0?Math.round((c.total/c.target)*100):0;
-                      const openDeals = c.deals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome));
-                      const blocked = c.deals.filter(d=>d.awaitingApproval);
-                      return (
-                        <div key={c.clientCompany} className="card" style={{marginBottom:10,padding:"14px 18px"}}>
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",flexWrap:"wrap",gap:8}}>
-                            <div>
-                              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                                <span className="sans" style={{fontSize:15,fontWeight:700}}>{c.clientCompany}</span>
-                                {idle>=7&&<span style={{background:`${C.red}22`,color:C.red,padding:"1px 7px",borderRadius:8,fontSize:10,fontWeight:700}}>COLD {idle}d</span>}
-                                {blocked.length>0&&<span style={{background:`${C.orange}22`,color:C.orange,padding:"1px 7px",borderRadius:8,fontSize:10,fontWeight:700}}>BLOCKED</span>}
-                              </div>
-                              <div style={{fontSize:11,color:C.dim}}>{rep?.name} · {c.deals[0]?.region} · Last contact: <span style={{color:idleColor,fontWeight:600}}>{c.lastContact?(idle===0?"today":`${idle}d ago`):"never"}</span></div>
-                            </div>
-                            <div style={{textAlign:"right"}}>
-                              <div style={{fontSize:18,fontWeight:700,color:C.green}}>{fmtR(c.total)}</div>
-                              <div style={{fontSize:10,color:C.dim}}>signed · target {fmtR(c.target)}</div>
-                              {c.target>0&&<div style={{marginTop:4,height:3,width:120,background:C.s3,borderRadius:2}}><div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:pct>=80?C.green:pct>=40?C.accent:C.red,borderRadius:2}}/></div>}
-                            </div>
-                          </div>
-                          <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:10}}>
-                            {c.fct>0&&<span style={{background:`${C.purple}18`,color:C.purple,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Linear TV {fmtR(c.fct)}</span>}
-                            {c.digital>0&&<span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Digital {fmtR(c.digital)}</span>}
-                            {c.integrated>0&&<span style={{background:`${C.green}18`,color:C.green,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Integrated Packages {fmtR(c.integrated)}</span>}
-                            {c.sponsorship>0&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>IPs {fmtR(c.sponsorship)}</span>}
-                            {c.branded>0&&<span style={{background:`${C.orange}18`,color:C.orange,padding:"2px 9px",borderRadius:10,fontSize:10,fontWeight:600}}>Media Solutions {fmtR(c.branded)}</span>}
-                            {c.fct>0&&c.digital===0&&<span style={{background:`${C.red}10`,color:C.red,padding:"2px 9px",borderRadius:10,fontSize:10,border:`1px dashed ${C.red}44`}}>No digital yet</span>}
-                            {c.total===0&&openDeals.length>0&&<span style={{background:`${C.orange}10`,color:C.orange,padding:"2px 9px",borderRadius:10,fontSize:10}}>In discussion</span>}
-                          </div>
-                          {openDeals.length>0&&(
-                            <div style={{marginTop:10,paddingTop:10,borderTop:`1px solid ${C.border}`}}>
-                              {openDeals.map(d=>(
-                                <div key={d.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4,flexWrap:"wrap"}}>
-                                  <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
-                                  <span style={{fontSize:11,color:C.dim,flex:1}}>{d.nextStep||"No next step set"}</span>
-                                  {d.awaitingApproval&&<span style={{background:`${C.orange}22`,color:C.orange,fontSize:10,padding:"1px 7px",borderRadius:6}}>⏳ {d.awaitingApproval}</span>}
-                                  <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(d.repId),dealId:d.id,clientAgencyName:d.clientCompany,contactName:d.contactName||""}));setLogOpen(true);}}
-                                    style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Meeting</button>
-                                  <button onClick={()=>openAddDeal(d.dealType)}
-                                    style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>+ Deal</button>
-                                  <button onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}}
-                                    style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Thread</button>
-                                  <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Support",dept:"Sales Strategy",subject:`Deck needed for ${d.clientCompany}`,details:"Please prepare a customised pitch deck.",raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Request raised → Sales Strategy ✓");}}
-                                    style={{background:`${C.purple}18`,border:"none",color:C.purple,borderRadius:4,padding:"2px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Deck</button>
-                                </div>
-                                                              ))}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                    {visibleAccts.length===0&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No approved client accounts yet.</div>}
+                    {visibleAccts.length>0&&(
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead>
+                            <tr>{["Client","Rep","Channel","Annual Target","Achieved","Committed","In Play","Shortfall","Stage","Days"].map(h=>(
+                              <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                            ))}</tr>
+                          </thead>
+                          <tbody>
+                            {visibleAccts.map(a=>{
+                              const rep = reps.find(r=>r.id===a.repId);
+                              const ach = revenueEntries.filter(e=>(e.clientAccountId===a.id||(e.repId===a.repId&&e.clientCompany===a.clientName&&!e.clientAccountId))&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                              const cmt = a.currentStage==="Mail Confirmed"?(a.annualTarget||0):0;
+                              const inp = ["In Discussion","Negotiation"].includes(a.currentStage||"")?(a.annualTarget||0):0;
+                              const sf  = Math.max(0,(a.annualTarget||0)-ach-cmt-inp);
+                              const idle = daysSince(a.lastDealMeetingDate||a.lastContactDate);
+                              const pct  = (a.annualTarget||0)>0?Math.round((ach/(a.annualTarget||0))*100):0;
+                              return (
+                                <tr key={a.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}
+                                  onClick={()=>{setAccountThreadClient(a.clientName);setAccountThreadOpen(true);}}
+                                  onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                                  onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                  <td style={{padding:"9px 14px"}}>
+                                    <div className="sans" style={{fontWeight:700}}>{a.clientName}</div>
+                                    {idle>=7&&<span style={{background:`${C.red}22`,color:C.red,padding:"1px 5px",borderRadius:4,fontSize:9,fontWeight:700}}>COLD {idle}d</span>}
+                                  </td>
+                                  <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                  <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{a.channel||"—"}</td>
+                                  <td style={{padding:"9px 14px",fontWeight:600}}>{fmtR(a.annualTarget||0)}</td>
+                                  <td style={{padding:"9px 14px",color:ach>0?C.green:C.muted,fontWeight:ach>0?700:400}}>
+                                    {ach>0?fmtR(ach):"—"}{ach>0&&<div style={{fontSize:9,color:C.dim}}>{pct}%</div>}
+                                  </td>
+                                  <td style={{padding:"9px 14px",color:cmt>0?C.green:C.muted,fontWeight:cmt>0?700:400}}>{cmt>0?fmtR(cmt):"—"}</td>
+                                  <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
+                                  <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
+                                  <td style={{padding:"9px 14px"}}>
+                                    <span style={{padding:"2px 8px",background:`${oColor(a.currentStage)}18`,border:`1px solid ${oColor(a.currentStage)}44`,borderRadius:5,color:oColor(a.currentStage),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{a.currentStage||"—"}</span>
+                                  </td>
+                                  <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* ── LINEAR TV TAB ── */}
                 {(()=>{
@@ -9494,7 +9459,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {(()=>{
                     const rf = revForm;
                     const setRf = setRevForm;
-                    const myDeals = isRep ? deals.filter(d=>d.repId===myRepId&&qMatch(d.quarter)) : deals.filter(d=>qMatch(d.quarter));
+                    // Spec §8: Revenue Log client = clientAccounts where approvalStatus = "Approved" only
+                    const myApprovedAccts = isRep
+                      ? clientAccounts.filter(a=>a.repId===myRepId&&a.approvalStatus==="Approved")
+                      : clientAccounts.filter(a=>a.approvalStatus==="Approved");
                     return (
                       <div>
                         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:8}}>
@@ -9502,16 +9470,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>CLIENT / ADVERTISER</div>
                             <select value={rf.clientCompany} onChange={e=>{
                               const sel = e.target.value;
-                              // Auto-populate zohoAccountId and dealType from the matched deal if available
-                              const matchDeal = myDeals.find(d=>d.clientCompany===sel);
-                              setRf(p=>({...p,clientCompany:sel,zohoAccountId:matchDeal?.zohoAccountId||"",dealType:matchDeal?.dealType||p.dealType}));
+                              // Auto-populate from clientAccount (the canonical source)
+                              const matchAcct = myApprovedAccts.find(a=>a.clientName===sel);
+                              setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",zohoAccountId:matchAcct?.zohoAccountId||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
                             }}
                               style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.zohoAccountId?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
                               <option value="">Select from approved targets…</option>
-                              {[...new Set(myDeals.map(d=>d.clientCompany))].sort().map(cl=><option key={cl}>{cl}</option>)}
+                              {myApprovedAccts.sort((a,b)=>a.clientName.localeCompare(b.clientName)).map(a=><option key={a.id} value={a.clientName}>{a.clientName}</option>)}
                             </select>
                             {rf.zohoAccountId&&<div style={{fontSize:9,color:C.green,marginTop:2}}>✓ Zoho ID linked — revenue will match correctly</div>}
-                            {!rf.clientCompany&&<div style={{fontSize:9,color:C.dim,marginTop:2}}>Only approved target clients appear here. Add a deal first.</div>}
+                            {!rf.clientCompany&&<div style={{fontSize:9,color:C.dim,marginTop:2}}>Only approved target clients appear here.</div>}
                           </div>
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
