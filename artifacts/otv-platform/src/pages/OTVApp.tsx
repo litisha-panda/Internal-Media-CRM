@@ -3706,6 +3706,38 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 )}
 
+                {/* ── T007: Action Items Due Today ── */}
+                {(()=>{
+                  const dueToday = tasks.filter(t =>
+                    (t.assignedToUserId === activeUser || t.repId === myRepId) &&
+                    t.dueDate === TODAY && !["Done","Closed"].includes(t.status)
+                  );
+                  if (!dueToday.length) return null;
+                  return (
+                    <div style={{background:`${C.green}08`,border:`1.5px solid ${C.green}44`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                        <span style={{fontSize:14}}>✅</span>
+                        <span className="sans" style={{fontWeight:700,fontSize:13,color:C.green}}>
+                          {dueToday.length} action item{dueToday.length!==1?"s":""} due today
+                        </span>
+                      </div>
+                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
+                        {dueToday.map(t=>(
+                          <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,background:`${C.green}06`,borderRadius:5,padding:"6px 10px"}}>
+                            <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{t.title}</span>
+                            {t.clientCompany&&<span style={{fontSize:10,color:C.dim}}>{t.clientCompany}</span>}
+                            <span style={{background:`${t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span>
+                            <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
+                              style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontFamily:"'DM Mono',monospace"}}>
+                              {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
+                            </select>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {/* ── Revenue Confirmation Prompt ── */}
                 {(()=>{
                   const pendingRevenue = revenueEntries.filter(e=>
