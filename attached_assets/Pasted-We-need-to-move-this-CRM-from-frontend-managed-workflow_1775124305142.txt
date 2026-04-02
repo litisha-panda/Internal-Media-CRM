@@ -1,0 +1,66 @@
+We need to move this CRM from frontend-managed workflow to backend-governed workflow.
+
+Priority order:
+
+1) Create real backend-controlled auth and authorization
+- Replace localStorage-only credential truth
+- Create persistent users/auth model in backend
+- Enforce role and scope server-side for every write action
+- Roles: SALES REP, REGION HEAD, SALES HEAD, CRO, SALES STRATEGY, DIGI OPS, ADMIN
+
+2) Create target-specific backend actions
+Do NOT use generic whole-array otv_targetSubs writes for business logic anymore.
+Need explicit routes/functions for:
+- create target submission
+- approve target at RH
+- approve target at NSH
+- approve target at Strategy
+- approve target at CRO
+- reject target with note
+- freeze quota on CRO approval
+- add additional revenue opportunity after freeze without changing frozen quota
+
+Business rule:
+- quota is annual and frozen after CRO approval
+- adding a new client later must NOT change frozen quota
+- achieved is measured separately against the frozen quota
+
+3) Create revenue-specific backend actions
+Do NOT leave RO→revenue mapping client-side.
+Need explicit routes/functions for:
+- save parsed RO
+- confirm RO mapping to client / target / deal
+- create revenue entry
+- validate invoiceRef, rep, quarter, permissions
+- update linked deal stage to RO Received when relevant
+- ensure achieved everywhere reads only from revenue entries
+
+4) Fix reset-all properly
+Current reset is incomplete.
+Create a full explicit reset strategy:
+- full dev reset
+- production initialization reset
+Ensure all operational keys/entities are handled, including touchpoints and client accounts.
+Keep admin-only access, typed confirmation, and reset log.
+
+5) Canonical model cleanup
+Decide one canonical model for:
+- touchpoints vs meetings → touchpoints only
+- stage vs outcome → stage only
+Clarify whether clientAccounts and deals both remain:
+- clientAccount = relationship shell / owner / last-contact / annual context
+- deal = opportunity / revenue episode / stage
+If both remain, enforce that split clearly in code and UI.
+
+6) Preserve these good rules
+- achieved source of truth = revenue entries only
+- target approval chain = RH → NSH → Strategy → CRO
+- stages = Prospect → In Discussion → Negotiation → Mail Confirmed → RO Received → Lost
+- touchpoint action routing stays
+
+Please first return:
+A. proposed backend route map
+B. proposed entity/table model
+C. migration plan from current app_state JSON blobs
+D. blockers / risks / edge cases
+Do not start coding until that design is shown clearly.
