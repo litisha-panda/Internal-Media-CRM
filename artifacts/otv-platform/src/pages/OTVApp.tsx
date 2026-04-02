@@ -22,7 +22,7 @@ const STAGE_PROB = { "Prospect": 10, "In Discussion": 40, "Negotiation": 70, "Ma
   "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 10, "Not Interested": 0 };
 const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
 const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Mail Confirmed"];
-const MEETING_TYPES  = ["Physical Meeting", "Online Meeting", "Phone Call"];
+const MEETING_TYPES  = ["Physical", "Online", "Phone Call"];
 const CLIENT_OR_AGENCY = ["Client", "Agency"];
 const TASK_PRIORITIES = ["High", "Medium", "Low"];
 const TASK_STATUSES   = ["Open", "In Progress", "Done", "Overdue"];
@@ -1505,13 +1505,13 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // Part 1+3: `stage` is the canonical field; `outcome` kept for legacy compat
   const BLANK_DEAL = { clientCompany:"", zohoAccountId:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", zohoAgencyId:"", reqs:[], auditLog:[] };
   const BLANK_NEXT_STEP_ITEM = {action:"", actionType:"", details:"", neededFrom:"", remarks:"", dueDate:""};
-  const ACTION_TYPES = ["Approval needed","Document / plan needed","Attend a meeting","Client introduction needed","Flag for follow-up"];
+  const ACTION_TYPES = ["Approval needed","Document needed","Attend a meeting","Introduction needed","Flag for follow-up"];
   const BLANK_LOG = {
     repId:"",
     meetingTime:"", clientOrAgency:"Client",
     dealId:"", clientAgencyName:"", dealAmount:"",
     contactName:"", designation:"", mobile:"",
-    meetingType:"Physical Meeting",
+    meetingType:"Physical",
     // Part 1: new Touchpoint fields
     touchpointType:"Deal Meeting",    // "Deal Meeting" | "Relationship"
     contactLevel:"",                  // C-Suite / VP-GM / etc.
@@ -1702,10 +1702,12 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const CURRENT_FY = "FY26";
   const getAchieved   = (repId?: number, fy = CURRENT_FY) =>
     revenueEntries.filter(e => (repId == null || e.repId === repId) && (e.fiscalYear === fy || fy === "all")).reduce((s, e) => s + (parseCurrency(e.amount||"0")||0), 0);
+  // COMMITTED = clientAccounts at Mail Confirmed stage (per spec: read annualTarget from clientAccounts, never from deals.amount)
   const getCommitted  = (repId?: number) =>
-    deals.filter(d => (repId == null || d.repId === repId) && (dealStage(d) === "Mail Confirmed")).reduce((s, d) => s + (d.pipelineAmount || parseCurrency(d.amount||"0")||0), 0);
+    clientAccounts.filter(a => (repId == null || a.repId === repId) && a.currentStage === "Mail Confirmed").reduce((s, a) => s + (a.annualTarget||0), 0);
+  // IN PLAY = clientAccounts at In Discussion or Negotiation stage
   const getInPlay     = (repId?: number) =>
-    deals.filter(d => (repId == null || d.repId === repId) && ["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s, d) => s + (d.pipelineAmount || parseCurrency(d.amount||"0")||0), 0);
+    clientAccounts.filter(a => (repId == null || a.repId === repId) && ["In Discussion","Negotiation"].includes(a.currentStage||"")).reduce((s, a) => s + (a.annualTarget||0), 0);
   const getShortfall  = (target: number, repId?: number) => Math.max(0, target - getAchieved(repId) - getCommitted(repId) - getInPlay(repId));
 
   // Part 5: Stacked bar — proportions of annual target: Achieved (green) / Committed (blue) / In Play (amber) / Shortfall (red)
@@ -2396,10 +2398,10 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
           // IR so rep can track this request
           newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Attend Meeting",dept:i.neededFrom,subject:`[Meeting request] ${clientCompany} — ${details||"Attend meeting"} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
-        } else if (aType==="Document / plan needed") {
+        } else if (aType==="Document needed" || aType==="Document / plan needed") {
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
           newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Document needed",dept:i.neededFrom,subject:`[Doc needed] ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
-        } else if (aType==="Client introduction needed") {
+        } else if (aType==="Introduction needed" || aType==="Client introduction needed") {
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
           newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Introduction needed",dept:i.neededFrom,subject:`[Intro needed] ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
         } else if (aType==="Flag for follow-up") {
@@ -2753,9 +2755,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         } else if (aType==="Attend a meeting") {
           attendPlansC.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserIdC(i.neededFrom,repIdIntC)||i.neededFrom,date:i.dueDate||TOMORROW,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repNameC}] ${details||`Re: ${clientCompany}`}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repNameC});
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
-        } else if (aType==="Document / plan needed") {
+        } else if (aType==="Document needed" || aType==="Document / plan needed") {
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
-        } else if (aType==="Client introduction needed") {
+        } else if (aType==="Introduction needed" || aType==="Client introduction needed") {
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
         } else if (aType==="Flag for follow-up") {
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — Flagged by ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
@@ -3323,7 +3325,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>?</button>
 
           {/* Countdown — only reps + RHs have 11:30 PM obligation */}
-          {(isRep || isRH) && <div style={{fontSize:11,fontWeight:700,color:countdown.includes("passed")?C.red:C.green,background:countdown.includes("passed")?`${C.red}12`:`${C.green}10`,border:`1px solid ${countdown.includes("passed")?C.red:C.green}33`,padding:"3px 10px",borderRadius:4,whiteSpace:"nowrap"}}>⏱ {countdown}</div>}
+          {(isRep || isRH) && (()=>{
+            const hr = new Date().getHours();
+            const cdColor = countdown.includes("passed") ? C.red : hr >= 21 ? C.red : hr >= 18 ? C.orange : C.green;
+            return <div style={{fontSize:11,fontWeight:700,color:cdColor,background:`${cdColor}12`,border:`1px solid ${cdColor}33`,padding:"3px 10px",borderRadius:4,whiteSpace:"nowrap"}}>⏱ {countdown}</div>;
+          })()}
 
           {/* Profile button — click to open dropdown with sign out */}
           <div style={{position:"relative"}}>
@@ -8260,7 +8266,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             {/* Right — meta */}
                             <div style={{display:"flex",gap:6,alignItems:"center",flexWrap:"wrap"}}>
                               {m.pitchType&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"2px 8px",borderRadius:8,fontSize:10,fontWeight:600}}>{m.pitchType}</span>}
-                              {m.meetingType&&<span style={{background:m.meetingType==="Physical Meeting"?`${C.green}18`:m.meetingType==="Online Meeting"?"#4285F418":`${C.blue}18`,color:m.meetingType==="Physical Meeting"?C.green:m.meetingType==="Online Meeting"?"#4285F4":C.blue,padding:"2px 8px",borderRadius:8,fontSize:10,fontWeight:600}}>{m.meetingType==="Physical Meeting"?"🤝":m.meetingType==="Online Meeting"?"💻":"📞"} {m.meetingType}</span>}
+                              {m.meetingType&&<span style={{background:(m.meetingType==="Physical"||m.meetingType==="Physical Meeting")?`${C.green}18`:(m.meetingType==="Online"||m.meetingType==="Online Meeting")?"#4285F418":`${C.blue}18`,color:(m.meetingType==="Physical"||m.meetingType==="Physical Meeting")?C.green:(m.meetingType==="Online"||m.meetingType==="Online Meeting")?"#4285F4":C.blue,padding:"2px 8px",borderRadius:8,fontSize:10,fontWeight:600}}>{(m.meetingType==="Physical"||m.meetingType==="Physical Meeting")?"🤝":(m.meetingType==="Online"||m.meetingType==="Online Meeting")?"💻":"📞"} {m.meetingType}</span>}
                               {m.clientOrAgency&&<span style={{background:C.s3,color:C.dim,padding:"2px 7px",borderRadius:8,fontSize:10}}>{m.clientOrAgency}</span>}
                               <span style={{fontSize:11,color:m.late?C.orange:C.green,fontWeight:600}}>{m.loggedAt} {m.late?"⚠ late":"✓"}</span>
                             </div>
@@ -12649,8 +12655,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",gap:6,marginTop:4}}>
                   {MEETING_TYPES.map(mt=>(
                     <button key={mt} onClick={()=>setLogForm(p=>({...p,meetingType:mt}))}
-                      style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${logForm.meetingType===mt?(mt==="Physical Meeting"?C.green:mt==="Online Meeting"?"#4285F4":C.accent):C.border}`,background:logForm.meetingType===mt?(mt==="Physical Meeting"?`${C.green}18`:mt==="Online Meeting"?"#4285F418":`${C.accent}18`):"transparent",color:logForm.meetingType===mt?(mt==="Physical Meeting"?C.green:mt==="Online Meeting"?"#4285F4":C.accent):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",transition:"all .1s",textAlign:"center"}}>
-                      {mt==="Physical Meeting"?"🤝":mt==="Online Meeting"?"💻":"📞"} {mt}
+                      style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.border}`,background:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?`${C.green}18`:mt==="Online"?"#4285F418":`${C.accent}18`):"transparent",color:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",transition:"all .1s",textAlign:"center"}}>
+                      {mt==="Physical"?"🤝":mt==="Online"?"💻":"📞"} {mt}
                     </button>
                   ))}
                 </div>
@@ -12895,7 +12901,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{marginTop:6,fontSize:10,color:C.blue,fontWeight:600}}>
                       {(item.actionType||item.action)==="Approval needed" && `→ Approvals tab of ${item.neededFrom}`}
                       {(item.actionType||item.action)==="Attend a meeting" && `→ My Plan of ${item.neededFrom} (unscheduled meeting request)`}
-                      {["Document / plan needed","Client introduction needed","Flag for follow-up"].includes(item.actionType||item.action) && `→ My Tasks of ${item.neededFrom}`}
+                      {["Document needed","Document / plan needed","Introduction needed","Client introduction needed","Flag for follow-up"].includes(item.actionType||item.action) && `→ My Tasks of ${item.neededFrom}`}
                     </div>
                   )}
                 </div>
