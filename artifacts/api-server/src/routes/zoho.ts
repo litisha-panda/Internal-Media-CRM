@@ -7,12 +7,24 @@ const ZOHO_API_BASE   = "https://www.zohoapis.in/crm/v2";
 const ZOHO_SANDBOX    = "https://crmsandbox.zoho.in/crm/v2";
 
 let cachedToken: { token: string; expiresAt: number } | null = null;
+// Mutex: if a refresh is already in flight, queue up rather than firing
+// a second concurrent request (which can cause Zoho 429 errors).
+let tokenRefreshPromise: Promise<string> | null = null;
 
-async function getAccessToken(): Promise<string> {
-  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
-    return cachedToken.token;
+// Fetch with a timeout so Zoho hangs don't block request handlers indefinitely.
+async function fetchWithTimeout(url: string, opts: RequestInit, timeoutMs = 10_000): Promise<Response> {
+  const ctrl = new AbortController();
+  const tid  = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: ctrl.signal });
+  } finally {
+    clearTimeout(tid);
   }
+}
 
+// Internal: actually calls Zoho to exchange refresh_token for access_token.
+// Retries up to 3 times with exponential backoff on transient errors (5xx, 429).
+async function refreshToken(): Promise<string> {
   const params = new URLSearchParams({
     grant_type:    "refresh_token",
     client_id:     process.env.ZOHO_CLIENT_ID     || "",
@@ -20,33 +32,81 @@ async function getAccessToken(): Promise<string> {
     refresh_token: process.env.ZOHO_REFRESH_TOKEN  || "",
   });
 
-  const res = await fetch(ZOHO_TOKEN_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: params.toString(),
+  const MAX_ATTEMPTS = 3;
+  let lastErr: Error = new Error("Unknown error");
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    try {
+      const res = await fetchWithTimeout(
+        ZOHO_TOKEN_URL,
+        {
+          method:  "POST",
+          headers: { "Content-Type": "application/x-www-form-urlencoded" },
+          body:    params.toString(),
+        },
+        10_000,
+      );
+
+      // Retry on server errors or rate-limit responses
+      if (res.status === 429 || res.status >= 500) {
+        const retryAfter = attempt * 2; // 2s, 4s, 6s
+        await new Promise((r) => setTimeout(r, retryAfter * 1000));
+        lastErr = new Error(`Zoho token refresh returned ${res.status}`);
+        continue;
+      }
+
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Zoho token refresh failed (${res.status}): ${text}`);
+      }
+
+      const data = (await res.json()) as {
+        access_token?: string;
+        expires_in?: number;
+        error?: string;
+      };
+
+      if (data.error || !data.access_token) {
+        throw new Error(`Zoho token error: ${data.error || "no access_token returned"}`);
+      }
+
+      cachedToken = {
+        token:     data.access_token,
+        expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
+      };
+
+      return cachedToken.token;
+    } catch (err) {
+      if (err instanceof Error && err.name === "AbortError") {
+        throw new Error("Zoho token refresh timed out after 10s");
+      }
+      lastErr = err instanceof Error ? err : new Error(String(err));
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, attempt * 2000));
+      }
+    }
+  }
+
+  throw lastErr;
+}
+
+async function getAccessToken(): Promise<string> {
+  // Fast path: use cached token if still valid (with 60s buffer)
+  if (cachedToken && Date.now() < cachedToken.expiresAt - 60_000) {
+    return cachedToken.token;
+  }
+
+  // Mutex: if a refresh is already running, wait for it instead of
+  // spawning a second request (prevents concurrent 429 from Zoho)
+  if (tokenRefreshPromise) {
+    return tokenRefreshPromise;
+  }
+
+  tokenRefreshPromise = refreshToken().finally(() => {
+    tokenRefreshPromise = null;
   });
 
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`Zoho token refresh failed (${res.status}): ${text}`);
-  }
-
-  const data = (await res.json()) as {
-    access_token?: string;
-    expires_in?: number;
-    error?: string;
-  };
-
-  if (data.error || !data.access_token) {
-    throw new Error(`Zoho token error: ${data.error || "no access_token returned"}`);
-  }
-
-  cachedToken = {
-    token:     data.access_token,
-    expiresAt: Date.now() + (data.expires_in ?? 3600) * 1000,
-  };
-
-  return cachedToken.token;
+  return tokenRefreshPromise;
 }
 
 // ── Shared helper: search Zoho Accounts module ─────────────────────────────────
@@ -59,7 +119,7 @@ async function searchAccounts(
     ? `${base}/Accounts/search?criteria=(Account_Name:contains:${encodeURIComponent(q)})&fields=id,Account_Name&per_page=20`
     : `${base}/Accounts?fields=id,Account_Name&per_page=50&sort_by=Account_Name&sort_order=asc`;
 
-  const r = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+  const r = await fetchWithTimeout(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } }, 15_000);
   if (r.status === 204) return [];
   if (!r.ok) throw new Error(`Zoho search failed (${r.status})`);
   const data = (await r.json()) as { data?: { id: string; Account_Name: string }[] };
@@ -78,7 +138,7 @@ async function searchAgencies(
     ? `${base}/Accounts/search?criteria=(Account_Name:contains:${encodeURIComponent(q)})&fields=id,Account_Name,Account_Type&per_page=20`
     : `${base}/Accounts?fields=id,Account_Name,Account_Type&per_page=50&sort_by=Account_Name&sort_order=asc`;
 
-  const r = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+  const r = await fetchWithTimeout(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } }, 15_000);
   if (r.status === 204) return [];
   if (!r.ok) throw new Error(`Zoho agency search failed (${r.status})`);
   const data = (await r.json()) as { data?: { id: string; Account_Name: string; Account_Type?: string }[] };
@@ -98,7 +158,7 @@ router.get("/zoho/accounts", async (req, res) => {
     } else {
       url = `${ZOHO_API_BASE}/Accounts?fields=Account_Name&per_page=200&sort_by=Account_Name&sort_order=asc`;
     }
-    const accountRes = await fetch(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } });
+    const accountRes = await fetchWithTimeout(url, { headers: { Authorization: `Zoho-oauthtoken ${token}` } }, 15_000);
     if (accountRes.status === 204) return res.json({ ok: true, accounts: [] });
     if (!accountRes.ok) {
       const text = await accountRes.text();
