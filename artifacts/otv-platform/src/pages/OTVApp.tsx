@@ -9603,6 +9603,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                         </div>
                         <button onClick={()=>{
+                          refreshDates(); // ensure TODAY reflects current date if tab was open overnight
                           const client = rf.clientCompany;
                           if(!client||!rf.amount){showToast("Client and amount are required","err");return;}
                           if(!rf.invoiceRef){showToast("Invoice / RO reference is required — cannot submit without it","err");return;}
