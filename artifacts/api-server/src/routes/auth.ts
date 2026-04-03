@@ -26,11 +26,15 @@ function generateToken(): string {
 
 function cookieOpts(expiresAt: Date) {
   return {
-    httpOnly:  true,
-    secure:    false,          // proxy handles TLS; internal connection is plain
-    sameSite:  "lax" as const,
-    path:      "/",
-    expires:   expiresAt,
+    httpOnly: true,
+    // Use secure cookies in production so tokens are never sent over plain HTTP.
+    // In development (NODE_ENV !== "production") allow http for local testing.
+    secure:   process.env.NODE_ENV === "production",
+    // "strict" blocks the cookie on ALL cross-site navigations/requests, providing
+    // CSRF protection without needing explicit CSRF tokens.
+    sameSite: "strict" as const,
+    path:     "/",
+    expires:  expiresAt,
   };
 }
 
