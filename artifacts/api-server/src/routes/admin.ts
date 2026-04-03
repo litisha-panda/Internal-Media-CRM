@@ -77,7 +77,7 @@ router.get("/admin/users", requireAuth, requireAdmin, async (req, res) => {
 // Activates a pending user and assigns their role + region.
 router.post("/admin/users/:id/approve", requireAuth, requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { role, region } = (req.body ?? {}) as { role?: string; region?: string };
+  const { role, region } = req.body as { role?: string; region?: string };
 
   if (!role || !(VALID_ROLES as readonly string[]).includes(role)) {
     res.status(400).json({ ok: false, error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` });
@@ -159,7 +159,7 @@ router.post("/admin/users/:id/reject", requireAuth, requireAdmin, async (req, re
 // because requireAuth re-joins live user data from DB on every request.
 router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { role, region } = (req.body ?? {}) as { role?: string; region?: string };
+  const { role, region } = req.body as { role?: string; region?: string };
 
   if (!role || !(VALID_ROLES as readonly string[]).includes(role)) {
     res.status(400).json({ ok: false, error: `Invalid role. Must be one of: ${VALID_ROLES.join(", ")}` });
@@ -252,7 +252,7 @@ router.delete("/admin/users/:id", requireAuth, requireAdmin, async (req, res) =>
 // Kills all sessions so the user must log in with the new password.
 router.post("/admin/users/:id/reset-password", requireAuth, requireAdmin, async (req, res) => {
   const { id } = req.params;
-  const { temporaryPassword } = (req.body ?? {}) as { temporaryPassword?: string };
+  const { temporaryPassword } = req.body as { temporaryPassword?: string };
 
   if (!temporaryPassword || temporaryPassword.trim().length < 6) {
     res.status(400).json({ ok: false, error: "temporaryPassword must be at least 6 characters" });
@@ -320,7 +320,7 @@ router.put("/admin/config", requireAuth, requireAdmin, async (req, res) => {
 // Full dev reset: wipes all operational app_state blobs + all sessions.
 // Users are preserved. Reset is logged before wiping.
 router.post("/admin/reset/dev", requireAuth, requireAdmin, async (req, res) => {
-  const { confirmText } = (req.body ?? {}) as { confirmText?: string };
+  const { confirmText } = req.body as { confirmText?: string };
 
   if (confirmText !== "RESET") {
     res.status(400).json({ ok: false, error: "confirmText must be exactly 'RESET'" });

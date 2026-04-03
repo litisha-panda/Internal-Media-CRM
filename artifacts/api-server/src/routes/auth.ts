@@ -145,23 +145,15 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
-    // Password verification order:
-    //  1. Always try bcrypt first (covers normal accounts AND admin-reset accounts)
-    //  2. If bcrypt fails AND needsPwReset=true, try SHA-256 bridge (legacy localStorage migration)
-    //     and upgrade the hash to bcrypt on success.
+    // SHA-256 bridge: legacy localStorage passwords were SHA-256 hashed.
+    // On first login after migration, accept SHA-256 match, then re-hash with bcrypt.
     let passwordOk = false;
 
-    const bcryptOk = await bcrypt.compare(password, user.passwordHash);
-
-    if (bcryptOk) {
-      passwordOk = true;
-      // If the account was marked for reset (admin set a temp bcrypt password),
-      // the flag stays true — frontend will prompt for a real password change.
-    } else if (user.needsPwReset) {
-      // SHA-256 bridge: legacy accounts whose hash was stored as SHA-256
+    if (user.needsPwReset) {
+      // Try SHA-256 bridge first
       const sha256 = crypto.createHash("sha256").update(password).digest("hex");
       if (sha256 === user.passwordHash) {
-        // Upgrade to bcrypt and clear the migration flag
+        // Upgrade to bcrypt
         const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
         await db
           .update(users)
@@ -169,6 +161,8 @@ router.post("/auth/login", async (req, res) => {
           .where(eq(users.id, user.id));
         passwordOk = true;
       }
+    } else {
+      passwordOk = await bcrypt.compare(password, user.passwordHash);
     }
 
     if (!passwordOk) {
@@ -229,21 +223,10 @@ router.post("/auth/seed-demo", async (req, res) => {
       .from(users)
       .limit(1);
 
-    // Allow re-seeding only if table is empty OR if caller is an authenticated admin.
-    // Note: seed-demo doesn't use requireAuth middleware, so we must check the session manually.
-    let callerIsAdmin = false;
-    const token = req.cookies?.[COOKIE_NAME] as string | undefined;
-    if (token) {
-      const sessionRows = await db
-        .select({ role: users.role, status: users.status })
-        .from(sessions)
-        .innerJoin(users, eq(sessions.userId, users.id))
-        .where(eq(sessions.token, token))
-        .limit(1);
-      callerIsAdmin = sessionRows.length > 0 &&
-                      sessionRows[0].status === "active" &&
-                      sessionRows[0].role   === "ADMIN";
-    }
+    // Allow re-seeding only if table is empty OR if caller is an authenticated admin
+    const callerIsAdmin =
+      req.cookies?.[COOKIE_NAME] &&
+      req.user?.role === "ADMIN";
 
     if (existing.length > 0 && !callerIsAdmin) {
       res.status(403).json({

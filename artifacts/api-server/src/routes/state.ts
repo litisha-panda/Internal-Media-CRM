@@ -1,59 +1,44 @@
 import { Router } from "express";
 import { db, appStateTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
-import { requireAdmin } from "../middlewares/requireRole";
 
 const router = Router();
 
-// Complete list of operational blobs to wipe on reset-all.
-// Any new otv_* key added to the system must be added here too.
 const OTV_EMPTY_STATE: Record<string, unknown> = {
-  otv_absence:        [],
-  otv_att:            {},
-  otv_clientAccounts: [],   // Part 1: client account threads
-  otv_deals:          [],
-  otv_internalReqs:   [],
-  otv_ipProposals:    [],
-  otv_liveRoles:      [],
-  otv_masterClients:  [],
-  otv_meetings:       [],
-  otv_pendingUsers:   [],
-  otv_plans:          [],
-  otv_properties:     [],
-  otv_reps:           [],
-  otv_revenueEntries: [],
-  otv_savedROs:       [],
-  otv_targetSubs:     [],
-  otv_tasks:          [],
-  otv_touchpoints:    [],   // Part 1: touchpoints / meeting log
-  otv_wplans:         [],
-  otv_adminConfig:    {},   // reset to defaults; getAdminConfig() merges with DEFAULT_CONFIG
+  otv_absence: [], otv_att: {}, otv_deals: [], otv_internalReqs: [],
+  otv_ipProposals: [], otv_liveRoles: [], otv_masterClients: [],
+  otv_meetings: [], otv_pendingUsers: [], otv_plans: [], otv_properties: [],
+  otv_reps: [], otv_revenueEntries: [], otv_savedROs: [],
+  otv_targetSubs: [], otv_tasks: [], otv_wplans: [],
 };
 
-// ─── POST /api/state/reset-all ───────────────────────────────────────────────
-// Wipes all operational app_state blobs.
-// Gate: session must be authenticated AND have ADMIN role.
-// The client must also supply confirmText="RESET" to prevent accidental triggers.
-router.post("/state/reset-all", requireAuth, requireAdmin, async (req, res) => {
+router.post("/state/reset-all", async (req, res) => {
   try {
-    const { confirmText } = (req.body ?? {}) as { confirmText?: string };
+    const { confirmText, triggeredBy, role } = req.body as {
+      confirmText?: string;
+      triggeredBy?: string;
+      role?: string;
+    };
 
-    if (confirmText !== "RESET") {
-      res.status(400).json({ ok: false, error: "confirmText must be exactly 'RESET'" });
+    // Must be Admin role
+    if (role !== "ADMIN") {
+      res.status(403).json({ ok: false, error: "Only Admin can reset all data." });
       return;
     }
 
-    const resetLog = {
-      triggeredBy:     req.user!.id,
-      triggeredByName: req.user!.name,
-      triggeredByEmail: req.user!.email,
-      role:            req.user!.role,
-      at:              new Date().toISOString(),
-      action:          "reset-all",
-    };
+    // Must type the confirmation string exactly
+    if (confirmText !== "RESET") {
+      res.status(400).json({ ok: false, error: "Confirmation text must be exactly 'RESET'." });
+      return;
+    }
 
-    // Log the reset before wiping (record survives the wipe)
+    // Log the trigger before wiping
+    const resetLog = {
+      triggeredBy: triggeredBy || "unknown",
+      role,
+      at: new Date().toISOString(),
+      action: "reset-all",
+    };
     await db
       .insert(appStateTable)
       .values({ key: "otv_resetLog", value: resetLog as object, updatedAt: new Date() })
@@ -62,6 +47,7 @@ router.post("/state/reset-all", requireAuth, requireAdmin, async (req, res) => {
         set: { value: resetLog as object, updatedAt: new Date() },
       });
 
+    // Wipe all app state
     for (const [key, value] of Object.entries(OTV_EMPTY_STATE)) {
       await db
         .insert(appStateTable)
@@ -78,9 +64,7 @@ router.post("/state/reset-all", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
-// ─── GET /api/state/:key ─────────────────────────────────────────────────────
-// Requires authentication — state blobs contain sensitive operational data.
-router.get("/state/:key", requireAuth, async (req, res) => {
+router.get("/state/:key", async (req, res) => {
   try {
     const rows = await db
       .select()
@@ -98,10 +82,7 @@ router.get("/state/:key", requireAuth, async (req, res) => {
   }
 });
 
-// ─── PUT /api/state/:key ─────────────────────────────────────────────────────
-// Requires authentication — any logged-in user may persist their own state blob.
-// (reset-all, which clears all blobs, is separately admin-gated above.)
-router.put("/state/:key", requireAuth, async (req, res) => {
+router.put("/state/:key", async (req, res) => {
   try {
     const { value } = req.body as { value: unknown };
     if (value === undefined) {
