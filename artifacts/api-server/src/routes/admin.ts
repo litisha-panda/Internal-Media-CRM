@@ -138,13 +138,18 @@ router.post("/admin/users/:id/reject", requireAuth, requireAdmin, async (req, re
       return;
     }
 
-    await invalidateUserSessions(id);
-
-    const [updated] = await db
-      .update(users)
-      .set({ status: "revoked", updatedAt: new Date() })
-      .where(eq(users.id, id))
-      .returning();
+    // Wrap session deletion and status update in a transaction so the user
+    // is never left in a state where sessions are killed but status is still
+    // "pending" (or vice-versa) if one of the two operations fails.
+    const updated = await db.transaction(async (tx) => {
+      await tx.delete(sessions).where(eq(sessions.userId, id));
+      const [u] = await tx
+        .update(users)
+        .set({ status: "revoked", updatedAt: new Date() })
+        .where(eq(users.id, id))
+        .returning();
+      return u;
+    });
 
     res.json({ ok: true, user: safeUser(updated) });
   } catch (err) {
@@ -229,14 +234,17 @@ router.delete("/admin/users/:id", requireAuth, requireAdmin, async (req, res) =>
       }
     }
 
-    // Kill sessions first — takes effect immediately
-    await invalidateUserSessions(id);
-
-    const [updated] = await db
-      .update(users)
-      .set({ status: "revoked", updatedAt: new Date() })
-      .where(eq(users.id, id))
-      .returning();
+    // Wrap session deletion + status update atomically so the user is never
+    // left with an active session but status still "active" if one op fails.
+    const updated = await db.transaction(async (tx) => {
+      await tx.delete(sessions).where(eq(sessions.userId, id));
+      const [u] = await tx
+        .update(users)
+        .set({ status: "revoked", updatedAt: new Date() })
+        .where(eq(users.id, id))
+        .returning();
+      return u;
+    });
 
     res.json({ ok: true, user: safeUser(updated) });
   } catch (err) {
@@ -354,34 +362,38 @@ router.post("/admin/reset/dev", requireAuth, requireAdmin, async (req, res) => {
 
   try {
     const resetEntry = {
-      triggeredBy: req.user!.id,
+      triggeredBy:     req.user!.id,
       triggeredByName: req.user!.name,
-      resetType: "dev",
-      at: new Date().toISOString(),
+      resetType:       "dev",
+      at:              new Date().toISOString(),
     };
 
-    // Log the reset first (survives the wipe)
-    await db
-      .insert(appStateTable)
-      .values({ key: "otv_resetLog", value: resetEntry as object, updatedAt: new Date() })
-      .onConflictDoUpdate({
-        target: appStateTable.key,
-        set: { value: resetEntry as object, updatedAt: new Date() },
-      });
-
-    // Wipe all operational blobs
-    for (const [key, value] of Object.entries(OTV_EMPTY_STATE)) {
-      await db
+    // Wrap the entire reset in a transaction so a mid-reset failure doesn't
+    // leave some keys cleared and others with live data.
+    await db.transaction(async (tx) => {
+      // Log the reset first (survives the wipe)
+      await tx
         .insert(appStateTable)
-        .values({ key, value: value as object, updatedAt: new Date() })
+        .values({ key: "otv_resetLog", value: resetEntry as object, updatedAt: new Date() })
         .onConflictDoUpdate({
           target: appStateTable.key,
-          set: { value: value as object, updatedAt: new Date() },
+          set: { value: resetEntry as object, updatedAt: new Date() },
         });
-    }
 
-    // Kill all sessions — forces everyone to re-login
-    await db.delete(sessions);
+      // Wipe all operational blobs
+      for (const [key, value] of Object.entries(OTV_EMPTY_STATE)) {
+        await tx
+          .insert(appStateTable)
+          .values({ key, value: value as object, updatedAt: new Date() })
+          .onConflictDoUpdate({
+            target: appStateTable.key,
+            set: { value: value as object, updatedAt: new Date() },
+          });
+      }
+
+      // Kill all sessions — forces everyone to re-login
+      await tx.delete(sessions);
+    });
 
     res.json({
       ok:      true,
