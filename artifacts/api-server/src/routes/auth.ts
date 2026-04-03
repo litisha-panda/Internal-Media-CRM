@@ -39,7 +39,9 @@ function cookieOpts(expiresAt: Date) {
 }
 
 async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
-  // Purge expired sessions for this user (housekeeping)
+  // Purge ALL expired sessions (not just this user's) to prevent unbounded
+  // table growth. Every login is a good opportunity for housekeeping since
+  // there is no separate background cleanup process.
   await db
     .delete(sessions)
     .where(lt(sessions.expiresAt, new Date()));
