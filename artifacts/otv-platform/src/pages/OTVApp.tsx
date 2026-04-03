@@ -9610,7 +9610,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               }
                             }
                           }
-                          // Part 3+9: Auto-set deal stage to "RO Received" when revenue is logged
+                          // Part 3+9: Auto-set deal stage to "RO Received" when revenue is logged.
+                          // Match priority: Zoho account ID (if both deal and entry have one),
+                          // falling back to client company name comparison.
                           const matchDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&(rf.zohoAccountId&&d.zohoAccountId?d.zohoAccountId===rf.zohoAccountId:d.clientCompany===client)&&qMatch(d.quarter));
                           if(matchDeal){
                             setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,stage:"RO Received",outcome:"RO Received",lastContact:TODAY}:d));
@@ -9618,6 +9620,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             if (matchDeal.clientAccountId) {
                               setClientAccounts(p=>p.map(a=>a.id===matchDeal.clientAccountId?{...a,currentStage:"RO Received",lastContactDate:TODAY,updatedAt:TODAY}:a));
                             }
+                          } else {
+                            // Revenue entry saved but no matching deal was found.
+                            // This means the deal stage won't be updated to "RO Received".
+                            // Common causes: Zoho account ID mismatch, client name typo,
+                            // or no deal exists for this client+quarter combination.
+                            showToast(`Revenue logged, but no matching deal found for "${client}" in this quarter. Update the deal stage manually.`,"warn");
                           }
                           setRf({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
                           const totalFY = [...revenueEntries.filter(e=>(isRep?e.repId===myRepId:true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
