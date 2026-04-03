@@ -1,6 +1,8 @@
 import { Router } from "express";
 import { db, appStateTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { requireAuth } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireRole";
 
 const router = Router();
 
@@ -12,16 +14,14 @@ const OTV_EMPTY_STATE: Record<string, unknown> = {
   otv_targetSubs: [], otv_tasks: [], otv_wplans: [],
 };
 
-router.post("/state/reset-all", async (req, res) => {
+router.post("/state/reset-all", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { confirmText, triggeredBy, role } = req.body as {
+    const { confirmText } = req.body as {
       confirmText?: string;
-      triggeredBy?: string;
-      role?: string;
     };
 
-    // Must be Admin role
-    if (role !== "ADMIN") {
+    // Role is read from the authenticated session — never from client body
+    if (req.user!.role !== "ADMIN") {
       res.status(403).json({ ok: false, error: "Only Admin can reset all data." });
       return;
     }
@@ -34,8 +34,9 @@ router.post("/state/reset-all", async (req, res) => {
 
     // Log the trigger before wiping
     const resetLog = {
-      triggeredBy: triggeredBy || "unknown",
-      role,
+      triggeredBy: req.user!.id,
+      triggeredByName: req.user!.name,
+      role: req.user!.role,
       at: new Date().toISOString(),
       action: "reset-all",
     };
