@@ -2405,8 +2405,10 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       const details = i.details||i.remarks||"";
       const ts = `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
       if (i.neededFrom==="Self") {
-        // Self-assigned: goes only to rep's own tasks
-        newTasks.push({id:ts,assignedTo:null,assignedToUserId:null,assignedDept:"Self",repId:repIdInt,clientCompany,title:`${aType} — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
+        // Self-assigned: goes only to rep's own tasks.
+        // assignedToUserId must be activeUser (not null) so the task filter
+        // at line ~2199 (t.assignedToUserId===activeUser) can surface it.
+        newTasks.push({id:ts,assignedTo:repIdInt,assignedToUserId:activeUser,assignedDept:"Self",repId:repIdInt,clientCompany,title:`${aType} — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
       } else if (i.neededFrom!=="Client") {
         if (aType==="Approval needed") {
           // → Approvals tab (Internal Request of type Approval) + Task for approver
@@ -2736,7 +2738,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       .filter(i => i.action && (!i.neededFrom || i.neededFrom === "Self"))
       .map(i => ({
         id: `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        assignedTo: rep?.name||null,
+        // assignedTo must be the numeric repId, not the rep name string.
+        // The task filter at line ~2199 checks t.assignedTo===myRepId (number),
+        // so storing a name string here caused self-tasks to be invisible.
+        assignedTo: repIdIntC,
         assignedToUserId: activeUser,
         assignedDept: "Self",
         repId: repIdIntC,
