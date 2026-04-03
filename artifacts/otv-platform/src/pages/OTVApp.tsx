@@ -1824,13 +1824,30 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     try{
       const parsed=[];
       if(roFiles.length>0){
+        // Track per-file errors so a single bad file doesn't abort the whole batch
+        const fileErrors: string[] = [];
         for(let i=0;i<roFiles.length;i++){
           setRoProgress(`Parsing ${i+1}/${roFiles.length}: ${roFiles[i].name}...`);
-          const msgs=await roBuildMessages(roFiles[i]);
-          const text=await roCallAPI(msgs);
-          const raw=roExtractJSON(text);
-          const deals=Array.isArray(raw)?raw:[raw];
-          deals.forEach((result,di)=>{roNormalizeDoc(result);result._filename=roFiles[i].name+(deals.length>1?` [${di+1}]`:"");parsed.push(result);});
+          try{
+            const msgs=await roBuildMessages(roFiles[i]);
+            const text=await roCallAPI(msgs);
+            const raw=roExtractJSON(text);
+            const deals=Array.isArray(raw)?raw:[raw];
+            deals.forEach((result,di)=>{roNormalizeDoc(result);result._filename=roFiles[i].name+(deals.length>1?` [${di+1}]`:"");parsed.push(result);});
+          }catch(fileErr){
+            // Record failure, continue with remaining files
+            fileErrors.push(`${roFiles[i].name}: ${roFriendlyError(fileErr)}`);
+          }
+        }
+        if(fileErrors.length>0 && parsed.length===0){
+          // All files failed
+          setRoError(`All files failed to parse:\n${fileErrors.join("\n")}`);
+        }else if(fileErrors.length>0){
+          // Partial success — show results and surface the failures as a warning
+          setRoResults(parsed);setRoActiveDoc(0);
+          setRoError(`${fileErrors.length} file(s) failed:\n${fileErrors.join("\n")}`);
+        }else{
+          setRoResults(parsed);setRoActiveDoc(0);
         }
       }else{
         setRoProgress("Parsing...");
@@ -1838,8 +1855,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         const raw=roExtractJSON(text);
         const deals=Array.isArray(raw)?raw:[raw];
         deals.forEach((result,di)=>{roNormalizeDoc(result);result._filename="Pasted Text"+(deals.length>1?` [${di+1}]`:"");parsed.push(result);});
+        setRoResults(parsed);setRoActiveDoc(0);
       }
-      setRoResults(parsed);setRoActiveDoc(0);
     }catch(err){setRoError(roFriendlyError(err));}
     finally{setRoLoading(false);setRoProgress("");}
   };
