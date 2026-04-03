@@ -4,7 +4,7 @@ Internal sales management platform for Odisha Television Network. Private, not f
 
 ## Stack
 
-- `artifacts/otv-platform/src/pages/OTVApp.tsx` — entire frontend, ~11,600+ lines, single React/Vite component
+- `artifacts/otv-platform/src/pages/OTVApp.tsx` — entire frontend, ~13,700+ lines, single React/Vite component
 - `artifacts/api-server/` — Express API server at `/api`, port 8080
 - `lib/db/` — Drizzle ORM + PostgreSQL (Replit built-in DB)
 - Build tool: Vite. One secret: `ANTHROPIC_API_KEY`
@@ -13,10 +13,15 @@ Internal sales management platform for Odisha Television Network. Private, not f
 
 All shared state lives in the `app_state` table (key TEXT PRIMARY KEY, value JSONB). 
 The `usePersistedState` hook in OTVApp.tsx syncs every collection to the server:
-- On mount: fetches latest from `/api/state/:key` (overrides localStorage with server data)
-- On change: debounces 1s then writes to server via PUT `/api/state/:key`
+- On mount: fetches latest from `/api/state/:key` (requires auth — returns 401 pre-login, falls back to localStorage)
+- On change: debounces 1s then writes to server via PUT `/api/state/:key` (requires auth)
 - Polls every 20s to pick up changes from other users (skips if user recently wrote)
 - Falls back to localStorage if server unreachable
+- `POST /api/state/reset-all` requires ADMIN role + `confirmText:"RESET"` body
+
+Tasks and Internal Requests are now proper PostgreSQL tables (not JSONB blobs):
+- `tasks` table: `GET/POST /api/tasks`, `PATCH /api/tasks/:id/status`
+- `internal_requests` table: `GET/POST /api/internal-requests`, `PATCH .../acknowledge`, `.../resolve`, `.../reject`, and field update `PATCH /:id`
 
 Collections synced: `otv_deals`, `otv_tasks`, `otv_targetSubs`, `otv_meetings`, `otv_plans`,
 `otv_wplans`, `otv_internalReqs`, `otv_att`, `otv_absence`, `otv_revenueEntries`,
@@ -124,6 +129,52 @@ All 13 parts of the CRM spec are now implemented:
 - **T007 (Part 8 — My Plan behaviour)**: At-risk cards at top of My Plan. Action items due today section. Deadline countdown: 6PM amber, 9PM red, 11PM full-width + "Nothing more to log today" button.
 - **T008 (Parts 9+10+11 — Trigger map, role views, regions)**: Relationship TPs don't update `lastDealMeetingDate`. Revenue log auto-sets stage to "RO Received". Revenue Log is 2nd item in rep PLANNING sidebar. IPs tab read-only for reps. No New Package button for reps. "No target set for this category" empty state. Six regions: North, South, East, West, National, Central.
 - **T009 (Parts 12+13 — Navigation)**: RO Management card → `dealroreader.replit.app`. `getCRMDefaultView()` routes per role: ADMIN→admin-access, RH→warroom, NSH/CRO/Strategy→warroom, DIGI OPS→digi-deals, SALES REP→my-plan. Reset-All endpoint gated with `role !== "ADMIN"` check.
+
+## Backend API Phases
+
+The platform is migrating from localStorage/JSONB app_state to proper PostgreSQL tables with role-governed routes.
+
+### Completed Phases
+
+| Phase | Description | Routes | Table(s) |
+|-------|-------------|--------|----------|
+| 0 | Schema: otv_users + otv_sessions | — | `otv_users`, `otv_sessions` |
+| 1 | Auth routes + requireAuth middleware | POST/GET auth/login, GET auth/me, POST auth/logout | — |
+| 2 | Admin routes | 9 routes (users CRUD, role/password, reset-all) | — |
+| 3 | Target submission routes | 9 routes (submit, approve, reject, override, freeze, list) | `target_submissions`, `target_clients` |
+| 4 | Revenue entry routes | 5 routes (create, list, update-notes, summary) | `revenue_entries` |
+| 5 | Client accounts + deals routes | 4+4=8 routes (CRUD + stage PATCH) | `client_accounts`, `deals` |
+| 6 | Touchpoints routes | POST, GET, GET/escalations | `touchpoints` |
+| 7 | Tasks + internal_requests routes | GET /tasks, PATCH status, GET /internal-requests, PATCH resolve/reject | `tasks`, `internal_requests` |
+
+### Pending Phases
+
+| Phase | Description |
+|-------|-------------|
+| 8 | Frontend cutover (usePersistedState → API calls for client accounts, touchpoints, tasks, IRs) |
+
+### Golden Rules (never violate)
+- **ACHIEVED** = `revenue_entries` table ONLY — never deal.amount, never pipeline amounts
+- **Never touch RO Parser** — all RO engine code remains as-is
+- **Pipeline is always derived** — never stored
+- **Revenue entries are immutable** except notes (no edit/delete routes)
+- **lastDealMeetingDate** resets ONLY on `Deal Meeting` touchpoint type — never on Relationship/Cold Call/Email/RO Follow-up
+
+### Touchpoints Route Spec
+- `POST /api/touchpoints` — create touchpoint; validates stageUpdate; applies controlled stage transition; updates client account clocks (Deal Meeting → both clocks, others → lastContactDate only); routes action items to app_state bridge
+- `GET /api/touchpoints` — list, role-scoped, query params: dealId/clientAccountId/repUserId/touchpointType/dateFrom/dateTo
+- `GET /api/touchpoints/escalations` — computes atRisk (7+ idle days, active stage), trigger2A (4+ meetings no stage movement in 30d), trigger2B (<15 touchpoints/calendar month per rep)
+
+### Action Item Routing (Phase 6 bridge via app_state)
+| Action Type | Destination |
+|-------------|------------|
+| Approval needed | `otv_internalReqs` |
+| Attend a meeting | `otv_plans` |
+| Document needed | `otv_tasks` |
+| Introduction needed | `otv_tasks` |
+| Flag for follow-up | `otv_tasks` (self, no IR) |
+
+Phase 7 will replace app_state bridge with direct INSERT to `internal_reqs`, `plans`, `tasks` tables.
 
 ## Session Bug Fixes
 

@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import ZohoSearchInput from "../components/ZohoSearchInput";
 
 
@@ -578,14 +578,28 @@ async function roCallAPI(msgs) {
   }
 }
 
-// Simple client-side password hash using PBKDF2 via WebCrypto
-async function hashPwd(password) {
+// Auth helpers — call backend session API
+async function apiLogin(email: string, password: string): Promise<{ ok: boolean; error?: string; pending?: boolean }> {
   try {
-    const enc = new TextEncoder();
-    const key = await crypto.subtle.importKey("raw", enc.encode(password), "PBKDF2", false, ["deriveBits"]);
-    const bits = await crypto.subtle.deriveBits({ name:"PBKDF2", salt:enc.encode("otv-crm-v1"), iterations:50000, hash:"SHA-256" }, key, 256);
-    return btoa(String.fromCharCode(...new Uint8Array(bits)));
-  } catch { return btoa(password); } // fallback if SubtleCrypto unavailable
+    const r = await fetch("/api/auth/login", {
+      method: "POST", credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const d = await r.json();
+    if (r.ok) return { ok: true };
+    if (r.status === 403 && d.error === "pending") return { ok: false, pending: true };
+    return { ok: false, error: d.error || "Login failed" };
+  } catch { return { ok: false, error: "Network error — try again" }; }
+}
+
+async function apiMe(): Promise<any | null> {
+  try {
+    const r = await fetch("/api/auth/me", { credentials: "include" });
+    if (!r.ok) return null;
+    const d = await r.json();
+    return d.ok ? d.user : null;
+  } catch { return null; }
 }
 
 
@@ -724,51 +738,40 @@ function LoginScreen({ onLogin }) {
     if (isNew && !phone.trim()) { setErr("Phone number is required"); return; }
     setLoading(true);
     try {
-      const stored  = JSON.parse(localStorage.getItem("otv_crm_users") || "[]");
-      const pending = JSON.parse(localStorage.getItem("otv_pendingSignups") || "[]");
-      const approved = stored.find(u => u.email.toLowerCase() === email.toLowerCase());
-      const inPending = pending.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-      if (approved) {
-        // Existing approved user — normal login
-        const h = await hashPwd(password);
-        if (approved.passwordHash !== h && approved.password !== password) {
-          setErr("Incorrect password"); setLoading(false); return;
-        }
-        onLogin({ name: approved.name, email: approved.email });
-      } else if (inPending) {
-        // Account exists but not yet approved — check password then show holding screen
-        const h = await hashPwd(password);
-        if (inPending.passwordHash !== h) { setErr("Incorrect password"); setLoading(false); return; }
-        setPendingApproval(inPending); setLoading(false);
+      if (isNew) {
+        // Sign-up → POST /api/auth/signup, show pending-approval screen
+        const r = await fetch("/api/auth/signup", {
+          method: "POST", credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: name.trim(), email: email.trim().toLowerCase(), password, phone: phone.trim(), designation: designation.trim(), intendedRole, preferredRegion }),
+        });
+        const d = await r.json();
+        if (r.status === 409) { setErr(d.error || "Email already registered"); setLoading(false); return; }
+        if (!r.ok) { setErr(d.error || "Signup failed"); setLoading(false); return; }
+        setPendingApproval({ name: name.trim(), email: email.trim().toLowerCase() });
+        setLoading(false);
       } else {
-        if (!isNew) { setErr("No account found. Click 'Create one' to sign up."); setLoading(false); return; }
-        // Brand-new signup — store in pending, do NOT log in yet
-        if (pending.find(u => u.email === email.toLowerCase())) {
-          setErr("A request for this email is already pending admin approval."); setLoading(false); return;
-        }
-        const h = await hashPwd(password);
-        const newPending = {
-          id: `ps_${Date.now()}`,
-          name: name.trim(), email: email.toLowerCase(), passwordHash: h,
-          phone: phone.trim(), designation: designation.trim(),
-          intendedRole, preferredRegion,
-          requestedAt: new Date().toISOString().split("T")[0],
-        };
-        localStorage.setItem("otv_pendingSignups", JSON.stringify([...pending, newPending]));
-        setPendingApproval(newPending); setLoading(false);
+        // Sign-in → POST /api/auth/login
+        const result = await apiLogin(email.trim(), password);
+        if (result.pending) { setPendingApproval({ name: "", email: email.trim() }); setLoading(false); return; }
+        if (!result.ok) { setErr(result.error || "Login failed"); setLoading(false); return; }
+        const me = await apiMe();
+        if (!me) { setErr("Session error — please try again"); setLoading(false); return; }
+        onLogin(me);
       }
     } catch(_err) {
       setErr("Login error — try again."); setLoading(false);
     }
   };
 
-  const handleDemo = (account) => {
-    setLoading(true);
-    setTimeout(() => {
-      onLogin({ name: account.label, email: account.email });
-      setLoading(false);
-    }, 600);
+  // doLogin: POST /api/auth/login with preset credentials (demo buttons + admin button)
+  const doLogin = async (loginEmail: string, loginPassword: string) => {
+    setErr(""); setLoading(true);
+    const result = await apiLogin(loginEmail, loginPassword);
+    if (!result.ok) { setErr(result.error || "Login failed"); setLoading(false); return; }
+    const me = await apiMe();
+    if (!me) { setErr("Session error — please try again"); setLoading(false); return; }
+    onLogin(me);
   };
 
   // ── Pending-approval holding screen ──
@@ -882,15 +885,15 @@ function LoginScreen({ onLogin }) {
                   <div style={{ fontSize:10, color:"#4d5e78", fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", marginBottom:10, textAlign:"center" }}>Demo Access</div>
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                     {[
-                      { label:"Sales Rep",           email:"arjun@odishatv.com",      color:"#1d5db4" },
-                      { label:"Region Head",          email:"rhnorth@odishatv.com",     color:"#7920e8" },
+                      { label:"Sales Rep",           email:"arjun@odishatv.com",       color:"#1d5db4" },
+                      { label:"Region Head",          email:"rh.north@odishatv.com",    color:"#7920e8" },
                       { label:"National Sales Head",  email:"saleshead@odishatv.com",   color:"#0369a1" },
                       { label:"Digi Ops",             email:"digiops@odishatv.com",     color:"#1e40af" },
                       { label:"Sales Strategy",       email:"sachin@odishatv.com",      color:"#15803d" },
                       { label:"CRO",                  email:"darpan@odishatv.com",      color:"#c47d00" },
                     ].map(a => (
                       <button key={a.email}
-                        onClick={() => onLogin({ name:a.label, email:a.email })}
+                        onClick={() => doLogin(a.email, "demo123")}
                         style={{ background:"#f0f4f9", border:`1px solid ${a.color}44`, borderRadius:6, padding:"8px 10px", cursor:"pointer", textAlign:"left", transition:"border-color .15s, background .15s" }}
                         onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background="#e8eef7"; }}
                         onMouseOut={e=>{ e.currentTarget.style.borderColor=`${a.color}44`; e.currentTarget.style.background="#f0f4f9"; }}>
@@ -903,7 +906,7 @@ function LoginScreen({ onLogin }) {
 
                 {/* Admin quick-login — bottom, subtle */}
                 <button
-                  onClick={() => onLogin({ name:"Admin", email:"admin@odishatv.com", role:"admin" })}
+                  onClick={() => doLogin("admin@odishatv.com", "demo123")}
                   style={{ width:"100%", marginTop:10, background:"transparent", border:"1px solid #c8d3e544", borderRadius:6, padding:"8px 16px", color:"#8a97ae", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", letterSpacing:".04em" }}>
                   ⚙ Admin access
                 </button>
@@ -941,7 +944,7 @@ function LoginScreen({ onLogin }) {
                         <div>
                           <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Region</label>
                           <select className="login-input" value={preferredRegion} onChange={e=>setReg(e.target.value)} style={{padding:"10px 14px"}}>
-                            {["North","South","East","West","National"].map(r=><option key={r}>{r}</option>)}
+                            {["North","South","East","West","National","Central"].map(r=><option key={r}>{r}</option>)}
                           </select>
                         </div>
                       </div>
@@ -1098,19 +1101,45 @@ const DATA_VERSION = "v3-clean";
 })();
 
 export default function OTVApp() {
+  const [authChecked, setAuthChecked] = useState(false);
   const [loggedIn, setLoggedIn]       = useState(false);
   const [loginUser, setLoginUser]     = useState(null);
   const [section, setSection]         = useState("home"); // "home" | "ro" | "crm"
-  const [plans, setPlans]             = usePersistedState("otv_plans",    SEED_PLANS);
+  const [plans, setPlans]             = useState<any[]>([]);              // Phase 8 Step 4: backend-driven
   const [weeklyPlans, setWeeklyPlans] = usePersistedState("otv_wplans",   SEED_WEEKLY_PLANS);
   const [meetings, setMeetings]       = usePersistedState("otv_meetings", SEED_MEETINGS);
-  const [deals, setDeals]             = usePersistedState("otv_deals",    SEED_DEALS);
+  const [deals, setDeals]             = useState<any[]>([]);  // Phase 8 Step 3: backend-driven
 
-  const handleLogin  = (user) => { setLoginUser(user); setLoggedIn(true); setSection(user?.role === "admin" ? "crm" : "home"); if (user?.provider) setLoginProvider(user.provider); };
-  const handleLogout = ()     => { setLoggedIn(false); setLoginUser(null); setSection("home"); };
-  const handleSelect = (s)    => setSection(s);
-  const handleBack   = ()     => setSection("home");
+  // On mount: check for an existing backend session
+  useEffect(() => {
+    apiMe().then(me => {
+      if (me) {
+        setLoginUser(me);
+        setLoggedIn(true);
+        setSection(me.role === "ADMIN" ? "crm" : "home");
+      }
+      setAuthChecked(true);
+    });
+  }, []); // eslint-disable-line
 
+  const handleLogin = (user: any) => {
+    setLoginUser(user);
+    setLoggedIn(true);
+    setSection(user?.role === "ADMIN" ? "crm" : "home");
+    if (user?.provider) setLoginProvider(user.provider);
+  };
+
+  const handleLogout = async () => {
+    try { await fetch("/api/auth/logout", { method: "POST", credentials: "include" }); } catch {}
+    setLoggedIn(false);
+    setLoginUser(null);
+    setSection("home");
+  };
+
+  const handleSelect = (s) => setSection(s);
+  const handleBack   = ()  => setSection("home");
+
+  if (!authChecked) return null; // wait for session check before rendering anything
   if (!loggedIn) return <LoginScreen onLogin={handleLogin} />;
   if (section === "home") return <HomeScreen user={loginUser} onSelect={handleSelect} onLogout={handleLogout} />;
 
@@ -1331,10 +1360,10 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [view, setView] = useState(getCRMDefaultView);
   // T009: Reset landing view whenever the logged-in user switches roles
   useEffect(() => { setView(getCRMDefaultView()); }, [user?.email]);
-  // Persist deals + meetings directly — no more sync bug
-  const [deals, _setDeals]        = usePersistedState("otv_deals",    sharedDeals   || SEED_DEALS);
+  // Phase 8 Step 3: deals read from backend via refreshDeals(); meetings stay local for now (Step 4)
+  const [deals, _setDeals]        = useState<any[]>(sharedDeals || []);
   const [meetings, _setMeetings]  = usePersistedState("otv_meetings", sharedMeetings|| SEED_MEETINGS);
-  const [plans_crm]               = [plans || SEED_PLANS];
+  const [plans_crm]               = [plans || []];
   const [att, setAtt]             = usePersistedState("otv_att",      SEED_ATT);
 
   // Wrap setters — propagate to parent (handles both value and functional updates)
@@ -1374,34 +1403,10 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [absenceReports, setAbsenceReports] = usePersistedState("otv_absence", SEED_ABSENCE_REPORTS);
   const [exceptionModal, setExceptionModal] = useState(null); // { reportId, repName }
   const [exceptionReason, setExceptionReason] = useState("");
-  // Derive activeUser from login email — prevents role spoofing via DevTools
-  const derivedUserId = useMemo(() => {
-    if (!user?.email) return "admin";
-    const email = user.email.toLowerCase();
-    // Direct email match against USER_ROLES name patterns
-    const emailToId = {
-      "darpan@odishatv.com":     "sales_analysis",
-      "saleshead@odishatv.com":  "sales_head",
-      "nsh@odishatv.com":        "sales_head",
-      "sachin@odishatv.com":     "sales_strategy",
-      "admin@odishatv.com":      "admin",
-      "digiops@odishatv.com":    "digi_ops",
-      "digital@odishatv.com":    "digi_ops",
-      "rhn@odishatv.com":        "rh_national",
-      "rhnorth@odishatv.com":    "rh_north",
-      "rhsouth@odishatv.com":    "rh_south",
-      "rheast@odishatv.com":     "rh_east",
-      "rhwest@odishatv.com":     "rh_west",
-      "arjun@odishatv.com":      "rep_arjun",
-      "priya@odishatv.com":      "rep_priya",
-      "rohit@odishatv.com":      "rep_rohit",
-      "sneha@odishatv.com":      "rep_sneha",
-      "vikram@odishatv.com":     "rep_vikram",
-      "meera@odishatv.com":      "rep_meera",
-    };
-    return emailToId[email] || "admin";
-  }, [user?.email]);
-  const [activeUser, setActiveUser] = useState(() => derivedUserId);
+  // Phase 8 Step 5: activeUser is the backend UUID from session; never localStorage
+  const activeUser = user?.id ?? "unknown";
+  // previewAsId: admin-only "preview as" role switcher — does NOT change auth identity
+  const [previewAsId, setPreviewAsId] = useState<string | null>(null);
   const [filterRegion, setFilterRegion] = useState("All");
   const [filterQ, setFilterQ]     = useState("Q1 FY26");
   const [expanded, setExpanded]   = useState(null);
@@ -1409,7 +1414,48 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [noteModal, setNoteModal] = useState(null);   // {title, placeholder, onSubmit}
   const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
-  const [tasks, setTasks]         = usePersistedState("otv_tasks", SEED_TASKS);
+  const [tasks, setTasks]         = useState<any[]>([]);
+  // ── Phase 8 Step 1: Tasks API helpers ────────────────────────────────────
+  const refreshTasks = useCallback(async () => {
+    try {
+      const r = await fetch("/api/tasks");
+      if (r.ok) { const d = await r.json(); if (d.ok) setTasks(d.tasks ?? []); }
+    } catch {}
+  }, []);
+  const patchTaskStatus = useCallback(async (taskId: string, newStatus: string) => {
+    try {
+      await fetch(`/api/tasks/${taskId}/status`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      setTimeout(refreshTasks, 300);
+    } catch {}
+  }, [refreshTasks]);
+  const createTask = useCallback(async (data: any) => {
+    try {
+      await fetch("/api/tasks", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          actionType:       data.actionType || data.action || "Flag for follow-up",
+          title:            data.title || "",
+          description:      data.description || null,
+          priority:         data.priority || "High",
+          dueDate:          data.dueDate || null,
+          assignedByUserId: data.assignedBy || data.assignedByUserId || "",
+          assignedByName:   data.assignedByName || "",
+          assignedToUserId: data.assignedToUserId || null,
+          assignedDept:     data.dept || data.assignedDept || null,
+          clientCompany:    data.clientCompany || null,
+          dealId:           data.dealId || null,
+          touchpointId:     data.touchpointId || null,
+          fromMeetingLog:   !!data.fromMeetingLog,
+          region:           data.region || null,
+          repId:            data.repId || null,
+        }),
+      });
+      setTimeout(refreshTasks, 400);
+    } catch {}
+  }, [refreshTasks]);
   const [taskModal, setTaskModal]       = useState(false);
   const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -1477,7 +1523,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // Part 1+3: `stage` is the canonical field; `outcome` kept for legacy compat
   const BLANK_DEAL = { clientCompany:"", zohoAccountId:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", zohoAgencyId:"", reqs:[], auditLog:[] };
   const BLANK_NEXT_STEP_ITEM = {action:"", actionType:"", details:"", neededFrom:"", remarks:"", dueDate:""};
-  const ACTION_TYPES = ["Approval needed","Document needed","Attend a meeting","Introduction needed","Flag for follow-up"];
+  const ACTION_TYPES = ["Approval needed","Document needed","Attend a meeting","Client introduction","Flag for follow-up"];
   const BLANK_LOG = {
     repId:"",
     meetingTime:"", clientOrAgency:"Client",
@@ -1578,14 +1624,217 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [ipPropNote, setIpPropNote]                    = useState("");
   const [ipPropValue, setIpPropValue]                  = useState("");
   const [ipApprovalPrices, setIpApprovalPrices]        = useState<Record<string,string>>({});
-  const [internalReqs, setInternalReqs]               = usePersistedState("otv_internalReqs", SEED_INTERNAL_REQS);
+  const [internalReqs, setInternalReqs]               = useState<any[]>([]);
+  // ── Phase 8 Step 1: Internal Requests API helpers ────────────────────────
+  const refreshIRs = useCallback(async () => {
+    try {
+      const r = await fetch("/api/internal-requests");
+      if (r.ok) {
+        const d = await r.json();
+        if (d.ok) {
+          setInternalReqs((d.internalRequests ?? []).map((ir: any) => ({
+            ...ir,
+            raisedBy: ir.raisedByUserId,
+            // Map backend statuses to frontend display values
+            status: ir.status === "Resolved" ? "Done"
+                  : ir.status === "In Review" ? "In Progress"
+                  : ir.status,
+          })));
+        }
+      }
+    } catch {}
+  }, []);
+  const resolveIR = useCallback(async (irId: string, note: string) => {
+    try {
+      await fetch(`/api/internal-requests/${irId}/resolve`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolverNote: note || "Resolved" }),
+      });
+      setTimeout(refreshIRs, 300);
+    } catch {}
+  }, [refreshIRs]);
+  const rejectIR = useCallback(async (irId: string, note: string) => {
+    try {
+      await fetch(`/api/internal-requests/${irId}/reject`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolverNote: note || "Rejected" }),
+      });
+      setTimeout(refreshIRs, 300);
+    } catch {}
+  }, [refreshIRs]);
+  const acknowledgeIR = useCallback(async (irId: string) => {
+    try {
+      await fetch(`/api/internal-requests/${irId}/acknowledge`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setTimeout(refreshIRs, 300);
+    } catch {}
+  }, [refreshIRs]);
+  const createIR = useCallback(async (data: any) => {
+    try {
+      await fetch("/api/internal-requests", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type:           data.type || "Approval needed",
+          dept:           data.dept || null,
+          subject:        data.subject || "",
+          details:        data.details || null,
+          raisedByUserId: data.raisedBy || data.raisedByUserId || "",
+          raisedByName:   data.raisedByName || "",
+          repId:          data.repId || null,
+          clientCompany:  data.clientCompany || null,
+          dealId:         data.dealId || null,
+          slaHours:       data.slaHours || 48,
+          region:         data.region || null,
+          raisedAt:       data.raisedAt || new Date().toISOString().split("T")[0],
+        }),
+      });
+      setTimeout(refreshIRs, 400);
+    } catch {}
+  }, [refreshIRs]);
+  const patchIR = useCallback(async (irId: string, fields: any) => {
+    try {
+      await fetch(`/api/internal-requests/${irId}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(fields),
+      });
+      setTimeout(refreshIRs, 300);
+    } catch {}
+  }, [refreshIRs]);
+  const withdrawIR = useCallback(async (irId: string) => {
+    try {
+      await fetch(`/api/internal-requests/${irId}/withdraw`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setTimeout(refreshIRs, 300);
+    } catch {}
+  }, [refreshIRs]);
+  const escalateIR = useCallback(async (irId: string) => {
+    try {
+      await fetch(`/api/internal-requests/${irId}/escalate`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({}),
+      });
+      setTimeout(refreshIRs, 400);
+    } catch {}
+  }, [refreshIRs]);
+  // ── Phase 8 Step 1: Load tasks + IRs from backend whenever user changes ──
+  useEffect(() => { if (activeUser) { refreshTasks(); refreshIRs(); refreshTouchpoints(); refreshDeals(); refreshClientAccounts(); refreshPlans(); refreshRevenue(); } }, [activeUser]); // eslint-disable-line
   const [irStatusFilter, setIrStatusFilter]            = useState("all");
   const [lbTab, setLbTab]                              = useState("team");
   const [targetSubs, setTargetSubs]                    = usePersistedState("otv_targetSubs", SEED_TARGET_SUBMISSIONS);
-  const [revenueEntries, setRevenueEntries]             = usePersistedState("otv_revenueEntries", SEED_REVENUE_ENTRIES);
-  // ── Part 1: New data model objects ──────────────────────────────────────
-  const [clientAccounts, setClientAccounts] = usePersistedState("otv_clientAccounts", []);
-  const [touchpoints,    setTouchpoints]    = usePersistedState("otv_touchpoints",    []);
+  // ── Phase 8 Revenue cutover: replaced usePersistedState("otv_revenueEntries") with backend-driven state ──
+  const [revenueEntries, setRevenueEntries]             = useState<any[]>([]);
+  const refreshRevenue = useCallback(async () => {
+    try {
+      const r = await fetch("/api/revenue?includeReversals=true", { credentials: "include" });
+      if (r.ok) {
+        const d = await r.json();
+        if (d.ok) setRevenueEntries(d.entries ?? []);
+      }
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  // ── Phase 8 Step 3: Client accounts — reads come from GET /api/client-accounts ──
+  const [clientAccounts, setClientAccounts] = useState<any[]>([]);
+  // ── Phase 8 Step 2: Touchpoints — reads come from GET /api/touchpoints ──────
+  const [touchpoints, setTouchpoints] = useState<any[]>([]);
+  const refreshTouchpoints = useCallback(async () => {
+    try {
+      const r = await fetch("/api/touchpoints");
+      if (r.ok) {
+        const d = await r.json();
+        if (d.ok) {
+          setTouchpoints((d.touchpoints ?? []).map((tp: any) => ({
+            ...tp,
+            // Normalize backend "Relationship Touchpoint" → frontend "Relationship"
+            touchpointType: tp.touchpointType === "Relationship Touchpoint"
+              ? "Relationship"
+              : tp.touchpointType,
+          })));
+        }
+      }
+    } catch {}
+  }, []);
+
+  // ── Phase 8 Step 3: Deals — reads come from GET /api/deals ───────────────
+  const refreshDeals = useCallback(async () => {
+    try {
+      const r = await fetch("/api/deals");
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.ok) {
+        const normalized = (d.deals ?? []).map((deal: any) => ({
+          ...deal,
+          // Backend amount is integer (whole rupees); pipelineAmount is the same value
+          pipelineAmount: deal.amount ?? 0,
+          // Legacy alias — dealStage() uses d.stage || d.outcome; stage is set, so this is cosmetic
+          outcome: deal.stage ?? "Prospect",
+          // Fields absent from backend schema — safe defaults so existing read paths don't break
+          awaitingApproval:      deal.awaitingApproval      ?? null,
+          awaitingApprovalSince: deal.awaitingApprovalSince ?? null,
+          targetAmount:          deal.targetAmount           ?? null,
+          lastContact:           deal.updatedAt              ?? null,
+          reqs:                  deal.reqs                   ?? [],
+          auditLog:              deal.auditLog               ?? [],
+        }));
+        _setDeals(normalized);
+        if (setSharedDeals) setSharedDeals(normalized);
+      }
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Phase 8 Step 3: Client accounts — reads from GET /api/client-accounts ─
+  const refreshClientAccounts = useCallback(async () => {
+    try {
+      const r = await fetch("/api/client-accounts");
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.ok) {
+        const normalized = (d.accounts ?? []).map((acct: any) => ({
+          ...acct,
+          // Fields absent from backend schema — safe defaults
+          annualTarget:    acct.annualTarget    ?? 0,
+          approvalStatus:  acct.approvalStatus  ?? null,
+          fiscalYear:      acct.fiscalYear       ?? "FY26",
+        }));
+        setClientAccounts(normalized);
+      }
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Phase 8 Step 4: Plans — reads come from GET /api/plans ──────────────
+  const refreshPlans = useCallback(async () => {
+    try {
+      const r = await fetch("/api/plans");
+      if (!r.ok) return;
+      const d = await r.json();
+      if (d.ok) setPlans(d.plans ?? []);
+    } catch {}
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const createPlanApi = useCallback(async (planData: any) => {
+    try {
+      await fetch("/api/plans", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(planData),
+      });
+      setTimeout(refreshPlans, 300);
+    } catch {}
+  }, [refreshPlans]);
+
+  const patchPlan = useCallback(async (planId: string, patch: any) => {
+    try {
+      await fetch(`/api/plans/${planId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(patch),
+      });
+      setTimeout(refreshPlans, 300);
+    } catch {}
+  }, [refreshPlans]);
 
   // Part 1: One-time migration — runs when clientAccounts is empty but deals/meetings exist
   useEffect(() => {
@@ -1633,7 +1882,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         loggedByUserId: m.loggedByUserId || String(m.repId),
       };
     }).filter(t => t.clientAccountId);
-    if (newTouchpoints.length > 0) setTouchpoints(newTouchpoints);
+    // Phase 8 Step 2: touchpoints seeding from local migration removed —
+    // reads now come from GET /api/touchpoints (refreshTouchpoints on mount).
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Normalise adminConfig.slaHours: rename legacy short keys (RH→Region Head, etc.) ──
@@ -1654,21 +1904,6 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (changed) setAdminConfig((p:any) => ({...p, slaHours: next}));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── One-time cleanup: remove any auto-stub revenue entries created by the old
-  //    broken logic that added deal.amount to revenueEntries on Mail Confirmed.
-  //    Safe to run repeatedly — only fires when stubs exist.
-  const stubsCleanedRef = useRef(false);
-  useEffect(() => {
-    if (stubsCleanedRef.current) return;
-    const hasStubs = revenueEntries.some(
-      e => e.invoiceRef === "PO Pending" && String(e.notes||"").startsWith("Auto-stub:")
-    );
-    if (!hasStubs) return;
-    stubsCleanedRef.current = true;
-    setRevenueEntries(p => p.filter(
-      e => !(e.invoiceRef === "PO Pending" && String(e.notes||"").startsWith("Auto-stub:"))
-    ));
-  }, [revenueEntries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Part 5: 4-number dashboard helpers ──────────────────────────────────
   const CURRENT_FY = "FY26";
@@ -1714,19 +1949,6 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [irForm, setIrForm]                             = useState(BLANK_IR_FORM);
   const [editIrId, setEditIrId]                         = useState<string|null>(null);
   const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", []);
-  // Merge any self-registered pending signups into admin's queue
-  useEffect(() => {
-    try {
-      const sups = JSON.parse(localStorage.getItem("otv_pendingSignups") || "[]");
-      if (sups.length > 0) {
-        setPendingUsers(prev => {
-          const existIds = new Set(prev.map(u => u.id));
-          const toAdd = sups.filter(u => !existIds.has(u.id));
-          return toAdd.length ? [...prev, ...toAdd] : prev;
-        });
-      }
-    } catch {}
-  }, []);
   const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles", []);
   const [reps, setReps]                                 = usePersistedState("otv_reps", REPS);
   const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", []);
@@ -1978,7 +2200,19 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     ));
     showToast("Exception revoked — marked Absent again");
   };
-  const user_role = USER_ROLES.find(u=>u.id===activeUser) || USER_ROLES.find(u=>u.id==="admin") || USER_ROLES[0];
+  // Phase 8 Step 5: user_role built from backend session — no USER_ROLES lookup
+  // When admin uses "preview as", overlay the preview role on top of the session identity
+  const sessionRole = {
+    id:      user?.id      ?? "unknown",
+    name:    user?.name    ?? "User",
+    email:   user?.email   ?? "",
+    role:    user?.role    ?? "ADMIN",
+    region:  user?.region  ?? null,
+    repId:   user?.repId   ?? null,
+    canView: user?.role === "SALES REP" ? "self" : user?.role === "REGION HEAD" ? "region" : "all",
+  };
+  const previewTarget = previewAsId ? USER_ROLES.find(u => u.id === previewAsId) : null;
+  const user_role = previewTarget ?? sessionRole;
   const canGrantException = ["ADMIN","CXO","CEO","CRO"].includes(user_role?.role);
 
   // Maps an IR dept string → the assignedToUserId of the right person to task
@@ -2004,16 +2238,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     }
   }, [logOpen, activeUser]);
 
-  // Section 18 — Trigger 3: actionItems & tasks where dueDate < today AND status = "Open" → set status = "Escalated"
+  // Section 18 — Trigger 3: touchpoint actionItems overdue (tasks auto-escalation removed — server-side in Phase 8)
   useEffect(() => {
-    const hasOpenTasks = tasks.some(t => t.dueDate && t.dueDate < TODAY && t.status === "Open");
-    if (hasOpenTasks) {
-      setTasks(prev => prev.map(t =>
-        t.dueDate && t.dueDate < TODAY && t.status === "Open"
-          ? { ...t, status: "Escalated" }
-          : t
-      ));
-    }
     const hasTpOverdue = touchpoints.some(tp =>
       (tp.actionItems || []).some((ai: any) => ai.dueDate && ai.dueDate < TODAY && ai.status === "Open")
     );
@@ -2322,6 +2548,12 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       touchpointType: tpType,
     }, ...p]);
     // Mark the matching plan entry as Done so Team's Plan reflects the log
+    const planMatches = (plans||[]).filter(pl=>
+      pl.repId===parseInt(logForm.repId) &&
+      pl.date===TODAY &&
+      pl.status!=="Done" &&
+      (pl.clientAgencyName||"").toLowerCase()===(clientCompany||"").toLowerCase()
+    );
     setPlans(q=>q.map(pl=>
       pl.repId===parseInt(logForm.repId) &&
       pl.date===TODAY &&
@@ -2330,6 +2562,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         ? {...pl, status:"Done", loggedMeetingId: newMeetingId}
         : pl
     ));
+    planMatches.forEach(pl => { if (pl.id) patchPlan(pl.id, { status:"Done", loggedMeetingId: newMeetingId }); });
 
     // Part 1: Create Touchpoint record alongside the legacy meeting record
     const touchpointId = `tp${Date.now()}`;
@@ -2344,6 +2577,49 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       actionItems: (logForm.nextStepItems||[]).filter(i=>i.action),
       loggedAt, loggedLate: late, loggedByUserId: activeUser,
     }, ...p]);
+    // Phase 8 Step 3: POST touchpoint to backend when clientAccountId is a backend UUID
+    const backendClientAccountId = deal?.clientAccountId || null;
+    if (backendClientAccountId) {
+      const tpBody: any = {
+        clientAccountId: backendClientAccountId,
+        dealId:          logForm.dealId || deal?.id || null,
+        touchpointType:  tpType,
+        meetingType:     logForm.meetingType || "Physical",
+        date:            TODAY,
+        time:            logForm.meetingTime || loggedAt,
+        contactName:     logForm.contactName     || null,
+        contactDesignation: logForm.designation  || null,
+        contactLevel:    logForm.contactLevel    || null,
+        whatHappened:    logForm.discussion      || "",
+        clientFeedback:  logForm.clientFeedback  || null,
+        actionItems:     (logForm.nextStepItems || []).filter((i: any) => i.action || i.details),
+        loggedAt,
+        loggedLate: late,
+      };
+      if (tpType === "Deal Meeting") {
+        tpBody.stageUpdate = stageNow;
+        tpBody.lossReason  = logForm.lossReason || null;
+      }
+      fetch("/api/touchpoints", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(tpBody),
+      }).then(r => r.json()).then(d => {
+        if (d.ok) {
+          refreshTouchpoints();
+          refreshDeals();
+          refreshClientAccounts();
+          setTimeout(refreshTasks, 400);
+          setTimeout(refreshIRs, 400);
+        }
+      }).catch(() => {
+        // POST failed — optimistic local insert still shows in-session
+        setTimeout(refreshTouchpoints, 1500);
+      });
+    } else {
+      // No backend clientAccountId yet — fall back to local-only optimistic insert
+      setTimeout(refreshTouchpoints, 1500);
+    }
 
     // Part 2: Auto-route action items by their type (5 types from spec)
     const repIdInt = parseInt(logForm.repId);
@@ -2374,9 +2650,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         } else if (aType==="Document needed" || aType==="Document / plan needed") {
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
           newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Document needed",dept:i.neededFrom,subject:`[Doc needed] ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
-        } else if (aType==="Introduction needed" || aType==="Client introduction needed") {
+        } else if (["Client introduction","Introduction needed","Client introduction needed"].includes(aType)) {
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Introduction needed",dept:i.neededFrom,subject:`[Intro needed] ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
+          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Client introduction",dept:i.neededFrom,subject:`[Intro needed] ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
         } else if (aType==="Flag for follow-up") {
           // T005: Flag for follow-up → Task only (no IR — it's a personal reminder, not a departmental request)
           newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt)||activeUser,assignedDept:i.neededFrom||"Self",repId:repIdInt,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW}`.slice(0,150),description:`Flagged by ${repName}. ${details}`,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
@@ -2387,8 +2663,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         }
       }
     });
-    if (newTasks.length) setTasks(p => [...newTasks, ...p]);
-    if (newIRsFromLog.length) setInternalReqs(p => [...newIRsFromLog, ...p]);
+    if (newTasks.length) newTasks.forEach((t: any) => createTask(t));
+    if (newIRsFromLog.length) newIRsFromLog.forEach((ir: any) => createIR(ir));
     if (attendPlans.length) setPlans(p => [...p, ...attendPlans]);
 
     // Update deal last contact, outcome, stage (Part 3), and next step
@@ -2456,7 +2732,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const stepPlans = (logForm.nextStepItems||[]).filter(i=>i.action&&i.dueDate);
     if (stepPlans.length) {
       stepPlans.forEach((item, idx) => {
-        setPlans(p => [...p, {
+        const nsPlan = {
           id: `p_ns_${Date.now()}_${idx}`,
           repId: parseInt(logForm.repId),
           date: item.dueDate,
@@ -2473,13 +2749,15 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
           isUnplanned: false,
           autoCreatedFrom: "next-step",
           assignedDept: item.neededFrom || "",
-        }]);
+        };
+        setPlans(p => [...p, nsPlan]);
+        createPlanApi(nsPlan);
       });
     }
 
     // Auto-create calendar plan for next meeting date
     if (logForm.nextMeetingDate) {
-      setPlans(p => [...p, {
+      const nxtPlan = {
         id: `p_nxt_${Date.now()}`,
         repId: parseInt(logForm.repId),
         date: logForm.nextMeetingDate,
@@ -2495,11 +2773,13 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         loggedMeetingId: null,
         isUnplanned: false,
         autoCreatedFrom: "next-meeting",
-      }]);
+      };
+      setPlans(p => [...p, nxtPlan]);
+      createPlanApi(nxtPlan);
     }
     // Auto-create calendar plan for follow-up date
     if (logForm.followUpDate) {
-      setPlans(p => [...p, {
+      const fuPlan = {
         id: `p_fu_${Date.now() + 1}`,
         repId: parseInt(logForm.repId),
         date: logForm.followUpDate,
@@ -2515,7 +2795,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         loggedMeetingId: null,
         isUnplanned: false,
         autoCreatedFrom: "follow-up",
-      }]);
+      };
+      setPlans(p => [...p, fuPlan]);
+      createPlanApi(fuPlan);
     }
 
     setAtt(p => ({ ...p, [TODAY]: { ...(p[TODAY]||{}), [parseInt(logForm.repId)]: true } }));
@@ -2667,6 +2949,45 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       actionItems: (updatedForm.nextStepItems||[]).filter(i=>i.action),
       loggedAt, loggedLate: late, loggedByUserId: activeUser,
     }, ...p]);
+    // Phase 8 Step 3: POST touchpoint to backend when clientAccountId is a backend UUID
+    const backendClientAccountIdC = deal?.clientAccountId || null;
+    if (backendClientAccountIdC) {
+      const tpBodyC: any = {
+        clientAccountId: backendClientAccountIdC,
+        dealId:          updatedForm.dealId || deal?.id || null,
+        touchpointType:  tpTypeC,
+        meetingType:     updatedForm.meetingType || "Physical",
+        date:            TODAY,
+        time:            updatedForm.meetingTime || loggedAt,
+        contactName:     updatedForm.contactName      || null,
+        contactDesignation: updatedForm.designation   || null,
+        contactLevel:    updatedForm.contactLevel     || null,
+        whatHappened:    updatedForm.discussion       || "",
+        clientFeedback:  updatedForm.clientFeedback   || null,
+        actionItems:     (updatedForm.nextStepItems || []).filter((i: any) => i.action || i.details),
+        loggedAt,
+        loggedLate: late,
+      };
+      if (tpTypeC === "Deal Meeting") {
+        tpBodyC.stageUpdate = stageNowC;
+        tpBodyC.lossReason  = updatedForm.lossReason || null;
+      }
+      fetch("/api/touchpoints", {
+        method:  "POST",
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify(tpBodyC),
+      }).then(r => r.json()).then(d => {
+        if (d.ok) {
+          refreshTouchpoints();
+          refreshDeals();
+          refreshClientAccounts();
+          setTimeout(refreshTasks, 400);
+          setTimeout(refreshIRs, 400);
+        }
+      }).catch(() => { setTimeout(refreshTouchpoints, 1500); });
+    } else {
+      setTimeout(refreshTouchpoints, 1500);
+    }
 
     // Auto-create tasks from next step items
     const repIdIntC = parseInt(updatedForm.repId);
@@ -2713,7 +3034,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     const newTasksC: any[] = [];
     const newIRs: any[] = [];
     const attendPlansC: any[] = [];
-    if (selfTasks.length) setTasks(p => [...selfTasks, ...p]);
+    if (selfTasks.length) selfTasks.forEach((t: any) => createTask(t));
     (updatedForm.nextStepItems||[]).filter(i=>(i.actionType||i.action)&&i.neededFrom).forEach(i=>{
       const aType = i.actionType||i.action;
       const details = i.details||i.remarks||"";
@@ -2730,7 +3051,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
         } else if (aType==="Document needed" || aType==="Document / plan needed") {
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
-        } else if (aType==="Introduction needed" || aType==="Client introduction needed") {
+        } else if (["Client introduction","Introduction needed","Client introduction needed"].includes(aType)) {
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
         } else if (aType==="Flag for follow-up") {
           newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — Flagged by ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
@@ -2740,8 +3061,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         }
       }
     });
-    if (newTasksC.length) setTasks(p => [...newTasksC, ...p]);
-    if (newIRs.length) setInternalReqs(p => [...newIRs, ...p]);
+    if (newTasksC.length) newTasksC.forEach((t: any) => createTask(t));
+    if (newIRs.length) newIRs.forEach((ir: any) => createIR(ir));
     if (attendPlansC.length) setPlans(p => [...p, ...attendPlansC]);
 
     const firstFollowUpItem = (updatedForm.nextStepItems||[]).find(i=>i.action);
@@ -2811,7 +3132,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     const stepPlansC = (updatedForm.nextStepItems||[]).filter(i=>i.action&&i.dueDate);
     if (stepPlansC.length) {
       stepPlansC.forEach((item, idx) => {
-        setPlans(p => [...p, {
+        const nsPlanC = {
           id: `p_ns_${Date.now()}_${idx}`,
           repId: parseInt(updatedForm.repId),
           date: item.dueDate,
@@ -2828,13 +3149,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           isUnplanned: false,
           autoCreatedFrom: "next-step",
           assignedDept: item.neededFrom || "",
-        }]);
+        };
+        setPlans(p => [...p, nsPlanC]);
+        createPlanApi(nsPlanC);
       });
     }
 
     // Auto-create calendar plan for next meeting date
     if (updatedForm.nextMeetingDate) {
-      setPlans(p => [...p, {
+      const nxtPlanC = {
         id: `p_nxt_${Date.now()}`,
         repId: parseInt(updatedForm.repId),
         date: updatedForm.nextMeetingDate,
@@ -2850,11 +3173,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         loggedMeetingId: null,
         isUnplanned: false,
         autoCreatedFrom: "next-meeting",
-      }]);
+      };
+      setPlans(p => [...p, nxtPlanC]);
+      createPlanApi(nxtPlanC);
     }
     // Auto-create calendar plan for follow-up date
     if (updatedForm.followUpDate) {
-      setPlans(p => [...p, {
+      const fuPlanC = {
         id: `p_fu_${Date.now() + 1}`,
         repId: parseInt(updatedForm.repId),
         date: updatedForm.followUpDate,
@@ -2870,7 +3195,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         loggedMeetingId: null,
         isUnplanned: false,
         autoCreatedFrom: "follow-up",
-      }]);
+      };
+      setPlans(p => [...p, fuPlanC]);
+      createPlanApi(fuPlanC);
     }
 
     setAtt(p => ({ ...p, [TODAY]: { ...(p[TODAY]||{}), [parseInt(updatedForm.repId)]: true } }));
@@ -3283,7 +3610,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {["ADMIN","CXO","CEO","CRO"].includes(user_role?.role) && (
             <div style={{display:"flex",alignItems:"center",gap:5}}>
               <span style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",whiteSpace:"nowrap"}}>Preview as</span>
-              <select value={activeUser} onChange={e=>setActiveUser(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px",color:C.accent,background:`${C.accent}18`,borderColor:`${C.accent}44`}}>
+              <select value={previewAsId ?? ""} onChange={e=>setPreviewAsId(e.target.value || null)} style={{width:"auto",fontSize:11,padding:"4px 8px",color:C.accent,background:`${C.accent}18`,borderColor:`${C.accent}44`}}>
+                <option value="">— self —</option>
                 {USER_ROLES.map(u=><option key={u.id} value={u.id}>{u.name} — {u.role}</option>)}
               </select>
             </div>
@@ -3634,7 +3962,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const doAddPlan = (date) => {
               if (!pf.clientAgencyName.trim()) return;
               const planTime = pf.time||"10:00";
-              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myPlanRepId,date,time:planTime,clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
+              const newPlan = {id:`p${Date.now()}`,repId:myPlanRepId,date,time:planTime,clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false};
+              setPlans(p=>[...p, newPlan]);
+              createPlanApi(newPlan);
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -3692,6 +4022,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               return daysSince(idleClock) >= riskThreshold;
             }).sort((a,b) => daysSince(b.lastDealMeetingDate||b.lastContact) - daysSince(a.lastDealMeetingDate||a.lastContact));
 
+            // Part 7+8: Tiered countdown color — matches topbar chip and deadline banner logic
+            // <6PM = green (small), ≥6PM = amber warning, ≥9PM = red alert, passed = red
+            const cdHr = new Date().getHours();
+            const cdColor = countdown.includes("passed") ? C.red : cdHr >= 21 ? C.red : cdHr >= 18 ? C.orange : C.green;
+
             return (
               <div className="fin">
                 {/* Header */}
@@ -3701,8 +4036,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>Click any planned meeting to log it · Add new ones via + on calendar</div>
                   </div>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    {/* Daily timer */}
-                    <div style={{background:countdown.includes("passed")?`${C.red}12`:`${C.green}10`,border:`1px solid ${countdown.includes("passed")?C.red:C.green}33`,borderRadius:5,padding:"4px 10px",fontSize:11,fontWeight:700,color:countdown.includes("passed")?C.red:C.green}}>
+                    {/* Daily timer — tiered: green <6PM / amber ≥6PM / red ≥9PM or passed */}
+                    <div style={{background:`${cdColor}12`,border:`1px solid ${cdColor}33`,borderRadius:5,padding:"4px 10px",fontSize:11,fontWeight:700,color:cdColor}}>
                       Daily: {countdown.includes("passed")?"Passed":countdown}
                     </div>
                     {/* Weekly timer */}
@@ -3770,7 +4105,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{t.title}</span>
                             {t.clientCompany&&<span style={{fontSize:10,color:C.dim}}>{t.clientCompany}</span>}
                             <span style={{background:`${t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span>
-                            <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
+                            <select value={t.status} onChange={e=>{const ns=e.target.value;patchTaskStatus(t.id,ns);setTasks(p=>p.map(x=>x.id===t.id?{...x,status:ns}:x));}}
                               style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontFamily:"'DM Mono',monospace"}}>
                               {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
                             </select>
@@ -3955,9 +4290,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   if (!overdue.length && !dueToday.length && !dueTmrw.length) return null;
                   const markItemDone = (item) => {
                     if (repTasks.find(t=>t.id===item.id)) {
-                      setTasks(q=>q.map(t=>t.id===item.id?{...t,status:"Done"}:t));
+                      patchTaskStatus(item.id,"Done");setTasks(q=>q.map(t=>t.id===item.id?{...t,status:"Done"}:t));
                     } else {
                       setPlans(q=>q.map(p=>p.id===item.id?{...p,status:"Done"}:p));
+                      if (item.id) patchPlan(item.id, { status:"Done" });
                     }
                   };
                   const renderItem = (item, urgency) => {
@@ -4066,7 +4402,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {p.status!=="Done"&&!isFuture&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
                                   {isFuture&&p.status!=="Done"&&<button onClick={e=>{e.stopPropagation();if(planEditId===p.id){setPlanEditId(null);}else{setPlanEditId(p.id);setPlanEditForm({time:p.time||"10:00",clientAgencyName:p.clientAgencyName||"",contactName:p.contactName||"",phone:p.phone||"",agenda:p.agenda||"",pitchType:p.pitchType||""});}}} style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,borderRadius:4,padding:"1px 7px",color:C.blue,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✎ Edit</button>}
                                   {isFuture&&p.status!=="Done"&&p.date===TOMORROW&&(
-                                    <button onClick={e=>{e.stopPropagation();if(confirm(`Did "${p.clientAgencyName}" actually happen today?`)){setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,date:TODAY,status:"Done"}:pl));showToast("Moved to today and marked Done ✓");}}} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"1px 7px",color:C.green,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4}}>✓ Happened today</button>
+                                    <button onClick={e=>{e.stopPropagation();if(confirm(`Did "${p.clientAgencyName}" actually happen today?`)){setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,date:TODAY,status:"Done"}:pl));patchPlan(p.id,{date:TODAY,status:"Done"});showToast("Moved to today and marked Done ✓");}}} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"1px 7px",color:C.green,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4}}>✓ Happened today</button>
                                   )}
                                 </div>
                               </div>
@@ -4084,7 +4420,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   </div>
                                   <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
                                     <button onClick={()=>setPlanEditId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
+                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));patchPlan(p.id,{...planEditForm,time:planEditForm.time||"10:00"});setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
                                   </div>
                                 </div>
                               )}
@@ -4098,17 +4434,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   <div style={{fontSize:10,color:C.dim,marginBottom:8}}>Confirm or decline this meeting request. Confirming adds it to both your plan and theirs.</div>
                                   <div style={{display:"flex",gap:8}}>
                                     <button onClick={()=>{
-                                      setPlans(q=>{
-                                        const confirmed = q.map(pl=>pl.id===p.id?{...pl,status:"Confirmed"}:pl);
-                                        // Create matching plan entry for the requester
-                                        const requesterPlan = {id:`p_conf_${Date.now()}`,repId:p.requestedBy,date:p.date,time:p.time||"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",agenda:`[Confirmed] ${p.agenda||`Meeting with ${p.clientAgencyName}`}`,pitchType:"",meetingType:p.meetingType||"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"confirm-from-"+myRepId};
-                                        return [...confirmed, requesterPlan];
-                                      });
+                                      const requesterPlan = {id:`p_conf_${Date.now()}`,repId:p.requestedBy,date:p.date,time:p.time||"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",agenda:`[Confirmed] ${p.agenda||`Meeting with ${p.clientAgencyName}`}`,pitchType:"",meetingType:p.meetingType||"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"confirm-from-"+myRepId};
+                                      setPlans(q=>[...q.map(pl=>pl.id===p.id?{...pl,status:"Confirmed"}:pl), requesterPlan]);
+                                      patchPlan(p.id, { status:"Confirmed" });
+                                      createPlanApi(requesterPlan);
                                       showToast("Meeting confirmed — added to both plans ✓");
                                     }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"4px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
                                       ✓ Confirm date
                                     </button>
-                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Declined"}:pl));showToast("Meeting request declined");}} style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,borderRadius:5,padding:"4px 14px",color:C.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Declined"}:pl));patchPlan(p.id,{status:"Declined"});showToast("Meeting request declined");}} style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,borderRadius:5,padding:"4px 14px",color:C.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
                                       ✗ Decline
                                     </button>
                                   </div>
@@ -4136,7 +4470,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                           const rStr = rDate.toISOString().slice(0,10);
                                           return (
                                             <button key={days} onClick={()=>{
-                                              setPlans(q=>[...q,{id:`rem${Date.now()}_${days}`,repId:myRepId,date:rStr,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow up on RO — ${p.clientAgencyName}`,pitchType:"",meetingType:"Call",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"}]);
+                                              const remPlan = {id:`rem${Date.now()}_${days}`,repId:myRepId,date:rStr,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow up on RO — ${p.clientAgencyName}`,pitchType:"",meetingType:"Call",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"};
+                                              setPlans(q=>[...q, remPlan]);
+                                              createPlanApi(remPlan);
                                               setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;});
                                               showToast(`Reminder set for ${rStr} ✓`);
                                             }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"5px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
@@ -4260,14 +4596,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       const loggedAt = `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}`;
                                       const newMeetId = `ml${Date.now()}`;
                                       setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done",loggedMeetingId:newMeetId}:pl));
+                                      patchPlan(p.id, { status:"Done", loggedMeetingId: newMeetId });
                                       setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,nextMeetingTime:nm_time||"",meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Mail Confirmed":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
                                         const _rhMap: Record<string,string>={North:"rh_north",South:"rh_south",East:"rh_east",West:"rh_west",National:"rh_national",Central:"rh_central"};
                                         const _frmUid = frm==="Region Head"?(_rhMap[user_role?.region||""]||null):frm==="NSH"?"sales_head":frm==="CXO"?"admin":frm==="Sales Strategy"?"sales_strategy":frm==="CRO"?"sales_analysis":null;
                                         const _repNm = user_role?.name||"Rep";
-                                        setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,assignedToUserId:_frmUid,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:_repNm,fromMeetingLog:true},...q]);
-                                        setInternalReqs(q=>[{id:`ir${Date.now()}`,type:act,dept:frm,subject:`${act} — ${p.clientAgencyName}${rmk?` — ${rmk}`:""} — by ${bywhen||fu||TOMORROW} — from ${_repNm}`.slice(0,160),details:rmk,raisedBy:activeUser,raisedByName:_repNm,repId:myRepId,dealId:md?.id||null,clientCompany:p.clientAgencyName,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""},...q]);
+                                        createTask({actionType:act,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedToUserId:_frmUid,repId:myRepId,dept:frm,priority:"High",dueDate:bywhen||fu||TOMORROW,assignedBy:activeUser,assignedByName:_repNm,fromMeetingLog:true});
+                                        createIR({type:act,dept:frm,subject:`${act} — ${p.clientAgencyName}${rmk?` — ${rmk}`:""} — by ${bywhen||fu||TOMORROW} — from ${_repNm}`.slice(0,160),details:rmk,raisedBy:activeUser,raisedByName:_repNm,repId:myRepId,dealId:md?.id||null,clientCompany:p.clientAgencyName,raisedAt:TODAY,slaHours:48});
                                         if(md) {
                                           // Route approval based on deal amount thresholds
                                           const amt = md.amount || 0;
@@ -4296,7 +4633,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       if (fu) {
                                         newAutoPlans.push({id:`p_fu_${ts+2}`,repId:repIdForPlan,date:fu,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow-up: ${ns||"Check in with client"}`,pitchType:p.pitchType||"",meetingType:"Call",needsMeet:false,status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"});
                                       }
-                                      if (newAutoPlans.length > 0) setPlans(q=>[...q,...newAutoPlans]);
+                                      if (newAutoPlans.length > 0) { setPlans(q=>[...q,...newAutoPlans]); newAutoPlans.forEach(pl => createPlanApi(pl)); }
                                       setAtt(q=>({...q,[TODAY]:{...(q[TODAY]||{}),[(myRepId||reps[0]?.id)]:true}}));
                                       setInlineLogPlan(null);
                                       // Part 8: Post-log inline messages
@@ -4802,7 +5139,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           {t.description&&<div style={{fontSize:11,color:C.dim,marginTop:2}}>{t.description}</div>}
                         </div>
                         <span style={{fontSize:10,color:C.dim}}>Due {t.dueDate}</span>
-                        <button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))}
+                        <button onClick={()=>{patchTaskStatus(t.id,"Done");setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x));}}
                           style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button>
                       </div>
                     );
@@ -4927,7 +5264,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.amount)}</span>
                           {!alreadyTasked&&(
                             <button onClick={()=>{
-                              setTasks(p=>[...p,{id:taskId,title:`Intervene — ${d.clientCompany} — ${idle}d — ${rep?.name||""}`,dept:"Region Head",status:"Open",dueDate:TODAY,repId:d.repId,createdAt:TODAY,priority:"High"}]);
+                              createTask({actionType:"Flag for follow-up",title:`Intervene — ${d.clientCompany} — ${idle}d — ${rep?.name||""}`,dept:"Region Head",priority:"High",dueDate:TODAY,repId:d.repId,assignedBy:activeUser,assignedByName:user_role?.name||""});
                               showToast(`Task created: Intervene — ${d.clientCompany}`);
                             }} style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                               Create Task
@@ -5244,9 +5581,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{r.raisedAt}</td>
                               <td style={{padding:"10px 14px"}}>{(()=>{const breached=r.status==="Pending"&&daysSince(r.raisedAt)>=APPROVAL_SLA_DAYS;return <span style={{background:breached?`${C.red}22`:r.status==="Pending"?`${C.orange}18`:r.status==="Overdue"?`${C.red}22`:`${C.blue}18`,color:breached?C.red:r.status==="Pending"?C.orange:r.status==="Overdue"?C.red:C.blue,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{breached?"⚠ SLA Breach":r.status}</span>;})()}</td>
                               <td style={{padding:"10px 14px",whiteSpace:"nowrap",display:"flex",gap:4}}>
-                                <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress",resolverNote:"Acknowledged by "+user_role?.name}:x))}
+                                <button onClick={()=>{acknowledgeIR(r.id);setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress",resolverNote:"Acknowledged by "+user_role?.name}:x));}}
                                   style={{background:`${C.blue}18`,color:C.blue,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Accept</button>
-                                <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Resolved by "+user_role?.name}:x))}
+                                <button onClick={()=>{resolveIR(r.id,"Resolved by "+(user_role?.name||""));setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Resolved by "+user_role?.name}:x));}}
                                   style={{background:`${C.green}18`,color:C.green,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Done</button>
                               </td>
                             </tr>
@@ -5318,7 +5655,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 <td style={{padding:"10px 14px"}}><span style={{background:t.priority==="High"?`${C.red}18`:`${C.orange}18`,color:t.priority==="High"?C.red:C.orange,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.priority}</span></td>
                                 <td style={{padding:"10px 14px",color:overdue?C.red:C.dim,fontSize:11}}>{t.dueDate}</td>
                                 <td style={{padding:"10px 14px"}}>
-                                  <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
+                                  <select value={t.status} onChange={e=>{const ns=e.target.value;patchTaskStatus(t.id,ns);setTasks(p=>p.map(x=>x.id===t.id?{...x,status:ns}:x));}}
                                     style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>
                                     {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
                                   </select>
@@ -5595,7 +5932,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </tr></thead>
                     <tbody>
                       {[
-                        {label:"Region Heads",     depts:["RH North","RH South","RH East","RH West","RH National"]},
+                        {label:"Region Heads",     depts:["RH North","RH South","RH East","RH West","RH National","RH Central"]},
                         {label:"Sales Executives",  depts:reps.map(r=>String(r.id))},
                         {label:"Sales Strategy",    depts:["Sales Strategy"]},
                       ].map(({label,depts})=>{
@@ -5642,8 +5979,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const pendingNSH     = targetSubs.filter(t=>t.status==="Pending NSH");
                   const blockedDeals   = allD.filter(d=>d.awaitingApproval&&d.outcome!=="Mail Confirmed");
 
-                  // Region-level analysis
-                  const GEOS = ["North","South","East","West","Odisha"];
+                  // Region-level analysis — use canonical 6 regions (T009 fix: Central replaces Odisha)
+                  const GEOS = ["North","South","East","West","Central","National"];
                   const regionAnalysis = GEOS.map(reg=>{
                     const rd  = allD.filter(d=>d.region===reg);
                     const rT  = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
@@ -5767,7 +6104,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div style={{flex:1}}><span style={{fontWeight:600}}>{t.title}</span>{t.clientCompany&&<span style={{color:C.dim,fontSize:11}}> · {t.clientCompany}</span>}</div>
                         <div style={{display:"flex",gap:6,alignItems:"center"}}>
                           <span style={{fontSize:10,color:C.dim}}>Due {t.dueDate}</span>
-                          <button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"2px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button>
+                          <button onClick={()=>{patchTaskStatus(t.id,"Done");setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x));}} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"2px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button>
                         </div>
                       </div>
                     ))}
@@ -6491,9 +6828,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                               <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(d.repId),dealId:d.id,clientAgencyName:d.clientCompany,contactName:d.contactName||""}));setLogOpen(true);}}
                                 style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Meeting</button>
-                              <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Support",dept:"Branding Team",subject:`Brand Solutions deck for ${d.clientCompany}`,details:`Custom package deck needed. Estimated value: ${fmtR(d.amount)}.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Deck request raised → Branding Team ✓");}}
+                              <button onClick={()=>{createIR({type:"Support",dept:"Branding Team",subject:`Brand Solutions deck for ${d.clientCompany}`,details:`Custom package deck needed. Estimated value: ${fmtR(d.amount)}.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,raisedAt:TODAY,slaHours:48});showToast("Deck request raised → Branding Team ✓");}}
                                 style={{background:`${C.purple}18`,border:"none",color:C.purple,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Deck</button>
-                              <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Approval",dept:"NSH",subject:`Brand Solutions approval: ${d.clientCompany} — ${fmtR(d.amount)}`,details:`Custom package deal needs NSH sign-off before presenting to client.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Approval request raised → NSH ✓");}}
+                              <button onClick={()=>{createIR({type:"Approval",dept:"NSH",subject:`Brand Solutions approval: ${d.clientCompany} — ${fmtR(d.amount)}`,details:`Custom package deal needs NSH sign-off before presenting to client.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,raisedAt:TODAY,slaHours:48});showToast("Approval request raised → NSH ✓");}}
                                 style={{background:`${C.orange}18`,border:"none",color:C.orange,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Approval</button>
                             </div>
                           </div>
@@ -6955,30 +7292,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
                       <button onClick={()=>{
                         if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
-                        const irId = `ir${Date.now()}`;
-                        const newReq={id:irId,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),raisedBy:activeUser,raisedByName:user_role?.name||"",repId:user_role?.repId||null,dealId:null,clientCompany:irForm.clientCompany.trim(),status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};
-                        setInternalReqs(p=>[newReq,...p]);
-                        // Auto-create a Task assigned to the "dept" person
                         const assigneeId = deptToUserId(irForm.dept);
                         const assigneeName = USER_ROLES.find(u=>u.id===assigneeId)?.name || irForm.dept;
-                        const newTask = {
-                          id:`t${Date.now()+1}`,
-                          title:`[IR] ${irForm.subject.trim()}`,
-                          assignedToUserId: assigneeId,
-                          assignedTo: null,
-                          assignedBy: activeUser,
-                          assignedByName: user_role?.name || "",
-                          assignedDept: irForm.dept,
-                          clientCompany: irForm.clientCompany.trim(),
-                          description: "Requested by " + (user_role?.name||"Sales Rep") + (irForm.clientCompany ? " for " + irForm.clientCompany.trim() : "") + ": " + (irForm.details.trim()||irForm.subject.trim()),
-                          priority: "High",
-                          status: "Open",
-                          dueDate: TOMORROW,
-                          createdAt: TODAY,
-                          repId: user_role?.repId||null,
-                          irId,
-                        };
-                        setTasks(p=>[...p, newTask]);
+                        createIR({type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),raisedBy:activeUser,raisedByName:user_role?.name||"",repId:user_role?.repId||null,dealId:null,clientCompany:irForm.clientCompany.trim(),raisedAt:TODAY,slaHours:48});
+                        createTask({actionType:"Approval needed",title:`[IR] ${irForm.subject.trim()}`,assignedToUserId:assigneeId,assignedBy:activeUser,assignedByName:user_role?.name||"",dept:irForm.dept,clientCompany:irForm.clientCompany.trim(),description:"Requested by "+(user_role?.name||"Sales Rep")+(irForm.clientCompany?" for "+irForm.clientCompany.trim():"")+": "+(irForm.details.trim()||irForm.subject.trim()),priority:"High",dueDate:TOMORROW,repId:user_role?.repId||null});
                         setIrFormOpen(false);setIrForm(BLANK_IR_FORM);
                         showToast(`Request raised → ${assigneeName} · Task created ✓`);
                       }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
@@ -7047,10 +7364,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           {req.status!=="Done" && (
                             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
                               {req.status!=="In Progress"&&(
-                                <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))}
+                                <button onClick={()=>{acknowledgeIR(req.id);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}}
                                   style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
                               )}
-                              <button onClick={()=>openNoteModal("Resolution Note","Resolved",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)))}
+                              <button onClick={()=>openNoteModal("Resolution Note","Resolved",note=>{resolveIR(req.id,note);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r));})}
                                 style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark Done</button>
                             </div>
                           )}
@@ -7086,27 +7403,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                         {isNSHDashboard && req.status!=="Done" && (
                           <>
-                            <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
-                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
+                            <button onClick={()=>{acknowledgeIR(req.id);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
+                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved", note => {resolveIR(req.id,note);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r));});}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
                           </>
                         )}
                         {/* Escalate: visible to rep/RH for any active non-escalation request */}
                         {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && req.type!=="Escalation" && (
                           <button onClick={()=>{
-                            const escalatedDept = req.dept==="NSH"?"CXO":req.dept==="Sales Strategy"?"NSH":req.dept==="Region Head"?"NSH":req.dept==="CXO"?"CXO":"Region Head";
-                            const escalated = {
-                              id:`ir${Date.now()}`,
-                              type:"Escalation",
-                              dept: escalatedDept,
-                              subject:`ESCALATION: ${req.subject}`,
-                              details:`Original request to ${req.dept} has breached SLA (${daysOld}d). Escalating for urgent action.\n\nOriginal: ${req.details||""}`,
-                              raisedBy:activeUser, raisedByName:user_role?.name||"",
-                              repId:user_role?.repId||req.repId||null,
-                              dealId:req.dealId||null, clientCompany:req.clientCompany||"",
-                              status:"Pending", raisedAt:TODAY, slaHours:24, resolvedAt:null, resolverNote:"",
-                            };
-                            setInternalReqs(p=>[escalated,...p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r)]);
-                            showToast(`Escalated to ${escalated.dept} ✓`);
+                            escalateIR(req.id);
+                            showToast("Escalating request ✓");
                           }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                             ↑ Escalate
                           </button>
@@ -7115,7 +7420,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <button onClick={()=>{setEditIrId(req.id);setIrForm({type:req.type||"Send Proposal",dept:req.dept||"NSH",subject:req.subject||"",details:req.details||"",clientCompany:req.clientCompany||""});}} style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✎ Edit</button>
                         )}
                         {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && (
-                          <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
+                          <button onClick={()=>{withdrawIR(req.id);showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
                         )}
                       </div>
                     </div>
@@ -7219,26 +7524,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   });
                                 }
                                 setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
-                                // If they signed up via the form, unlock their login credentials
-                                if (pu.passwordHash) {
-                                  const stored = JSON.parse(localStorage.getItem("otv_crm_users")||"[]");
-                                  if (!stored.find(u=>u.email===pu.email)) {
-                                    localStorage.setItem("otv_crm_users", JSON.stringify([...stored, {name:pu.name,email:pu.email,passwordHash:pu.passwordHash}]));
-                                  }
-                                  const sups = JSON.parse(localStorage.getItem("otv_pendingSignups")||"[]");
-                                  localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
-                                }
                                 showToast(`${pu.name} approved as ${role} ✓`);
                               }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                                 ✓ Approve
                               </button>
                               <button onClick={()=>{
                                 setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
-                                // Also remove from pending signups if applicable
-                                if (pu.passwordHash) {
-                                  const sups = JSON.parse(localStorage.getItem("otv_pendingSignups")||"[]");
-                                  localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
-                                }
                                 showToast(`${pu.name} rejected`,"err");
                               }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
                                 Reject
@@ -7333,8 +7624,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
                           {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8}}>{req.details}</div>}
                           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                            <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
-                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved by admin", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
+                            <button onClick={()=>{acknowledgeIR(req.id);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
+                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved by admin", note => {resolveIR(req.id,note);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r));});}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
                           </div>
                         </div>
                       );
@@ -7538,7 +7829,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {key:"South",label:"South",icon:"↓",color:"#a855f7"},
                   {key:"West", label:"West", icon:"←",color:"#f97316"},
                   {key:"East", label:"East", icon:"→",color:"#16c784"},
-                  {key:"Odisha",label:"Odisha",icon:"◈",color:"#f0a500"},
+                  {key:"Central",label:"Central",icon:"◈",color:"#f0a500"},
                   {key:"DigitalOnly",label:"Digital Only",icon:"◉",color:"#2d7dd2"},
                   {key:"DigitalTV",label:"Digital + TV",icon:"⬡",color:"#ea3943"},
                 ];
@@ -7703,7 +7994,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       const tPct=tT>0?Math.round((tC/tT)*100):0;
                       const tsc=tPct>=80?C.green:tPct>=50?C.accent:C.red;
                       // Geographic regions: drill to rep tiles; deal-type tiles: flat list
-                      const isGeoTile = ["North","South","West","East","Odisha"].includes(targetDrilldown.key);
+                      const isGeoTile = ["North","South","West","East","Central","National"].includes(targetDrilldown.key);
                       const regionReps = isGeoTile ? reps.filter(r=>r.region===targetDrilldown.key) : [];
                       return (
                         <div style={{marginTop:16}}>
@@ -8482,8 +8773,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   <td style={{padding:"10px 14px",color:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{r.raisedAt}</td>
                                   <td style={{padding:"10px 14px",color:C.red,fontWeight:700}}>{daysSince(r.raisedAt)}d</td>
                                   <td style={{padding:"10px 14px",whiteSpace:"nowrap",display:"flex",gap:4}}>
-                                    <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress"}:x))} style={{background:`${C.blue}18`,color:C.blue,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Accept</button>
-                                    <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY}:x))} style={{background:`${C.green}18`,color:C.green,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Done</button>
+                                    <button onClick={()=>{acknowledgeIR(r.id);setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress"}:x));}} style={{background:`${C.blue}18`,color:C.blue,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Accept</button>
+                                    <button onClick={()=>{resolveIR(r.id,"Resolved");setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY}:x));}} style={{background:`${C.green}18`,color:C.green,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Done</button>
                                   </td>
                                 </tr>
                               ))}
@@ -9227,9 +9518,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <div style={{fontSize:10,color:C.muted,marginTop:4}}>Raised by: {r.raisedByName||"—"} · {r.raisedAt} · Client: {r.clientCompany||"—"}</div>
                             </div>
                             <div style={{display:"flex",gap:8,flexShrink:0}}>
-                              <button onClick={()=>{setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Approved by "+user_role?.name}:x));showToast("Approved ✓");}}
+                              <button onClick={()=>{const note="Approved by "+(user_role?.name||"");resolveIR(r.id,note);setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:note}:x));showToast("Approved ✓");}}
                                 style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Approve</button>
-                              <button onClick={()=>{const note=prompt("Rejection reason (required):")||"";if(!note.trim()){showToast("Rejection reason is required","err");return;}setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:x));showToast("Request rejected — rep notified");}}
+                              <button onClick={()=>{const note=prompt("Rejection reason (required):")||"";if(!note.trim()){showToast("Rejection reason is required","err");return;}rejectIR(r.id,note);setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:x));showToast("Request rejected — rep notified");}}
                                 style={{background:`${C.red}15`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✗ Reject</button>
                             </div>
                           </div>
@@ -9526,14 +9817,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <input value={rf.notes} placeholder="Optional notes" onChange={e=>setRf(p=>({...p,notes:e.target.value}))}
                             style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                         </div>
-                        <button onClick={()=>{
+                        <button onClick={async ()=>{
                           const client = rf.clientCompany;
                           if(!client||!rf.amount){showToast("Client and amount are required","err");return;}
                           if(!rf.invoiceRef){showToast("Invoice / RO reference is required — cannot submit without it","err");return;}
                           const amt = parseCurrency(rf.amount);
                           if(!amt){showToast("Invalid amount","err");return;}
-                          const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,zohoAccountId:rf.zohoAccountId||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
-                          setRevenueEntries(p=>[entry,...p]);
+                          // ── Revenue cutover: POST to backend instead of local push ──
+                          const rr = await fetch("/api/revenue",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({clientCompany:client,zohoAccountId:rf.zohoAccountId||null,clientAccountId:(rf as any).clientAccountId||null,dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef||null,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes||null})});
+                          const rj = await rr.json();
+                          if(!rr.ok){showToast(rj.error||"Failed to log revenue","err");return;}
+                          await refreshRevenue();
                           // Fix 6: IP slot committed — notify other reps with pending proposals for the same slot
                           if (rf.dealType==="IPs") {
                             const linkedDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&d.dealType==="IPs"&&d.clientCompany===client&&d.ipId&&d.elemId);
@@ -9566,7 +9860,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             }
                           }
                           setRf({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
-                          const totalFY = [...revenueEntries.filter(e=>(isRep?e.repId===myRepId:true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
+                          // totalFY: current FY entries (pre-refresh snapshot) + the new amount just posted
+                          const totalFY = revenueEntries.filter(e=>(isRep?e.repId===myRepId:true)&&e.fiscalYear===CURRENT_FY).reduce((s,e)=>s+(e.amount||0),0) + amt;
                           // Part 9: Check if annual target reached
                           const annualTarget = isRep ? (getAnnualTarget(myRepId)?.amount||0) : 0;
                           if (annualTarget>0 && totalFY>=annualTarget) {
@@ -9600,45 +9895,30 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             editingRevId===e.id ? (
                               <tr key={e.id} style={{borderBottom:`1px solid ${C.border}`,background:C.s2}}>
                                 <td colSpan={7} style={{padding:"12px 14px"}}>
-                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:8,marginBottom:8,alignItems:"end"}}>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>AMOUNT ₹</div>
-                                      <input value={editRevData.amount||""} onChange={e=>setEditRevData(p=>({...p,amount:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                                    </div>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
-                                      <select value={editRevData.dealType||"Linear TV"} onChange={ev=>setEditRevData(p=>({...p,dealType:ev.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                                        {dealTypes.map(d=><option key={d}>{d}</option>)}
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>INVOICE REF</div>
-                                      <input value={editRevData.invoiceRef||""} onChange={e=>setEditRevData(p=>({...p,invoiceRef:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                                    </div>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>DATE</div>
-                                      <input type="date" value={editRevData.date||TODAY} onChange={e=>setEditRevData(p=>({...p,date:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                                    </div>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>NOTES</div>
-                                      <input value={editRevData.notes||""} onChange={e=>setEditRevData(p=>({...p,notes:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                                    </div>
+                                  {/* Notes-only edit — amount/date/dealType are immutable per spec */}
+                                  <div style={{marginBottom:8}}>
+                                    <div style={{fontSize:9,color:C.dim,marginBottom:3}}>NOTES — only editable field</div>
+                                    <input value={editRevData.notes||""} onChange={ev=>setEditRevData((p:any)=>({...p,notes:ev.target.value}))}
+                                      style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                                   </div>
                                   <div style={{display:"flex",gap:8}}>
-                                    <button onClick={()=>{
-                                      const amt=parseCurrency(editRevData.amount);
-                                      if(!amt){showToast("Invalid amount","err");return;}
-                                      setRevenueEntries(p=>p.map(x=>x.id===e.id?{...x,...editRevData,amount:amt,editHistory:[...(x.editHistory||[]),{editedAt:new Date().toISOString(),editedBy:user_role?.name||activeUser,oldAmount:x.amount}]}:x));
-                                      setEditingRevId(null);showToast("Entry updated ✓");
-                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Save</button>
+                                    <button onClick={async ()=>{
+                                      const res=await fetch(`/api/revenue/${e.id}/notes`,{method:"PATCH",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({notes:editRevData.notes||""})});
+                                      const j=await res.json();
+                                      if(!res.ok){showToast(j.error||"Failed to update notes","err");return;}
+                                      await refreshRevenue();setEditingRevId(null);showToast("Notes updated ✓");
+                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Save Notes</button>
                                     <button onClick={()=>setEditingRevId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                                    <button onClick={()=>{if(!confirm("Delete this revenue entry?"))return;setRevenueEntries(p=>p.filter(x=>x.id!==e.id));setEditingRevId(null);showToast("Entry deleted");}}
-                                      style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginLeft:"auto"}}>🗑 Delete</button>
+                                    {["ADMIN","REGION HEAD"].includes(user_role?.role) && (
+                                      <button onClick={async ()=>{
+                                        const reason=window.prompt("Reason for reversal (required):");
+                                        if(!reason?.trim())return;
+                                        const res=await fetch(`/api/revenue/${e.id}/reverse`,{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify({reason})});
+                                        const j=await res.json();
+                                        if(!res.ok){showToast(j.error||"Reversal failed","err");return;}
+                                        await refreshRevenue();setEditingRevId(null);showToast("Entry reversed ✓");
+                                      }} style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginLeft:"auto"}}>↩ Reverse</button>
+                                    )}
                                   </div>
                                 </td>
                               </tr>
@@ -9653,8 +9933,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{e.date}</td>
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11,maxWidth:160}}>{e.notes||"—"}</td>
                               <td style={{padding:"10px 14px",textAlign:"right"}}>
-                                <button onClick={()=>{setEditingRevId(e.id);setEditRevData({amount:(e.amount/100000)+"L",dealType:e.dealType,invoiceRef:e.invoiceRef||"",date:e.date,notes:e.notes||""});}}
-                                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✏ Edit</button>
+                                <button onClick={()=>{setEditingRevId(e.id);setEditRevData({notes:e.notes||""});}}
+                                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✏ Notes</button>
                               </td>
                             </tr>
                             )
@@ -10393,19 +10673,29 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   reader.readAsArrayBuffer(file);
                 };
 
-                const commitImport = () => {
+                const commitImport = async () => {
                   if (!importData) return;
                   const {rows, type} = importData;
                   const parseCur = v => { if(!v)return 0; const s=String(v).replace(/[,₹]/g,"").trim(); if(/[0-9]+[Cc][Rr]$/.test(s))return parseFloat(s)*10000000; if(/[0-9]+[Ll]$/.test(s))return parseFloat(s)*100000; return parseFloat(s)||0; };
 
                   if (type==="revenue") {
-                    const repLookup = r => reps.find(rep=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
-                    const entries = rows.map((row,i)=>{
-                      const rep = repLookup(row["Rep Name"]);
-                      return {id:`re_imp_${Date.now()}_${i}`,repId:rep?.id||null,clientCompany:row["Client Company"]||"",dealType:row["Deal Type"]||"Linear TV",amount:parseCur(row["Amount"]),invoiceRef:row["Invoice Ref"]||"",date:row["Date"]||TODAY,quarter:row["Quarter"]||"Q1 FY26",notes:row["Notes"]||""};
-                    });
-                    setRevenueEntries(p=>[...p,...entries]);
-                    showToast(`✓ ${entries.length} revenue entries imported`);
+                    // Revenue cutover: POST each row to backend instead of local push
+                    const payloads = rows.map(row=>({
+                      clientCompany: (row["Client Company"]||"").trim(),
+                      dealType:      (row["Deal Type"]||"Linear TV").trim(),
+                      amount:        parseCur(row["Amount"]),
+                      invoiceRef:    row["Invoice Ref"]||null,
+                      date:          row["Date"]||TODAY,
+                      quarter:       row["Quarter"]||"Q1 FY26",
+                      notes:         row["Notes"]||null,
+                    })).filter(p=>p.clientCompany&&p.amount>0);
+                    let ok=0, fail=0;
+                    for (const p of payloads) {
+                      const r=await fetch("/api/revenue",{method:"POST",credentials:"include",headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+                      if(r.ok) ok++; else fail++;
+                    }
+                    await refreshRevenue();
+                    showToast(`✓ ${ok} revenue entries imported${fail?` (${fail} failed)`:""}`);
                   } else if (type==="targets") {
                     // Group rows by rep — one targetSub per rep, multiple client+deal entries per sub
                     const repGroups: Record<string, {rep:any, repName:string, region:string, rows:any[]}> = {};
@@ -10987,7 +11277,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <td style={{padding:"10px 14px",color:overdue?C.red:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{t.dueDate}</td>
                             <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
                               {t.status!=="Done"&&(
-                                <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
+                                <select value={t.status} onChange={e=>{const ns=e.target.value;patchTaskStatus(t.id,ns);setTasks(p=>p.map(x=>x.id===t.id?{...x,status:ns}:x));}}
                                   style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,marginRight:4}}>
                                   {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
                                 </select>
@@ -11161,7 +11451,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <td style={{padding:"9px 12px"}}><span style={{background:t.priority==="High"?`${C.red}18`:t.priority==="Medium"?`${C.orange}18`:`${C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span></td>
                           <td style={{padding:"9px 12px"}}><span style={{background:`${sc}18`,color:sc,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{overdue?"OVERDUE":t.status}</span></td>
                           <td style={{padding:"9px 12px",color:overdue?C.red:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{t.dueDate}</td>
-                          <td style={{padding:"9px 12px"}}>{t.status!=="Done"&&<select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))} style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>{TASK_STATUSES.map(s=><option key={s}>{s}</option>)}</select>}</td>
+                          <td style={{padding:"9px 12px"}}>{t.status!=="Done"&&<select value={t.status} onChange={e=>{const ns=e.target.value;patchTaskStatus(t.id,ns);setTasks(p=>p.map(x=>x.id===t.id?{...x,status:ns}:x));}} style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>{TASK_STATUSES.map(s=><option key={s}>{s}</option>)}</select>}</td>
                         </tr>);
                       })}</tbody>
                     </table>
@@ -11631,7 +11921,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <td style={{padding:"9px 12px"}}><span style={{background:t.priority==="High"?`${C.red}18`:t.priority==="Medium"?`${C.orange}18`:`${C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span></td>
                           <td style={{padding:"9px 12px"}}><span style={{background:`${sc}18`,color:sc,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{overdue?"OVERDUE":t.status}</span></td>
                           <td style={{padding:"9px 12px",color:overdue?C.red:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{t.dueDate}</td>
-                          <td style={{padding:"9px 12px"}}>{t.status!=="Done"&&<select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))} style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>{TASK_STATUSES.map(s=><option key={s}>{s}</option>)}</select>}</td>
+                          <td style={{padding:"9px 12px"}}>{t.status!=="Done"&&<select value={t.status} onChange={e=>{const ns=e.target.value;patchTaskStatus(t.id,ns);setTasks(p=>p.map(x=>x.id===t.id?{...x,status:ns}:x));}} style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>{TASK_STATUSES.map(s=><option key={s}>{s}</option>)}</select>}</td>
                         </tr>);
                       })}</tbody>
                     </table>
@@ -11643,7 +11933,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ NSH RH HR ═══ */}
           {view==="nsh-rh-hr" && isNSHDashboard && (()=>{
-            const REGIONS = ["North","South","East","West","National"];
+            const REGIONS = ["North","South","East","West","National","Central"];
             const rhUsers = USER_ROLES.filter(u=>u.role==="REGION HEAD");
             return (
               <div className="fin">
@@ -12367,7 +12657,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   :assignedUser?.role==="CRO"?"CRO"
                   :assignedUser?.role==="REGION HEAD"?"Region Head"
                   :null;
-                setTasks(p=>[{id:`t${Date.now()}`,...taskForm,dept:taskDept,assignedToUserId:assignedUserId,assignedToName:assignedUser?.name||"",assignedTo:repId,repId:repId,assignedBy:activeUser,assignedByName:user_role?.name||user.name,status:"Open",createdAt:TODAY},...p]);
+                createTask({actionType:taskForm.actionType||taskForm.action||"Flag for follow-up",...taskForm,dept:taskDept,assignedToUserId:assignedUserId,assignedTo:repId,repId:repId,assignedBy:activeUser,assignedByName:user_role?.name||user.name});
                 closeTaskModal();
                 showToast(assignedUserId===activeUser?"✓ Task created for yourself":"Task assigned to "+(assignedUser?.name||""));
               }}>{selfTaskMode?"Create Task":isRep?"Create Task":"Assign Task"}</button>
@@ -12813,7 +13103,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     const reminderDate=rd.toISOString().slice(0,10);
                     return (
                       <button key={days} onClick={()=>{
-                        setPlans((prev:any[])=>[...prev,{id:`p_ro_${Date.now()}_${days}`,repId:myRepId,date:reminderDate,time:"10:00",clientAgencyName:logForm.clientCompany||logForm.clientAgencyName||"",contactName:"",phone:"",agenda:`[RO Reminder] Follow up — RO not yet received`,pitchType:"",meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"ro-reminder"}]);
+                        const roPlan = {id:`p_ro_${Date.now()}_${days}`,repId:myRepId,date:reminderDate,time:"10:00",clientAgencyName:logForm.clientCompany||logForm.clientAgencyName||"",contactName:"",phone:"",agenda:`[RO Reminder] Follow up — RO not yet received`,pitchType:"",meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"ro-reminder"};
+                        setPlans((prev:any[])=>[...prev, roPlan]);
+                        createPlanApi(roPlan);
                         showToast(`RO follow-up reminder set for ${days} days`);
                       }} style={{padding:"6px 16px",background:C.green,color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace",fontWeight:600}}>
                         +{days}d
@@ -12884,7 +13176,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{marginTop:6,fontSize:10,color:C.blue,fontWeight:600}}>
                       {(item.actionType||item.action)==="Approval needed" && `→ Approvals tab of ${item.neededFrom}`}
                       {(item.actionType||item.action)==="Attend a meeting" && `→ My Plan of ${item.neededFrom} (unscheduled meeting request)`}
-                      {["Document needed","Document / plan needed","Introduction needed","Client introduction needed","Flag for follow-up"].includes(item.actionType||item.action) && `→ My Tasks of ${item.neededFrom}`}
+                      {["Document needed","Document / plan needed","Client introduction","Introduction needed","Client introduction needed","Flag for follow-up"].includes(item.actionType||item.action) && `→ My Tasks of ${item.neededFrom}`}
                     </div>
                   )}
                 </div>
@@ -13321,7 +13613,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <button onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
               <button onClick={()=>{
                 if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
-                setInternalReqs(p=>p.map(r=>r.id===editIrId?{...r,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),clientCompany:irForm.clientCompany.trim()}:r));
+                patchIR(editIrId,{type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),clientCompany:irForm.clientCompany.trim()});setInternalReqs(p=>p.map(r=>r.id===editIrId?{...r,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),clientCompany:irForm.clientCompany.trim()}:r));
                 setEditIrId(null);setIrForm(BLANK_IR_FORM);
                 showToast("Request updated ✓");
               }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
@@ -13509,7 +13801,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 <div style={{fontSize:10,color:C.blue,fontWeight:600,marginBottom:8}}>
                                   {threadAIForm.actionType==="Approval needed"&&`→ Approvals tab of ${threadAIForm.neededFrom}`}
                                   {threadAIForm.actionType==="Attend a meeting"&&`→ My Plan of ${threadAIForm.neededFrom}`}
-                                  {["Document needed","Introduction needed","Flag for follow-up"].includes(threadAIForm.actionType)&&`→ My Tasks of ${threadAIForm.neededFrom}`}
+                                  {["Document needed","Client introduction","Introduction needed","Flag for follow-up"].includes(threadAIForm.actionType)&&`→ My Tasks of ${threadAIForm.neededFrom}`}
                                   {threadAIForm.neededFrom==="Self"&&" (personal reminder — no one else notified)"}
                                 </div>
                               )}
@@ -13524,9 +13816,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   const repName=user_role?.name||"Rep";
                                   const ts=`ai_tp_${Date.now()}`;
                                   const baseTask:any={id:ts,assignedTo:null,assignedToUserId:null,assignedDept:neededFrom==="Self"?"Self":neededFrom,repId:clientDeals[0]?.repId||null,clientCompany:clientName,title:`${aType} — ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType};
-                                  setTasks(p=>[baseTask,...p]);
+                                  createTask(baseTask);
                                   if(aType==="Approval needed"&&neededFrom!=="Self"){
-                                    setInternalReqs(p=>[{id:`ir_tp_${Date.now()}`,type:"Approval",dept:neededFrom,subject:`[Approval needed] ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:clientDeals[0]?.repId||null,dealId:clientDeals[0]?.id||null,clientCompany:clientName,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""},...p]);
+                                    createIR({type:"Approval",dept:neededFrom,subject:`[Approval needed] ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:clientDeals[0]?.repId||null,dealId:clientDeals[0]?.id||null,clientCompany:clientName,raisedAt:TODAY,slaHours:48});
                                   }
                                   setThreadAIForm(null);
                                   showToast(`Action item → ${neededFrom} ✓`);
