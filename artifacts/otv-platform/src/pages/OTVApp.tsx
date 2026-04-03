@@ -41,17 +41,36 @@ const APPROVAL_TARGETS = [
 // If approval has been pending more than this many days → auto-escalates
 const APPROVAL_SLA_DAYS = 2;
 
-// ── DATE CONSTANTS — must be before any seed data that references them ──
-const TODAY    = new Date().toISOString().split("T")[0];
-const TOMORROW = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-const D1     = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-const D3     = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
-const D7     = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
-const D14    = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
+// ── DATE CONSTANTS ──────────────────────────────────────────────────────────
+// These are declared as `let` so they can be refreshed at runtime.
+// Module-level `const` values are computed once at page load. If the user
+// keeps the tab open overnight, TODAY/TOMORROW stay as yesterday's date,
+// causing meetings, tasks, and revenue entries to be logged with wrong dates.
+//
+// Call refreshDates() at the start of any event handler that writes a date
+// (meeting log, task creation, revenue entry, plan creation).
+let TODAY    = new Date().toISOString().split("T")[0];
+let TOMORROW = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+let D1       = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+let D3       = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
+let D7       = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+let D14      = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
 
 // Live date helpers — call these in handlers/effects so dates stay correct across midnight
 const getToday    = () => new Date().toISOString().split("T")[0];
 const getTomorrow = () => new Date(Date.now() + 86400000).toISOString().split("T")[0];
+
+// Refresh all module-level date constants to the current wall-clock date.
+// Call this at the start of any callback that records a date to ensure
+// a user who left the tab open overnight gets correct dates on their entries.
+function refreshDates() {
+  TODAY    = new Date().toISOString().split("T")[0];
+  TOMORROW = new Date(Date.now() + 86400000).toISOString().split("T")[0];
+  D1       = new Date(Date.now() - 86400000).toISOString().split("T")[0];
+  D3       = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
+  D7       = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
+  D14      = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
+}
 
 const SEED_TASKS: any[] = [];
 
@@ -1819,6 +1838,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   // RO PARSER HANDLERS
   const roParseAll = async () => {
+    refreshDates(); // ensure TODAY reflects current date if page was open overnight
     if(!roFiles.length&&!roInputText.trim())return;
     setRoLoading(true);setRoError(null);setRoResults([]);
     try{
@@ -2316,6 +2336,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   };
 
   const handleLogMeeting = () => {
+    refreshDates(); // ensure TODAY/TOMORROW reflect current date, not page-load date
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
     if (!logForm.dealId && !logForm.clientAgencyName?.trim()) { showToast("Select a client deal or enter a client company name to proceed", "err"); return; }
     // Part 1+3: Stage Update required for Deal Meeting
@@ -2651,6 +2672,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
   };
 
   const handleLogMeetingWithCalendar = async () => {
+    refreshDates(); // ensure TODAY/TOMORROW reflect current date, not page-load date
     if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
     if (!logForm.dealId && !logForm.clientAgencyName?.trim()) { showToast("Select a client deal or enter a client company name to proceed", "err"); return; }
 
