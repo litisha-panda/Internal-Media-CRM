@@ -262,8 +262,8 @@ router.post("/admin/users/:id/reset-password", requireAuth, requireAdmin, async 
   const { id } = req.params;
   const { temporaryPassword } = req.body as { temporaryPassword?: string };
 
-  if (!temporaryPassword || temporaryPassword.trim().length < 6) {
-    res.status(400).json({ ok: false, error: "temporaryPassword must be at least 6 characters" });
+  if (!temporaryPassword || temporaryPassword.trim().length < 8) {
+    res.status(400).json({ ok: false, error: "temporaryPassword must be at least 8 characters" });
     return;
   }
 

@@ -63,6 +63,16 @@ router.post("/auth/signup", async (req, res) => {
     return;
   }
 
+  // Minimum password strength: at least 8 characters and one digit.
+  // Prevents trivially weak passwords like "a" or "password".
+  if (password.length < 8 || !/\d/.test(password)) {
+    res.status(400).json({
+      ok:    false,
+      error: "Password must be at least 8 characters and contain at least one number",
+    });
+    return;
+  }
+
   const lowerEmail = email.toLowerCase().trim();
 
   try {
