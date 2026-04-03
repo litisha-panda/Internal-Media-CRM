@@ -1002,11 +1002,20 @@ function usePersistedState(key, initial) {
     } catch { return initial; }
   });
 
-  // Track when we last wrote, to avoid polling overwriting in-progress edits
+  // stateRef always holds the CURRENT state value so closures in async
+  // callbacks (poll, beforeunload flush) always see the latest data and
+  // never push stale initial-mount snapshots to the server.
+  const stateRef        = useRef(state);
   const lastWriteRef    = useRef<number>(0);
+  // lastWrittenValueRef tracks what we last confirmed as written to the server
+  // so the beforeunload flush can skip if there's nothing pending.
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout>|null>(null);
+  const hasPendingWrite = useRef(false);
   // Skip the very first effect run (mount) so we don't falsely mark as "user write"
   const isFirstRunRef   = useRef(true);
+
+  // Keep stateRef in sync on every render
+  stateRef.current = state;
 
   // 2. On every state change: mirror to localStorage immediately,
   //    then debounce-write to server after 1s.
@@ -1015,9 +1024,8 @@ function usePersistedState(key, initial) {
   useEffect(() => {
     try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
     if (!isFirstRunRef.current) {
-      // User-initiated change (or server-load triggered re-render after first mount):
-      // stamp the write time NOW so the load grace-period check sees it immediately.
       lastWriteRef.current = Date.now();
+      hasPendingWrite.current = true;
     }
     isFirstRunRef.current = false;
     if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
@@ -1026,8 +1034,11 @@ function usePersistedState(key, initial) {
         await fetch(`/api/state/${key}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ value: state }),
+          // Use stateRef.current so we always flush the LATEST value,
+          // not a stale closure captured at debounce-schedule time.
+          body: JSON.stringify({ value: stateRef.current }),
         });
+        hasPendingWrite.current = false;
       } catch { /* offline — localStorage still has it */ }
     }, 1000);
     return () => { if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current); };
@@ -1036,8 +1047,8 @@ function usePersistedState(key, initial) {
   // 3. On mount: load from server (may override localStorage with newer shared data).
   //    If server has nothing, migrate localStorage/seed to server.
   // 4. Poll every 20s — only accept server value if it's newer than our last local write.
-  //    The grace-period check now applies to BOTH initial loads AND polls to prevent
-  //    a slow initial fetch from overwriting an entry the user just logged.
+  //    Grace-period check: skip server update if we wrote locally in the last 10s
+  //    (up from 5s to handle slow networks more safely).
   useEffect(() => {
     const load = async (isPoll = false) => {
       try {
@@ -1045,18 +1056,20 @@ function usePersistedState(key, initial) {
         if (!res.ok) return;
         const data = await res.json();
         if (data.ok && data.value !== null) {
-          // Skip if we have a pending local write that is newer than the server data
           const serverTs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
-          if (lastWriteRef.current > serverTs - 5000) return;
+          // Skip server update if we have a recent local write that hasn't
+          // synced yet. Use 10s window (was 5s) to cover slow network writes.
+          if (lastWriteRef.current > serverTs - 10_000) return;
           setState(data.value);
           try { localStorage.setItem(key, JSON.stringify(data.value)); } catch {}
         } else if (!isPoll) {
-          // Server has no data yet — push local/seed data so other users see it
-          const localVal = state;
+          // Server has no data yet — push current local state so other users see it.
+          // Use stateRef.current (not closure-captured `state`) to avoid pushing
+          // the stale initial-mount snapshot.
           fetch(`/api/state/${key}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value: localVal }),
+            body: JSON.stringify({ value: stateRef.current }),
           }).catch(() => {});
         }
       } catch { /* offline */ }
@@ -1064,7 +1077,26 @@ function usePersistedState(key, initial) {
 
     load(false); // initial load
     const interval = setInterval(() => load(true), 20000); // poll every 20s
-    return () => clearInterval(interval);
+
+    // Flush any pending write synchronously before the tab closes so data
+    // is not lost when a user edits and immediately closes the browser.
+    const flushOnUnload = () => {
+      if (!hasPendingWrite.current) return;
+      try {
+        // sendBeacon is fire-and-forget and survives page unload reliably.
+        const blob = new Blob(
+          [JSON.stringify({ value: stateRef.current })],
+          { type: "application/json" },
+        );
+        navigator.sendBeacon(`/api/state/${key}`, blob);
+      } catch { /* best-effort */ }
+    };
+    window.addEventListener("beforeunload", flushOnUnload);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener("beforeunload", flushOnUnload);
+    };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
