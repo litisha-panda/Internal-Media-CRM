@@ -460,14 +460,14 @@ function ROCard({result,onExport,onPushToPipeline}){
         <span style={{color:"#7d8590",fontSize:11}}>Deal + Breakup + Summary sheets</span>
       </div>
       <div style={{display:"flex",borderBottom:"1px solid #1e2d3d",overflowX:"auto"}}>
-        {tabs.map(t=>{const a=activeTab===t.id;return<button key={t.id} onClick={()=>setActiveTab(t.id)} style={{padding:"9px 16px",background:"transparent",border:"none",color:a?"#a855f7":"#7d8590",fontWeight:a?700:400,fontSize:12,cursor:"pointer",borderBottom:a?"2px solid #a855f7":"2px solid transparent",whiteSpace:"nowrap",fontFamily:"'DM Mono',monospace"}}>{t.label}</button>;})}
+        {tabs.map(t=>{const a=activeTab===t.id;return<button key={t.id} onClick={()=>setActiveTab(t.id)} style={{padding:"9px 16px",background:"transparent",border:"none",color:a?"#a855f7":"#7d8590",fontWeight:a?700:400,fontSize:12,cursor:"pointer",borderBottom:a?"2px solid #a855f7":"2px solid transparent",whiteSpace:"nowrap",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{t.label}</button>;})}
       </div>
       <div style={{padding:16}}>
         {activeTab==="deal"&&<div><ZohoHierarchy r={result} exp={exp} /><div style={{fontSize:10,fontWeight:700,color:"#7d8590",textTransform:"uppercase",marginBottom:7,letterSpacing:".08em"}}>Deal Form Fields</div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(190px,1fr))",gap:7}}>{Object.entries(exp.dealRow).filter(([,v])=>v).map(([k,v])=><ROFieldCard key={k} label={k} value={String(v)} highlight={k==="Deal Name"||k==="Advertiser"} warn={k==="Commission"&&v==="AGENCY BILLING ON NET"} />)}</div></div>}
         {activeTab==="breakup"&&<div><div style={{background:"#1a1a0a",border:"1px solid #854d0e",borderRadius:6,padding:"7px 11px",marginBottom:10,fontSize:11,color:"#f0a500"}}>⚠ Contract Type and Secondary Type blank — fill in Zoho directly.</div><ROTableView rows={exp.breakupRows} /></div>}
         {activeTab==="summary"&&<div><div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(170px,1fr))",gap:7}}>{[["Total Inventory",m.totalInventory?m.totalInventory+"s":null],["Total Spots",m.totalSlots||null],["Total Amount",m.totalAmount?roFmtMoney(m.totalAmount):null],["ER","Rs."+(m.er||0)+"/10s"],["Gross",m.grossAmt?roFmtMoney(m.grossAmt):null],["Discount",m.discountAmt?roFmtMoney(m.discountAmt):null],["Commission",m.commAmt?roFmtMoney(m.commAmt):null],["Net Payable",roFmtMoney(result.total_payable||m.expectedRevenue||m.grossAmt)]].filter(e=>e[1]).map(([k,v])=><ROFieldCard key={k} label={k} value={v} highlight={k==="Net Payable"} warn={k==="Discount"||k==="Commission"} />)}</div></div>}
         {activeTab==="spots"&&<ROTableView rows={(result.spot_items||[]).filter(item=>{const p=(item.program_or_timeband||"").trim().toLowerCase();return p&&p!=="total"&&p!=="subtotal"&&p!=="sub total"&&p!=="grand total";}).map(s=>({"Program":s.program_or_timeband||"","Days":s.days||"","Timeband":s.time_band||"","Caption":s.caption||"","Dur(s)":s.spot_duration_sec||"","Type":s.payment_type||"Paid","FCT(s)":s.total_fct||"","Rate/10s":s.net_rate_per_10sec||"","Spots":s.no_of_spots||"","Net Cost":s.net_cost||""}))} />}
-        {activeTab==="json"&&<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:7}}><button onClick={()=>{navigator.clipboard?.writeText(JSON.stringify(result,null,2));setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{background:"#1a2332",color:"#7d8590",border:"none",padding:"4px 11px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{copied?"Copied!":"Copy JSON"}</button></div><pre style={{background:"#080a0f",borderRadius:7,padding:14,fontSize:11,color:"#16c784",overflowX:"auto",margin:0,maxHeight:480,overflow:"auto"}}>{JSON.stringify(result,null,2)}</pre></div>}
+        {activeTab==="json"&&<div><div style={{display:"flex",justifyContent:"flex-end",marginBottom:7}}><button onClick={()=>{navigator.clipboard?.writeText(JSON.stringify(result,null,2));setCopied(true);setTimeout(()=>setCopied(false),2000);}} style={{background:"#1a2332",color:"#7d8590",border:"none",padding:"4px 11px",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{copied?"Copied!":"Copy JSON"}</button></div><pre style={{background:"#080a0f",borderRadius:7,padding:14,fontSize:11,color:"#16c784",overflowX:"auto",margin:0,maxHeight:480,overflow:"auto"}}>{JSON.stringify(result,null,2)}</pre></div>}
       </div>
     </div>
   );
@@ -3338,13 +3338,57 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         table{width:100%;border-collapse:collapse}
         /* ── FORM LABELS ── */
         label{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:11px;font-weight:600;color:${C.dim};display:block;margin-bottom:5px;letter-spacing:.04em}
+        /* ── PAGE HEADER ── */
+        .page-hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:20px;gap:16px}
+        .page-hdr-left{display:flex;flex-direction:column;gap:3px}
+        .page-hdr-actions{display:flex;align-items:center;gap:8px;flex-shrink:0}
+        .page-title{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:18px;font-weight:700;color:${C.text};letter-spacing:-.3px;line-height:1.2}
+        .page-subtitle{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:12px;color:${C.muted};margin-top:2px}
+        /* ── KPI CARDS ── */
+        .kpi-grid{display:grid;gap:12px;margin-bottom:16px}
+        .kpi-grid-4{grid-template-columns:repeat(4,1fr)}
+        .kpi-grid-5{grid-template-columns:repeat(5,1fr)}
+        .kpi-grid-2{grid-template-columns:1fr 1fr}
+        .kpi-grid-3{grid-template-columns:repeat(3,1fr)}
+        .kpi-card{background:${C.surface};border:1px solid ${C.border};border-radius:12px;padding:16px 18px;box-shadow:0 1px 3px rgba(0,0,0,.04);position:relative;overflow:hidden}
+        .kpi-label{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:10px;font-weight:700;color:${C.muted};letter-spacing:.08em;text-transform:uppercase;margin-bottom:6px}
+        .kpi-value{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:22px;font-weight:700;line-height:1.1;font-variant-numeric:tabular-nums}
+        .kpi-sub{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:11px;color:${C.muted};margin-top:4px;line-height:1.35}
+        /* ── TAB NAVIGATION ── */
+        .tab-bar{display:flex;gap:0;margin-bottom:16px;border-bottom:1.5px solid ${C.border};overflow-x:auto}
+        .tab-btn{flex-shrink:0;padding:10px 16px;background:transparent;border:none;border-bottom:2.5px solid transparent;margin-bottom:-1.5px;color:${C.dim};cursor:pointer;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:12px;font-weight:500;text-align:left;transition:color .15s,border-color .15s;white-space:nowrap;line-height:1.3}
+        .tab-btn:hover{color:${C.text}}
+        .tab-btn.active{color:${C.accent};border-bottom-color:${C.accent};font-weight:700}
+        .tab-btn-sub{font-size:10px;color:${C.muted};margin-top:1px;font-weight:400}
+        /* ── SIDEBAR NAV ── */
+        .nav-section-label{font-size:9px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;color:${C.muted};font-weight:700;letter-spacing:.12em;text-transform:uppercase;padding:12px 16px 4px;display:block}
+        .nav-section-label:first-child{padding-top:8px}
+        .nav-btn{width:100%;padding:8px 14px 8px 16px;background:transparent;border:none;border-left:2px solid transparent;cursor:pointer;display:flex;align-items:center;gap:8px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:12px;font-weight:400;color:${C.dim};text-align:left;transition:all .12s;line-height:1.3}
+        .nav-btn:hover{color:${C.text};background:${C.s2}}
+        .nav-btn.active{background:${C.accent}10;border-left-color:${C.accent};color:${C.accent};font-weight:600}
+        /* ── SECTION BLOCK ── */
+        .section-block{background:${C.surface};border:1px solid ${C.border};border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+        .section-hdr{display:flex;justify-content:space-between;align-items:center;padding:14px 20px;border-bottom:1px solid ${C.border}}
+        .section-hdr-title{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:13px;font-weight:700;color:${C.text}}
+        .section-body{padding:16px 20px}
+        /* ── EMPTY STATE ── */
+        .empty-state{text-align:center;padding:48px 24px;color:${C.muted}}
+        .empty-state-icon{font-size:32px;margin-bottom:12px;opacity:.4}
+        .empty-state-title{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:14px;font-weight:600;color:${C.dim};margin-bottom:4px}
+        .empty-state-body{font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:12px;color:${C.muted};line-height:1.5}
+        /* ── STATUS BADGE (inline) ── */
+        .badge{display:inline-flex;align-items:center;padding:2px 8px;border-radius:20px;font-family:'Plus Jakarta Sans',system-ui,sans-serif;font-size:10px;font-weight:700;letter-spacing:.03em}
+        /* ── ACTION ALERT CARD ── */
+        .alert-card{background:${C.surface};border:1px solid ${C.border};border-radius:10px;padding:16px 18px;margin-bottom:16px}
+        .alert-row{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid ${C.s2}}
+        .alert-row:last-child{border-bottom:none}
       `}</style>
 
       {/* TOPBAR */}
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 20px",height:48,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           {/* Back to home */}
-          <button onClick={onGoHome} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 10px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s"}}
+          <button onClick={onGoHome} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 10px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s"}}
             onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
             onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>
             ← Home
@@ -3365,7 +3409,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 onFocus={()=>setSearchOpen(true)}
                 onBlur={()=>setTimeout(()=>setSearchOpen(false),150)}
                 placeholder="Search clients, deals, tasks…"
-                style={{width:"100%",background:C.s2,border:`1px solid ${globalSearch?C.accent:C.border}`,borderRadius:6,padding:"5px 10px 5px 28px",fontSize:11,color:C.text,fontFamily:"'DM Mono',monospace",outline:"none",transition:"border-color .15s"}}
+                style={{width:"100%",background:C.s2,border:`1px solid ${globalSearch?C.accent:C.border}`,borderRadius:6,padding:"5px 10px 5px 28px",fontSize:11,color:C.text,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",outline:"none",transition:"border-color .15s"}}
               />
               {globalSearch && <button onClick={()=>{setGlobalSearch("");setSearchOpen(false);}} style={{position:"absolute",right:7,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:13,lineHeight:1}}>×</button>}
             </div>
@@ -3443,7 +3487,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{height:1,background:C.border,margin:"4px 0"}} />
                 <button
                   onClick={()=>{setProfileOpen(false);onLogout();}}
-                  style={{width:"100%",background:"transparent",border:"none",padding:"8px 12px",textAlign:"left",color:C.red,fontSize:12,cursor:"pointer",borderRadius:5,fontFamily:"'DM Mono',monospace",transition:"background .1s"}}
+                  style={{width:"100%",background:"transparent",border:"none",padding:"8px 12px",textAlign:"left",color:C.red,fontSize:12,cursor:"pointer",borderRadius:5,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",transition:"background .1s"}}
                   onMouseOver={e=>e.currentTarget.style.background=`${C.red}18`}
                   onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                   Sign out
@@ -3479,11 +3523,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               {/* Action buttons */}
               <div style={{display:"flex",gap:10}}>
                 <button onClick={startTour}
-                  style={{flex:1,background:C.accent,border:"none",color:"#000",borderRadius:8,padding:"12px 20px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",letterSpacing:.3}}>
+                  style={{flex:1,background:C.accent,border:"none",color:"#000",borderRadius:8,padding:"12px 20px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",letterSpacing:.3}}>
                   Start Tour →
                 </button>
                 <button onClick={()=>{setShowWelcomeModal(false);localStorage.setItem(`otv_welcome_${activeUser}`,"1");}}
-                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:8,padding:"12px 20px",fontSize:13,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:8,padding:"12px 20px",fontSize:13,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                   Skip for now
                 </button>
               </div>
@@ -3597,22 +3641,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               {/* Navigation */}
               <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 22px",display:"flex",gap:8,alignItems:"center"}}>
                 <button onClick={()=>setTourStep(s=>Math.max(0,s-1))} disabled={isFirst}
-                  style={{background:"transparent",border:`1px solid ${isFirst?C.s3:C.border}`,borderRadius:6,padding:"6px 14px",color:isFirst?C.muted:C.dim,fontSize:11,cursor:isFirst?"default":"pointer",fontFamily:"'DM Mono',monospace"}}>
+                  style={{background:"transparent",border:`1px solid ${isFirst?C.s3:C.border}`,borderRadius:6,padding:"6px 14px",color:isFirst?C.muted:C.dim,fontSize:11,cursor:isFirst?"default":"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                   ← Prev
                 </button>
                 {isLast ? (
                   <button onClick={closeTour}
-                    style={{flex:1,background:C.accent,border:"none",color:"#000",borderRadius:6,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                    style={{flex:1,background:C.accent,border:"none",color:"#000",borderRadius:6,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                     Done ✓
                   </button>
                 ) : (
                   <button onClick={()=>setTourStep(s=>Math.min(total-1,s+1))}
-                    style={{flex:1,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"8px 14px",fontSize:12,color:C.accent,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                    style={{flex:1,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"8px 14px",fontSize:12,color:C.accent,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                     Next →
                   </button>
                 )}
                 <button onClick={closeTour}
-                  style={{background:"transparent",border:"none",color:C.muted,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",padding:"6px 8px"}}>
+                  style={{background:"transparent",border:"none",color:C.muted,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",padding:"6px 8px"}}>
                   Skip all
                 </button>
               </div>
@@ -3624,28 +3668,29 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       <div style={{display:"flex",flex:1,overflow:"hidden",flexDirection: isMobile ? "column" : "row"}}>
         {/* SIDEBAR — vertical on desktop, horizontal tab bar on mobile */}
         {isMobile ? (
-          <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,display:"flex",overflowX:"auto",flexShrink:0,padding:"4px 8px",gap:2}}>
+          <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,display:"flex",overflowX:"auto",flexShrink:0,padding:"4px 8px",gap:0}}>
             {navSections.flatMap(sec => sec.items).map(n => (
               <button key={n.id} onClick={()=>setView(n.id)}
-                style={{flexShrink:0,padding:"6px 10px",background:view===n.id?`${C.accent}18`:"transparent",border:"none",borderBottom:view===n.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===n.id?C.accent:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:view===n.id?600:400,whiteSpace:"nowrap",transition:"all .1s"}}>
-                <span style={{fontSize:11}}>{n.icon}</span>
+                className={`tab-btn${view===n.id?" active":""}`}
+                style={{display:"flex",alignItems:"center",gap:5,padding:"8px 12px"}}>
+                <span style={{fontSize:12}}>{n.icon}</span>
                 <span>{n.label}</span>
-                {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:8,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 3px"}}>{n.badge}</span>}
+                {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:20,minWidth:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 4px"}}>{n.badge}</span>}
               </button>
             ))}
           </div>
         ) : (
-          <div style={{width:182,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"6px 0 0",flexShrink:0,display:"flex",flexDirection:"column",overflowY:"auto"}}>
+          <div style={{width:200,background:C.surface,borderRight:`1px solid ${C.border}`,padding:"4px 0 0",flexShrink:0,display:"flex",flexDirection:"column",overflowY:"auto"}}>
             {navSections.map((sec,si) => (
-              <div key={si} style={{marginBottom:2}}>
-                <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",padding:si===0?"6px 14px 3px":"10px 14px 3px"}}>{sec.label}</div>
+              <div key={si}>
+                <span className="nav-section-label">{sec.label}</span>
                 {sec.items.map(n => (
                   <button key={n.id} onClick={()=>setView(n.id)}
                     data-tour={n.id}
-                    style={{width:"100%",padding:"8px 14px",background:view===n.id?`${C.accent}12`:"transparent",border:"none",borderLeft:view===n.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===n.id?C.accent:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:view===n.id?600:400,letterSpacing:".03em",textAlign:"left",transition:"all .1s"}}>
-                    <span style={{fontSize:12,opacity:.75}}>{n.icon}</span>
-                    <span style={{flex:1}}>{n.label}</span>
-                    {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:8,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 3px"}}>{n.badge}</span>}
+                    className={`nav-btn${view===n.id?" active":""}`}>
+                    <span style={{fontSize:13,opacity:view===n.id?1:.7,flexShrink:0}}>{n.icon}</span>
+                    <span style={{flex:1,fontSize:12}}>{n.label}</span>
+                    {n.badge>0&&<span style={{background:C.red,color:"#fff",borderRadius:20,minWidth:16,height:16,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 4px"}}>{n.badge}</span>}
                   </button>
                 ))}
               </div>
@@ -3889,7 +3934,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             {t.clientCompany&&<span style={{fontSize:10,color:C.dim}}>{t.clientCompany}</span>}
                             <span style={{background:`${t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span>
                             <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
-                              style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontFamily:"'DM Mono',monospace"}}>
+                              style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                               {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
                             </select>
                           </div>
@@ -3939,7 +3984,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
                   {([["plan","📅 Plan"],["log","📋 Meeting Log"]] as [string,string][]).map(([id,label])=>(
                     <button key={id} onClick={()=>setMyPlanTab(id as "plan"|"log")}
-                      style={{background:"none",border:"none",borderBottom:`2px solid ${myPlanTab===id?C.accent:"transparent"}`,padding:"6px 14px",fontSize:12,fontWeight:myPlanTab===id?700:400,color:myPlanTab===id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginBottom:-1,transition:"color .15s"}}>
+                      style={{background:"none",border:"none",borderBottom:`2px solid ${myPlanTab===id?C.accent:"transparent"}`,padding:"6px 14px",fontSize:12,fontWeight:myPlanTab===id?700:400,color:myPlanTab===id?C.accent:C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginBottom:-1,transition:"color .15s"}}>
                       {label}
                     </button>
                   ))}
@@ -4029,7 +4074,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           const note = {id:`eod${Date.now()}`,repId:myRepId,type:"EOD Confirm",note:"Rep confirmed: nothing more to log today",date:TODAY,createdAt:TODAY};
                           setTouchpoints(p=>[...p,note as any]);
                           showToast("Confirmed — no more meetings today. Record saved.");
-                        }} style={{background:"#fff",color:C.red,border:"none",borderRadius:5,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
+                        }} style={{background:"#fff",color:C.red,border:"none",borderRadius:5,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",whiteSpace:"nowrap"}}>
                           Nothing more to log today
                         </button>
                       </div>
@@ -4120,7 +4165,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                         <div style={{display:"flex",gap:6,alignItems:"center"}}>
                           <span style={{fontSize:12,color:done?C.green:C.red,fontWeight:700}}>{done?"✓":"✗"}</span>
-                          <button onClick={()=>setAddPlanFor(date)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 8px",color:C.dim,fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Add</button>
+                          <button onClick={()=>setAddPlanFor(date)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 8px",color:C.dim,fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>+ Add</button>
                         </div>
                       </div>
                       <div style={{padding:"10px 14px",minHeight:60}}>
@@ -4201,8 +4246,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <div style={{gridColumn:"1/-1"}}><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Agenda</label><input value={planEditForm.agenda} onChange={e=>setPlanEditForm(f=>({...f,agenda:e.target.value}))} placeholder="What are you going in with?" style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
                                   </div>
                                   <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                                    <button onClick={()=>setPlanEditId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
+                                    <button onClick={()=>setPlanEditId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
+                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>Save Changes</button>
                                   </div>
                                 </div>
                               )}
@@ -4223,10 +4268,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                         return [...confirmed, requesterPlan];
                                       });
                                       showToast("Meeting confirmed — added to both plans ✓");
-                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"4px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"4px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                       ✓ Confirm date
                                     </button>
-                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Declined"}:pl));showToast("Meeting request declined");}} style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,borderRadius:5,padding:"4px 14px",color:C.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Declined"}:pl));showToast("Meeting request declined");}} style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,borderRadius:5,padding:"4px 14px",color:C.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                       ✗ Decline
                                     </button>
                                   </div>
@@ -4257,12 +4302,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                               setPlans(q=>[...q,{id:`rem${Date.now()}_${days}`,repId:myRepId,date:rStr,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow up on RO — ${p.clientAgencyName}`,pitchType:"",meetingType:"Call",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"}]);
                                               setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;});
                                               showToast(`Reminder set for ${rStr} ✓`);
-                                            }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"5px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                            }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"5px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                               {days}d
                                             </button>
                                           );
                                         })}
-                                        <button onClick={()=>setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;})} style={{background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 14px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                        <button onClick={()=>setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;})} style={{background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 14px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                           Skip
                                         </button>
                                       </div>
@@ -4457,9 +4502,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{fontSize:10,color:weeklyDiffMs<=0?C.red:C.blue,fontWeight:600,marginTop:2}}>Weekly plan: {weeklyLabel}</div>
                     </div>
                     <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                      <button onClick={()=>setCalWeekOffset(p=>p-1)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:C.dim,cursor:"pointer",fontSize:13,fontFamily:"'DM Mono',monospace"}}>←</button>
-                      <button onClick={()=>setCalWeekOffset(0)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:calWeekOffset===0?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>Today</button>
-                      <button onClick={()=>setCalWeekOffset(p=>p+1)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:C.dim,cursor:"pointer",fontSize:13,fontFamily:"'DM Mono',monospace"}}>→</button>
+                      <button onClick={()=>setCalWeekOffset(p=>p-1)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:C.dim,cursor:"pointer",fontSize:13,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>←</button>
+                      <button onClick={()=>setCalWeekOffset(0)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:calWeekOffset===0?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Today</button>
+                      <button onClick={()=>setCalWeekOffset(p=>p+1)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:C.dim,cursor:"pointer",fontSize:13,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>→</button>
                     </div>
                   </div>
 
@@ -4589,7 +4634,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             return (
                               <div key={h} style={{display:"flex",gap:0,minHeight:48,borderBottom:`1px solid ${C.s2}`}}>
                                 {/* Hour label */}
-                                <div style={{width:48,flexShrink:0,padding:"6px 8px 0",fontSize:10,color:C.muted,fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{timeLabel}</div>
+                                <div style={{width:48,flexShrink:0,padding:"6px 8px 0",fontSize:10,color:C.muted,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textAlign:"right"}}>{timeLabel}</div>
                                 {/* Slot content */}
                                 <div style={{flex:1,padding:"4px 8px",background:isOccupied?`${C.accent}05`:"transparent",cursor:!dvIsPast?"pointer":"default",transition:"background .1s"}}
                                   onMouseEnter={e=>{if(!dvIsPast)(e.currentTarget as HTMLDivElement).style.background=`${C.accent}0a`;}}
@@ -4736,7 +4781,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div style={{display:"flex",gap:6,marginTop:4}}>
                             {[{id:"Physical",icon:"🤝"},{id:"Online",icon:"💻"},{id:"Phone Call",icon:"📞"}].map(mt=>(
                               <button key={mt.id} onClick={()=>setPf(p=>({...p,meetingType:mt.id,needsMeet:mt.id!=="Online"?false:p.needsMeet}))}
-                                style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${pf.meetingType===mt.id?C.accent:C.border}`,background:pf.meetingType===mt.id?`${C.accent}18`:"transparent",color:pf.meetingType===mt.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",textAlign:"center"}}>
+                                style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${pf.meetingType===mt.id?C.accent:C.border}`,background:pf.meetingType===mt.id?`${C.accent}18`:"transparent",color:pf.meetingType===mt.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textAlign:"center"}}>
                                 {mt.icon} {mt.id}
                               </button>
                             ))}
@@ -4745,7 +4790,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           {pf.meetingType==="Online" && (
                             <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,padding:"8px 10px",background:"#4285F418",border:"1px solid #4285F444",borderRadius:5}}>
                               <button onClick={()=>setPf(p=>({...p,needsMeet:!p.needsMeet}))}
-                                style={{width:16,height:16,borderRadius:3,border:`1px solid ${pf.needsMeet?"#4285F4":C.border}`,background:pf.needsMeet?"#4285F4":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10,flexShrink:0,fontFamily:"'DM Mono',monospace"}}>
+                                style={{width:16,height:16,borderRadius:3,border:`1px solid ${pf.needsMeet?"#4285F4":C.border}`,background:pf.needsMeet?"#4285F4":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10,flexShrink:0,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                 {pf.needsMeet?"✓":""}
                               </button>
                               <span style={{fontSize:12,color:"#4285F4",fontWeight:600}}>Schedule Google Meet link</span>
@@ -4762,7 +4807,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <label>Pitch Type</label>
                           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:4}}>
                             {PITCH_TYPES.map(pt=>(
-                              <button key={pt} onClick={()=>setPf(p=>({...p,pitchType:pt}))} style={{padding:"3px 9px",fontSize:10,borderRadius:4,border:`1px solid ${pf.pitchType===pt?C.accent:C.border}`,background:pf.pitchType===pt?`${C.accent}18`:"transparent",color:pf.pitchType===pt?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{pt}</button>
+                              <button key={pt} onClick={()=>setPf(p=>({...p,pitchType:pt}))} style={{padding:"3px 9px",fontSize:10,borderRadius:4,border:`1px solid ${pf.pitchType===pt?C.accent:C.border}`,background:pf.pitchType===pt?`${C.accent}18`:"transparent",color:pf.pitchType===pt?C.accent:C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{pt}</button>
                             ))}
                           </div>
                         </div>
@@ -4904,7 +4949,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:700}}>{dw}d waiting</span>
                         <span style={{color:C.accent,fontWeight:700}}>{fmtR(d.amount)}</span>
                         <button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()}
-                          style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Approve →</button>
+                          style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Approve →</button>
                       </div>
                     );
                   })}
@@ -4921,7 +4966,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                         <span style={{fontSize:10,color:C.dim}}>Due {t.dueDate}</span>
                         <button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))}
-                          style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button>
+                          style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Done</button>
                       </div>
                     );
                   })}
@@ -5047,7 +5092,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <button onClick={()=>{
                               setTasks(p=>[...p,{id:taskId,title:`Intervene — ${d.clientCompany} — ${idle}d — ${rep?.name||""}`,dept:"Region Head",status:"Open",dueDate:TODAY,repId:d.repId,createdAt:TODAY,priority:"High"}]);
                               showToast(`Task created: Intervene — ${d.clientCompany}`);
-                            }} style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                            }} style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                               Create Task
                             </button>
                           )}
@@ -5400,9 +5445,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
                                 <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
                                   <button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()}
-                                    style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>Approve</button>
+                                    style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginRight:4}}>Approve</button>
                                   <button onClick={()=>setView("pipeline")}
-                                    style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>View</button>
+                                    style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>View</button>
                                 </td>
                               </tr>
                             );
@@ -5833,10 +5878,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ WAR ROOM ═══ */}
           {view==="warroom" && !isRH && !isNSHDashboard && (
             <div className="fin">
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                <div>
-                  <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>WAR ROOM</div>
-                  <div style={{fontSize:11,color:C.dim,marginTop:2}}>{new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short",year:"numeric"})}</div>
+              <div className="page-hdr">
+                <div className="page-hdr-left">
+                  <div className="page-title">War Room</div>
+                  <div className="page-subtitle">{new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short",year:"numeric"})}</div>
                 </div>
               </div>
 
@@ -5885,7 +5930,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div style={{flex:1}}><span style={{fontWeight:600}}>{t.title}</span>{t.clientCompany&&<span style={{color:C.dim,fontSize:11}}> · {t.clientCompany}</span>}</div>
                         <div style={{display:"flex",gap:6,alignItems:"center"}}>
                           <span style={{fontSize:10,color:C.dim}}>Due {t.dueDate}</span>
-                          <button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"2px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button>
+                          <button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"2px 8px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Done</button>
                         </div>
                       </div>
                     ))}
@@ -5912,10 +5957,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       {label:"IN PLAY",   value:fmtR(wrInp), color:C.accent, sub:"In Discussion / Negotiation"},
                       {label:"SHORTFALL", value:fmtR(wrSf),  color:wrSf===0?C.green:C.red, sub:wrSf===0?"On track":"Gap remaining"},
                     ].map(k=>(
-                      <div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}>
-                        <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:5}}>{k.label}</div>
-                        <div className="sans" style={{fontSize:21,fontWeight:700,color:k.color,lineHeight:1}}>{k.value}</div>
-                        {k.sub&&<div style={{fontSize:10,color:C.dim,marginTop:4}}>{k.sub}</div>}
+                      <div key={k.label} className="kpi-card" style={{borderTop:`3px solid ${k.color}`}}>
+                        <div className="kpi-label">{k.label}</div>
+                        <div className="kpi-value" style={{color:k.color}}>{k.value}</div>
+                        {k.sub&&<div className="kpi-sub">{k.sub}</div>}
                       </div>
                     ))}
                   </div>
@@ -5998,7 +6043,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </div>
                             <div style={{display:"flex",gap:6,alignItems:"center"}}>
                               <span style={{fontSize:10,color:C.dim}}>{rep?.name}</span>
-                              <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace",marginLeft:"auto"}}>{d.outcome}</span>
+                              <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginLeft:"auto"}}>{d.outcome}</span>
                             </div>
                           </div>
                         );
@@ -6029,16 +6074,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ REVENUE TRACKER ═══ */}
           {view==="pipeline" && (
             <div className="fin">
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
-                  <div>
-                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REVENUE TRACKER</div>
-                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>{isDigiOps?"Website · App · Social · Direct · Internal · Programmatic":"Linear TV · IPs · Digital · Media Solutions · Integrated Packages"}</div>
+                <div className="page-hdr" style={{marginBottom:4}}>
+                  <div className="page-hdr-left">
+                    <div className="page-title">Revenue Tracker</div>
+                    <div className="page-subtitle">{isDigiOps?"Website · App · Social · Direct · Internal · Programmatic":"Linear TV · IPs · Digital · Media Solutions · Integrated Packages"}</div>
                   </div>
-                  <button className="btn btn-primary" onClick={()=>openAddDeal()}>+ Add Deal</button>
+                  <div className="page-hdr-actions">
+                    <button className="btn btn-primary" onClick={()=>openAddDeal()}>+ Add Deal</button>
+                  </div>
                 </div>
 
                 {/* Tab switcher */}
-                <div style={{display:"flex",gap:0,marginBottom:16,borderBottom:`1px solid ${C.border}`}}>
+                <div className="tab-bar">
                   {(isDigiOps ? [
                     {id:"accounts",    label:"Website",      sub:"Digital"},
                     {id:"digi-app",    label:"App",          sub:"Mobile"},
@@ -6055,9 +6102,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {id:"integrated",  label:"Integrated Packages", sub:"Multi-platform"},
                   ]).map(t=>(
                     <button key={t.id} onClick={()=>setRtTab(t.id)}
-                      style={{padding:"10px 16px",background:"transparent",border:"none",borderBottom:rtTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",color:rtTab===t.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:rtTab===t.id?700:400,textAlign:"left",whiteSpace:"nowrap"}}>
+                      className={`tab-btn${rtTab===t.id?" active":""}`}>
                       <div>{t.label}</div>
-                      <div style={{fontSize:9,color:C.muted,marginTop:1}}>{t.sub}</div>
+                      <div className="tab-btn-sub">{t.sub}</div>
                     </button>
                   ))}
                 </div>
@@ -6106,7 +6153,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                   <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                   <td style={{padding:"9px 14px"}}>
-                                    <span style={{padding:"2px 8px",background:`${oColor(a.currentStage)}18`,border:`1px solid ${oColor(a.currentStage)}44`,borderRadius:5,color:oColor(a.currentStage),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{a.currentStage||"—"}</span>
+                                    <span style={{padding:"2px 8px",background:`${oColor(a.currentStage)}18`,border:`1px solid ${oColor(a.currentStage)}44`,borderRadius:5,color:oColor(a.currentStage),fontSize:10,fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{a.currentStage||"—"}</span>
                                   </td>
                                   <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                 </tr>
@@ -6165,7 +6212,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{dealStage(d)}</span>
+                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{dealStage(d)}</span>
                                     </td>
                                     <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                   </tr>
@@ -6303,7 +6350,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       <td style={{padding:"9px 14px",color:cmt>0?C.green:C.muted,fontWeight:cmt>0?700:400}}>{cmt>0?fmtR(cmt):"—"}</td>
                                       <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                       <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
-                                      <td style={{padding:"9px 14px"}}><span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{dealStage(d)}</span></td>
+                                      <td style={{padding:"9px 14px"}}><span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{dealStage(d)}</span></td>
                                       <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                     </tr>
                                   );
@@ -6427,7 +6474,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                           <td style={{padding:"6px 12px",whiteSpace:"nowrap",textAlign:"right"}}>
                                             {canPropose&&(
                                               <button onClick={()=>{setIpPropOpen(panelOpen?null:fk);setIpPropClient("");setIpPropNote("");setIpPropValue("");}}
-                                                style={{background:panelOpen?C.s3:`${C.blue}18`,border:`1px solid ${panelOpen?C.border:C.blue}44`,color:panelOpen?C.dim:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                                style={{background:panelOpen?C.s3:`${C.blue}18`,border:`1px solid ${panelOpen?C.border:C.blue}44`,color:panelOpen?C.dim:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                                                 {panelOpen?"✕ Cancel":"+ Propose"}
                                               </button>
                                             )}
@@ -6442,7 +6489,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                             )}
                                             {showPendingBadge&&(
                                               <button onClick={()=>setIpPropOpen(panelOpen?null:fk)}
-                                                style={{background:panelOpen?C.s3:`${C.orange}18`,border:`1px solid ${panelOpen?C.border:C.orange}55`,color:panelOpen?C.dim:C.orange,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                                style={{background:panelOpen?C.s3:`${C.orange}18`,border:`1px solid ${panelOpen?C.border:C.orange}55`,color:panelOpen?C.dim:C.orange,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                                                 {panelOpen?"✕ Close":`Review ${pending.length}`}
                                               </button>
                                             )}
@@ -6464,22 +6511,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                                         <div style={{fontSize:10,color:C.dim,marginBottom:3}}>Client name *</div>
                                                         <input value={ipPropClient} onChange={e=>setIpPropClient(e.target.value)}
                                                           placeholder="e.g. Godrej Consumer"
-                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}}/>
                                                       </div>
                                                       <div style={{flex:"1 1 120px"}}>
                                                         <div style={{fontSize:10,color:C.dim,marginBottom:3}}>Proposed value (optional)</div>
                                                         <input value={ipPropValue} onChange={e=>setIpPropValue(e.target.value)}
                                                           placeholder={`e.g. ${(elem.rackRate/100000).toFixed(0)}L`}
-                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}}/>
                                                       </div>
                                                       <div style={{flex:"2 1 180px"}}>
                                                         <div style={{fontSize:10,color:C.dim,marginBottom:3}}>Note</div>
                                                         <input value={ipPropNote} onChange={e=>setIpPropNote(e.target.value)}
                                                           placeholder="Budget confirmed / in discussion…"
-                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                                                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}}/>
                                                       </div>
                                                       <button onClick={()=>submitProposal(ip,elem)}
-                                                        style={{background:C.blue,border:"none",color:"#fff",borderRadius:5,padding:"6px 16px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap"}}>
+                                                        style={{background:C.blue,border:"none",color:"#fff",borderRadius:5,padding:"6px 16px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700,whiteSpace:"nowrap"}}>
                                                         Submit →
                                                       </button>
                                                     </div>
@@ -6511,13 +6558,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                                                   value={ipApprovalPrices[prop.id]||""}
                                                                   onChange={e=>setIpApprovalPrices(prev=>({...prev,[prop.id]:e.target.value}))}
                                                                   placeholder={`Closed at (e.g. ${(elem.rackRate/100000).toFixed(0)}L)`}
-                                                                  style={{background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"4px 8px",color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace",width:140}}/>
+                                                                  style={{background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"4px 8px",color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",width:140}}/>
                                                                 <button onClick={()=>approveProposal(prop)}
-                                                                  style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"4px 12px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                                                  style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"4px 12px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                                                                   Approve ✓
                                                                 </button>
                                                                 <button onClick={()=>rejectProposal(prop)}
-                                                                  style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:5,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                                                  style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:5,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                                                   Reject
                                                                 </button>
                                                               </>
@@ -6608,11 +6655,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </div>
                             <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                               <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(d.repId),dealId:d.id,clientAgencyName:d.clientCompany,contactName:d.contactName||""}));setLogOpen(true);}}
-                                style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Meeting</button>
+                                style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>Log Meeting</button>
                               <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Support",dept:"Branding Team",subject:`Brand Solutions deck for ${d.clientCompany}`,details:`Custom package deck needed. Estimated value: ${fmtR(d.amount)}.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Deck request raised → Branding Team ✓");}}
-                                style={{background:`${C.purple}18`,border:"none",color:C.purple,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Deck</button>
+                                style={{background:`${C.purple}18`,border:"none",color:C.purple,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Request Deck</button>
                               <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Approval",dept:"NSH",subject:`Brand Solutions approval: ${d.clientCompany} — ${fmtR(d.amount)}`,details:`Custom package deal needs NSH sign-off before presenting to client.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Approval request raised → NSH ✓");}}
-                                style={{background:`${C.orange}18`,border:"none",color:C.orange,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Approval</button>
+                                style={{background:`${C.orange}18`,border:"none",color:C.orange,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Request Approval</button>
                             </div>
                           </div>
                         );
@@ -6665,7 +6712,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{dealStage(d)}</span>
+                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{dealStage(d)}</span>
                                     </td>
                                     <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                   </tr>
@@ -6724,7 +6771,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <td style={{padding:"9px 14px",color:inp>0?C.accent:C.muted,fontWeight:inp>0?700:400}}>{inp>0?fmtR(inp):"—"}</td>
                                     <td style={{padding:"9px 14px",color:sf===0?C.green:C.red,fontWeight:700}}>{sf===0?"✓":fmtR(sf)}</td>
                                     <td style={{padding:"9px 14px"}}>
-                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{dealStage(d)}</span>
+                                      <span style={{padding:"2px 8px",background:`${oColor(dealStage(d))}18`,border:`1px solid ${oColor(dealStage(d))}44`,borderRadius:5,color:oColor(dealStage(d)),fontSize:10,fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{dealStage(d)}</span>
                                     </td>
                                     <td style={{padding:"9px 14px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11,fontWeight:idle>=7?700:400}}>{idle===0?"Today":`${idle}d`}</td>
                                   </tr>
@@ -6768,7 +6815,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{textAlign:"center",padding:"60px 20px",color:C.dim}}>
                         <div style={{fontSize:32,marginBottom:12}}>📭</div>
                         <div style={{fontWeight:700,fontSize:14,marginBottom:6,color:C.text}}>No deals match these filters</div>
-                        <button onClick={()=>{setFilterRegion("All");setFilterQ("Q1 FY26");}} style={{color:C.accent,background:"none",border:`1px solid ${C.accent}`,borderRadius:5,padding:"6px 14px",cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Reset filters</button>
+                        <button onClick={()=>{setFilterRegion("All");setFilterQ("Q1 FY26");}} style={{color:C.accent,background:"none",border:`1px solid ${C.accent}`,borderRadius:5,padding:"6px 14px",cursor:"pointer",fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Reset filters</button>
                       </div>
                     )}
 
@@ -6808,7 +6855,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       <td>{d.awaitingApproval?<span style={{background:ov?`${C.red}22`:`${C.orange}22`,color:ov?C.red:C.orange,padding:"1px 7px",borderRadius:6,fontSize:10,fontWeight:600}}>{d.awaitingApproval} {dw>0?`${dw}d`:""}</span>:<span style={{color:C.muted,fontSize:10}}>—</span>}</td>
                                       <td style={{fontSize:11,color:C.dim,maxWidth:180}}>{d.nextStep||"—"}</td>
                                       <td>
-                                        <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'DM Mono',monospace"}}>{d.outcome}</span>
+                                        <span style={{padding:"2px 8px",background:`${oColor(d.outcome)}18`,border:`1px solid ${oColor(d.outcome)}44`,borderRadius:5,color:oColor(d.outcome),fontSize:10,fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{d.outcome}</span>
                                       </td>
                                     </tr>
                                   );
@@ -6926,7 +6973,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         style={{padding:"10px 20px",background:"transparent",border:"none",
                           borderBottom:effectiveLbTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
                           color:effectiveLbTab===t.id?C.accent:C.dim,cursor:"pointer",
-                          fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:effectiveLbTab===t.id?700:400,textAlign:"left"}}>
+                          fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontSize:12,fontWeight:effectiveLbTab===t.id?700:400,textAlign:"left"}}>
                         <div>{t.label}</div>
                         <div style={{fontSize:9,color:C.muted,marginTop:1}}>{t.sub}</div>
                       </button>
@@ -7034,14 +7081,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div>
                         <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Request type *</div>
                         <select value={irForm.type} onChange={e=>setIrForm(f=>({...f,type:e.target.value}))}
-                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                           {["Send Proposal","Send FCT Grid","Send Revised Rate Card","Send Sponsorship Deck","Get Budget Approval","Arrange Senior Meeting","Get Rate Approval","Follow Up with Client","Share Digital Plan","Content / Script Needed","Legal / Contract Review","Get PO / Release","Other"].map(t=><option key={t}>{t}</option>)}
                         </select>
                       </div>
                       <div>
                         <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Who do you need it from? *</div>
                         <select value={irForm.dept} onChange={e=>setIrForm(f=>({...f,dept:e.target.value}))}
-                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                           {["Region Head","NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
                         </select>
                       </div>
@@ -7050,13 +7097,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Subject / What do you need? *</div>
                       <input value={irForm.subject} onChange={e=>setIrForm(f=>({...f,subject:e.target.value}))}
                         placeholder="e.g. Discount approval — 10% off rate card for Havells"
-                        style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                        style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}}/>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
                       <div>
                         <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Client / Account (optional)</div>
                         <select value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
-                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}>
+                          style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}}>
                           <option value="">— Select client —</option>
                           {[...new Set(deals.filter(d=>user_role?.repId?d.repId===user_role.repId:true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
                         </select>
@@ -7066,11 +7113,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Details / Context</div>
                       <textarea value={irForm.details} onChange={e=>setIrForm(f=>({...f,details:e.target.value}))}
                         rows={3} placeholder="Provide context — client budget, ask, deadline, any relevant background…"
-                        style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",resize:"vertical",boxSizing:"border-box"}}/>
+                        style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",resize:"vertical",boxSizing:"border-box"}}/>
                     </div>
                     <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
                       <button onClick={()=>{setIrFormOpen(false);setIrForm(BLANK_IR_FORM);}}
-                        style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                        style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                       <button onClick={()=>{
                         if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
                         const irId = `ir${Date.now()}`;
@@ -7099,7 +7146,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         setTasks(p=>[...p, newTask]);
                         setIrFormOpen(false);setIrForm(BLANK_IR_FORM);
                         showToast(`Request raised → ${assigneeName} · Task created ✓`);
-                      }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                      }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                         Submit Request →
                       </button>
                     </div>
@@ -7124,7 +7171,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
                   {["all","Pending","Overdue","In Progress","Done","Withdrawn"].map(s=>(
                     <button key={s} onClick={()=>setIrStatusFilter(s)}
-                      style={{padding:"4px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:irStatusFilter===s?700:400,
+                      style={{padding:"4px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:irStatusFilter===s?700:400,
                         background:irStatusFilter===s?C.accent:`${C.accent}12`,
                         color:irStatusFilter===s?"#fff":C.dim,border:"none"}}>
                       {s==="all"?"All":s}
@@ -7166,10 +7213,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
                               {req.status!=="In Progress"&&(
                                 <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))}
-                                  style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
+                                  style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Mark In Progress</button>
                               )}
                               <button onClick={()=>openNoteModal("Resolution Note","Resolved",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)))}
-                                style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark Done</button>
+                                style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Mark Done</button>
                             </div>
                           )}
                         </div>
@@ -7204,8 +7251,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                         {isNSHDashboard && req.status!=="Done" && (
                           <>
-                            <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
-                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
+                            <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Mark In Progress</button>
+                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Resolve</button>
                           </>
                         )}
                         {/* Escalate: visible to rep/RH for any active non-escalation request */}
@@ -7225,15 +7272,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             };
                             setInternalReqs(p=>[escalated,...p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r)]);
                             showToast(`Escalated to ${escalated.dept} ✓`);
-                          }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                          }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                             ↑ Escalate
                           </button>
                         )}
                         {(isRep||isRH) && req.status==="Pending" && (
-                          <button onClick={()=>{setEditIrId(req.id);setIrForm({type:req.type||"Send Proposal",dept:req.dept||"NSH",subject:req.subject||"",details:req.details||"",clientCompany:req.clientCompany||""});}} style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✎ Edit</button>
+                          <button onClick={()=>{setEditIrId(req.id);setIrForm({type:req.type||"Send Proposal",dept:req.dept||"NSH",subject:req.subject||"",details:req.details||"",clientCompany:req.clientCompany||""});}} style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✎ Edit</button>
                         )}
                         {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && (
-                          <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
+                          <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Withdraw</button>
                         )}
                       </div>
                     </div>
@@ -7274,7 +7321,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             if(j.ok){Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));showToast("Demo data cleared — reloading…");setTimeout(()=>window.location.reload(),800);}
                             else showToast("Reset failed: "+j.error,"err");
                           }catch{showToast("Reset failed","err");}
-                        }} style={{background:C.red,border:"none",color:"#fff",borderRadius:6,padding:"8px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        }} style={{background:C.red,border:"none",color:"#fff",borderRadius:6,padding:"8px 20px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                           🗑 Clear All Demo Data Now
                         </button>
                       </div>
@@ -7313,11 +7360,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </div>
                             {/* Role + Region selectors inline — pre-fill from signup if available */}
                             <select id={`role-${pu.id}`} defaultValue={pu.intendedRole||"SALES REP"}
-                              style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                              style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                               {ALL_ROLES.filter(r=>r!=="ADMIN").map(r=><option key={r}>{r}</option>)}
                             </select>
                             <select id={`region-${pu.id}`} defaultValue={pu.preferredRegion||"North"}
-                              style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                              style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                               {REGIONS.map(r=><option key={r}>{r}</option>)}
                             </select>
                             <div style={{display:"flex",gap:6}}>
@@ -7347,7 +7394,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
                                 }
                                 showToast(`${pu.name} approved as ${role} ✓`);
-                              }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                              }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                                 ✓ Approve
                               </button>
                               <button onClick={()=>{
@@ -7358,7 +7405,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
                                 }
                                 showToast(`${pu.name} rejected`,"err");
-                              }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                              }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                 Reject
                               </button>
                             </div>
@@ -7384,14 +7431,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             const newRole = e.target.value;
                             setLiveRoles(p=>p.map(r=>r.id===u.id?{...r,role:newRole,canView:newRole==="SALES REP"?"self":newRole==="REGION HEAD"?"region":"all"}:r));
                             showToast(`${u.name} role updated to ${newRole}`);
-                          }} style={{padding:"4px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                          }} style={{padding:"4px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                             {ALL_ROLES.map(r=><option key={r}>{r}</option>)}
                           </select>
                           <button onClick={()=>{
                             if(!window.confirm(`Revoke access for ${u.name}?`)) return;
                             setLiveRoles(p=>p.filter(r=>r.id!==u.id));
                             showToast(`${u.name}'s access revoked`,"err");
-                          }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"4px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Revoke</button>
+                          }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"4px 11px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Revoke</button>
                         </div>
                       ))}
                     </div>
@@ -7422,7 +7469,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         } catch(e) {
                           showToast("Reset failed","err");
                         }
-                      }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"7px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                      }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"7px 18px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                         ⚠ Reset All App Data
                       </button>
                     </div>
@@ -7451,8 +7498,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
                           {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8}}>{req.details}</div>}
                           <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                            <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
-                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved by admin", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
+                            <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>In Progress</button>
+                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved by admin", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Resolve</button>
                           </div>
                         </div>
                       );
@@ -7546,7 +7593,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   return (
                     <div>
                       <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-                        <button onClick={()=>setRhRepDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← Back to Reps</button>
+                        <button onClick={()=>setRhRepDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>← Back to Reps</button>
                         <div className="sans" style={{fontSize:15,fontWeight:700}}>{repObj?.name}</div>
                         <div style={{fontSize:11,color:C.dim}}>{repObj?.region} · {repDeals.length} clients</div>
                       </div>
@@ -7749,8 +7796,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div style={{marginTop:16}}>
                           {/* Breadcrumb */}
                           <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14,flexWrap:"wrap"}}>
-                            <button onClick={()=>{setTargetDrilldown(null);setNshRepDrill(null);}} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← All Regions</button>
-                            <button onClick={()=>setNshRepDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← {tile?.label} Reps</button>
+                            <button onClick={()=>{setTargetDrilldown(null);setNshRepDrill(null);}} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>← All Regions</button>
+                            <button onClick={()=>setNshRepDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>← {tile?.label} Reps</button>
                             <div className="sans" style={{fontSize:15,fontWeight:700}}>{repObj?.name}</div>
                             <div style={{fontSize:11,color:C.dim}}>{repObj?.region} · {rd.length} client{rd.length!==1?"s":""}</div>
                           </div>
@@ -7827,7 +7874,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div style={{marginTop:16}}>
                           {/* Back + header */}
                           <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:14}}>
-                            <button onClick={()=>{setTargetDrilldown(null);setNshRepDrill(null);}} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← All Regions</button>
+                            <button onClick={()=>{setTargetDrilldown(null);setNshRepDrill(null);}} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>← All Regions</button>
                             <div style={{width:28,height:28,borderRadius:6,background:`${tile?.color}22`,border:`1px solid ${tile?.color}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,color:tile?.color,fontWeight:700}}>{tile?.icon}</div>
                             <div className="sans" style={{fontSize:15,fontWeight:700}}>{tile?.label}</div>
                             <div style={{fontSize:11,color:C.dim}}>{td.length} deal{td.length!==1?"s":""}</div>
@@ -7973,8 +8020,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <button onClick={()=>{
                                       if(!canApprove(d)){showToast("Only the designated approver can approve","err");return;}
                                       openNoteModal("Approval Note","Approved",note=>approveDeal(d.id,note));
-                                    }} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>Approve →</button>
-                                    <button onClick={()=>setView("pipeline")} style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>View Deal</button>
+                                    }} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginRight:4}}>Approve →</button>
+                                    <button onClick={()=>setView("pipeline")} style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>View Deal</button>
                                   </td>
                                 </tr>
                               );
@@ -8520,11 +8567,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
                                     <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
                                       <button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()}
-                                        style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>
+                                        style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginRight:4}}>
                                         Resolved
                                       </button>
                                       <button onClick={()=>setView("pipeline")}
-                                        style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                        style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                         View Deal
                                       </button>
                                     </td>
@@ -8934,7 +8981,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>Submit your client-wise targets for approval. Once CRO approves, they become your official quota.</div>
                   </div>
                   <button onClick={()=>{ setAddClientForm({clientCompany:"",dealType:"Linear TV",targetAmount:""}); setAddClientModalOpen(true); }}
-                    style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:7,padding:"9px 18px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                    style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:7,padding:"9px 18px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
                     + Add Client
                   </button>
                 </div>
@@ -8999,7 +9046,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       ))}
                     </div>
                     <button onClick={()=>{ setAddClientForm({clientCompany:"",dealType:"Linear TV",targetAmount:""}); setAddClientModalOpen(true); }}
-                      style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:8,padding:"11px 28px",fontSize:13,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                      style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:8,padding:"11px 28px",fontSize:13,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                       + Add My First Client Target
                     </button>
                   </div>
@@ -9062,7 +9109,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div>
                           <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>DEAL TYPE</div>
                           <select value={addClientForm.dealType} onChange={e=>setAddClientForm(p=>({...p,dealType:e.target.value}))}
-                            style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
+                            style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                             {dealTypes.map(d=><option key={d}>{d}</option>)}
                           </select>
                         </div>
@@ -9070,11 +9117,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div style={{fontSize:10,color:C.dim,marginBottom:4,letterSpacing:".05em"}}>TARGET AMOUNT (₹)</div>
                           <input value={addClientForm.targetAmount} placeholder="e.g. 50L or 5000000"
                             onChange={e=>setAddClientForm(p=>({...p,targetAmount:e.target.value}))}
-                            style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}/>
+                            style={{width:"100%",boxSizing:"border-box",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                         </div>
                       </div>
                       <div style={{marginTop:22,display:"flex",gap:10,justifyContent:"flex-end"}}>
-                        <button onClick={()=>setAddClientModalOpen(false)} style={{padding:"9px 18px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                        <button onClick={()=>setAddClientModalOpen(false)} style={{padding:"9px 18px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                         <button onClick={()=>{
                           const {clientCompany,zohoAccountId,dealType,targetAmount} = addClientForm;
                           if(!clientCompany.trim()||!targetAmount){showToast("Fill in client name and target amount","err");return;}
@@ -9100,7 +9147,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           }
                           setAddClientModalOpen(false);
                           showToast(`${clientCompany.trim()} added → submitted for approval ✓`);
-                        }} style={{padding:"9px 22px",background:isFrozen?"linear-gradient(135deg,#15803d,#16a34a)":"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:6,color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        }} style={{padding:"9px 22px",background:isFrozen?"linear-gradient(135deg,#15803d,#16a34a)":"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:6,color:"#fff",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                           {isFrozen ? "Add as Additional Revenue Opportunity →" : "Submit for Approval →"}
                         </button>
                       </div>
@@ -9189,11 +9236,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{filterQ} · Rejected Submission</div>
                       {editSubId!==sub.id
                         ? <button onClick={()=>{ setEditSubId(sub.id); setEditSubClients(sub.clients.map(c=>({...c,targetAmount:String(c.targetAmount)}))); }}
-                            style={{background:`${C.orange}18`,border:`1px solid ${C.orange}44`,color:C.orange,borderRadius:6,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                            style={{background:`${C.orange}18`,border:`1px solid ${C.orange}44`,color:C.orange,borderRadius:6,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                             ✏ Edit &amp; Resubmit
                           </button>
                         : <div style={{display:"flex",gap:8}}>
-                            <button onClick={()=>setEditSubId(null)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 14px",fontSize:11,cursor:"pointer",color:C.dim,fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                            <button onClick={()=>setEditSubId(null)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,padding:"5px 14px",fontSize:11,cursor:"pointer",color:C.dim,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                             <button onClick={()=>{
                               const updated = editSubClients.map(c=>({...c,targetAmount:parseCurrency(String(c.targetAmount)),clientStatus:"Pending"}));
                               const newTotal = updated.reduce((s,c)=>s+(c.targetAmount||0),0);
@@ -9207,7 +9254,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               }:t));
                               setEditSubId(null);
                               showToast("Revised targets submitted for approval ✓");
-                            }} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:6,padding:"5px 16px",fontSize:11,cursor:"pointer",color:"#fff",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                            }} style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",borderRadius:6,padding:"5px 16px",fontSize:11,cursor:"pointer",color:"#fff",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                               Resubmit →
                             </button>
                           </div>
@@ -9243,7 +9290,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     value={editSubClients[i]?.targetAmount||""}
                                     onChange={e=>setEditSubClients(p=>p.map((c,j)=>j===i?{...c,targetAmount:e.target.value}:c))}
                                     placeholder="e.g. 50L"
-                                    style={{width:120,padding:"6px 10px",background:C.s2,border:`1px solid ${C.accent}55`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}
+                                    style={{width:120,padding:"6px 10px",background:C.s2,border:`1px solid ${C.accent}55`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}
                                   />
                                 </td>
                               )}
@@ -9294,7 +9341,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   </div>
                   <button onClick={()=>{setPlanUploadForm({repId:"",quarter:entryQ,clients:[{clientCompany:"",dealType:"Linear TV",targetAmount:""}]});setPlanUploadOpen(true);}}
-                    style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:7,padding:"9px 18px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                    style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:7,padding:"9px 18px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
                     ↑ Upload Plan for Rep
                   </button>
                 </div>
@@ -9346,9 +9393,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </div>
                             <div style={{display:"flex",gap:8,flexShrink:0}}>
                               <button onClick={()=>{setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Approved by "+user_role?.name}:x));showToast("Approved ✓");}}
-                                style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Approve</button>
+                                style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>✓ Approve</button>
                               <button onClick={()=>{const note=prompt("Rejection reason (required):")||"";if(!note.trim()){showToast("Rejection reason is required","err");return;}setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:x));showToast("Request rejected — rep notified");}}
-                                style={{background:`${C.red}15`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✗ Reject</button>
+                                style={{background:`${C.red}15`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>✗ Reject</button>
                             </div>
                           </div>
                         </div>
@@ -9425,15 +9472,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 {cs==="Pending" ? (
                                   <>
                                     <button onClick={()=>setClientStatus(i,"Approved")}
-                                      style={{background:`${C.green}22`,border:`1px solid ${C.green}55`,color:C.green,borderRadius:4,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Approve</button>
+                                      style={{background:`${C.green}22`,border:`1px solid ${C.green}55`,color:C.green,borderRadius:4,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>✓ Approve</button>
                                     <button onClick={()=>setClientStatus(i,"Rejected")}
-                                      style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✗ Reject</button>
+                                      style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"4px 10px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✗ Reject</button>
                                   </>
                                 ) : (
                                   <div style={{display:"flex",gap:5,alignItems:"center"}}>
                                     <span style={{fontSize:11,fontWeight:700,color:cs==="Approved"?C.green:C.red}}>{cs==="Approved"?"✓ Approved":"✗ Rejected"}</span>
                                     <button onClick={()=>setClientStatus(i,"Pending")}
-                                      style={{background:C.s3,border:"none",color:C.dim,borderRadius:4,padding:"3px 7px",fontSize:9,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Undo</button>
+                                      style={{background:C.s3,border:"none",color:C.dim,borderRadius:4,padding:"3px 7px",fontSize:9,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Undo</button>
                                   </div>
                                 )}
                               </div>
@@ -9464,7 +9511,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <button onClick={()=>{
                             setTargetSubs(p=>p.map(t=>t.id===sub.id?{...t,status:"Rejected",approvalLog:[...t.approvalLog,{action:"Rejected",step:pendingStep,by:user_role?.name||"",at:TODAY,note:"Rejected by "+user_role?.name}]}:t));
                             showToast("Submission rejected — rep will be notified");
-                          }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Reject All</button>
+                          }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"6px 14px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Reject All</button>
                           <button
                             disabled={!canForward||pendingClients.length>0}
                             onClick={()=>{
@@ -9508,7 +9555,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               }
                               showToast(nextStep==="Approved"?`✓ ${approvedOnly.length} targets approved!`:`Forwarded ${approvedOnly.length} clients → ${nextStep||""}`);
                             }}
-                            style={{background:canForward&&pendingClients.length===0?"linear-gradient(135deg,#6366f1,#8b5cf6)":C.s3,border:"none",color:canForward&&pendingClients.length===0?"#fff":C.muted,borderRadius:4,padding:"6px 18px",fontSize:12,cursor:canForward&&pendingClients.length===0?"pointer":"not-allowed",fontFamily:"'DM Mono',monospace",fontWeight:700,transition:"all .15s"}}>
+                            style={{background:canForward&&pendingClients.length===0?"linear-gradient(135deg,#6366f1,#8b5cf6)":C.s3,border:"none",color:canForward&&pendingClients.length===0?"#fff":C.muted,borderRadius:4,padding:"6px 18px",fontSize:12,cursor:canForward&&pendingClients.length===0?"pointer":"not-allowed",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700,transition:"all .15s"}}>
                             {nextStep==="Approved"?"✓ Final Approve":pendingClients.length>0?`Review all first (${pendingClients.length} left)`:`Approve ${approvedClients.length} → ${nextStep||""}`}
                           </button>
                         </div>
@@ -9607,7 +9654,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               const matchAcct = myApprovedAccts.find(a=>a.clientName===sel);
                               setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",zohoAccountId:matchAcct?.zohoAccountId||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
                             }}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.zohoAccountId?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.zohoAccountId?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                               <option value="">Select from approved targets…</option>
                               {myApprovedAccts.sort((a,b)=>a.clientName.localeCompare(b.clientName)).map(a=><option key={a.id} value={a.clientName}>{a.clientName}</option>)}
                             </select>
@@ -9617,7 +9664,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
                             <select value={rf.dealType} onChange={e=>setRf(p=>({...p,dealType:e.target.value}))}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                               {dealTypes.map(d=><option key={d}>{d}</option>)}
                             </select>
                           </div>
@@ -9626,23 +9673,23 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>AMOUNT ₹</div>
                             <input value={rf.amount} placeholder="e.g. 5L or 1Cr" onChange={e=>setRf(p=>({...p,amount:e.target.value}))}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                           </div>
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>INVOICE / PO REF</div>
                             <input value={rf.invoiceRef} placeholder="INV-2024-XXX" onChange={e=>setRf(p=>({...p,invoiceRef:e.target.value}))}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                           </div>
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>DATE</div>
                             <input type="date" min="2020-01-01" max="2099-12-31" value={rf.date} onChange={e=>setRf(p=>({...p,date:e.target.value}))}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                           </div>
                         </div>
                         <div style={{marginBottom:10}}>
                           <div style={{fontSize:10,color:C.dim,marginBottom:3}}>NOTES</div>
                           <input value={rf.notes} placeholder="Optional notes" onChange={e=>setRf(p=>({...p,notes:e.target.value}))}
-                            style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                            style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                         </div>
                         <button onClick={()=>{
                           refreshDates(); // ensure TODAY reflects current date if tab was open overnight
@@ -9701,7 +9748,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           } else {
                             showToast(`₹${(amt/100000).toFixed(1)}L logged for ${client} ✓  Your total ${CURRENT_FY}: ₹${(totalFY/100000).toFixed(1)}L`);
                           }
-                        }} style={{background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:5,padding:"8px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        }} style={{background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:5,padding:"8px 20px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                           ✓ Log Revenue
                         </button>
                       </div>
@@ -9731,29 +9778,29 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     <div>
                                       <div style={{fontSize:9,color:C.dim,marginBottom:3}}>AMOUNT ₹</div>
                                       <input value={editRevData.amount||""} onChange={e=>setEditRevData(p=>({...p,amount:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                                     </div>
                                     <div>
                                       <div style={{fontSize:9,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
                                       <select value={editRevData.dealType||"Linear TV"} onChange={ev=>setEditRevData(p=>({...p,dealType:ev.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                         {dealTypes.map(d=><option key={d}>{d}</option>)}
                                       </select>
                                     </div>
                                     <div>
                                       <div style={{fontSize:9,color:C.dim,marginBottom:3}}>INVOICE REF</div>
                                       <input value={editRevData.invoiceRef||""} onChange={e=>setEditRevData(p=>({...p,invoiceRef:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                                     </div>
                                     <div>
                                       <div style={{fontSize:9,color:C.dim,marginBottom:3}}>DATE</div>
                                       <input type="date" value={editRevData.date||TODAY} onChange={e=>setEditRevData(p=>({...p,date:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                                     </div>
                                     <div>
                                       <div style={{fontSize:9,color:C.dim,marginBottom:3}}>NOTES</div>
                                       <input value={editRevData.notes||""} onChange={e=>setEditRevData(p=>({...p,notes:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                                     </div>
                                   </div>
                                   <div style={{display:"flex",gap:8}}>
@@ -9762,10 +9809,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       if(!amt){showToast("Invalid amount","err");return;}
                                       setRevenueEntries(p=>p.map(x=>x.id===e.id?{...x,...editRevData,amount:amt,editHistory:[...(x.editHistory||[]),{editedAt:new Date().toISOString(),editedBy:user_role?.name||activeUser,oldAmount:x.amount}]}:x));
                                       setEditingRevId(null);showToast("Entry updated ✓");
-                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Save</button>
-                                    <button onClick={()=>setEditingRevId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>✓ Save</button>
+                                    <button onClick={()=>setEditingRevId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                                     <button onClick={()=>{if(!confirm("Delete this revenue entry?"))return;setRevenueEntries(p=>p.filter(x=>x.id!==e.id));setEditingRevId(null);showToast("Entry deleted");}}
-                                      style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginLeft:"auto"}}>🗑 Delete</button>
+                                      style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginLeft:"auto"}}>🗑 Delete</button>
                                   </div>
                                 </td>
                               </tr>
@@ -9781,7 +9828,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11,maxWidth:160}}>{e.notes||"—"}</td>
                               <td style={{padding:"10px 14px",textAlign:"right"}}>
                                 <button onClick={()=>{setEditingRevId(e.id);setEditRevData({amount:(e.amount/100000)+"L",dealType:e.dealType,invoiceRef:e.invoiceRef||"",date:e.date,notes:e.notes||""});}}
-                                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✏ Edit</button>
+                                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✏ Edit</button>
                               </td>
                             </tr>
                             )
@@ -9819,7 +9866,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <span style={{fontSize:11,color:C.dim}}>₹</span>
                       <input type="number" value={adminConfig.approvalThresholds?.[key]!=null?adminConfig.approvalThresholds[key]/100000:0}
                         onChange={e=>setAdminConfig(p=>({...p,approvalThresholds:{...p.approvalThresholds,[key]:parseFloat(e.target.value||"0")*100000}}))}
-                        style={{width:80,padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"right"}}/>
+                        style={{width:80,padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textAlign:"right"}}/>
                       <span style={{fontSize:11,color:C.dim}}>L</span>
                     </div>
                     <div style={{minWidth:90,fontSize:11,color:C.accent,fontWeight:700}}>{((adminConfig.approvalThresholds?.[key]||0)/100000).toFixed(0)}L = ₹{((adminConfig.approvalThresholds?.[key]||0)/10000000).toFixed(2)}Cr</div>
@@ -9840,7 +9887,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
                       <input type="number" value={adminConfig[key]||0}
                         onChange={e=>setAdminConfig(p=>({...p,[key]:parseInt(e.target.value||"0")}))}
-                        style={{width:56,padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
+                        style={{width:56,padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textAlign:"center"}}/>
                       <span style={{fontSize:11,color:C.dim}}>{suffix}</span>
                     </div>
                   </div>
@@ -9858,7 +9905,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{display:"flex",alignItems:"center",gap:4}}>
                         <input type="number" value={v as number}
                           onChange={e=>setAdminConfig(p=>({...p,slaHours:{...p.slaHours,[k]:parseInt(e.target.value||"48")}}))}
-                          style={{width:50,padding:"4px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
+                          style={{width:50,padding:"4px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textAlign:"center"}}/>
                         <span style={{fontSize:10,color:C.dim}}>hrs</span>
                       </div>
                     </div>
@@ -9892,7 +9939,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"flex",gap:6}}>
                       {["Pre-launch","Live"].map(s=>(
                         <button key={s} onClick={()=>setAdminConfig(p=>({...p,platformLive:s==="Live"}))}
-                          style={{padding:"7px 16px",fontSize:11,fontWeight:700,borderRadius:5,border:`1px solid ${((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?s==="Live"?C.green:C.orange:C.border}`,background:((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?`${s==="Live"?C.green:C.orange}18`:C.s2,color:((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?s==="Live"?C.green:C.orange:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                          style={{padding:"7px 16px",fontSize:11,fontWeight:700,borderRadius:5,border:`1px solid ${((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?s==="Live"?C.green:C.orange:C.border}`,background:((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?`${s==="Live"?C.green:C.orange}18`:C.s2,color:((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?s==="Live"?C.green:C.orange:C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                           {s==="Live"?"✓ Go Live":"🚀 Pre-launch"}
                         </button>
                       ))}
@@ -9902,7 +9949,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div>
                       <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:5}}>LAUNCH DATE (shown to reps)</div>
                       <input type="date" value={adminConfig.launchDate||""} onChange={e=>setAdminConfig(p=>({...p,launchDate:e.target.value}))}
-                        style={{padding:"6px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                        style={{padding:"6px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                     </div>
                   )}
                 </div>
@@ -9926,7 +9973,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <span style={{fontSize:11,color:C.dim}}>₹</span>
                       <input type="number" value={adminConfig.approvalThresholds[key]/100000}
                         onChange={e=>setAdminConfig(p=>({...p,approvalThresholds:{...p.approvalThresholds,[key]:parseFloat(e.target.value||0)*100000}}))}
-                        style={{width:80,padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"right"}}/>
+                        style={{width:80,padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textAlign:"right"}}/>
                       <span style={{fontSize:11,color:C.dim}}>L</span>
                     </div>
                     <div style={{minWidth:80,fontSize:11,color:C.accent,fontWeight:700}}>{(adminConfig.approvalThresholds[key]/100000).toFixed(0)}L = ₹{(adminConfig.approvalThresholds[key]/10000000).toFixed(2)}Cr</div>
@@ -9945,7 +9992,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{display:"flex",alignItems:"center",gap:4}}>
                         <input type="number" value={v}
                           onChange={e=>setAdminConfig(p=>({...p,slaHours:{...p.slaHours,[k]:parseInt(e.target.value||48)}}))}
-                          style={{width:50,padding:"4px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
+                          style={{width:50,padding:"4px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textAlign:"center"}}/>
                         <span style={{fontSize:10,color:C.dim}}>hrs</span>
                       </div>
                     </div>
@@ -9965,7 +10012,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"flex",alignItems:"center",gap:6}}>
                       <input type="number" value={adminConfig[key]}
                         onChange={e=>setAdminConfig(p=>({...p,[key]:parseInt(e.target.value||7)}))}
-                        style={{width:55,padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
+                        style={{width:55,padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textAlign:"center"}}/>
                       <span style={{fontSize:11,color:C.dim}}>{suffix}</span>
                     </div>
                   </div>
@@ -9982,7 +10029,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     value={adminConfig.webhookUrl||""}
                     onChange={e=>setAdminConfig(p=>({...p,webhookUrl:e.target.value}))}
                     placeholder="https://hooks.zapier.com/hooks/catch/..."
-                    style={{flex:1,minWidth:260,padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}
+                    style={{flex:1,minWidth:260,padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}
                   />
                   <button onClick={()=>{
                     const url=adminConfig.webhookUrl?.trim();
@@ -9990,7 +10037,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:"OTV CRM",event:"test",message:"Webhook test from OTV CRM System Config",timestamp:new Date().toISOString()})})
                       .then(()=>showToast("Test ping sent ✓"))
                       .catch(()=>showToast("Webhook call failed — check URL","err"));
-                  }} style={{padding:"7px 14px",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,borderRadius:5,color:C.accent,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
+                  }} style={{padding:"7px 14px",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,borderRadius:5,color:C.accent,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",whiteSpace:"nowrap"}}>
                     Send Test Ping
                   </button>
                 </div>
@@ -10021,7 +10068,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       }
                     }}
                     placeholder="Type client name and press Enter or click Add…"
-                    style={{flex:1,padding:"8px 11px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                    style={{flex:1,padding:"8px 11px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                   <button onClick={()=>{
                     const name=masterNewName.trim();
                     if(!name){showToast("Enter a client name","err");return;}
@@ -10029,7 +10076,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     setClientMasterList(p=>[...p,name].sort((a,b)=>a.localeCompare(b)));
                     setMasterNewName("");
                     showToast(`${name} added ✓`);
-                  }} style={{padding:"8px 16px",background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:5,color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap"}}>
+                  }} style={{padding:"8px 16px",background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:5,color:C.blue,fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700,whiteSpace:"nowrap"}}>
                     + Add
                   </button>
                 </div>
@@ -10052,14 +10099,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       }catch(e:unknown){setZohoError(e instanceof Error?e.message:"Network error");}
                       finally{setZohoImporting(false);}
                     }} disabled={zohoImporting}
-                      style={{padding:"6px 14px",background:C.green,border:"none",borderRadius:5,color:"#fff",fontSize:11,cursor:zohoImporting?"not-allowed":"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,opacity:zohoImporting?0.6:1}}>
+                      style={{padding:"6px 14px",background:C.green,border:"none",borderRadius:5,color:"#fff",fontSize:11,cursor:zohoImporting?"not-allowed":"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700,opacity:zohoImporting?0.6:1}}>
                       {zohoImporting?"Fetching…":"Fetch Accounts"}
                     </button>
                   </div>
                   <div style={{display:"flex",gap:6,marginBottom:8}}>
                     <input value={zohoSearchQ} onChange={e=>setZohoSearchQ(e.target.value)}
                       placeholder="Search Zoho accounts by name… (leave blank to fetch all)"
-                      style={{flex:1,padding:"6px 10px",background:"#fff",border:`1px solid ${C.green}44`,borderRadius:5,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}/>
+                      style={{flex:1,padding:"6px 10px",background:"#fff",border:`1px solid ${C.green}44`,borderRadius:5,color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                   </div>
                   {zohoError&&<div style={{fontSize:11,color:C.red,marginBottom:6}}>⚠ {zohoError}</div>}
                   {zohoAccounts.length>0&&(()=>{
@@ -10075,7 +10122,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               setClientMasterList(p=>[...p,a].sort((x,y)=>x.localeCompare(y)));
                               showToast(`${a} added ✓`);
                             }}
-                              style={{background:already?`${C.green}12`:`${C.green}20`,border:`1px solid ${already?C.green+"44":C.green+"66"}`,borderRadius:12,padding:"3px 11px",fontSize:11,color:already?C.muted:C.green,cursor:already?"default":"pointer",fontFamily:"'DM Mono',monospace",textDecoration:already?"line-through":"none"}}>
+                              style={{background:already?`${C.green}12`:`${C.green}20`,border:`1px solid ${already?C.green+"44":C.green+"66"}`,borderRadius:12,padding:"3px 11px",fontSize:11,color:already?C.muted:C.green,cursor:already?"default":"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textDecoration:already?"line-through":"none"}}>
                               {already?"✓":"+"}  {a}
                             </button>;
                           })}
@@ -10083,7 +10130,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {notYet.length>0&&<button onClick={()=>{
                           setClientMasterList(p=>[...p,...notYet].sort((a,b)=>a.localeCompare(b)));
                           showToast(`${notYet.length} Zoho accounts imported ✓`);
-                        }} style={{fontSize:10,background:`${C.green}22`,border:`1px solid ${C.green}55`,borderRadius:4,padding:"4px 12px",color:C.green,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        }} style={{fontSize:10,background:`${C.green}22`,border:`1px solid ${C.green}55`,borderRadius:4,padding:"4px 12px",color:C.green,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                           Import All {notYet.length} New
                         </button>}
                       </div>
@@ -10103,7 +10150,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <div style={{display:"flex",flexWrap:"wrap",gap:5,marginBottom:8}}>
                         {notYetAdded.map(c=>(
                           <button key={c} onClick={()=>{setClientMasterList(p=>[...p,c].sort((a,b)=>a.localeCompare(b)));showToast(`${c} added ✓`);}}
-                            style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,borderRadius:12,padding:"3px 11px",fontSize:11,color:C.accent,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                            style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,borderRadius:12,padding:"3px 11px",fontSize:11,color:C.accent,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                             + {c}
                           </button>
                         ))}
@@ -10112,7 +10159,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         const toAdd=notYetAdded.filter(c=>!clientMasterList.some(m=>m.toLowerCase()===c.toLowerCase()));
                         setClientMasterList(p=>[...p,...toAdd].sort((a,b)=>a.localeCompare(b)));
                         showToast(`${toAdd.length} clients imported ✓`);
-                      }} style={{fontSize:10,background:`${C.accent}22`,border:`1px solid ${C.accent}55`,borderRadius:4,padding:"4px 12px",color:C.accent,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                      }} style={{fontSize:10,background:`${C.accent}22`,border:`1px solid ${C.accent}55`,borderRadius:4,padding:"4px 12px",color:C.accent,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                         Import All {notYetAdded.length}
                       </button>
                     </div>
@@ -10174,7 +10221,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     style={{padding:"10px 20px",background:"transparent",border:"none",
                       borderBottom:dmTab===id?`2px solid ${C.accent}`:"2px solid transparent",
                       color:dmTab===id?C.accent:C.dim,cursor:"pointer",
-                      fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:dmTab===id?700:400}}>
+                      fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontSize:12,fontWeight:dmTab===id?700:400}}>
                     {label}
                   </button>
                 ))}
@@ -10203,7 +10250,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                       <div style={{fontSize:12,color:C.dim}}>{reps.filter(r=>r.active!==false).length} active · {reps.filter(r=>r.active===false).length} inactive</div>
                       <button onClick={()=>{setRepAddMode(true);setRepEditId(null);}}
-                        style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                         + Add Rep
                       </button>
                     </div>
@@ -10228,11 +10275,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </select></div>
                           <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>TARGET (₹L)</div>
                             <input type="number" value={repAddForm.target/100000} onChange={e=>setRepAddForm(p=>({...p,target:parseFloat(e.target.value||0)*100000}))}
-                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}} /></div>
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}} /></div>
                         </div>
                         <div style={{display:"flex",gap:8}}>
-                          <button onClick={addRep} style={{background:C.accent,border:"none",color:"#000",borderRadius:5,padding:"7px 18px",fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>Save Rep</button>
-                          <button onClick={()=>setRepAddMode(false)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"7px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                          <button onClick={addRep} style={{background:C.accent,border:"none",color:"#000",borderRadius:5,padding:"7px 18px",fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Save Rep</button>
+                          <button onClick={()=>setRepAddMode(false)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"7px 14px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                         </div>
                       </div>
                     )}
@@ -10253,7 +10300,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             const inactive  = rep.active===false;
                             return (
                               <tr key={rep.id} style={{borderTop:`1px solid ${C.s2}`,background:inactive?"rgba(0,0,0,.03)":"transparent",opacity:inactive?.65:1}}>
-                                <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",color:C.muted,fontSize:11}}>{rep.id}</td>
+                                <td style={{padding:"9px 12px",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",color:C.muted,fontSize:11}}>{rep.id}</td>
                                 <td style={{padding:"9px 12px"}}>
                                   {isEditing
                                     ? <input value={repEditForm.name||rep.name} onChange={e=>setRepEditForm(p=>({...p,name:e.target.value}))}
@@ -10266,7 +10313,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                         style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12}}>
                                         {REGIONS.map(r=><option key={r}>{r}</option>)}
                                       </select>
-                                    : <span style={{color:C.blue,fontFamily:"'DM Mono',monospace",fontSize:11}}>{rep.region}</span>}
+                                    : <span style={{color:C.blue,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontSize:11}}>{rep.region}</span>}
                                 </td>
                                 <td style={{padding:"9px 12px"}}>
                                   {isEditing
@@ -10276,11 +10323,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       </select>
                                     : <span style={{color:C.dim,fontSize:11}}>{rep.role}</span>}
                                 </td>
-                                <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace"}}>
+                                <td style={{padding:"9px 12px",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                   {isEditing
                                     ? <input type="number" value={(repEditForm.target??rep.target)/100000}
                                         onChange={e=>setRepEditForm(p=>({...p,target:parseFloat(e.target.value||0)*100000}))}
-                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:70,fontFamily:"'DM Mono',monospace"}} />
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:70,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}} />
                                     : <span style={{color:C.accent}}>₹{((rep.target||0)/100000).toFixed(0)}L</span>}
                                 </td>
                                 <td style={{padding:"9px 12px"}}>
@@ -10295,16 +10342,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     {isEditing ? (
                                       <>
                                         <button onClick={saveRep}
-                                          style={{background:C.green,border:"none",color:"#fff",borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>✓ Save</button>
+                                          style={{background:C.green,border:"none",color:"#fff",borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✓ Save</button>
                                         <button onClick={()=>{setRepEditId(null);setRepEditForm({});}}
-                                          style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✕</button>
+                                          style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 8px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✕</button>
                                       </>
                                     ) : (
                                       <>
                                         <button onClick={()=>{setRepEditId(rep.id);setRepEditForm({...rep});setRepAddMode(false);}}
-                                          style={{background:`${C.blue}15`,border:"none",color:C.blue,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Edit</button>
+                                          style={{background:`${C.blue}15`,border:"none",color:C.blue,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Edit</button>
                                         <button onClick={()=>{setReps(p=>p.map(r=>r.id===rep.id?{...r,active:!inactive}:r));showToast(inactive?"Rep activated":"Rep deactivated");}}
-                                          style={{background:inactive?`${C.green}15`:`${C.red}12`,border:"none",color:inactive?C.green:C.red,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                          style={{background:inactive?`${C.green}15`:`${C.red}12`,border:"none",color:inactive?C.green:C.red,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                           {inactive?"Activate":"Deactivate"}
                                         </button>
                                       </>
@@ -10344,7 +10391,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                       <div style={{fontSize:12,color:C.dim}}>{masterClients.length} clients in master list</div>
                       <button onClick={()=>{setClientAddMode(true);setClientEditId(null);}}
-                        style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                        style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                         + Add Client
                       </button>
                     </div>
@@ -10374,14 +10421,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
                           <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>PHONE</div>
                             <input value={clientAddForm.phone} onChange={e=>setClientAddForm(p=>({...p,phone:e.target.value}))} placeholder="9800000000"
-                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}} /></div>
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}} /></div>
                           <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>EMAIL</div>
                             <input value={clientAddForm.email} onChange={e=>setClientAddForm(p=>({...p,email:e.target.value}))} placeholder="name@company.com"
-                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}} /></div>
+                              style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}} /></div>
                         </div>
                         <div style={{display:"flex",gap:8}}>
-                          <button onClick={addClient} style={{background:C.accent,border:"none",color:"#000",borderRadius:5,padding:"7px 18px",fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>Save Client</button>
-                          <button onClick={()=>setClientAddMode(false)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"7px 14px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                          <button onClick={addClient} style={{background:C.accent,border:"none",color:"#000",borderRadius:5,padding:"7px 18px",fontSize:12,cursor:"pointer",fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Save Client</button>
+                          <button onClick={()=>setClientAddMode(false)} style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"7px 14px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                         </div>
                       </div>
                     )}
@@ -10421,7 +10468,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                         style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11}}>
                                         {REGIONS.map(r=><option key={r}>{r}</option>)}
                                       </select>
-                                    : <span style={{color:C.blue,fontFamily:"'DM Mono',monospace",fontSize:11}}>{cl.region||"—"}</span>}
+                                    : <span style={{color:C.blue,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontSize:11}}>{cl.region||"—"}</span>}
                                 </td>
                                 <td style={{padding:"9px 12px"}}>
                                   {isEditing
@@ -10429,16 +10476,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                         style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:120}} />
                                     : <span style={{color:C.dim,fontSize:11}}>{cl.contact||"—"}</span>}
                                 </td>
-                                <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",fontSize:11}}>
+                                <td style={{padding:"9px 12px",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontSize:11}}>
                                   {isEditing
                                     ? <input value={clientEditForm.phone??cl.phone} onChange={e=>setClientEditForm(p=>({...p,phone:e.target.value}))}
-                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11,width:110,fontFamily:"'DM Mono',monospace"}} />
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11,width:110,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}} />
                                     : <span style={{color:C.dim}}>{cl.phone||"—"}</span>}
                                 </td>
-                                <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",fontSize:11}}>
+                                <td style={{padding:"9px 12px",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontSize:11}}>
                                   {isEditing
                                     ? <input value={clientEditForm.email??cl.email} onChange={e=>setClientEditForm(p=>({...p,email:e.target.value}))}
-                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11,width:150,fontFamily:"'DM Mono',monospace"}} />
+                                        style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11,width:150,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}} />
                                     : <span style={{color:C.muted}}>{cl.email||"—"}</span>}
                                 </td>
                                 <td style={{padding:"9px 12px"}}>
@@ -10446,16 +10493,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     {isEditing ? (
                                       <>
                                         <button onClick={saveClient}
-                                          style={{background:C.green,border:"none",color:"#fff",borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontWeight:700,fontFamily:"'DM Mono',monospace"}}>✓ Save</button>
+                                          style={{background:C.green,border:"none",color:"#fff",borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✓ Save</button>
                                         <button onClick={()=>{setClientEditId(null);setClientEditForm({});}}
-                                          style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✕</button>
+                                          style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 8px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✕</button>
                                       </>
                                     ) : (
                                       <>
                                         <button onClick={()=>{setClientEditId(cl.id);setClientEditForm({...cl});setClientAddMode(false);}}
-                                          style={{background:`${C.blue}15`,border:"none",color:C.blue,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Edit</button>
+                                          style={{background:`${C.blue}15`,border:"none",color:C.blue,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Edit</button>
                                         <button onClick={()=>{setMasterClients(p=>p.filter(c=>c.id!==cl.id));showToast("Client removed");}}
-                                          style={{background:`${C.red}12`,border:"none",color:C.red,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Remove</button>
+                                          style={{background:`${C.red}12`,border:"none",color:C.red,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Remove</button>
                                       </>
                                     )}
                                   </div>
@@ -10593,7 +10640,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           style={{padding:"10px 18px",background:"transparent",border:"none",
                             borderBottom:impTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",
                             color:impTab===t.id?C.accent:C.dim,cursor:"pointer",
-                            fontFamily:"'DM Mono',monospace",fontSize:12,fontWeight:impTab===t.id?700:400}}>
+                            fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontSize:12,fontWeight:impTab===t.id?700:400}}>
                           {t.icon} {t.label}
                         </button>
                       ))}
@@ -10611,7 +10658,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <div style={{fontSize:11,color:C.dim}}>Columns: {TEMPLATES[tab.id]?.join(" · ")}</div>
                             </div>
                             <button onClick={()=>downloadTemplate(tab.id)}
-                              style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
+                              style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 16px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700,whiteSpace:"nowrap",flexShrink:0}}>
                               ↓ Download CSV
                             </button>
                           </div>
@@ -10642,9 +10689,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 <div style={{fontSize:11,color:C.dim,marginTop:2}}>{importData.rows.length} rows ready to import</div>
                               </div>
                               <div style={{display:"flex",gap:8}}>
-                                <button onClick={()=>setImportData(null)} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✕ Cancel</button>
+                                <button onClick={()=>setImportData(null)} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"6px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✕ Cancel</button>
                                 <button onClick={commitImport}
-                                  style={{background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:4,padding:"6px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                                  style={{background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:4,padding:"6px 18px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                                   ✓ Import {importData.rows.length} rows →
                                 </button>
                               </div>
@@ -10784,7 +10831,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {[{label:"TOTAL PENDING",value:pending.length,color:C.orange},{label:"OVERDUE (>2D)",value:pending.filter(d=>daysSince(d.awaitingApprovalSince||TODAY)>=2).length,color:C.red},{label:"TOTAL VALUE",value:fmtR(pending.reduce((s,d)=>s+(d.amount||0),0)),color:C.accent}].map(k=>(<div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div><div className="sans" style={{fontSize:24,fontWeight:700,color:k.color}}>{k.value}</div></div>))}
               </div>
               {pending.length===0&&<div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",color:C.green,fontSize:12}}>✓ No pending approvals</div>}
-              {pending.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Amount","Waiting For","Days","Stage","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{pending.map(d=>{const rep=reps.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:dw>=2?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=dw>=2?`${C.red}04`:"transparent"}><td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{d.awaitingApproval}</span></td><td style={{padding:"10px 14px",color:dw>=2?C.red:C.dim,fontWeight:dw>=2?700:400}}>{dw}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"10px 14px",whiteSpace:"nowrap"}}><button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()} style={{background:canApprove(d)?`${C.green}22`:C.s3,border:"none",color:canApprove(d)?C.green:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{canApprove(d)?"Approve →":"🔒 Locked"}</button></td></tr>);})}</tbody></table></div>}
+              {pending.length>0&&<div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Amount","Waiting For","Days","Stage","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{pending.map(d=>{const rep=reps.find(r=>r.id===d.repId);const dw=daysSince(d.awaitingApprovalSince||TODAY);return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:dw>=2?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=dw>=2?`${C.red}04`:"transparent"}><td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td><td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{d.awaitingApproval}</span></td><td style={{padding:"10px 14px",color:dw>=2?C.red:C.dim,fontWeight:dw>=2?700:400}}>{dw}d</td><td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"10px 14px",whiteSpace:"nowrap"}}><button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()} style={{background:canApprove(d)?`${C.green}22`:C.s3,border:"none",color:canApprove(d)?C.green:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{canApprove(d)?"Approve →":"🔒 Locked"}</button></td></tr>);})}</tbody></table></div>}
             </div>);
           })()}
 
@@ -10824,7 +10871,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div key={d.id} style={{background:C.surface,border:`1px solid ${dw>=2?C.red+"44":C.border}`,borderLeft:`3px solid ${dw>=2?C.red:C.orange}`,borderRadius:8,padding:"14px 18px",marginBottom:10}}>
                   <div style={{display:"flex",alignItems:"flex-start",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
                     <div><div style={{display:"flex",alignItems:"center",gap:10,marginBottom:5}}><span className="sans" style={{fontSize:15,fontWeight:700}}>{d.clientCompany}</span><span style={{background:`${dw>=2?C.red:C.orange}22`,color:dw>=2?C.red:C.orange,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>{dw}d → {d.awaitingApproval}</span></div><div style={{fontSize:11,color:C.dim}}>{rep?.name} · {d.region}</div>{d.nextStep&&<div style={{fontSize:11,color:C.text,marginTop:5}}>Next: {d.nextStep}</div>}</div>
-                    <div style={{textAlign:"right"}}><div className="sans" style={{fontSize:16,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()} style={{marginTop:6,background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✓ Resolved</button></div>
+                    <div style={{textAlign:"right"}}><div className="sans" style={{fontSize:16,fontWeight:700,color:C.accent}}>{fmtR(d.amount)}</div><button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()} style={{marginTop:6,background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>✓ Resolved</button></div>
                   </div>
                 </div>
               );})}
@@ -10952,7 +10999,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
                 {[{l:"TOTAL DIGITAL",v:fmtR(digiDeals.reduce((s,d)=>s+(d.amount||0),0)),c:C.blue},{l:"CLOSED",v:fmtR(revenueEntries.filter(e=>new Set(digiDeals.map(d=>d.repId)).has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0)),c:C.green},{l:"OPEN PIPELINE",v:fmtR(digiDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0)),c:C.accent},{l:"WAITING ON YOU",v:blocked.length,c:blocked.length>0?C.orange:C.green}].map(k=>(<div key={k.l} className="card" style={{padding:13,borderTop:`2px solid ${k.c}`}}><div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div><div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div></div>))}
               </div>
-              {digiTasks.length>0&&(<div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}><div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📋 {digiTasks.length} Task{digiTasks.length!==1?"s":""} Assigned to Digital</div>{digiTasks.slice(0,4).map(t=>{const rep=reps.find(r=>r.id===t.repId);return(<div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:C.s2,borderRadius:5,marginBottom:5}}><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{t.title}</div><div style={{fontSize:10,color:C.dim}}>{t.clientCompany&&`${t.clientCompany} · `}{rep&&`from ${rep.name} · `}Due {t.dueDate}</div></div><span style={{background:t.dueDate<TODAY?`${C.red}22`:`${C.orange}18`,color:t.dueDate<TODAY?C.red:C.orange,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.dueDate<TODAY?"OVERDUE":t.priority}</span><button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Done</button></div>);})}{digiTasks.length>4&&<div style={{fontSize:10,color:C.dim,textAlign:"center",marginTop:5}}>+{digiTasks.length-4} more · see My Tasks</div>}</div>)}
+              {digiTasks.length>0&&(<div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}><div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📋 {digiTasks.length} Task{digiTasks.length!==1?"s":""} Assigned to Digital</div>{digiTasks.slice(0,4).map(t=>{const rep=reps.find(r=>r.id===t.repId);return(<div key={t.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:C.s2,borderRadius:5,marginBottom:5}}><div style={{flex:1}}><div style={{fontWeight:600,fontSize:12}}>{t.title}</div><div style={{fontSize:10,color:C.dim}}>{t.clientCompany&&`${t.clientCompany} · `}{rep&&`from ${rep.name} · `}Due {t.dueDate}</div></div><span style={{background:t.dueDate<TODAY?`${C.red}22`:`${C.orange}18`,color:t.dueDate<TODAY?C.red:C.orange,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.dueDate<TODAY?"OVERDUE":t.priority}</span><button onClick={()=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:"Done"}:x))} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Done</button></div>);})}{digiTasks.length>4&&<div style={{fontSize:10,color:C.dim,textAlign:"center",marginTop:5}}>+{digiTasks.length-4} more · see My Tasks</div>}</div>)}
               <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}><table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}><thead><tr>{["Client","Rep","Region","Type","Amount","Needs from Digital","Stage","Idle"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead><tbody>{digiDeals.length===0&&<tr><td colSpan={8} style={{padding:24,textAlign:"center",color:C.muted}}>No digital deals for {filterQ} yet</td></tr>}{digiDeals.map(d=>{const rep=reps.find(r=>r.id===d.repId);const idle=daysSince(d.lastContact);const digiReqs=(d.reqs||[]).filter(r=>r.dept==="Digital");const waitingOnUs=d.awaitingApproval==="Digital";return(<tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:waitingOnUs?`${C.blue}06`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=waitingOnUs?`${C.blue}06`:"transparent"}><td style={{padding:"9px 12px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div>{waitingOnUs&&<span style={{background:`${C.blue}22`,color:C.blue,padding:"1px 5px",borderRadius:3,fontSize:9,fontWeight:700}}>Needs your action</span>}</td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?.name}</td><td style={{padding:"9px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{d.region}</span></td><td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{d.dealType}</td><td style={{padding:"9px 12px",fontWeight:600}}>{fmtR(d.amount)}</td><td style={{padding:"9px 12px"}}>{digiReqs.length>0?<div>{digiReqs.map((r,i)=><div key={i} style={{fontSize:10,color:C.blue}}>{r.desc}</div>)}</div>:waitingOnUs?<span style={{color:C.blue,fontSize:11}}>Approval needed</span>:<span style={{color:C.muted}}>—</span>}</td><td style={{padding:"9px 12px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td><td style={{padding:"9px 12px",color:idle>=7?C.red:idle>=3?C.orange:C.green,fontSize:11}}>{idle===0?"Today":`${idle}d`}</td></tr>);})}</tbody></table></div>
             </div>);
           })()}
@@ -10976,7 +11023,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 const nextApprover = d.amount >= 50000000 ? "CXO" : null;
                                 setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:nextApprover,awaitingApprovalSince:nextApprover?TODAY:null}:x));
                                 showToast(nextApprover ? `Approved → forwarded to CXO` : "Deal approved ✓");
-                              }} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                              }} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                                 {d.amount >= 50000000 ? "Approve → CXO" : "✓ Approve"}
                               </button></div></div>);})}
             </div>);
@@ -11203,7 +11250,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const rd=visibleDeals.filter(d=>d.repId===rhRepDrill);
                   return (
                     <div>
-                      <button onClick={()=>setRhRepDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginBottom:12}}>← Back to Reps</button>
+                      <button onClick={()=>setRhRepDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginBottom:12}}>← Back to Reps</button>
                       <div className="sans" style={{fontSize:15,fontWeight:700,marginBottom:10}}>{rep?.name} · Client List</div>
                       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -11492,7 +11539,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div style={{display:"flex",gap:5}}>
                     {["all",...regions].map(r=>(
                       <button key={r} onClick={()=>setSelRegion(r)}
-                        style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${selRegion===r?C.accent:C.border}`,background:selRegion===r?`${C.accent}18`:"transparent",color:selRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                        style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${selRegion===r?C.accent:C.border}`,background:selRegion===r?`${C.accent}18`:"transparent",color:selRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                         {r==="all"?"All":r}
                       </button>
                     ))}
@@ -11640,8 +11687,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
                   <div><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>RH PIPELINE</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>Pipeline grouped by region · {filterQ}</div></div>
                   <div style={{display:"flex",gap:6}}>
-                    <button onClick={()=>setNshRHDrill(null)} style={{padding:"5px 10px",borderRadius:5,border:`1px solid ${!nshRHDrill?C.accent:C.border}`,background:!nshRHDrill?`${C.accent}18`:"transparent",color:!nshRHDrill?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>All Regions</button>
-                    {regions.map(r=><button key={r} onClick={()=>setNshRHDrill(r)} style={{padding:"5px 10px",borderRadius:5,border:`1px solid ${nshRHDrill===r?C.accent:C.border}`,background:nshRHDrill===r?`${C.accent}18`:"transparent",color:nshRHDrill===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{r}</button>)}
+                    <button onClick={()=>setNshRHDrill(null)} style={{padding:"5px 10px",borderRadius:5,border:`1px solid ${!nshRHDrill?C.accent:C.border}`,background:!nshRHDrill?`${C.accent}18`:"transparent",color:!nshRHDrill?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>All Regions</button>
+                    {regions.map(r=><button key={r} onClick={()=>setNshRHDrill(r)} style={{padding:"5px 10px",borderRadius:5,border:`1px solid ${nshRHDrill===r?C.accent:C.border}`,background:nshRHDrill===r?`${C.accent}18`:"transparent",color:nshRHDrill===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{r}</button>)}
                   </div>
                 </div>
                 {(nshRHDrill?[nshRHDrill]:regions).map(region=>{
@@ -11840,7 +11887,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                   <div><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REP SCORECARD</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>All reps · {filterQ}</div></div>
                   <div style={{display:"flex",gap:6}}>
-                    {regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"5px 10px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace",textTransform:"capitalize"}}>{r==="all"?"All":r}</button>)}
+                    {regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"5px 10px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",textTransform:"capitalize"}}>{r==="all"?"All":r}</button>)}
                   </div>
                 </div>
                 {reps.filter(r=>nshRegion==="all"||r.region===nshRegion).map((rep,rank)=>{
@@ -11892,7 +11939,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div className="fin">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                   <div><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REP PIPELINE</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>All rep deals · {filterQ}</div></div>
-                  <div style={{display:"flex",gap:5}}>{regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{r==="all"?"All":r}</button>)}</div>
+                  <div style={{display:"flex",gap:5}}>{regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{r==="all"?"All":r}</button>)}</div>
                 </div>
                 <div className="card" style={{overflow:"hidden"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -11925,7 +11972,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div className="fin">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                   <div><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REP TARGETS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>Individual targets · {filterQ}</div></div>
-                  <div style={{display:"flex",gap:5}}>{regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{r==="all"?"All":r}</button>)}</div>
+                  <div style={{display:"flex",gap:5}}>{regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{r==="all"?"All":r}</button>)}</div>
                 </div>
                 <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -11962,7 +12009,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                   <div><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REP TASKS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>All rep tasks</div></div>
                   <div style={{display:"flex",gap:5,alignItems:"center"}}>
-                    {regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{r==="all"?"All":r}</button>)}
+                    {regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{r==="all"?"All":r}</button>)}
                     <button className="btn btn-primary" onClick={()=>setTaskModal(true)} style={{marginLeft:6}}>+ Assign Task</button>
                   </div>
                 </div>
@@ -12002,7 +12049,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div className="fin">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
                   <div><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REP HR REPORTS</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>All rep absence records</div></div>
-                  <div style={{display:"flex",gap:5}}>{regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>{r==="all"?"All":r}</button>)}</div>
+                  <div style={{display:"flex",gap:5}}>{regions.map(r=><button key={r} onClick={()=>setNshRegion(r)} style={{padding:"4px 9px",borderRadius:5,border:`1px solid ${nshRegion===r?C.accent:C.border}`,background:nshRegion===r?`${C.accent}18`:"transparent",color:nshRegion===r?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>{r==="all"?"All":r}</button>)}</div>
                 </div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:14}}>
                   {[{l:"TOTAL ABSENCES",v:fAbs.filter(r=>r.markedAs==="Absent").length,c:C.red},{l:"EXCEPTIONS",v:fAbs.filter(r=>r.exception==="Overridden").length,c:C.orange},{l:"REPORTS SENT",v:fAbs.length,c:C.dim}].map(k=>(
@@ -12076,7 +12123,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       value={roInputText}
                       onChange={e=>setRoInputText(e.target.value)}
                       rows={6}
-                      style={{width:"100%",background:C.s2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 12px",color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace",resize:"vertical",outline:"none"}}
+                      style={{width:"100%",background:C.s2,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 12px",color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",resize:"vertical",outline:"none"}}
                     />
                   </div>
                 </div>
@@ -12085,18 +12132,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <button
                     onClick={roParseAll}
                     disabled={roLoading||(!roFiles.length&&!roInputText.trim())}
-                    style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",padding:"9px 24px",borderRadius:6,cursor:roLoading?"wait":"pointer",fontSize:12,fontWeight:700,fontFamily:"'DM Mono',monospace",opacity:(!roFiles.length&&!roInputText.trim())?0.4:1,transition:"opacity .15s"}}>
+                    style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",padding:"9px 24px",borderRadius:6,cursor:roLoading?"wait":"pointer",fontSize:12,fontWeight:700,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",opacity:(!roFiles.length&&!roInputText.trim())?0.4:1,transition:"opacity .15s"}}>
                     {roLoading?`⏳ ${roProgress||"Parsing..."}`:"⚡ Parse RO"}
                   </button>
                   {roLoading && (
                     <button onClick={()=>{roCancelParse();setRoLoading(false);setRoProgress("");setRoError("Parse cancelled.");}}
-                      style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,padding:"8px 16px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                      style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,padding:"8px 16px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                       ✕ Cancel
                     </button>
                   )}
                   {(roFiles.length>0||roInputText.trim())&&!roLoading&&(
                     <button onClick={()=>{setRoFiles([]);setRoInputText("");setRoResults([]);setRoError(null);}}
-                      style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,padding:"8px 16px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                      style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,padding:"8px 16px",borderRadius:6,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                       Clear All
                     </button>
                   )}
@@ -12111,7 +12158,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap"}}>
                       {roResults.map((r,i)=>(
                         <button key={i} onClick={()=>setRoActiveDoc(i)}
-                          style={{padding:"4px 12px",borderRadius:5,border:`1px solid ${roActiveDoc===i?C.accent:C.border}`,background:roActiveDoc===i?`${C.accent}18`:"transparent",color:roActiveDoc===i?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                          style={{padding:"4px 12px",borderRadius:5,border:`1px solid ${roActiveDoc===i?C.accent:C.border}`,background:roActiveDoc===i?`${C.accent}18`:"transparent",color:roActiveDoc===i?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                           {r._filename||`Doc ${i+1}`}
                         </button>
                       ))}
@@ -12154,9 +12201,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{display:"flex",gap:10,marginBottom:14,flexWrap:"wrap"}}>
                 <input placeholder="Search client, agency, RO number..."
                   value={roSearch} onChange={e=>setRoSearch(e.target.value)}
-                  style={{flex:1,minWidth:200,background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace",outline:"none"}} />
+                  style={{flex:1,minWidth:200,background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 12px",color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",outline:"none"}} />
                 <select value={roMgmtChannel} onChange={e=>setRoMgmtChannel(e.target.value)}
-                  style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 10px",color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
+                  style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,padding:"7px 10px",color:C.text,fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                   <option value="all">All Channels</option>
                   {[...new Set(savedROs.map(r=>r.channel).filter(Boolean))].map(ch=><option key={ch}>{ch}</option>)}
                 </select>
@@ -12197,17 +12244,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <div style={{display:"flex",gap:8}}>
                             <button
                               onClick={()=>{if(roMgmtViewRO===r.id)setRoMgmtViewRO(null);else setRoMgmtViewRO(r.id);}}
-                              style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"5px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                              style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"5px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                               {roMgmtViewRO===r.id?"Hide":"View"}
                             </button>
                             <button
                               onClick={()=>r.result&&roExportSingle(r.result)}
-                              style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"5px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                              style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"5px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                               Export
                             </button>
                             <button
                               onClick={()=>setRoMgmtConfirmDelete(r.id)}
-                              style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:5,padding:"5px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                              style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:5,padding:"5px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                               Delete
                             </button>
                           </div>
@@ -12220,8 +12267,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {roMgmtConfirmDelete===r.id&&(
                           <div style={{marginTop:10,background:`${C.red}08`,border:`1px solid ${C.red}33`,borderRadius:6,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
                             <span style={{fontSize:12,color:C.red,flex:1}}>Delete this RO permanently?</span>
-                            <button onClick={()=>{setSavedROs(p=>p.filter(x=>x.id!==r.id));setRoMgmtConfirmDelete(null);}} style={{background:`${C.red}22`,border:"none",color:C.red,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Yes, Delete</button>
-                            <button onClick={()=>setRoMgmtConfirmDelete(null)} style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                            <button onClick={()=>{setSavedROs(p=>p.filter(x=>x.id!==r.id));setRoMgmtConfirmDelete(null);}} style={{background:`${C.red}22`,border:"none",color:C.red,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>Yes, Delete</button>
+                            <button onClick={()=>setRoMgmtConfirmDelete(null)} style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                           </div>
                         )}
                       </div>
@@ -12543,7 +12590,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {reps.filter(r=>isRH?r.region===user_role?.region:true).length===0
                   ? <div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>
                   : <select value={planUploadForm.repId} onChange={e=>setPlanUploadForm(p=>({...p,repId:e.target.value}))}
-                    style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:planUploadForm.repId?C.text:C.muted,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
+                    style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:planUploadForm.repId?C.text:C.muted,fontSize:13,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                     <option value="">Select rep…</option>
                     {reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
                   </select>
@@ -12552,7 +12599,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div>
                 <div style={{fontSize:10,color:C.dim,marginBottom:5,letterSpacing:".05em",fontWeight:700}}>QUARTER *</div>
                 <select value={planUploadForm.quarter} onChange={e=>setPlanUploadForm(p=>({...p,quarter:e.target.value}))}
-                  style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
+                  style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                   {QUARTERS.map(q=><option key={q}>{q}</option>)}
                 </select>
               </div>
@@ -12567,24 +12614,24 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     const offList=val.length>0&&clientMasterList.length>0&&!clientMasterList.some(n=>n.toLowerCase()===val.toLowerCase());
                     return <input list="cm-list" value={cl.clientCompany} placeholder={clientMasterList.length>0?"Search client list…":`Client ${i+1} name`}
                       onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,clientCompany:e.target.value}:c)}))}
-                      style={{padding:"8px 10px",background:C.s2,border:`1px solid ${offList?C.orange:C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}} title={offList?`"${val}" not in approved client list`:undefined}/>;
+                      style={{padding:"8px 10px",background:C.s2,border:`1px solid ${offList?C.orange:C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}} title={offList?`"${val}" not in approved client list`:undefined}/>;
                   })()}
                   <select value={cl.dealType}
                     onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,dealType:e.target.value}:c)}))}
-                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                     {["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"].map(d=><option key={d}>{d}</option>)}
                   </select>
                   <input value={cl.targetAmount} placeholder="Target e.g. 50L"
                     onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,targetAmount:e.target.value}:c)}))}
-                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}/>
                   {planUploadForm.clients.length>1
                     ? <button onClick={()=>setPlanUploadForm(p=>({...p,clients:p.clients.filter((_,j)=>j!==i)}))}
-                        style={{background:`${C.red}18`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"7px 10px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",lineHeight:1}}>✕</button>
+                        style={{background:`${C.red}18`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"7px 10px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",lineHeight:1}}>✕</button>
                     : <div style={{width:36}}/>}
                 </div>
               ))}
               <button onClick={()=>setPlanUploadForm(p=>({...p,clients:[...p.clients,{clientCompany:"",dealType:"Linear TV",targetAmount:""}]}))}
-                style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginTop:2}}>
+                style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginTop:2}}>
                 + Add Client
               </button>
             </div>
@@ -12599,7 +12646,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               </div>
               <div style={{display:"flex",gap:10}}>
                 <button onClick={()=>setPlanUploadOpen(false)}
-                  style={{padding:"9px 18px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                  style={{padding:"9px 18px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                 <button onClick={()=>{
                   const parsedRepId = parseInt(planUploadForm.repId);
                   const validClients = planUploadForm.clients.filter(c=>c.clientCompany.trim()&&c.targetAmount);
@@ -12645,7 +12692,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   setTargetSubs(p=>[sub,...p]);
                   setPlanUploadOpen(false);
                 }}
-                  style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:6,padding:"9px 22px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                  style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:6,padding:"9px 22px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                   {isCRORole?"Submit & Auto-Approve ✓":"Submit Plan →"}
                 </button>
               </div>
@@ -12726,7 +12773,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             <div style={{display:"flex",gap:8,marginBottom:14}}>
               {(["Deal Meeting","Relationship"] as const).map(tt=>(
                 <button key={tt} onClick={()=>setLogForm(p=>({...p,touchpointType:tt}))}
-                  style={{flex:1,padding:"9px 14px",borderRadius:6,border:`1px solid ${logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.border}`,background:logForm.touchpointType===tt?(tt==="Deal Meeting"?`${C.blue}14`:`${C.green}14`):"transparent",color:logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:12,textAlign:"center"}}>
+                  style={{flex:1,padding:"9px 14px",borderRadius:6,border:`1px solid ${logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.border}`,background:logForm.touchpointType===tt?(tt==="Deal Meeting"?`${C.blue}14`:`${C.green}14`):"transparent",color:logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700,fontSize:12,textAlign:"center"}}>
                   {tt==="Deal Meeting"?"💼 Deal Meeting":"🤝 Relationship"}
                   <div style={{fontSize:9,fontWeight:400,marginTop:2,color:"inherit",opacity:.8}}>
                     {tt==="Deal Meeting"?"Updates stage · Resets escalation clock":"Hi-Hello · No pipeline impact"}
@@ -12765,7 +12812,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",gap:6,marginTop:4}}>
                   {MEETING_TYPES.map(mt=>(
                     <button key={mt} onClick={()=>setLogForm(p=>({...p,meetingType:mt}))}
-                      style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.border}`,background:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?`${C.green}18`:mt==="Online"?"#4285F418":`${C.accent}18`):"transparent",color:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",transition:"all .1s",textAlign:"center"}}>
+                      style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.border}`,background:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?`${C.green}18`:mt==="Online"?"#4285F418":`${C.accent}18`):"transparent",color:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",transition:"all .1s",textAlign:"center"}}>
                       {mt==="Physical"?"🤝":mt==="Online"?"💻":"📞"} {mt}
                     </button>
                   ))}
@@ -12849,7 +12896,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
                   {DEAL_STAGES.filter(s=>s!=="RO Received").map(s=>(
                     <button key={s} onClick={()=>setLogForm(p=>({...p,stageUpdate:s,status:s}))}
-                      style={{padding:"5px 12px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.stageUpdate===s?oColor(s):C.border}`,background:logForm.stageUpdate===s?`${oColor(s)}18`:C.s2,color:logForm.stageUpdate===s?oColor(s):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:logForm.stageUpdate===s?700:400}}>
+                      style={{padding:"5px 12px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.stageUpdate===s?oColor(s):C.border}`,background:logForm.stageUpdate===s?`${oColor(s)}18`:C.s2,color:logForm.stageUpdate===s?oColor(s):C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:logForm.stageUpdate===s?700:400}}>
                       {s}
                     </button>
                   ))}
@@ -12879,7 +12926,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {PITCH_TYPES.map(pt=>(
                   <button key={pt} onClick={()=>setLogForm(p=>({...p,pitchType:pt}))}
-                    style={{padding:"5px 12px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.pitchType===pt?C.accent:C.border}`,background:logForm.pitchType===pt?`${C.accent}22`:C.s2,color:logForm.pitchType===pt?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",transition:"all .1s"}}>
+                    style={{padding:"5px 12px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.pitchType===pt?C.accent:C.border}`,background:logForm.pitchType===pt?`${C.accent}22`:C.s2,color:logForm.pitchType===pt?C.accent:C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",transition:"all .1s"}}>
                     {pt}
                   </button>
                 ))}
@@ -12903,7 +12950,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div style={{display:"flex",gap:6,marginTop:4}}>
                     {["No","Yes"].map(v=>(
                       <button key={v} onClick={()=>setLogForm(p=>({...p,seniorRequested:v}))}
-                        style={{padding:"6px 14px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.seniorRequested===v?(v==="Yes"?C.orange:C.green):C.border}`,background:logForm.seniorRequested===v?(v==="Yes"?`${C.orange}22`:`${C.green}22`):C.s2,color:logForm.seniorRequested===v?(v==="Yes"?C.orange:C.green):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                        style={{padding:"6px 14px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.seniorRequested===v?(v==="Yes"?C.orange:C.green):C.border}`,background:logForm.seniorRequested===v?(v==="Yes"?`${C.orange}22`:`${C.green}22`):C.s2,color:logForm.seniorRequested===v?(v==="Yes"?C.orange:C.green):C.dim,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                         {v}
                       </button>
                     ))}
@@ -12942,7 +12989,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       <button key={days} onClick={()=>{
                         setPlans((prev:any[])=>[...prev,{id:`p_ro_${Date.now()}_${days}`,repId:myRepId,date:reminderDate,time:"10:00",clientAgencyName:logForm.clientCompany||logForm.clientAgencyName||"",contactName:"",phone:"",agenda:`[RO Reminder] Follow up — RO not yet received`,pitchType:"",meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"ro-reminder"}]);
                         showToast(`RO follow-up reminder set for ${days} days`);
-                      }} style={{padding:"6px 16px",background:C.green,color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace",fontWeight:600}}>
+                      }} style={{padding:"6px 16px",background:C.green,color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:600}}>
                         +{days}d
                       </button>
                     );
@@ -13018,7 +13065,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               ))}
 
               <button onClick={()=>setLogForm(p=>({...p,nextStepItems:[...(p.nextStepItems||[]),{...BLANK_NEXT_STEP_ITEM}]}))}
-                style={{background:"transparent",border:`1px dashed ${C.border}`,borderRadius:5,padding:"5px 14px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginTop:4,width:"100%"}}>
+                style={{background:"transparent",border:`1px dashed ${C.border}`,borderRadius:5,padding:"5px 14px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",marginTop:4,width:"100%"}}>
                 + Add another action item
               </button>
             </div>
@@ -13412,14 +13459,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div>
                 <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Request Type *</div>
                 <select value={irForm.type} onChange={e=>setIrForm(f=>({...f,type:e.target.value}))}
-                  style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                  style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                   {["Send Proposal","Send FCT Grid","Send Revised Rate Card","Send Sponsorship Deck","Get Budget Approval","Arrange Senior Meeting","Get Rate Approval","Follow Up with Client","Share Digital Plan","Content / Script Needed","Legal / Contract Review","Get PO / Release","Other"].map(t=><option key={t}>{t}</option>)}
                 </select>
               </div>
               <div>
                 <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Who do you need it from? *</div>
                 <select value={irForm.dept} onChange={e=>setIrForm(f=>({...f,dept:e.target.value}))}
-                  style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                  style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>
                   {["Region Head","NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
                 </select>
               </div>
@@ -13428,12 +13475,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Subject / What do you need? *</div>
               <input value={irForm.subject} onChange={e=>setIrForm(f=>({...f,subject:e.target.value}))}
                 placeholder="e.g. Discount approval — 10% off rate card for Havells"
-                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
+                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}}/>
             </div>
             <div style={{marginBottom:10}}>
               <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Client / Account (optional)</div>
               <select value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
-                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}>
+                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",boxSizing:"border-box"}}>
                 <option value="">— Select client —</option>
                 {[...new Set(deals.filter(d=>myRepId?d.repId===myRepId:true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
               </select>
@@ -13442,16 +13489,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Details / Context</div>
               <textarea value={irForm.details} onChange={e=>setIrForm(f=>({...f,details:e.target.value}))}
                 rows={4} placeholder="Provide context — client budget, ask, deadline, any relevant background…"
-                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",resize:"vertical",boxSizing:"border-box"}}/>
+                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",resize:"vertical",boxSizing:"border-box"}}/>
             </div>
             <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-              <button onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+              <button onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
               <button onClick={()=>{
                 if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
                 setInternalReqs(p=>p.map(r=>r.id===editIrId?{...r,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),clientCompany:irForm.clientCompany.trim()}:r));
                 setEditIrId(null);setIrForm(BLANK_IR_FORM);
                 showToast("Request updated ✓");
-              }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+              }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                 Save Changes
               </button>
             </div>
@@ -13641,7 +13688,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 </div>
                               )}
                               <div style={{display:"flex",gap:8}}>
-                                <button onClick={()=>setThreadAIForm(null)} style={{flex:1,background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                                <button onClick={()=>setThreadAIForm(null)} style={{flex:1,background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
                                 <button onClick={()=>{
                                   if(!threadAIForm.actionType||!threadAIForm.neededFrom||!threadAIForm.dueDate){showToast("Fill all required fields");return;}
                                   const aType=threadAIForm.actionType;
@@ -13657,12 +13704,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   }
                                   setThreadAIForm(null);
                                   showToast(`Action item → ${neededFrom} ✓`);
-                                }} style={{flex:2,background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Add Item</button>
+                                }} style={{flex:2,background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>Add Item</button>
                               </div>
                             </div>
                           ):(
                             <button onClick={()=>setThreadAIForm({entryId:entry.id,actionType:"",details:"",neededFrom:"",dueDate:TOMORROW})}
-                              style={{background:`${C.blue}10`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                              style={{background:`${C.blue}10`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                               + Add Action Item
                             </button>
                           )}
@@ -13674,7 +13721,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               </div>
               <div style={{marginTop:16,paddingTop:14,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end"}}>
                 <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,clientAgencyName:clientName,repId:String(clientDeals[0]?.repId||"")}));setLogOpen(true);setAccountThreadOpen(false);}}
-                  style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:6,padding:"7px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+                  style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:6,padding:"7px 18px",fontSize:11,cursor:"pointer",fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>
                   + Log New Meeting
                 </button>
               </div>
@@ -13691,12 +13738,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             <div className="sans" style={{fontWeight:700,fontSize:15,marginBottom:14}}>{noteModal.title}</div>
             <textarea autoFocus rows={3} value={noteModalVal} onChange={e=>setNoteModalVal(e.target.value)}
               onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();noteModal.onSubmit(noteModalVal||noteModal.placeholder);setNoteModal(null);}}}
-              style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace",resize:"none",outline:"none"}}
+              style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",resize:"none",outline:"none"}}
               placeholder={noteModal.placeholder}/>
             <div style={{display:"flex",gap:8,marginTop:12,justifyContent:"flex-end"}}>
-              <button onClick={()=>setNoteModal(null)} style={{padding:"7px 16px",background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+              <button onClick={()=>setNoteModal(null)} style={{padding:"7px 16px",background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif"}}>Cancel</button>
               <button onClick={()=>{noteModal.onSubmit(noteModalVal||noteModal.placeholder);setNoteModal(null);}}
-                style={{padding:"7px 18px",background:C.accent,border:"none",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:700}}>Submit</button>
+                style={{padding:"7px 18px",background:C.accent,border:"none",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'Plus Jakarta Sans',system-ui,sans-serif",fontWeight:700}}>Submit</button>
             </div>
           </div>
         </div>
