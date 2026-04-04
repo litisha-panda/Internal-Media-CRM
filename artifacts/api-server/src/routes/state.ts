@@ -1,27 +1,46 @@
 import { Router } from "express";
 import { db, appStateTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { requireAuth } from "../middlewares/requireAuth";
+import { requireAdmin } from "../middlewares/requireRole";
 
 const router = Router();
 
+// All keys that the frontend creates via usePersistedState().
+// Must stay in sync with every usePersistedState() call in OTVApp.tsx.
+// Missing keys here means they are NOT cleared on admin reset, leaving
+// stale data that confuses the next team using the system.
 const OTV_EMPTY_STATE: Record<string, unknown> = {
-  otv_absence: [], otv_att: {}, otv_deals: [], otv_internalReqs: [],
-  otv_ipProposals: [], otv_liveRoles: [], otv_masterClients: [],
-  otv_meetings: [], otv_pendingUsers: [], otv_plans: [], otv_properties: [],
-  otv_reps: [], otv_revenueEntries: [], otv_savedROs: [],
-  otv_targetSubs: [], otv_tasks: [], otv_wplans: [],
+  otv_absence:        [],
+  otv_adminConfig:    {},   // reset to defaults (getAdminConfig() merges with DEFAULT_CONFIG)
+  otv_att:            {},
+  otv_clientAccounts: [],   // was missing — client account thread data
+  otv_deals:          [],
+  otv_internalReqs:   [],
+  otv_ipProposals:    [],
+  otv_liveRoles:      [],   // legacy blob — cleared to prevent stale role data
+  otv_masterClients:  [],
+  otv_meetings:       [],
+  otv_pendingUsers:   [],   // legacy blob — cleared to prevent stale pending list
+  otv_plans:          [],
+  otv_properties:     [],
+  otv_reps:           [],
+  otv_revenueEntries: [],
+  otv_savedROs:       [],
+  otv_targetSubs:     [],
+  otv_tasks:          [],
+  otv_touchpoints:    [],   // was missing — touchpoint thread data
+  otv_wplans:         [],
 };
 
-router.post("/state/reset-all", async (req, res) => {
+router.post("/state/reset-all", requireAuth, requireAdmin, async (req, res) => {
   try {
-    const { confirmText, triggeredBy, role } = req.body as {
+    const { confirmText } = req.body as {
       confirmText?: string;
-      triggeredBy?: string;
-      role?: string;
     };
 
-    // Must be Admin role
-    if (role !== "ADMIN") {
+    // Role is read from the authenticated session — never from client body
+    if (req.user!.role !== "ADMIN") {
       res.status(403).json({ ok: false, error: "Only Admin can reset all data." });
       return;
     }
@@ -34,8 +53,9 @@ router.post("/state/reset-all", async (req, res) => {
 
     // Log the trigger before wiping
     const resetLog = {
-      triggeredBy: triggeredBy || "unknown",
-      role,
+      triggeredBy: req.user!.id,
+      triggeredByName: req.user!.name,
+      role: req.user!.role,
       at: new Date().toISOString(),
       action: "reset-all",
     };
@@ -64,7 +84,10 @@ router.post("/state/reset-all", async (req, res) => {
   }
 });
 
-router.get("/state/:key", async (req, res) => {
+// Both GET and PUT are auth-gated. Without requireAuth, any unauthenticated
+// caller can read all CRM data (GET) or overwrite deals/tasks/meetings (PUT)
+// by directly hitting /api/state/:key with crafted JSON.
+router.get("/state/:key", requireAuth, async (req, res) => {
   try {
     const rows = await db
       .select()
@@ -82,11 +105,18 @@ router.get("/state/:key", async (req, res) => {
   }
 });
 
-router.put("/state/:key", async (req, res) => {
+router.put("/state/:key", requireAuth, async (req, res) => {
   try {
     const { value } = req.body as { value: unknown };
     if (value === undefined) {
       res.status(400).json({ ok: false, error: "Missing value" });
+      return;
+    }
+
+    // Reject non-object/non-array values to prevent storing primitives
+    // (null, strings, numbers) as CRM state blobs.
+    if (typeof value !== "object") {
+      res.status(400).json({ ok: false, error: "value must be an object or array" });
       return;
     }
 

@@ -26,16 +26,22 @@ function generateToken(): string {
 
 function cookieOpts(expiresAt: Date) {
   return {
-    httpOnly:  true,
-    secure:    false,          // proxy handles TLS; internal connection is plain
-    sameSite:  "lax" as const,
-    path:      "/",
-    expires:   expiresAt,
+    httpOnly: true,
+    // Use secure cookies in production so tokens are never sent over plain HTTP.
+    // In development (NODE_ENV !== "production") allow http for local testing.
+    secure:   process.env.NODE_ENV === "production",
+    // "strict" blocks the cookie on ALL cross-site navigations/requests, providing
+    // CSRF protection without needing explicit CSRF tokens.
+    sameSite: "strict" as const,
+    path:     "/",
+    expires:  expiresAt,
   };
 }
 
 async function createSession(userId: string): Promise<{ token: string; expiresAt: Date }> {
-  // Purge expired sessions for this user (housekeeping)
+  // Purge ALL expired sessions (not just this user's) to prevent unbounded
+  // table growth. Every login is a good opportunity for housekeeping since
+  // there is no separate background cleanup process.
   await db
     .delete(sessions)
     .where(lt(sessions.expiresAt, new Date()));
@@ -56,6 +62,16 @@ router.post("/auth/signup", async (req, res) => {
 
   if (!name?.trim() || !email?.trim() || !password?.trim()) {
     res.status(400).json({ ok: false, error: "name, email and password are required" });
+    return;
+  }
+
+  // Minimum password strength: at least 8 characters and one digit.
+  // Prevents trivially weak passwords like "a" or "password".
+  if (password.length < 8 || !/\d/.test(password)) {
+    res.status(400).json({
+      ok:    false,
+      error: "Password must be at least 8 characters and contain at least one number",
+    });
     return;
   }
 

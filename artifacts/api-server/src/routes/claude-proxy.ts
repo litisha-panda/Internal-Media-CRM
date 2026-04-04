@@ -1,9 +1,13 @@
 import { Router, type IRouter } from "express";
 import { anthropic } from "@workspace/integrations-anthropic-ai";
+import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
 
-router.post("/claude", async (req, res) => {
+// requireAuth: prevents unauthenticated callers from consuming Claude API
+// credits. Without this, any external script could POST to /api/claude
+// and run up charges with no accountability.
+router.post("/claude", requireAuth, async (req, res) => {
   try {
     const { model, max_tokens, system, messages, mcp_servers, ...rest } = req.body;
 
