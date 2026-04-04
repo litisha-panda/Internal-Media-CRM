@@ -174,7 +174,7 @@ const SEED_MEETINGS: any[] = [];
 const SEED_ATT: Record<string,Record<number,boolean>> = {};
 
 // ─── COLORS ───────────────────────────────────────────────────────────────────
-const C = { bg:"#f0f4f9", surface:"#ffffff", s2:"#e8eef7", s3:"#dde5f0", border:"#c8d3e5", accent:"#c47d00", green:"#15803d", red:"#c92828", blue:"#1d5db4", purple:"#7920e8", orange:"#c24000", text:"#18243a", dim:"#4d5e78", muted:"#8a97ae" };
+const C = { bg:"#f8fafc", surface:"#ffffff", s2:"#f1f5f9", s3:"#e2e8f0", border:"#e2e8f0", accent:"#d97706", green:"#16a34a", red:"#dc2626", blue:"#2563eb", purple:"#9333ea", orange:"#ea580c", text:"#0f172a", dim:"#64748b", muted:"#94a3b8" };
 
 const fmt = (n) => { if (n == null || n === "") return "—"; if (n===0) return "0"; if (n>=10000000) return `${(n/10000000).toFixed(1)}Cr`; if (n>=100000) return `${(n/100000).toFixed(1)}L`; return `${(n/1000).toFixed(0)}K`; };
 const fmtR = (n) => (n == null || n === "") ? "—" : `₹${fmt(n)}`;
@@ -792,215 +792,230 @@ function LoginScreen({ onLogin }) {
 
   // ── Pending-approval holding screen ──
   if (pendingApproval) return (
-    <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace",background:"#f0f4f9",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;600;700&display=swap');*{box-sizing:border-box;margin:0;padding:0}`}</style>
-      <div style={{width:"100%",maxWidth:420}}>
+    <div style={{fontFamily:"'Inter',-apple-system,sans-serif",background:"radial-gradient(ellipse at 50% -10%, #312e81 0%, #0f172a 65%)",minHeight:"100vh",display:"flex",alignItems:"center",justifyContent:"center",padding:"24px 16px"}}>
+      <div style={{position:"fixed",inset:0,backgroundImage:"linear-gradient(rgba(255,255,255,.025) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.025) 1px,transparent 1px)",backgroundSize:"40px 40px",pointerEvents:"none"}} />
+      <div style={{width:"100%",maxWidth:440,position:"relative"}}>
         <div style={{textAlign:"center",marginBottom:28}}>
           <div style={{display:"inline-flex",alignItems:"center",gap:12}}>
-            <div style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",borderRadius:10,padding:"8px 14px",fontSize:15,fontWeight:700,color:"#fff",letterSpacing:2}}>OTV</div>
-            <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:16,fontWeight:700,color:"#18243a",letterSpacing:1}}>OTV CRM</div>
+            <div style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",borderRadius:12,padding:"9px 16px",fontSize:16,fontWeight:800,color:"#fff",letterSpacing:"0.15em",boxShadow:"0 8px 20px rgba(99,102,241,.35)"}}>OTV</div>
+            <div style={{textAlign:"left"}}>
+              <div style={{fontSize:17,fontWeight:700,color:"#fff",letterSpacing:"0.02em"}}>OTV CRM</div>
+              <div style={{fontSize:10,color:"#818cf8",letterSpacing:"0.12em",textTransform:"uppercase"}}>Sales Intelligence Platform</div>
+            </div>
           </div>
         </div>
-        <div style={{background:"#fff",border:"1px solid #c8d3e5",borderRadius:12,padding:"32px 28px",boxShadow:"0 4px 24px rgba(0,0,0,.08)",textAlign:"center"}}>
-          <div style={{fontSize:32,marginBottom:16}}>⏳</div>
-          <div style={{fontFamily:"'DM Sans',sans-serif",fontSize:17,fontWeight:700,color:"#18243a",marginBottom:8}}>Access Request Submitted</div>
-          <div style={{fontSize:12,color:"#4d5e78",lineHeight:1.7,marginBottom:20}}>
-            Hi <strong>{pendingApproval.name}</strong>, your request has been sent to the admin.<br/>
-            Once approved, you can sign in and get started.<br/>
-            <span style={{fontSize:11,color:"#8a97ae"}}>Requested role: {pendingApproval.intendedRole} · {pendingApproval.preferredRegion}</span>
+        <div style={{background:"#fff",borderRadius:20,boxShadow:"0 32px 64px -12px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.06)",overflow:"hidden"}}>
+          <div style={{padding:"24px 28px 20px",borderBottom:"1px solid #f1f5f9"}}>
+            <div style={{fontSize:15,fontWeight:700,color:"#0f172a",marginBottom:2}}>Access Request Submitted</div>
+            <div style={{fontSize:11,color:"#94a3b8"}}>Odisha Television Network · Internal use only</div>
           </div>
-          <div style={{background:"#f0f4f9",border:"1px solid #c8d3e5",borderRadius:8,padding:"12px 16px",marginBottom:20,textAlign:"left"}}>
-            {[["Name",pendingApproval.name],["Email",pendingApproval.email],["Phone",pendingApproval.phone||"—"],["Designation",pendingApproval.designation||"—"]].map(([l,v])=>(
-              <div key={l} style={{display:"flex",gap:8,fontSize:11,marginBottom:4}}>
-                <span style={{color:"#8a97ae",minWidth:80}}>{l}</span>
-                <span style={{color:"#18243a",fontWeight:600}}>{v}</span>
-              </div>
-            ))}
+          <div style={{padding:"28px 28px 24px",textAlign:"center"}}>
+            <div style={{width:56,height:56,borderRadius:16,background:"linear-gradient(135deg,#fef3c7,#fde68a)",border:"1px solid #fbbf2440",display:"flex",alignItems:"center",justifyContent:"center",fontSize:26,margin:"0 auto 20px"}}>⏳</div>
+            <div style={{fontSize:15,fontWeight:700,color:"#0f172a",marginBottom:8}}>Awaiting Admin Approval</div>
+            <div style={{fontSize:12,color:"#64748b",lineHeight:1.7,marginBottom:20}}>
+              Hi <strong style={{color:"#0f172a"}}>{pendingApproval.name}</strong>, your request has been received.<br/>
+              You'll be able to sign in once an admin approves your account.
+            </div>
+            <div style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:10,padding:"14px 16px",marginBottom:20,textAlign:"left"}}>
+              {[["Name",pendingApproval.name],["Email",pendingApproval.email],["Role",pendingApproval.intendedRole],["Region",pendingApproval.preferredRegion]].map(([l,v])=>(
+                <div key={l} style={{display:"flex",alignItems:"center",gap:8,fontSize:12,marginBottom:6,paddingBottom:6,borderBottom:"1px solid #f1f5f9",lastChild:{border:"none"}}}>
+                  <span style={{color:"#94a3b8",minWidth:68,fontSize:11,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em"}}>{l}</span>
+                  <span style={{color:"#0f172a",fontWeight:600}}>{v||"—"}</span>
+                </div>
+              ))}
+            </div>
+            <button onClick={()=>setPendingApproval(null)}
+              style={{background:"#f8fafc",border:"1px solid #e2e8f0",borderRadius:8,padding:"10px 22px",color:"#64748b",fontSize:13,cursor:"pointer",fontWeight:500,transition:"all .15s"}}
+              onMouseOver={e=>{e.currentTarget.style.background="#f1f5f9";e.currentTarget.style.borderColor="#cbd5e1";}}
+              onMouseOut={e=>{e.currentTarget.style.background="#f8fafc";e.currentTarget.style.borderColor="#e2e8f0";}}>
+              ← Back to Sign In
+            </button>
           </div>
-          <button onClick={()=>setPendingApproval(null)}
-            style={{background:"transparent",border:"1px solid #c8d3e5",borderRadius:6,padding:"9px 20px",color:"#4d5e78",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-            ← Back to Sign In
-          </button>
         </div>
+        <div style={{textAlign:"center",marginTop:20,fontSize:11,color:"#475569"}}>OTV CRM · Internal platform · Not for external distribution</div>
       </div>
     </div>
   );
 
   return (
-    <div style={{ fontFamily:"'DM Mono','JetBrains Mono',monospace", background:"#f0f4f9", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+    <div style={{ fontFamily:"'Inter',system-ui,sans-serif", background:"radial-gradient(ellipse at 50% -20%, #1e1b4b 0%, #0f172a 70%)", minHeight:"100vh", display:"flex", alignItems:"center", justifyContent:"center", padding:20, position:"relative", overflow:"hidden" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;600;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
-        .login-input{background:#ffffff;border:1px solid #c8d3e5;border-radius:6px;padding:10px 14px;color:#18243a;font-size:13px;font-family:'DM Mono',monospace;outline:none;width:100%;transition:border-color .15s}
-        .login-input:focus{border-color:#7920e8}
-        .login-input::placeholder{color:#8a97ae}
+        .login-grid{position:fixed;inset:0;background-image:linear-gradient(rgba(255,255,255,.04) 1px,transparent 1px),linear-gradient(90deg,rgba(255,255,255,.04) 1px,transparent 1px);background-size:48px 48px;pointer-events:none}
+        .login-input{background:#f8fafc;border:1.5px solid #e2e8f0;border-radius:10px;padding:11px 14px;color:#0f172a;font-size:14px;font-family:'Inter',system-ui,sans-serif;outline:none;width:100%;transition:border-color .15s,box-shadow .15s}
+        .login-input:focus{border-color:#6366f1;box-shadow:0 0 0 3px rgba(99,102,241,.12)}
+        .login-input::placeholder{color:#94a3b8}
+        .login-btn-primary{background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;border:none;border-radius:10px;padding:12px;font-weight:600;font-size:14px;cursor:pointer;font-family:'Inter',system-ui,sans-serif;width:100%;transition:opacity .15s,transform .1s;letter-spacing:.01em}
+        .login-btn-primary:hover{opacity:.9;transform:translateY(-1px)}
+        .login-btn-primary:active{transform:translateY(0)}
+        .demo-role-btn{border-radius:8px;padding:9px 11px;cursor:pointer;text-align:left;transition:all .15s;font-family:'Inter',system-ui,sans-serif;width:100%;border-width:1.5px;border-style:solid}
+        .demo-role-btn:hover{transform:translateY(-1px)}
       `}</style>
+      <div className="login-grid" />
 
-      <div style={{ width:"100%", maxWidth:420 }}>
-        {/* LOGO */}
-        <div style={{ textAlign:"center", marginBottom:32 }}>
-          <div style={{ display:"inline-flex", alignItems:"center", gap:12, marginBottom:12 }}>
-            <div style={{ background:"linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius:10, padding:"8px 14px", fontSize:15, fontWeight:700, color:"#fff", letterSpacing:2 }}>OTV</div>
+      <div style={{ width:"100%", maxWidth:440, position:"relative", zIndex:1 }}>
+        {/* OTV Brand */}
+        <div style={{ textAlign:"center", marginBottom:28 }}>
+          <div style={{ display:"inline-flex", flexDirection:"column", alignItems:"center", gap:10 }}>
+            <div style={{ background:"linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius:16, padding:"12px 24px", fontSize:22, fontWeight:800, color:"#fff", letterSpacing:5, boxShadow:"0 0 40px rgba(99,102,241,.5), 0 8px 20px rgba(0,0,0,.3)" }}>OTV</div>
             <div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:16, fontWeight:700, color:"#18243a", letterSpacing:1 }}>OTV CRM</div>
-              <div style={{ fontSize:10, color:"#4d5e78", letterSpacing:2, textTransform:"uppercase" }}>Sales Intelligence Platform</div>
+              <div style={{ fontSize:18, fontWeight:700, color:"#ffffff", letterSpacing:.3 }}>OTV CRM</div>
+              <div style={{ fontSize:10, color:"rgba(255,255,255,.4)", letterSpacing:3, textTransform:"uppercase", marginTop:3 }}>Sales Intelligence Platform</div>
             </div>
           </div>
         </div>
 
-        <div style={{ background:"#ffffff", border:"1px solid #c8d3e5", borderRadius:12, overflow:"hidden", boxShadow:"0 4px 24px rgba(0,0,0,.08)" }}>
-
-          {/* HEADER */}
-          <div style={{ padding:"20px 24px 16px", borderBottom:"1px solid #c8d3e5" }}>
-            <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:15, fontWeight:700, color:"#18243a", marginBottom:3 }}>
-              {mode==="email" ? (isNew ? "Create account" : "Sign in") : "Sign in"}
+        {/* Card */}
+        <div style={{ background:"#ffffff", borderRadius:20, overflow:"hidden", boxShadow:"0 32px 64px -12px rgba(0,0,0,.6), 0 0 0 1px rgba(255,255,255,.06)" }}>
+          {/* Card header */}
+          <div style={{ padding:"20px 28px 16px", borderBottom:"1px solid #f1f5f9", background:"linear-gradient(180deg,#fafbff 0%,#ffffff 100%)" }}>
+            <div style={{ fontSize:16, fontWeight:700, color:"#0f172a", marginBottom:2 }}>
+              {mode==="email" ? (isNew ? "Create account" : "Welcome back") : "Sign in to OTV CRM"}
             </div>
-            <div style={{ fontSize:11, color:"#4d5e78" }}>Odisha Television Network · Internal use only</div>
+            <div style={{ fontSize:12, color:"#94a3b8" }}>Odisha Television Network · Internal use only</div>
           </div>
 
-          <div style={{ padding:24 }}>
+          <div style={{ padding:28 }}>
             {mode==="options" && (
               <>
-                {/* Google */}
-                <button
-                  onClick={handleGoogleClick}
-                  disabled={loading}
-                  style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", color:"#3c4043", border:"1px solid #dadce0", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", marginBottom:10, transition:"box-shadow .15s" }}
-                  onMouseOver={e=>e.currentTarget.style.boxShadow="0 1px 6px rgba(0,0,0,.3)"}
-                  onMouseOut={e=>e.currentTarget.style.boxShadow="none"}>
+                {/* Google SSO */}
+                <button onClick={handleGoogleClick} disabled={loading}
+                  style={{ display:"flex", alignItems:"center", gap:10, background:"#fff", color:"#3c4043", border:"1.5px solid #e2e8f0", borderRadius:10, padding:"11px 16px", cursor:"pointer", fontSize:14, fontWeight:500, width:"100%", marginBottom:10, transition:"box-shadow .15s,border-color .15s", fontFamily:"'Inter',system-ui,sans-serif" }}
+                  onMouseOver={e=>{e.currentTarget.style.boxShadow="0 2px 10px rgba(0,0,0,.1)";e.currentTarget.style.borderColor="#cbd5e1";}}
+                  onMouseOut={e=>{e.currentTarget.style.boxShadow="none";e.currentTarget.style.borderColor="#e2e8f0";}}>
                   <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
                   Continue with Google
                 </button>
 
-                {/* Zoho */}
-                <button
-                  onClick={handleZohoClick}
-                  disabled={loading}
-                  style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", marginBottom:16, transition:"opacity .15s" }}
-                  onMouseOver={e=>e.currentTarget.style.opacity=".88"}
-                  onMouseOut={e=>e.currentTarget.style.opacity="1"}>
+                {/* Zoho SSO */}
+                <button onClick={handleZohoClick} disabled={loading}
+                  style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:10, padding:"11px 16px", cursor:"pointer", fontSize:14, fontWeight:500, width:"100%", marginBottom:20, transition:"opacity .15s,transform .1s", fontFamily:"'Inter',system-ui,sans-serif" }}
+                  onMouseOver={e=>{e.currentTarget.style.opacity=".88";e.currentTarget.style.transform="translateY(-1px)";}}
+                  onMouseOut={e=>{e.currentTarget.style.opacity="1";e.currentTarget.style.transform="translateY(0)";}}>
                   <svg width="18" height="18" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="4" fill="#e42527"/><text x="50%" y="58%" dominantBaseline="middle" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="bold" fontFamily="sans-serif">Z</text></svg>
                   Continue with Zoho
                 </button>
 
-                <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>
-                  <div style={{ flex:1, height:1, background:"#c8d3e5" }} />
-                  <span style={{ fontSize:11, color:"#4d5e78" }}>or</span>
-                  <div style={{ flex:1, height:1, background:"#c8d3e5" }} />
+                {/* Divider */}
+                <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:20 }}>
+                  <div style={{ flex:1, height:1, background:"#f1f5f9" }} />
+                  <span style={{ fontSize:12, color:"#94a3b8", fontWeight:500 }}>or use email</span>
+                  <div style={{ flex:1, height:1, background:"#f1f5f9" }} />
                 </div>
 
                 {/* Email */}
-                <button onClick={() => setMode("email")} style={{ width:"100%", background:"transparent", border:"1px solid #c8d3e5", borderRadius:6, padding:"10px 16px", color:"#18243a", fontSize:13, cursor:"pointer", fontFamily:"'DM Mono',monospace", transition:"border-color .15s", marginBottom:10 }}
-                  onMouseOver={e=>e.currentTarget.style.borderColor="#7920e8"}
-                  onMouseOut={e=>e.currentTarget.style.borderColor="#c8d3e5"}>
+                <button onClick={() => setMode("email")}
+                  style={{ width:"100%", background:"#f8fafc", border:"1.5px solid #e2e8f0", borderRadius:10, padding:"11px 16px", color:"#0f172a", fontSize:14, cursor:"pointer", fontFamily:"'Inter',system-ui,sans-serif", transition:"all .15s", marginBottom:4, fontWeight:500 }}
+                  onMouseOver={e=>{e.currentTarget.style.borderColor="#6366f1";e.currentTarget.style.background="#fafbff";}}
+                  onMouseOut={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.background="#f8fafc";}}>
                   Continue with Email →
                 </button>
 
-                {/* Demo access */}
-                <div style={{ marginTop:20, borderTop:"1px solid #c8d3e5", paddingTop:16 }}>
-                  <div style={{ fontSize:10, color:"#4d5e78", fontWeight:700, letterSpacing:".1em", textTransform:"uppercase", marginBottom:10, textAlign:"center" }}>Demo Access</div>
-                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
+                {/* Demo Access */}
+                <div style={{ marginTop:24, borderTop:"1px solid #f1f5f9", paddingTop:20 }}>
+                  <div style={{ fontSize:10, color:"#94a3b8", fontWeight:700, letterSpacing:".12em", textTransform:"uppercase", marginBottom:12, textAlign:"center" }}>Demo Access</div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
                     {[
-                      { label:"Sales Rep",           email:"arjun@odishatv.com",      color:"#1d5db4" },
-                      { label:"Region Head",          email:"rhnorth@odishatv.com",     color:"#7920e8" },
-                      { label:"National Sales Head",  email:"saleshead@odishatv.com",   color:"#0369a1" },
-                      { label:"Digi Ops",             email:"digiops@odishatv.com",     color:"#1e40af" },
-                      { label:"Sales Strategy",       email:"sachin@odishatv.com",      color:"#15803d" },
-                      { label:"CRO",                  email:"darpan@odishatv.com",      color:"#c47d00" },
+                      { label:"Sales Rep",          email:"arjun@odishatv.com",     color:"#2563eb" },
+                      { label:"Region Head",         email:"rhnorth@odishatv.com",    color:"#7c3aed" },
+                      { label:"National Sales Head", email:"saleshead@odishatv.com",  color:"#0369a1" },
+                      { label:"Digi Ops",            email:"digiops@odishatv.com",    color:"#1d4ed8" },
+                      { label:"Sales Strategy",      email:"sachin@odishatv.com",     color:"#15803d" },
+                      { label:"CRO",                 email:"darpan@odishatv.com",     color:"#b45309" },
                     ].map(a => (
-                      <button key={a.email}
+                      <button key={a.email} className="demo-role-btn"
                         onClick={() => onLogin({ name:a.label, email:a.email })}
-                        style={{ background:"#f0f4f9", border:`1px solid ${a.color}44`, borderRadius:6, padding:"8px 10px", cursor:"pointer", textAlign:"left", transition:"border-color .15s, background .15s" }}
-                        onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background="#e8eef7"; }}
-                        onMouseOut={e=>{ e.currentTarget.style.borderColor=`${a.color}44`; e.currentTarget.style.background="#f0f4f9"; }}>
-                        <div style={{ fontSize:11, fontWeight:700, color:a.color, fontFamily:"'DM Sans',sans-serif", marginBottom:1 }}>{a.label}</div>
-                        <div style={{ fontSize:9, color:"#8a97ae", letterSpacing:".04em" }}>demo</div>
+                        style={{ borderColor:`${a.color}33`, background:`${a.color}08` }}
+                        onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background=`${a.color}12`; e.currentTarget.style.transform="translateY(-1px)"; e.currentTarget.style.boxShadow=`0 4px 12px ${a.color}22`; }}
+                        onMouseOut={e=>{ e.currentTarget.style.borderColor=`${a.color}33`; e.currentTarget.style.background=`${a.color}08`; e.currentTarget.style.transform="translateY(0)"; e.currentTarget.style.boxShadow="none"; }}>
+                        <div style={{ fontSize:12, fontWeight:600, color:a.color, marginBottom:1 }}>{a.label}</div>
+                        <div style={{ fontSize:10, color:"#94a3b8" }}>demo account</div>
                       </button>
                     ))}
                   </div>
                 </div>
 
-                {/* Admin quick-login — bottom, subtle */}
-                <button
-                  onClick={() => onLogin({ name:"Admin", email:"admin@odishatv.com", role:"admin" })}
-                  style={{ width:"100%", marginTop:10, background:"transparent", border:"1px solid #c8d3e544", borderRadius:6, padding:"8px 16px", color:"#8a97ae", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", letterSpacing:".04em" }}>
-                  ⚙ Admin access
+                {/* Admin quick-login */}
+                <button onClick={() => onLogin({ name:"Admin", email:"admin@odishatv.com", role:"admin" })}
+                  style={{ width:"100%", marginTop:12, background:"transparent", border:"1px solid #f1f5f9", borderRadius:8, padding:"8px 16px", color:"#cbd5e1", fontSize:11, cursor:"pointer", fontFamily:"'Inter',system-ui,sans-serif", letterSpacing:".04em", transition:"all .15s" }}
+                  onMouseOver={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#94a3b8";}}
+                  onMouseOut={e=>{e.currentTarget.style.borderColor="#f1f5f9";e.currentTarget.style.color="#cbd5e1";}}>
+                  Admin access
                 </button>
 
-                {err && <div style={{ marginTop:12, background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:5, padding:"8px 12px", fontSize:12, color:"#c92828" }}>{err}</div>}
+                {err && <div style={{ marginTop:12, background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#dc2626" }}>{err}</div>}
               </>
             )}
 
             {mode==="email" && (
               <form onSubmit={handleEmail}>
-                <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
                   {isNew && (
                     <>
                       <div>
-                        <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Full Name *</label>
+                        <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".04em"}}>Full Name *</label>
                         <input className="login-input" type="text" placeholder="Your full name" value={name} onChange={e=>setName(e.target.value)} autoFocus />
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                         <div>
-                          <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Phone *</label>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".04em"}}>Phone *</label>
                           <input className="login-input" type="tel" placeholder="Mobile number" value={phone} onChange={e=>setPhone(e.target.value)} />
                         </div>
                         <div>
-                          <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Designation</label>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".04em"}}>Designation</label>
                           <input className="login-input" type="text" placeholder="e.g. Sales Manager" value={designation} onChange={e=>setDesig(e.target.value)} />
                         </div>
                       </div>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
                         <div>
-                          <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Intended Role</label>
-                          <select className="login-input" value={intendedRole} onChange={e=>setRole(e.target.value)} style={{padding:"10px 14px"}}>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".04em"}}>Intended Role</label>
+                          <select className="login-input" value={intendedRole} onChange={e=>setRole(e.target.value)}>
                             {["SALES REP","REGION HEAD","SALES HEAD","SALES STRATEGY","CRO","DIGI OPS"].map(r=><option key={r}>{r}</option>)}
                           </select>
                         </div>
                         <div>
-                          <label style={{fontSize:10,color:"#4d5e78",display:"block",marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Region</label>
-                          <select className="login-input" value={preferredRegion} onChange={e=>setReg(e.target.value)} style={{padding:"10px 14px"}}>
+                          <label style={{fontSize:11,color:"#64748b",display:"block",marginBottom:5,fontWeight:600,letterSpacing:".04em"}}>Region</label>
+                          <select className="login-input" value={preferredRegion} onChange={e=>setReg(e.target.value)}>
                             {["North","South","East","West","National"].map(r=><option key={r}>{r}</option>)}
                           </select>
                         </div>
                       </div>
-                      <div style={{background:"#f0f9ff",border:"1px solid #bae6fd",borderRadius:6,padding:"8px 12px",fontSize:11,color:"#0369a1"}}>
+                      <div style={{background:"#eff6ff",border:"1px solid #bfdbfe",borderRadius:8,padding:"10px 14px",fontSize:12,color:"#1d4ed8"}}>
                         Your request will be reviewed by the admin before you can access the platform.
                       </div>
                     </>
                   )}
                   <div>
-                    <label style={{ fontSize:10, color:"#4d5e78", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em" }}>Email</label>
+                    <label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:5, fontWeight:600, letterSpacing:".04em" }}>Email address</label>
                     <input className="login-input" type="email" placeholder="you@odishatv.com" value={email} onChange={e=>setEmail(e.target.value)} autoFocus={!isNew} />
                   </div>
                   <div>
-                    <label style={{ fontSize:10, color:"#4d5e78", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em" }}>Password</label>
+                    <label style={{ fontSize:11, color:"#64748b", display:"block", marginBottom:5, fontWeight:600, letterSpacing:".04em" }}>Password</label>
                     <input className="login-input" type="password" placeholder="••••••••" value={password} onChange={e=>setPassword(e.target.value)} />
                   </div>
 
-                  {err && <div style={{ background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:5, padding:"8px 12px", fontSize:12, color:"#c92828" }}>{err}</div>}
+                  {err && <div style={{ background:"#fef2f2", border:"1px solid #fecaca", borderRadius:8, padding:"10px 14px", fontSize:13, color:"#dc2626" }}>{err}</div>}
 
-                  <button type="submit" style={{ background:"linear-gradient(135deg,#6366f1,#8b5cf6)", color:"#fff", border:"none", borderRadius:6, padding:"11px", fontWeight:700, fontSize:13, cursor:"pointer", fontFamily:"'DM Sans',sans-serif", marginTop:4 }}>
+                  <button type="submit" className="login-btn-primary">
                     {isNew ? "Create Account" : "Sign In"}
                   </button>
 
-                  <div style={{ textAlign:"center", fontSize:12, color:"#4d5e78" }}>
+                  <div style={{ textAlign:"center", fontSize:13, color:"#64748b" }}>
                     {isNew
-                      ? <span>Already have an account? <button type="button" onClick={()=>{setIsNew(false);setErr("");}} style={{ color:"#7920e8", background:"none", border:"none", cursor:"pointer", fontWeight:600, fontFamily:"'DM Mono',monospace" }}>Sign in</button></span>
-                      : <span>No account? <button type="button" onClick={()=>{setIsNew(true);setErr("");}} style={{ color:"#7920e8", background:"none", border:"none", cursor:"pointer", fontWeight:600, fontFamily:"'DM Mono',monospace" }}>Create one</button></span>
+                      ? <span>Already have an account?{" "}<button type="button" onClick={()=>{setIsNew(false);setErr("");}} style={{ color:"#6366f1", background:"none", border:"none", cursor:"pointer", fontWeight:600, fontFamily:"'Inter',system-ui,sans-serif", fontSize:13 }}>Sign in</button></span>
+                      : <span>No account?{" "}<button type="button" onClick={()=>{setIsNew(true);setErr("");}} style={{ color:"#6366f1", background:"none", border:"none", cursor:"pointer", fontWeight:600, fontFamily:"'Inter',system-ui,sans-serif", fontSize:13 }}>Create one</button></span>
                     }
                   </div>
 
-                  <button type="button" onClick={()=>{setMode("options");setErr("");}} style={{ background:"transparent", border:"none", color:"#4d5e78", fontSize:12, cursor:"pointer", fontFamily:"'DM Mono',monospace", textAlign:"center" }}>← Back</button>
+                  <button type="button" onClick={()=>{setMode("options");setErr("");}} style={{ background:"transparent", border:"none", color:"#94a3b8", fontSize:13, cursor:"pointer", fontFamily:"'Inter',system-ui,sans-serif", textAlign:"center", padding:"4px 0" }}>← Back to sign-in options</button>
                 </div>
               </form>
             )}
-
-            {err && mode==="options" && <div style={{ marginTop:12, background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:5, padding:"8px 12px", fontSize:12, color:"#c92828" }}>{err}</div>}
           </div>
         </div>
 
-        <div style={{ textAlign:"center", marginTop:16, fontSize:10, color:"#8a97ae" }}>
+        <div style={{ textAlign:"center", marginTop:20, fontSize:11, color:"rgba(255,255,255,.25)" }}>
           OTV CRM · Internal platform · Odisha Television Network
         </div>
       </div>
@@ -1182,96 +1197,101 @@ function HomeScreen({ user, onSelect, onLogout }) {
   const firstName = (user.name || "").split(" ")[0];
 
   return (
-    <div style={{ fontFamily:"'DM Mono','JetBrains Mono',monospace", background:"#f0f4f9", minHeight:"100vh", display:"flex", flexDirection:"column", color:"#18243a" }}>
+    <div style={{ fontFamily:"'Inter',system-ui,sans-serif", background:"#f8fafc", minHeight:"100vh", display:"flex", flexDirection:"column", color:"#0f172a" }}>
       <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;600;700;800&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=DM+Mono:wght@400;500&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
-        .home-tile{background:#ffffff;border:1px solid #c8d3e5;border-radius:14px;padding:40px 36px;cursor:pointer;transition:border-color .2s,background .2s,transform .15s,box-shadow .2s;display:flex;flex-direction:column;align-items:flex-start;gap:14px;text-align:left;box-shadow:0 2px 12px rgba(0,0,0,.06)}
-        .home-tile:hover{transform:translateY(-3px);box-shadow:0 14px 40px rgba(0,0,0,.12)}
-        .home-tile-ro:hover{border-color:#7920e8;background:#faf6ff}
-        .home-tile-crm:hover{border-color:#c47d00;background:#fffbf0}
+        .home-tile{background:#ffffff;border:1.5px solid #e2e8f0;border-radius:16px;padding:36px 32px;cursor:pointer;transition:border-color .2s,transform .18s,box-shadow .2s;display:flex;flex-direction:column;align-items:flex-start;gap:16px;text-align:left;box-shadow:0 1px 4px rgba(0,0,0,.04),0 4px 16px rgba(0,0,0,.04)}
+        .home-tile:hover{transform:translateY(-4px);box-shadow:0 12px 40px rgba(0,0,0,.1)}
+        .home-tile-ro:hover{border-color:#6366f1;background:linear-gradient(180deg,#fafbff,#ffffff)}
+        .home-tile-crm:hover{border-color:#d97706;background:linear-gradient(180deg,#fffcf5,#ffffff)}
       `}</style>
 
       {/* TOPBAR */}
-      <div style={{ background:"#ffffff", borderBottom:"1px solid #c8d3e5", padding:"0 32px", height:48, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, boxShadow:"0 1px 4px rgba(0,0,0,.06)" }}>
+      <div style={{ background:"#ffffff", borderBottom:"1px solid #e2e8f0", padding:"0 32px", height:52, display:"flex", alignItems:"center", justifyContent:"space-between", flexShrink:0, boxShadow:"0 1px 3px rgba(0,0,0,.05)" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12 }}>
-          <div style={{ background:"linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius:7, padding:"5px 10px", fontSize:13, fontWeight:700, letterSpacing:2, color:"#fff" }}>OTV</div>
-          <span style={{ color:"#c8d3e5" }}>|</span>
-          <span style={{ fontFamily:"'DM Sans',sans-serif", fontSize:11, fontWeight:700, color:"#4d5e78", letterSpacing:2, textTransform:"uppercase" }}>Platform</span>
+          <div style={{ background:"linear-gradient(135deg,#6366f1,#8b5cf6)", borderRadius:8, padding:"6px 12px", fontSize:13, fontWeight:800, letterSpacing:3, color:"#fff" }}>OTV</div>
+          <span style={{ color:"#e2e8f0" }}>|</span>
+          <span style={{ fontSize:11, fontWeight:600, color:"#94a3b8", letterSpacing:2, textTransform:"uppercase" }}>Platform</span>
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
-          <div style={{ width:26, height:26, borderRadius:"50%", background:"#7920e820", border:"1px solid #7920e850", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#7920e8" }}>
+          <div style={{ width:28, height:28, borderRadius:"50%", background:"linear-gradient(135deg,#6366f1,#8b5cf6)", display:"flex", alignItems:"center", justifyContent:"center", fontSize:12, fontWeight:700, color:"#fff" }}>
             {(user.name||"?")[0].toUpperCase()}
           </div>
-          <span style={{ fontSize:12, color:"#4d5e78" }}>{user.name}</span>
-          <button onClick={onLogout} style={{ background:"transparent", border:"1px solid #c8d3e5", borderRadius:4, padding:"3px 10px", color:"#4d5e78", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace" }}
-            onMouseOver={e=>{e.currentTarget.style.borderColor="#c92828";e.currentTarget.style.color="#c92828";}}
-            onMouseOut={e=>{e.currentTarget.style.borderColor="#c8d3e5";e.currentTarget.style.color="#4d5e78";}}>
+          <span style={{ fontSize:13, color:"#475569", fontWeight:500 }}>{user.name}</span>
+          <button onClick={onLogout}
+            style={{ background:"transparent", border:"1.5px solid #e2e8f0", borderRadius:8, padding:"5px 14px", color:"#64748b", fontSize:12, cursor:"pointer", fontFamily:"'Inter',system-ui,sans-serif", fontWeight:500, transition:"all .15s" }}
+            onMouseOver={e=>{e.currentTarget.style.borderColor="#fca5a5";e.currentTarget.style.color="#dc2626";e.currentTarget.style.background="#fef2f2";}}
+            onMouseOut={e=>{e.currentTarget.style.borderColor="#e2e8f0";e.currentTarget.style.color="#64748b";e.currentTarget.style.background="transparent";}}>
             Sign out
           </button>
         </div>
       </div>
 
       {/* MAIN */}
-      <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:32 }}>
+      <div style={{ flex:1, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:"40px 32px" }}>
 
         {/* GREETING */}
         <div style={{ textAlign:"center", marginBottom:52 }}>
-          <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:28, fontWeight:800, marginBottom:6, letterSpacing:-.5, color:"#18243a" }}>
-            {greeting}, {firstName} 👋
+          <div style={{ fontSize:30, fontWeight:800, marginBottom:8, letterSpacing:-.5, color:"#0f172a", lineHeight:1.2 }}>
+            {greeting}, {firstName}
           </div>
-          <div style={{ fontSize:13, color:"#4d5e78" }}>
-            {new Date().toLocaleDateString("en-IN", { weekday:"long", day:"2-digit", month:"long", year:"numeric" })} · Odisha Television Network
+          <div style={{ fontSize:13, color:"#94a3b8", fontWeight:400 }}>
+            {new Date().toLocaleDateString("en-IN", { weekday:"long", day:"2-digit", month:"long", year:"numeric" })}
+            <span style={{ margin:"0 8px", color:"#cbd5e1" }}>·</span>
+            Odisha Television Network
           </div>
         </div>
 
         {/* TWO TILES */}
-        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, width:"100%", maxWidth:720 }}>
+        <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20, width:"100%", maxWidth:760 }}>
 
           {/* RO MANAGEMENT TILE */}
           <div className="home-tile home-tile-ro" onClick={() => window.open("https://dealroreader.replit.app", "_blank")}>
-            <div style={{ width:48, height:48, borderRadius:12, background:"#7920e818", border:"1px solid #7920e840", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
-              📋
+            <div style={{ width:48, height:48, borderRadius:12, background:"linear-gradient(135deg,#6366f1,#8b5cf6)", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 12px rgba(99,102,241,.3)" }}>
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#fff" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 12h6m-6 4h6m2 4H7a2 2 0 01-2-2V6a2 2 0 012-2h5l5 5v11a2 2 0 01-2 2z"/></svg>
             </div>
             <div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:20, fontWeight:800, color:"#18243a", marginBottom:6, letterSpacing:-.3 }}>RO Management</div>
-              <div style={{ fontSize:12, color:"#4d5e78", lineHeight:1.6 }}>Parse Release Orders from any agency format. Export Zoho-ready Deal + Breakup sheets. View and manage all saved ROs.</div>
+              <div style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:6, letterSpacing:-.3 }}>RO Management</div>
+              <div style={{ fontSize:13, color:"#64748b", lineHeight:1.65 }}>Parse Release Orders from any agency format. Export Zoho-ready Deal + Breakup sheets. View and manage all saved ROs.</div>
             </div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:4 }}>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {["PDF","Excel","Images","CSV"].map(f => (
-                <span key={f} style={{ background:"#7920e815", color:"#7920e8", padding:"2px 8px", borderRadius:10, fontSize:10, fontWeight:600 }}>{f}</span>
+                <span key={f} style={{ background:"#eef2ff", color:"#6366f1", padding:"3px 9px", borderRadius:20, fontSize:11, fontWeight:600 }}>{f}</span>
               ))}
               {["WPP","Madison","Zenith","ENES"].map(f => (
-                <span key={f} style={{ background:"#e8eef7", color:"#4d5e78", padding:"2px 8px", borderRadius:10, fontSize:10 }}>{f}</span>
+                <span key={f} style={{ background:"#f1f5f9", color:"#64748b", padding:"3px 9px", borderRadius:20, fontSize:11 }}>{f}</span>
               ))}
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:6, color:"#7920e8", fontSize:12, fontWeight:600 }}>
-              Open RO Module <span style={{ fontSize:16 }}>→</span>
+            <div style={{ display:"flex", alignItems:"center", gap:6, color:"#6366f1", fontSize:13, fontWeight:600 }}>
+              Open RO Module
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
             </div>
           </div>
 
           {/* CRM TILE */}
           <div className="home-tile home-tile-crm" onClick={() => onSelect("crm")}>
-            <div style={{ width:48, height:48, borderRadius:12, background:"#c47d0018", border:"1px solid #c47d0040", display:"flex", alignItems:"center", justifyContent:"center", fontSize:22 }}>
-              ⬡
+            <div style={{ width:48, height:48, borderRadius:12, background:"linear-gradient(135deg,#d97706,#f59e0b)", display:"flex", alignItems:"center", justifyContent:"center", boxShadow:"0 4px 12px rgba(217,119,6,.3)" }}>
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="#fff" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/></svg>
             </div>
             <div>
-              <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:20, fontWeight:800, color:"#18243a", marginBottom:6, letterSpacing:-.3 }}>OTV CRM</div>
-              <div style={{ fontSize:12, color:"#4d5e78", lineHeight:1.6 }}>Pipeline, targets, team scorecards, meeting logs, escalations, HR compliance and absence reports.</div>
+              <div style={{ fontSize:20, fontWeight:800, color:"#0f172a", marginBottom:6, letterSpacing:-.3 }}>OTV CRM</div>
+              <div style={{ fontSize:13, color:"#64748b", lineHeight:1.65 }}>Pipeline, targets, team scorecards, meeting logs, escalations, HR compliance and absence reports.</div>
             </div>
-            <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:4 }}>
+            <div style={{ display:"flex", gap:6, flexWrap:"wrap" }}>
               {["War Room","Pipeline","Targets","Team","HR Reports"].map(f => (
-                <span key={f} style={{ background:"#c47d0015", color:"#c47d00", padding:"2px 8px", borderRadius:10, fontSize:10, fontWeight:600 }}>{f}</span>
+                <span key={f} style={{ background:"#fef3c7", color:"#b45309", padding:"3px 9px", borderRadius:20, fontSize:11, fontWeight:600 }}>{f}</span>
               ))}
             </div>
-            <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:6, color:"#c47d00", fontSize:12, fontWeight:600 }}>
-              Open CRM <span style={{ fontSize:16 }}>→</span>
+            <div style={{ display:"flex", alignItems:"center", gap:6, color:"#d97706", fontSize:13, fontWeight:600 }}>
+              Open CRM
+              <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6"/></svg>
             </div>
           </div>
         </div>
 
         {/* FOOTER NOTE */}
-        <div style={{ marginTop:40, fontSize:11, color:"#8a97ae", textAlign:"center" }}>
+        <div style={{ marginTop:48, fontSize:11, color:"#cbd5e1", textAlign:"center" }}>
           Odisha Television Network · Internal platform · Not for external distribution
         </div>
       </div>
@@ -3269,26 +3289,27 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
         *{box-sizing:border-box;margin:0;padding:0}
-        ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:${C.s3};border-radius:2px}
+        ::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:${C.s3};border-radius:4px}::-webkit-scrollbar-track{background:transparent}
         .sans{font-family:'DM Sans',sans-serif}
-        input,select,textarea{font-family:'DM Mono',monospace;font-size:12px;color:${C.text};background:${C.s2};border:1px solid ${C.border};border-radius:4px;padding:7px 10px;outline:none;width:100%;transition:border-color .15s}
-        input:focus,select:focus,textarea:focus{border-color:${C.accent}}
+        input,select,textarea{font-family:'DM Mono',monospace;font-size:12px;color:${C.text};background:${C.s2};border:1px solid ${C.border};border-radius:6px;padding:7px 10px;outline:none;width:100%;transition:border-color .15s,box-shadow .15s}
+        input:focus,select:focus,textarea:focus{border-color:${C.accent};box-shadow:0 0 0 2px ${C.accent}18}
         select option{background:${C.s2}}
-        .card{background:${C.surface};border:1px solid ${C.border};border-radius:6px}
-        .row{background:${C.surface};border:1px solid ${C.border};border-radius:5px;padding:11px 14px;margin-bottom:6px;transition:border-color .15s}
-        .row:hover{border-color:${C.accent}88}
-        .btn{padding:7px 16px;border:none;border-radius:4px;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;transition:opacity .15s;letter-spacing:.03em}
-        .btn:hover{opacity:.82}
-        .btn-primary{background:${C.accent};color:#090600;font-weight:700}
+        .card{background:${C.surface};border:1px solid ${C.border};border-radius:10px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+        .row{background:${C.surface};border:1px solid ${C.border};border-radius:8px;padding:11px 14px;margin-bottom:6px;transition:border-color .15s,box-shadow .15s}
+        .row:hover{border-color:${C.accent}66;box-shadow:0 2px 8px rgba(0,0,0,.06)}
+        .btn{padding:7px 16px;border:none;border-radius:6px;cursor:pointer;font-family:'DM Mono',monospace;font-size:12px;font-weight:500;transition:opacity .15s,transform .1s;letter-spacing:.03em}
+        .btn:hover{opacity:.85;transform:translateY(-1px)}
+        .btn:active{transform:translateY(0)}
+        .btn-primary{background:${C.accent};color:#fff;font-weight:700}
         .btn-ghost{background:transparent;color:${C.dim};border:1px solid ${C.border}}
-        .pill{display:inline-block;padding:2px 7px;border-radius:3px;font-size:11px;font-weight:600;letter-spacing:.04em}
+        .pill{display:inline-block;padding:2px 9px;border-radius:20px;font-size:11px;font-weight:600;letter-spacing:.04em}
         .pulse{animation:pulse 2.5s infinite}
         @keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
         .fin{animation:fin .2s ease}
         @keyframes fin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
-        .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100;display:flex;align-items:center;justify-content:center}
-        .modal{background:${C.surface};border:1px solid ${C.border};border-radius:8px;padding:24px;width:560px;max-height:88vh;overflow-y:auto}
-        .pbar{height:5px;background:${C.s3};border-radius:3px;overflow:hidden}
+        .overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:100;display:flex;align-items:center;justify-content:center;backdrop-filter:blur(2px)}
+        .modal{background:${C.surface};border:1px solid ${C.border};border-radius:14px;padding:28px;width:580px;max-height:88vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+        .pbar{height:5px;background:${C.s3};border-radius:6px;overflow:hidden}
         .pfill{height:100%;border-radius:3px;transition:width .6s}
         th{text-align:left;font-size:10px;font-weight:600;letter-spacing:.08em;color:${C.dim};padding:7px 10px;border-bottom:1px solid ${C.border};text-transform:uppercase;white-space:nowrap}
         td{padding:9px 10px;border-bottom:1px solid ${C.border};vertical-align:middle;font-size:12px}
@@ -3299,7 +3320,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
       `}</style>
 
       {/* TOPBAR */}
-      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 20px",height:46,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
+      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 20px",height:48,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0,boxShadow:"0 1px 3px rgba(0,0,0,.05)"}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           {/* Back to home */}
           <button onClick={onGoHome} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 10px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s"}}
