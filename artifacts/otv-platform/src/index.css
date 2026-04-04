@@ -128,10 +128,10 @@
   --chart-4:             0 72% 51%;    /* red-600 */
   --chart-5:             215 16% 47%;  /* slate-500 */
 
-  /* Typography */
-  --app-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  /* Typography — Plus Jakarta Sans (enterprise SaaS standard) */
+  --app-font-sans: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   --app-font-serif: Georgia, 'Times New Roman', serif;
-  --app-font-mono: 'JetBrains Mono', 'Fira Code', Menlo, monospace;
+  --app-font-mono: 'DM Mono', 'JetBrains Mono', 'Fira Code', Menlo, monospace;
 
   /* Shape */
   --radius: 0.5rem; /* 8px */
@@ -228,6 +228,9 @@
   --shadow-2xl: 0 32px 56px -12px rgb(0 0 0 / 0.75);
 }
 
+/* ── FONT IMPORT ─────────────────────────────────────────────────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Mono:wght@400;500&display=swap');
+
 /* ── BASE STYLES ─────────────────────────────────────────────────────────── */
 @layer base {
   * {
@@ -242,6 +245,7 @@
 
   body {
     @apply font-sans bg-background text-foreground;
+    font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
     font-feature-settings: "rlig" 1, "calt" 1;
     font-size: 14px;
     line-height: 1.5;
