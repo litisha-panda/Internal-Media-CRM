@@ -1,5 +1,5 @@
 // @ts-nocheck
-import React, { useState, useRef, useEffect, useMemo } from "react";
+import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import ZohoSearchInput from "../components/ZohoSearchInput";
 
 
@@ -1083,80 +1083,85 @@ function usePersistedState(key, initial) {
 }
 
 /**
- * useApiEntityState — like usePersistedState but backed by a normalized REST endpoint.
- * Reads from the API on mount (seeds localStorage for instant UI on next load).
- * Debounce-syncs writes back: POST for new items, PATCH for changed items.
- * Falls back gracefully when unauthenticated or offline.
+ * useApiEntityState — API is the single source of truth.
+ * Fetches on mount and polls every 30s for multi-user consistency.
+ * Writes are immediate: POST for new items, PATCH for changed items (optimistic update).
+ * localStorage used only as a stale-while-revalidate cold cache (never as a sync layer).
+ * Returns [data, setter, loading, syncError].
  */
 function useApiEntityState<T extends { id: string }>(
   apiPath: string,
   localKey: string,
   initial: T[],
-): [T[], React.Dispatch<React.SetStateAction<T[]>>] {
-  const backendIds  = useRef<Set<string>>(new Set());
-  const loaded      = useRef(false);
-  const isFirst     = useRef(true);
-  const timer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+): [T[], React.Dispatch<React.SetStateAction<T[]>>, boolean, string|null] {
+  const backendIds = useRef<Set<string>>(new Set());
 
+  // Seed from localStorage cache for instant first paint, overwritten by API on mount
   const [state, setState] = useState<T[]>(() => {
     try {
-      const s = localStorage.getItem(localKey);
-      return s ? JSON.parse(s) : initial;
+      const cached = localStorage.getItem(localKey);
+      return cached ? JSON.parse(cached) : initial;
     } catch { return initial; }
   });
+  const [loading,   setLoading]   = useState(true);
+  const [syncError, setSyncError] = useState<string|null>(null);
 
-  // On mount: load from normalized API endpoint
-  useEffect(() => {
-    fetch(apiPath)
-      .then(r => (r.ok ? r.json() : null))
-      .then(data => {
-        if (data?.ok && Array.isArray(data.data) && data.data.length > 0) {
-          setState(data.data);
-          backendIds.current = new Set(data.data.map((i: T) => i.id));
-          try { localStorage.setItem(localKey, JSON.stringify(data.data)); } catch {}
-        }
-      })
-      .catch(() => {/* offline or unauthenticated — use localStorage */})
-      .finally(() => { loaded.current = true; });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiPath]);
-
-  // On state change: mirror to localStorage + debounce-sync to API
-  useEffect(() => {
-    try { localStorage.setItem(localKey, JSON.stringify(state)); } catch {}
-
-    if (isFirst.current) { isFirst.current = false; return; }
-
-    if (timer.current) clearTimeout(timer.current);
-    timer.current = setTimeout(async () => {
-      if (!loaded.current) return;
-      for (const item of state) {
-        try {
-          if (backendIds.current.has(item.id)) {
-            // Existing item — PATCH (backend enforces field-level immutability per entity)
-            await fetch(`${apiPath}/${item.id}`, {
-              method:  "PATCH",
-              headers: { "Content-Type": "application/json" },
-              body:    JSON.stringify(item),
-            });
-          } else {
-            // New item — POST
-            const r = await fetch(apiPath, {
-              method:  "POST",
-              headers: { "Content-Type": "application/json" },
-              body:    JSON.stringify(item),
-            });
-            if (r.ok) backendIds.current.add(item.id);
-          }
-        } catch {/* offline */}
+  // Fetch from API — used on mount and by the 30s polling interval
+  const fetchAll = useCallback(async (isInitial?: boolean) => {
+    try {
+      const r = await fetch(apiPath);
+      if (r.status === 401) { if (isInitial) setLoading(false); return; }
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      const json = await r.json();
+      if (json?.ok && Array.isArray(json.data)) {
+        setState(json.data);
+        backendIds.current = new Set(json.data.map((i: T) => i.id));
+        try { localStorage.setItem(localKey, JSON.stringify(json.data)); } catch {}
       }
-    }, 1500);
-
-    return () => { if (timer.current) clearTimeout(timer.current); };
+    } catch {/* offline — keep current state */}
+    finally { if (isInitial) setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state]);
+  }, [apiPath, localKey]);
 
-  return [state, setState];
+  useEffect(() => {
+    fetchAll(true);
+    const t = setInterval(() => fetchAll(false), 30_000);
+    return () => clearInterval(t);
+  }, [fetchAll]);
+
+  // Setter: optimistic local update + immediate POST/PATCH to API
+  const setStateAndSync = useCallback((action: React.SetStateAction<T[]>) => {
+    setState(prev => {
+      const next = typeof action === "function" ? (action as (p: T[]) => T[])(prev) : action;
+      (async () => {
+        try {
+          for (const item of next) {
+            if (!backendIds.current.has(item.id)) {
+              // New item — POST
+              const r = await fetch(apiPath, {
+                method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(item),
+              });
+              if (r.ok) { const d = await r.json(); if (d.ok) backendIds.current.add(item.id); }
+            } else {
+              // Existing item — PATCH only if changed
+              const old = prev.find(i => i.id === item.id);
+              if (old && JSON.stringify(old) !== JSON.stringify(item)) {
+                await fetch(`${apiPath}/${item.id}`, {
+                  method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify(item),
+                });
+              }
+            }
+          }
+          try { localStorage.setItem(localKey, JSON.stringify(next)); } catch {}
+          setSyncError(null);
+        } catch { setSyncError("Sync failed — changes may not be saved."); }
+      })();
+      return next;
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiPath, localKey]);
+
+  return [state, setStateAndSync as React.Dispatch<React.SetStateAction<T[]>>, loading, syncError];
 }
 
 // ── DATA VERSION AUTO-CLEAR ────────────────────────────────────────────────
@@ -1409,24 +1414,20 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // T009: Reset landing view whenever the logged-in user switches roles
   useEffect(() => { setView(getCRMDefaultView()); }, [user?.email]);
   // Persist deals + meetings directly — no more sync bug
-  const [deals, _setDeals]        = usePersistedState("otv_deals",    sharedDeals   || SEED_DEALS);
-  const [meetings, _setMeetings]  = usePersistedState("otv_meetings", sharedMeetings|| SEED_MEETINGS);
+  // deals is API-backed (owned by OTVApp via useApiEntityState) — use prop directly, no dual-write
+  const deals                     = sharedDeals   || SEED_DEALS;
+  const [meetings, _setMeetings]  = usePersistedState("otv_meetings", sharedMeetings || SEED_MEETINGS);
   const [plans_crm]               = [plans || SEED_PLANS];
   const [att, setAtt]             = usePersistedState("otv_att",      SEED_ATT);
 
-  // Wrap setters — propagate to parent (handles both value and functional updates)
-  const setDeals = v => {
-    _setDeals(v);
-    if (setSharedDeals) {
-      // if v is a function, resolve it against current deals before syncing
-      setSharedDeals(typeof v === "function" ? prev => v(prev) : v);
-    }
+  // setDeals: routes directly to OTVApp's useApiEntityState setter (immediate POST/PATCH, no blob store)
+  const setDeals = (v: any) => {
+    if (setSharedDeals) setSharedDeals(typeof v === "function" ? (prev: any) => v(prev) : v);
   };
-  const setMeetings = v => {
+  // setMeetings: still blob-store backed, propagate upward for consistency
+  const setMeetings = (v: any) => {
     _setMeetings(v);
-    if (setSharedMeetings) {
-      setSharedMeetings(typeof v === "function" ? prev => v(prev) : v);
-    }
+    if (setSharedMeetings) setSharedMeetings(typeof v === "function" ? (prev: any) => v(prev) : v);
   };
 
   // Countdown to 11:30 PM — shown in topbar for all users
@@ -1486,7 +1487,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [noteModal, setNoteModal] = useState(null);   // {title, placeholder, onSubmit}
   const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
-  const [tasks, setTasks]         = useApiEntityState("/api/tasks", "otv_tasks", SEED_TASKS);
+  const [tasks, setTasks, tasksLoading, tasksError]         = useApiEntityState("/api/tasks", "otv_tasks", SEED_TASKS);
   const [taskModal, setTaskModal]       = useState(false);
   const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -1655,14 +1656,14 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [ipPropNote, setIpPropNote]                    = useState("");
   const [ipPropValue, setIpPropValue]                  = useState("");
   const [ipApprovalPrices, setIpApprovalPrices]        = useState<Record<string,string>>({});
-  const [internalReqs, setInternalReqs]               = useApiEntityState("/api/internal-requests", "otv_internalReqs", SEED_INTERNAL_REQS);
-  const [irStatusFilter, setIrStatusFilter]            = useState("all");
-  const [lbTab, setLbTab]                              = useState("team");
-  const [targetSubs, setTargetSubs]                    = useApiEntityState("/api/targets",            "otv_targetSubs",      SEED_TARGET_SUBMISSIONS);
-  const [revenueEntries, setRevenueEntries]             = useApiEntityState("/api/revenue",             "otv_revenueEntries",  SEED_REVENUE_ENTRIES);
+  const [internalReqs, setInternalReqs, , irError]            = useApiEntityState("/api/internal-requests", "otv_internalReqs", SEED_INTERNAL_REQS);
+  const [irStatusFilter, setIrStatusFilter]                   = useState("all");
+  const [lbTab, setLbTab]                                     = useState("team");
+  const [targetSubs, setTargetSubs, targetLoading, targetError] = useApiEntityState("/api/targets",        "otv_targetSubs",      SEED_TARGET_SUBMISSIONS);
+  const [revenueEntries, setRevenueEntries, revLoading, revError] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  SEED_REVENUE_ENTRIES);
   // ── Part 1: New data model objects ──────────────────────────────────────
-  const [clientAccounts, setClientAccounts] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
-  const [touchpoints,    setTouchpoints]    = useApiEntityState("/api/touchpoints",     "otv_touchpoints",    []);
+  const [clientAccounts, setClientAccounts, , caError] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
+  const [touchpoints,    setTouchpoints,    , tpError] = useApiEntityState("/api/touchpoints",     "otv_touchpoints",    []);
 
   // Part 1: One-time migration — runs when clientAccounts is empty but deals/meetings exist
   useEffect(() => {
@@ -1790,46 +1791,37 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [irFormOpen, setIrFormOpen]                     = useState(false);
   const [irForm, setIrForm]                             = useState(BLANK_IR_FORM);
   const [editIrId, setEditIrId]                         = useState<string|null>(null);
-  const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", []);
-  const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles", []);
-  // Merge any self-registered pending signups into admin's queue
-  useEffect(() => {
+  // Admin user management — sourced entirely from API (no localStorage)
+  const [pendingUsers, setPendingUsers]                 = useState<any[]>([]);
+  const [liveRoles, setLiveRoles]                       = useState<any[]>([]);
+  const [adminUsersLoading, setAdminUsersLoading]       = useState(false);
+  const [adminUsersError, setAdminUsersError]           = useState<string|null>(null);
+  const refreshAdminUsers = useCallback(async () => {
+    setAdminUsersLoading(true);
     try {
-      const sups = JSON.parse(localStorage.getItem("otv_pendingSignups") || "[]");
-      if (sups.length > 0) {
-        setPendingUsers(prev => {
-          const existIds = new Set(prev.map(u => u.id));
-          const toAdd = sups.filter(u => !existIds.has(u.id));
-          return toAdd.length ? [...prev, ...toAdd] : prev;
-        });
-      }
-    } catch {}
+      const r = await fetch("/api/admin/users");
+      if (!r.ok) { setAdminUsersError("Failed to load user list"); return; }
+      const data = await r.json();
+      const apiUsers: any[] = data?.users ?? data?.data ?? [];
+      if (!data?.ok || !Array.isArray(apiUsers)) return;
+      setPendingUsers(apiUsers.filter(u => u.status === "pending").map(u => ({
+        id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email,
+        requestedAt: u.requestedAt ?? u.createdAt, intendedRole: u.role,
+      })));
+      setLiveRoles(apiUsers.filter(u => u.status === "active").map(u => ({
+        id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email,
+        role: u.role, region: u.region ?? "",
+        canView: u.role === "SALES REP" ? "self" : u.role === "REGION HEAD" ? "region" : "all",
+      })));
+      setAdminUsersError(null);
+    } catch { setAdminUsersError("Network error — could not load users"); }
+    finally { setAdminUsersLoading(false); }
   }, []);
-  // Reconcile with the real auth API — picks up users who signed up via /api/auth/signup
   useEffect(() => {
-    fetch("/api/admin/users")
-      .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (!data?.ok || !Array.isArray(data.data)) return;
-        const apiUsers: any[] = data.data;
-        setPendingUsers(prev => {
-          const existEmails = new Set(prev.map((u: any) => u.email));
-          const toAdd = apiUsers
-            .filter(u => u.status === "pending" && !existEmails.has(u.email))
-            .map(u => ({ id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email, requestedAt: u.requestedAt ?? u.createdAt, intendedRole: u.role }));
-          return toAdd.length ? [...prev, ...toAdd] : prev;
-        });
-        setLiveRoles(prev => {
-          const existEmails = new Set(prev.map((u: any) => u.email));
-          const toAdd = apiUsers
-            .filter(u => u.status === "active" && !existEmails.has(u.email))
-            .map(u => ({ id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email, role: u.role, region: u.region ?? "", canView: u.role === "SALES REP" ? "self" : u.role === "REGION HEAD" ? "region" : "all" }));
-          return toAdd.length ? [...prev, ...toAdd] : prev;
-        });
-      })
-      .catch(() => {/* unauthenticated or offline — use localStorage data */});
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    refreshAdminUsers();
+    const t = setInterval(refreshAdminUsers, 30_000);
+    return () => clearInterval(t);
+  }, [refreshAdminUsers]);
   const [reps, setReps]                                 = usePersistedState("otv_reps", REPS);
   const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", []);
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
@@ -3289,11 +3281,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
   const navSections = getSidebarSections();
   const nav = navSections.flatMap(s => s.items); // flat nav kept for any legacy usage
 
+  // Global API status — collected from all API-backed entity hooks
+  const crmLoading = tasksLoading || targetLoading || revLoading;
+  const syncError  = tasksError || irError || targetError || revError || caError || tpError;
 
   return (
     <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace",background:C.bg,color:C.text,minHeight:"100vh",display:"flex",flexDirection:"column",fontSize:13}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
+        @keyframes loadpulse{0%,100%{opacity:.7}50%{opacity:1}}
+        @keyframes spin{to{transform:rotate(360deg)}}
         *{box-sizing:border-box;margin:0;padding:0}
         ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:${C.s3};border-radius:2px}
         .sans{font-family:'DM Sans',sans-serif}
@@ -3323,6 +3320,27 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         table{width:100%;border-collapse:collapse}
         label{font-size:10px;color:${C.dim};display:block;margin-bottom:4px;letter-spacing:.06em;text-transform:uppercase}
       `}</style>
+
+      {/* ── API Loading indicator — thin amber bar at top while initial data loads ── */}
+      {crmLoading && (
+        <div style={{position:"fixed",top:0,left:0,right:0,height:2,background:C.accent,zIndex:9999,animation:"loadpulse 1.2s ease-in-out infinite",pointerEvents:"none"}} />
+      )}
+
+      {/* ── Sync error toast — bottom-right, auto-clears on next successful write ── */}
+      {syncError && (
+        <div style={{position:"fixed",bottom:20,right:20,zIndex:9998,maxWidth:300,background:C.surface,border:`1px solid ${C.border}`,borderLeft:`3px solid ${C.red}`,borderRadius:6,padding:"10px 14px",boxShadow:"0 4px 16px rgba(0,0,0,.12)"}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.red,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Sync Error</div>
+          <div style={{fontSize:11,color:C.dim}}>{syncError}</div>
+        </div>
+      )}
+
+      {/* ── Admin users loading/error banner (admin panel only) ── */}
+      {adminUsersError && view === "admin-access" && (
+        <div style={{position:"fixed",bottom:20,left:20,zIndex:9998,maxWidth:280,background:C.surface,border:`1px solid ${C.orange}55`,borderLeft:`3px solid ${C.orange}`,borderRadius:6,padding:"10px 14px",boxShadow:"0 4px 16px rgba(0,0,0,.1)"}}>
+          <div style={{fontSize:10,fontWeight:700,color:C.orange,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>User Fetch Error</div>
+          <div style={{fontSize:11,color:C.dim}}>{adminUsersError}</div>
+        </div>
+      )}
 
       {/* TOPBAR */}
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 20px",height:46,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
@@ -7272,6 +7290,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* ── ACCESS MANAGEMENT ── */}
                 {view==="admin-access" && (
                   <div>
+                    {/* Loading indicator */}
+                    {adminUsersLoading && (
+                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,color:C.muted,fontSize:11}}>
+                        <div style={{width:12,height:12,border:`2px solid ${C.border}`,borderTopColor:C.accent,borderRadius:"50%",animation:"spin 0.7s linear infinite"}} />
+                        Refreshing user list...
+                      </div>
+                    )}
                     {/* Pending signups */}
                     {pendingUsers.length>0&&(
                       <div style={{marginBottom:24}}>
@@ -7310,44 +7335,28 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 const regionEl = document.getElementById(`region-${pu.id}`);
                                 const role     = roleEl?.value || "SALES REP";
                                 const region   = regionEl?.value || "North";
-                                // Call backend for auth-system users
-                                if (pu._apiId) {
-                                  try {
-                                    await fetch(`/api/admin/users/${pu._apiId}/approve`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({role,region}) });
-                                  } catch {}
-                                }
-                                const newUser  = {id:`u_${pu.id}`,_apiId:pu._apiId,name:pu.name,email:pu.email,role,canView:role==="SALES REP"?"self":role==="REGION HEAD"?"region":"all",region};
-                                setLiveRoles(p=>[...p, newUser]);
-                                if (role === "SALES REP") {
-                                  setReps(prev => {
-                                    const nextId = prev.length > 0 ? Math.max(...prev.map(r=>r.id)) + 1 : 1;
-                                    const repDesig = pu.designation || "Sales Executive";
-                                    return [...prev, {id:nextId, name:pu.name, region, role:repDesig, target:0}];
-                                  });
-                                }
-                                setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
-                                if (pu.passwordHash) {
-                                  const stored = JSON.parse(localStorage.getItem("otv_crm_users")||"[]");
-                                  if (!stored.find(u=>u.email===pu.email)) {
-                                    localStorage.setItem("otv_crm_users", JSON.stringify([...stored, {name:pu.name,email:pu.email,passwordHash:pu.passwordHash}]));
-                                  }
-                                  const sups = JSON.parse(localStorage.getItem("otv_pendingSignups")||"[]");
-                                  localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
-                                }
-                                showToast(`${pu.name} approved as ${role} ✓`);
+                                try {
+                                  const r = await fetch(`/api/admin/users/${pu._apiId}/approve`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({role,region}) });
+                                  if (r.ok) {
+                                    if (role === "SALES REP") {
+                                      setReps(prev => {
+                                        const nextId = prev.length > 0 ? Math.max(...prev.map(r=>r.id)) + 1 : 1;
+                                        return [...prev, {id:nextId, name:pu.name, region, role:"Sales Executive", target:0}];
+                                      });
+                                    }
+                                    await refreshAdminUsers();
+                                    showToast(`${pu.name} approved as ${role} ✓`);
+                                  } else { showToast("Approval failed","err"); }
+                                } catch { showToast("Network error — approval failed","err"); }
                               }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                                 ✓ Approve
                               </button>
                               <button onClick={async ()=>{
-                                if (pu._apiId) {
-                                  try { await fetch(`/api/admin/users/${pu._apiId}/reject`, { method:"POST" }); } catch {}
-                                }
-                                setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
-                                if (pu.passwordHash) {
-                                  const sups = JSON.parse(localStorage.getItem("otv_pendingSignups")||"[]");
-                                  localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
-                                }
-                                showToast(`${pu.name} rejected`,"err");
+                                try {
+                                  const r = await fetch(`/api/admin/users/${pu._apiId}/reject`, { method:"POST" });
+                                  if (r.ok) { await refreshAdminUsers(); showToast(`${pu.name} rejected`,"err"); }
+                                  else { showToast("Rejection failed","err"); }
+                                } catch { showToast("Network error","err"); }
                               }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
                                 Reject
                               </button>
@@ -7372,21 +7381,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           {/* Editable role */}
                           <select value={u.role} onChange={async e=>{
                             const newRole = e.target.value;
-                            if (u._apiId) {
-                              try { await fetch(`/api/admin/users/${u._apiId}/role`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({role:newRole,region:u.region}) }); } catch {}
-                            }
-                            setLiveRoles(p=>p.map(r=>r.id===u.id?{...r,role:newRole,canView:newRole==="SALES REP"?"self":newRole==="REGION HEAD"?"region":"all"}:r));
-                            showToast(`${u.name} role updated to ${newRole}`);
+                            try {
+                              const r = await fetch(`/api/admin/users/${u._apiId}/role`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({role:newRole,region:u.region}) });
+                              if (r.ok) { await refreshAdminUsers(); showToast(`${u.name} role updated to ${newRole}`); }
+                              else { showToast("Role update failed","err"); }
+                            } catch { showToast("Network error","err"); }
                           }} style={{padding:"4px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
                             {ALL_ROLES.map(r=><option key={r}>{r}</option>)}
                           </select>
                           <button onClick={async ()=>{
                             if(!window.confirm(`Revoke access for ${u.name}?`)) return;
-                            if (u._apiId) {
-                              try { await fetch(`/api/admin/users/${u._apiId}`, { method:"DELETE" }); } catch {}
-                            }
-                            setLiveRoles(p=>p.filter(r=>r.id!==u.id));
-                            showToast(`${u.name}'s access revoked`,"err");
+                            try {
+                              const r = await fetch(`/api/admin/users/${u._apiId}`, { method:"DELETE" });
+                              if (r.ok) { await refreshAdminUsers(); showToast(`${u.name}'s access revoked`,"err"); }
+                              else { showToast("Revoke failed","err"); }
+                            } catch { showToast("Network error","err"); }
                           }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"4px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Revoke</button>
                         </div>
                       ))}

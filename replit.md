@@ -38,10 +38,15 @@ Internal sales management platform for Odisha Television Network. Private, not f
 
 ### Frontend State — Dual-layer Pattern
 
-**7 core entities** use `useApiEntityState(apiPath, localKey, initial)`:
-- Reads from normalized API on mount → seeds localStorage for instant UI
-- Debounce-syncs writes to normalized API (1.5s): POST for new items, PATCH for changed items
-- Falls back to localStorage when unauthenticated or offline
+**7 core entities** use `useApiEntityState(apiPath, localKey, initial)` — **API is single source of truth**:
+- Returns `[data, setter, loading, syncError]` (4-tuple — extra values backward-compatible)
+- On mount: fetches from API → overwrites state; localStorage used as cold cache (stale-while-revalidate only)
+- On setter call: **immediate POST/PATCH** (no debounce) with optimistic local update
+- Polls every 30 seconds for multi-user real-time consistency
+- On 401: falls back to localStorage cache (unauthenticated / offline graceful degradation)
+- `loading`: true until first API response; used for global loading bar in UI
+- `syncError`: set on network/API failure; auto-clears on next successful write
+- **No dual-write**: `deals` in CROApp uses the prop directly (`sharedDeals`) — no `usePersistedState` wrapper
 - Entities: `deals`, `tasks`, `internalReqs`, `targetSubs`, `revenueEntries`, `clientAccounts`, `touchpoints`
 
 **Secondary entities** continue to use `usePersistedState(key, initial)` via generic `/api/state/:key` blob store:
