@@ -1,27 +1,16 @@
 import { Router } from "express";
-import { db, deals, clientAccounts } from "@workspace/db";
+import { db, deals, clientAccounts, STAGE_PROB } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { resolveOwnership } from "../lib/ownership";
+import { logActivity } from "../lib/activityLog";
 
 const router = Router();
 
-// Stage probability map — pipeline = amount × prob / 100
-// This is derived at read time, NEVER stored.
-const STAGE_PROB: Record<string, number> = {
-  Prospect:         10,
-  Qualified:        25,
-  "Proposal Sent":  40,
-  Negotiation:      65,
-  "Verbal Commit":  80,
-  "PO Received":    90,
-  "RO Received":    90,
-  Won:             100,
-  Lost:              0,
-  Cancelled:         0,
-  Archived:          0,
-  "On Hold":        20,
-};
-
+/**
+ * Pipeline = amount × STAGE_PROB[stage] / 100
+ * NEVER stored. Always derived at read time.
+ */
 function derivePipeline(deal: any) {
   const prob = STAGE_PROB[deal.stage ?? "Prospect"] ?? 10;
   return { ...deal, pipelineAmount: Math.round((deal.amount ?? 0) * prob / 100) };
@@ -43,7 +32,6 @@ function caCondition(user: any) {
 
 // ─── DEALS ───────────────────────────────────────────────────────────────────
 
-// GET /api/deals — list all deals (scoped); pipeline derived
 router.get("/deals", requireAuth, async (req, res) => {
   try {
     const cond = scopeCondition(req.user!);
@@ -56,7 +44,6 @@ router.get("/deals", requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/deals/:id — single deal
 router.get("/deals/:id", requireAuth, async (req, res) => {
   try {
     const rows = await db
@@ -71,7 +58,6 @@ router.get("/deals/:id", requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/deals — create new deal
 router.post("/deals", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
@@ -80,21 +66,23 @@ router.post("/deals", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "id and clientCompany required" });
     }
 
-    // ── Issue #3: force ownership from session for SALES REP ─────────────────
-    const authorRepId  = u.role === "SALES REP" ? u.repId!  : (body.repId  ?? u.repId  ?? 0);
-    const authorRepNm  = u.role === "SALES REP" ? u.name    : (body.repName ?? u.name);
-    const authorRegion = u.role === "SALES REP" ? u.region! : (body.region  ?? u.region ?? "");
+    // ── Validate ownership — RH on-behalf must target rep in their region ──────
+    let owner: { repId: number; region: string; name: string };
+    try {
+      owner = await resolveOwnership(u, { repId: body.repId, region: body.region, repName: body.repName });
+    } catch (e: any) {
+      return void res.status(e.status ?? 400).json({ ok: false, error: e.error ?? String(e) });
+    }
 
-    // ── Issue #7: outcome is always kept in sync with stage ──────────────────
     const stage = body.stage ?? "Prospect";
 
     const row = await db
       .insert(deals)
       .values({
         id:                    body.id,
-        repId:                 authorRepId,
-        repName:               authorRepNm,
-        region:                authorRegion,
+        repId:                 owner.repId,
+        repName:               owner.name,
+        region:                owner.region,
         clientCompany:         body.clientCompany,
         zohoAccountId:         body.zohoAccountId       ?? null,
         clientAccountId:       body.clientAccountId     ?? null,
@@ -105,9 +93,9 @@ router.post("/deals", requireAuth, async (req, res) => {
         email:                 body.email                ?? null,
         dealType:              body.dealType             ?? null,
         stage,
-        outcome:               stage, // always mirror stage — issue #7
+        outcome:               stage,                    // always mirrors stage
         amount:                body.amount               ?? 0,
-        // targetAmount: intentionally omitted from normative deal model (issue #7)
+        // targetAmount intentionally not written — stale field
         lossReason:            body.lossReason           ?? null,
         priority:              body.priority             ?? "Regular",
         quarter:               body.quarter              ?? null,
@@ -118,14 +106,29 @@ router.post("/deals", requireAuth, async (req, res) => {
         zohoAgencyId:          body.zohoAgencyId         ?? null,
         lastContact:           body.lastContact          ?? null,
         lastDealMeetingDate:   body.lastDealMeetingDate  ?? null,
-        atRisk:                false, // governance engine sets this — not client
-        awaitingApproval:      body.awaitingApproval     ?? null,
-        awaitingApprovalSince: body.awaitingApprovalSince ?? null,
+        atRisk:                false,                    // governance engine only
+        awaitingApproval:      null,                     // governance engine only
+        awaitingApprovalSince: null,                     // governance engine only
         reqs:                  body.reqs                 ?? [],
-        auditLog:              body.auditLog             ?? [],
+        auditLog:              [],                       // empty — central activityLog used instead
       })
       .onConflictDoNothing()
       .returning();
+
+    if (!row[0]) {
+      return void res.status(409).json({ ok: false, error: "Deal with this id already exists" });
+    }
+
+    void logActivity({
+      userId:     u.id,
+      userName:   u.name,
+      userRole:   u.role,
+      region:     owner.region,
+      action:     "deal.created",
+      entityType: "deal",
+      entityId:   body.id,
+      meta:       { clientCompany: body.clientCompany, stage, amount: body.amount ?? 0 },
+    });
 
     res.status(201).json({ ok: true, data: derivePipeline(row[0]) });
   } catch (err: any) {
@@ -133,17 +136,35 @@ router.post("/deals", requireAuth, async (req, res) => {
   }
 });
 
-// PATCH /api/deals/:id — update deal (NO DELETE — use stage=Lost/Archived)
 router.patch("/deals/:id", requireAuth, async (req, res) => {
   try {
+    const u = req.user!;
     const body = req.body;
-    // Strip read-only / derived fields
-    const { id: _id, createdAt: _ca, pipelineAmount: _pa, targetAmount: _ta, ...rest } = body;
 
-    // ── Issue #7: keep outcome in sync whenever stage changes ────────────────
+    // ── Strip all governance-owned, derived, and stale fields ─────────────────
+    const {
+      id: _id, createdAt: _ca,
+      pipelineAmount: _pa,
+      targetAmount: _ta,          // stale — governance and business logic never use this
+      atRisk: _ar,                // governance engine only
+      awaitingApproval: _aa,      // governance engine only
+      awaitingApprovalSince: _as, // governance engine only
+      auditLog: _al,              // replaced by central activityLog
+      repId: _ri, repName: _rn, region: _reg, // ownership immutable after creation
+      ...rest
+    } = body;
+
+    // ── Sync outcome whenever stage changes ────────────────────────────────────
     if (rest.stage !== undefined && rest.outcome === undefined) {
       rest.outcome = rest.stage;
     }
+
+    // Fetch existing to detect meaningful changes for activity log
+    const existing = await db
+      .select({ stage: deals.stage, amount: deals.amount })
+      .from(deals)
+      .where(eq(deals.id, String(req.params["id"])))
+      .limit(1);
 
     const updated = await db
       .update(deals)
@@ -152,6 +173,20 @@ router.patch("/deals/:id", requireAuth, async (req, res) => {
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
+
+    // ── Activity logging for significant changes ───────────────────────────────
+    if (existing.length && rest.stage && rest.stage !== existing[0].stage) {
+      void logActivity({
+        userId:     u.id,
+        userName:   u.name,
+        userRole:   u.role,
+        action:     "deal.stage_changed",
+        entityType: "deal",
+        entityId:   String(req.params["id"]),
+        meta:       { from: existing[0].stage, to: rest.stage },
+      });
+    }
+
     res.json({ ok: true, data: derivePipeline(updated[0]) });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
@@ -160,7 +195,6 @@ router.patch("/deals/:id", requireAuth, async (req, res) => {
 
 // ─── CLIENT ACCOUNTS ─────────────────────────────────────────────────────────
 
-// GET /api/client-accounts — list (scoped)
 router.get("/client-accounts", requireAuth, async (req, res) => {
   try {
     const cond = caCondition(req.user!);
@@ -173,7 +207,6 @@ router.get("/client-accounts", requireAuth, async (req, res) => {
   }
 });
 
-// GET /api/client-accounts/:id — single account
 router.get("/client-accounts/:id", requireAuth, async (req, res) => {
   try {
     const rows = await db
@@ -188,7 +221,6 @@ router.get("/client-accounts/:id", requireAuth, async (req, res) => {
   }
 });
 
-// POST /api/client-accounts — create
 router.post("/client-accounts", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
@@ -197,18 +229,21 @@ router.post("/client-accounts", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "id and clientName required" });
     }
 
-    // ── Issue #3: force ownership for SALES REP ──────────────────────────────
-    const authorRepId  = u.role === "SALES REP" ? u.repId!  : (body.repId  ?? u.repId ?? 0);
-    const authorRegion = u.role === "SALES REP" ? u.region! : (body.region ?? u.region ?? "");
+    let owner: { repId: number; region: string; name: string };
+    try {
+      owner = await resolveOwnership(u, { repId: body.repId, region: body.region });
+    } catch (e: any) {
+      return void res.status(e.status ?? 400).json({ ok: false, error: e.error ?? String(e) });
+    }
 
     const row = await db
       .insert(clientAccounts)
       .values({
         id:                  body.id,
         clientName:          body.clientName,
-        repId:               authorRepId,
+        repId:               owner.repId,
         zohoAccountId:       body.zohoAccountId      ?? null,
-        region:              authorRegion,
+        region:              owner.region,
         fiscalYear:          body.fiscalYear         ?? "FY26",
         annualTarget:        body.annualTarget        ?? 0,
         currentStage:        body.currentStage        ?? "Prospect",
@@ -218,16 +253,19 @@ router.post("/client-accounts", requireAuth, async (req, res) => {
       .onConflictDoNothing()
       .returning();
 
+    if (!row[0]) {
+      return void res.status(409).json({ ok: false, error: "Client account with this id already exists" });
+    }
+
     res.status(201).json({ ok: true, data: row[0] });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
   }
 });
 
-// PATCH /api/client-accounts/:id — update
 router.patch("/client-accounts/:id", requireAuth, async (req, res) => {
   try {
-    const { id: _id, createdAt: _ca, ...rest } = req.body;
+    const { id: _id, createdAt: _ca, repId: _ri, region: _reg, ...rest } = req.body;
     const updated = await db
       .update(clientAccounts)
       .set({ ...rest, updatedAt: new Date() })

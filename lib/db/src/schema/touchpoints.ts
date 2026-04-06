@@ -10,6 +10,8 @@ export const touchpoints = pgTable("touchpoints", {
   clientAccountId:    text("client_account_id"),
   dealId:             text("deal_id"),
   repId:              integer("rep_id").notNull(),
+  /** Denormalized rep region — filled from session at insert time, never by client. */
+  region:             text("region"),
   date:               text("date"),
   time:               text("time"),
   meetingType:        text("meeting_type"),

@@ -21,6 +21,7 @@ import {
   users,
   touchpoints,
   attendanceRecords,
+  dailyPlans,
   tasks,
   ESC_CHAIN,
   ESC_HOP_HOURS,
@@ -155,67 +156,123 @@ async function runStalledDeals(): Promise<void> {
 }
 
 // ── 3. Attendance records (11:30 PM IST rule) ─────────────────────────────────
+//
+// Compliance requires BOTH:
+//   (a) at least one touchpoint logged today
+//   (b) a daily plan created for tomorrow
+//
+// Roles checked: SALES REP and REGION HEAD.
+// Status values:
+//   "present" — both requirements met
+//   "partial" — touchpoint logged but no plan (or plan but no touchpoint)
+//   "absent"  — neither requirement met
 
 async function runAttendanceCheck(): Promise<void> {
-  const d = todayIST(); // IST wall-clock date
+  const d = todayIST(); // IST wall-clock date, e.g. "2026-04-06"
+
+  // "tomorrow" in IST — this is the planDate we check exists
+  const tomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" })
+    .format(new Date(Date.now() + 86_400_000));
+
   try {
-    const reps = await db
+    // Include both SALES REP and REGION HEAD in compliance checks
+    const complianceUsers = await db
       .select()
       .from(users)
-      .where(and(eq(users.role, "SALES REP"), eq(users.status, "active")));
+      .where(
+        and(
+          eq(users.status, "active"),
+          // role IN ('SALES REP', 'REGION HEAD')
+          sql`${users.role} IN ('SALES REP', 'REGION HEAD')`,
+        ),
+      );
 
-    for (const rep of reps) {
+    for (const user of complianceUsers) {
+      // Skip if record already written for today
       const existing = await db
         .select({ id: attendanceRecords.id })
         .from(attendanceRecords)
-        .where(and(eq(attendanceRecords.userId, rep.id), eq(attendanceRecords.date, d)))
+        .where(and(eq(attendanceRecords.userId, user.id), eq(attendanceRecords.date, d)))
         .limit(1);
 
       if (existing.length > 0) continue;
 
-      const logged = await db
+      // Check (a): touchpoint logged today by this user
+      const tpLogged = await db
         .select({ id: touchpoints.id })
         .from(touchpoints)
         .where(
           and(
-            eq(touchpoints.loggedByUserId, rep.id),
+            eq(touchpoints.loggedByUserId, user.id),
             eq(touchpoints.date, d),
           ),
         )
         .limit(1);
+      const hasTouchpoint = tpLogged.length > 0;
 
-      const status = logged.length > 0 ? "present" : "absent";
+      // Check (b): daily plan created for tomorrow
+      const planLogged = await db
+        .select({ id: dailyPlans.id })
+        .from(dailyPlans)
+        .where(
+          and(
+            eq(dailyPlans.userId, user.id),
+            eq(dailyPlans.planDate, tomorrow),
+          ),
+        )
+        .limit(1);
+      const hasPlan = planLogged.length > 0;
+
+      // Derive status
+      let status: string;
+      let note:   string;
+      if (hasTouchpoint && hasPlan) {
+        status = "present";
+        note   = "";
+      } else if (hasTouchpoint && !hasPlan) {
+        status = "partial";
+        note   = `Touchpoint logged but no plan created for ${tomorrow} by 23:30 IST`;
+      } else if (!hasTouchpoint && hasPlan) {
+        status = "partial";
+        note   = `Plan created for ${tomorrow} but no touchpoint logged for ${d}`;
+      } else {
+        status = "absent";
+        note   = `No touchpoint logged for ${d} and no plan for ${tomorrow}`;
+      }
+
       await db.insert(attendanceRecords).values({
-        id:       `att_${rep.id}_${d}`,
-        userId:   rep.id,
-        userName: rep.name,
-        region:   rep.region,
-        date:     d,
+        id:               `att_${user.id}_${d}`,
+        userId:           user.id,
+        userName:         user.name,
+        region:           user.region,
+        date:             d,
         status,
-        note:     status === "absent" ? "No touchpoint logged by 23:30 IST" : null,
+        touchpointLogged: hasTouchpoint ? "yes" : "no",
+        planLogged:       hasPlan       ? "yes" : "no",
+        note:             note || null,
       }).onConflictDoNothing();
 
       void logActivity({
         action:     `attendance.${status}`,
-        userId:     rep.id,
-        userName:   rep.name,
-        userRole:   "SALES REP",
-        region:     rep.region,
+        userId:     user.id,
+        userName:   user.name,
+        userRole:   user.role,
+        region:     user.region,
         entityType: "attendance_record",
-        entityId:   `att_${rep.id}_${d}`,
-        meta:       { date: d },
+        entityId:   `att_${user.id}_${d}`,
+        meta:       { date: d, hasTouchpoint, hasPlan },
       });
 
-      if (status === "absent") {
+      if (status !== "present") {
         void createNotification({
-          userId:     rep.id,
-          type:       "attendance_absent",
-          title:      "No touchpoint logged today",
-          body:       `You have not logged any touchpoint for ${d}. Please log a touchpoint or raise an exception.`,
+          userId:     user.id,
+          type:       status === "absent" ? "attendance_absent" : "attendance_partial",
+          title:      status === "absent" ? "Compliance check failed" : "Compliance partially met",
+          body:       note,
           entityType: "attendance_record",
-          entityId:   `att_${rep.id}_${d}`,
+          entityId:   `att_${user.id}_${d}`,
         });
-        logger.info({ userId: rep.id, name: rep.name, date: d }, "Attendance: absent");
+        logger.info({ userId: user.id, name: user.name, date: d, status }, `Attendance: ${status}`);
       }
     }
   } catch (err) {

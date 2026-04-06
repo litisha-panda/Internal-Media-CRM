@@ -59,14 +59,19 @@ export const internalRequests = pgTable("internal_requests", {
 
 /** Daily attendance / compliance record created by the governance engine at 23:30 each day. */
 export const attendanceRecords = pgTable("attendance_records", {
-  id:        text("id").primaryKey(),
-  userId:    text("user_id").notNull(),
-  userName:  text("user_name"),
-  region:    text("region"),
-  date:      text("date").notNull(),
-  status:    text("status").notNull().default("absent"), // "present" | "absent"
-  note:      text("note"),
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  id:           text("id").primaryKey(),
+  userId:       text("user_id").notNull(),
+  userName:     text("user_name"),
+  region:       text("region"),
+  date:         text("date").notNull(),
+  /** "present" | "absent" | "partial" (touchpoint logged but no plan) */
+  status:       text("status").notNull().default("absent"),
+  /** True if the user logged a touchpoint for this date. */
+  touchpointLogged: text("touchpoint_logged").default("no"),  // "yes"|"no"
+  /** True if the user created a plan for tomorrow by 23:30. */
+  planLogged:   text("plan_logged").default("no"),            // "yes"|"no"
+  note:         text("note"),
+  createdAt:    timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 export type Task                = typeof tasks.$inferSelect;

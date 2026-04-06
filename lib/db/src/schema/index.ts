@@ -8,4 +8,5 @@ export * from "./touchpoints";
 export * from "./tasks";
 export * from "./activity_log";
 export * from "./notifications";
+export * from "./daily_plans";
 // attendanceRecords is part of the tasks schema file

@@ -1,9 +1,46 @@
 import { Router } from "express";
 import { db, targetSubmissions, TARGET_APPROVAL_CHAIN, TARGET_NEXT_STATUS } from "@workspace/db";
+import type { ClientAllocation } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activityLog";
 import { createNotification } from "../lib/notifications";
+
+// ─── Client allocation helpers ────────────────────────────────────────────────
+
+/**
+ * Validates that a clients array conforms to the ClientAllocation structure.
+ * Returns a list of error strings (empty = valid).
+ */
+function validateClientAllocations(clients: unknown[]): string[] {
+  const errors: string[] = [];
+  clients.forEach((c: any, i) => {
+    if (!c || typeof c !== "object") {
+      errors.push(`clients[${i}]: must be an object`);
+      return;
+    }
+    if (!c.clientName || typeof c.clientName !== "string") {
+      errors.push(`clients[${i}]: clientName is required and must be a string`);
+    }
+    if (c.allocatedAmount === undefined || typeof c.allocatedAmount !== "number" || c.allocatedAmount < 0) {
+      errors.push(`clients[${i}]: allocatedAmount is required and must be a non-negative number`);
+    }
+  });
+  return errors;
+}
+
+/**
+ * Cross-checks that the sum of client allocations equals the declared totalTarget.
+ * Returns null if ok, or an error string.
+ */
+function crossCheckTotal(clients: ClientAllocation[], totalTarget: number): string | null {
+  const sum = clients.reduce((acc, c) => acc + (c.allocatedAmount ?? 0), 0);
+  // Allow ±1 rounding tolerance
+  if (Math.abs(sum - totalTarget) > 1) {
+    return `Sum of client allocations (${sum}) does not match totalTarget (${totalTarget}). Please reconcile.`;
+  }
+  return null;
+}
 
 const router = Router();
 
@@ -84,6 +121,22 @@ router.post("/targets", requireAuth, async (req, res) => {
     const u = req.user!;
     const { id, quarter, clients, totalTarget } = req.body;
     if (!id || !quarter) return void res.status(400).json({ ok: false, error: "id and quarter required" });
+
+    // ── Validate client allocations structure ─────────────────────────────────
+    const clientList: ClientAllocation[] = Array.isArray(clients) ? clients : [];
+    if (clientList.length > 0) {
+      const structureErrors = validateClientAllocations(clientList);
+      if (structureErrors.length > 0) {
+        return void res.status(400).json({ ok: false, error: "Invalid client allocations", details: structureErrors });
+      }
+      // Cross-check sum against declared total (only when both are provided)
+      if (totalTarget !== undefined && totalTarget !== null) {
+        const mismatch = crossCheckTotal(clientList, Number(totalTarget));
+        if (mismatch) {
+          return void res.status(400).json({ ok: false, error: mismatch });
+        }
+      }
+    }
 
     // ── Never trust client-supplied ownership for SALES REP ──────────────────
     const authorRepId  = u.role === "SALES REP" ? u.repId!   : (req.body.repId   ?? u.repId ?? 0);

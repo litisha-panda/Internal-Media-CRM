@@ -44,7 +44,7 @@ All API routes are prefixed with `/api/` and include modules for Authentication,
 A backend scheduler (5-minute tick, **Asia/Kolkata IST wall-clock time**) handles five automated workflows:
 - **IR Escalation Hops**: After SLA breach (dept-derived hours), IRs advance along `ESC_CHAIN = ["Region Head","NSH","Sales Strategy","CRO"]` every 12h. State stored in `routedToRole`, `escalatedAt`, `escDept`, `escHistory`. Fires `createNotification()` and `logActivity()` on each hop.
 - **Stalled Deal Flagging**: Sets `atRisk = true` on open deals with 7+ days since last `lastContact`. Logs to activity ledger.
-- **Attendance Records**: At 23:30 IST, checks each active Sales Rep's touchpoints for the day; inserts `present`/`absent` into `attendanceRecords` table. Sends notification on absent.
+- **Attendance Records (composite)**: At 23:30 IST, checks **both** SALES REP and REGION HEAD users for: (a) touchpoint logged today AND (b) daily plan created for tomorrow via `dailyPlans` table. Status is `present`/`partial`/`absent`. Sends notification on partial or absent.
 - **Task Overdue Flagging**: Sets task `status = "Overdue"` when `dueDate < today` and status is still Open/In Progress. Notifies assignee.
 - **Task Reminders**: Sends notification 24h before due date to the assignee.
 
@@ -55,6 +55,31 @@ All date/time operations in the backend must use this module:
 - `isAttendanceWindow()` — true from 23:30–23:59 IST
 - `hoursSince()`, `daysSince()` — elapsed time helpers
 - `nowISO()` — current UTC ISO timestamp for DB writes
+
+### Ownership Validation (`artifacts/api-server/src/lib/ownership.ts`)
+`resolveOwnership(user, body)` — enforces on-behalf authorization for write operations:
+- **SALES REP**: always session data; body.repId/region ignored
+- **REGION HEAD**: body.repId must be an active SALES REP in RH's own region (DB-validated). Cross-region returns 403.
+- **ADMIN/Elevated**: body.repId must exist in DB; body.region trusted
+Used in: deals POST, revenue POST, touchpoints POST, client-accounts POST.
+
+### Daily Plans (`lib/db/src/schema/daily_plans.ts`, `GET|POST /api/daily-plans`)
+New `daily_plans` table — upsert per user per date. One record per userId+planDate (unique constraint). Contains `items` (JSONB), `itemCount`, `planDate` (YYYY-MM-DD for the day being planned for). Governance checks this table for compliance. Team view at `GET /api/daily-plans/team` (RH+ scoped).
+
+### Task Workflow (Tightened)
+Generic `PATCH /api/tasks/:id` removed. Replaced with specific endpoints:
+- `PATCH /api/tasks/:id/status` — assignee, assigner, ADMIN/RH only
+- `PATCH /api/tasks/:id/reschedule` — assigner, ADMIN/RH only
+- `PATCH /api/tasks/:id/reassign` — assigner, ADMIN/RH only
+- `PATCH /api/tasks/:id/note` — any party with access
+
+### IR Lifecycle (Governed)
+Generic `PATCH /api/internal-requests/:id` removed. All state transitions via:
+- `POST /api/internal-requests/:id/accept` — routedToRole or ADMIN
+- `POST /api/internal-requests/:id/resolve` — routedToRole or ADMIN
+- `POST /api/internal-requests/:id/reject` — routedToRole or ADMIN
+- `POST /api/internal-requests/:id/withdraw` — original raiser or ADMIN only
+- `PATCH /api/internal-requests/:id/note` — any party (notes only)
 
 ### Activity Ledger (`lib/db/src/schema/activity_log.ts`)
 Append-only audit trail. New `activityLog` table with columns: `id, userId, userName, userRole, region, action, entityType, entityId, meta (JSONB), createdAt`. Helper: `artifacts/api-server/src/lib/activityLog.ts` → `logActivity()`. Visible at `GET /api/activity-log` (elevated roles only). Key actions logged: `deal.created`, `revenue.entry_created`, `revenue.entry_reversed`, `target.submitted`, `target.approved`, `target.rejected`, `task.created`, `task.completed`, `task.overdue_flagged`, `ir.raised`, `ir.accepted`, `ir.resolved`, `ir.escalated`, `attendance.absent`.

@@ -14,6 +14,7 @@ import tasksRouter from "./tasks";
 import kpiRouter from "./kpi";
 import notificationsRouter from "./notifications";
 import activityLogRouter from "./activity-log";
+import dailyPlansRouter from "./daily-plans";
 
 const router: IRouter = Router();
 
@@ -48,5 +49,8 @@ router.use(notificationsRouter);
 
 // Phase 8 — Activity audit log
 router.use(activityLogRouter);
+
+// Phase 9 — Daily plans (compliance)
+router.use(dailyPlansRouter);
 
 export default router;

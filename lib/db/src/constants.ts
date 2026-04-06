@@ -182,6 +182,20 @@ export const ESC_HOP_HOURS    = 12;   // hours between escalation hops
 export const ESC_CHAIN        = ["Region Head", "NSH", "Sales Strategy", "CRO"] as const;
 export const TASK_REMINDER_HOURS = 24; // hours before due → send reminder notification
 
+// ─── Target client allocation structure ──────────────────────────────────────
+/**
+ * One line item in a target submission.
+ * The `clients` array in targetSubmissions must conform to this shape.
+ */
+export interface ClientAllocation {
+  clientName:      string;
+  zohoAccountId?:  string | null;
+  allocatedAmount: number;
+  channel?:        string | null;    // e.g. "TV Spot", "Sponsorship", "Digital"
+  dealType?:       string | null;    // from DEAL_TYPES
+  notes?:          string | null;
+}
+
 // ─── Touchpoint types ─────────────────────────────────────────────────────────
 export const TOUCHPOINT_TYPES = [
   "Deal Meeting",

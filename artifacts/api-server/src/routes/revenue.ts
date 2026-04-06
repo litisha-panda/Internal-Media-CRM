@@ -3,6 +3,7 @@ import { db, revenueEntries } from "@workspace/db";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activityLog";
+import { resolveOwnership } from "../lib/ownership";
 
 const router = Router();
 
@@ -112,9 +113,15 @@ router.post("/revenue", requireAuth, async (req, res) => {
       }
     }
 
-    // ── Force ownership from session for SALES REP ───────────────────────────
-    const authorRepId  = u.role === "SALES REP" ? u.repId!  : (req.body.repId  ?? u.repId ?? 0);
-    const authorRegion = u.role === "SALES REP" ? u.region! : (req.body.region ?? u.region ?? null);
+    // ── Validate and resolve ownership (RH must target rep in their region) ────
+    let owner: { repId: number; region: string; name: string };
+    try {
+      owner = await resolveOwnership(u, { repId: req.body.repId, region: req.body.region });
+    } catch (e: any) {
+      return void res.status(e.status ?? 400).json({ ok: false, error: e.error ?? String(e) });
+    }
+    const authorRepId  = owner.repId;
+    const authorRegion = owner.region;
 
     const isReversal = !!reversalOf;
 
