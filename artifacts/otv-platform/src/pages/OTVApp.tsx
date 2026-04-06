@@ -4169,7 +4169,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {/* Follow-ups due today */}
                         {followUpsToday.length > 0 && (
                           <div>
-                            <div onClick={()=>setView("revenue-log")} style={{fontSize:9,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
+                            <div onClick={()=>{setLogForm(f=>({...BLANK_LOG,repId:String(myRepId||"")}));setLogOpen(true);}} style={{fontSize:9,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
                               📅 {followUpsToday.length} follow-up{followUpsToday.length!==1?"s":""} due today →
                             </div>
                             <div style={{display:"flex",flexDirection:"column",gap:4}}>
