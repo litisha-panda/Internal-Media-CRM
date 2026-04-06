@@ -3341,9 +3341,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     if (isRep) return [
       { label:"DAILY WORK", items:[
         N("my-plan",             "My Plan",             "◎"),
+        N("tasks",               "Tasks",               "✓", myRepTaskBadge),
         N("pipeline",            "My Pipeline",         "◈"),
         N("revenue-log",         "Revenue Log",         "₹"),
-        N("tasks",               "Tasks",               "✓", myRepTaskBadge),
         N("target-submit",       "Target",              "◎", targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
         N("internal-requests",   "Requests",            "⬆", irBadge),
         N("hr",                  "HR Report",           "⊘", hrBadge),
@@ -4150,110 +4150,134 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   );
                 })()}
 
-                {/* ── At-Risk Alert Banner ── */}
-                {atRiskDeals.length > 0 && (
-                  <div style={{background:`${C.red}12`,border:`1.5px solid ${C.red}55`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
-                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                      <span style={{fontSize:14}}>⚠️</span>
-                      <span className="sans" style={{fontWeight:700,fontSize:13,color:C.red}}>
-                        {atRiskDeals.length === 1 ? "1 deal is going cold" : `${atRiskDeals.length} deals are going cold`} — act today
-                      </span>
-                    </div>
-                    <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                      {atRiskDeals.map(d => {
-                        const idleClock = d.lastDealMeetingDate || d.lastContact;
-                        const idle = daysSince(idleClock);
-                        const ds = dealStage(d);
-                        return (
-                          <div key={d.id} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} style={{display:"flex",alignItems:"center",gap:10,background:`${C.red}08`,borderRadius:5,padding:"6px 10px",cursor:"pointer"}}>
-                            <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{d.clientCompany}</span>
-                            <span style={{background:`${oColor(ds)}18`,color:oColor(ds),padding:"2px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{ds}</span>
-                            <span style={{background:`${C.red}22`,color:C.red,padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>
-                              No deal meeting {idle}d
-                            </span>
-                            <button
-                              onClick={e=>{e.stopPropagation();setLogForm(f=>({...BLANK_LOG,repId:String(myRepId||""),dealId:d.id,clientAgencyName:d.clientCompany}));setLogOpen(true);}}
-                              style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                              Log Touchpoint →
-                            </button>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* ── T007: Action Items Due Today ── */}
+                {/* ── TODAY'S ACTIONS — consolidated alert block ── */}
                 {(()=>{
-                  // Only show: self-assigned tasks, OR tasks not from meeting-log routing
-                  // Routed action items (approval/document/attend) go to My Tasks, not My Plan
-                  const dueToday = tasks.filter(t =>
+                  const coldDeals = atRiskDeals;
+                  const overdueTasks = tasks.filter(t=>
                     !["Done","Closed"].includes(t.status) &&
-                    t.dueDate === TODAY &&
-                    (t.assignedToUserId === activeUser || t.repId === myRepId) &&
-                    (t.assignedDept === "Self" || !t.fromMeetingLog)
+                    t.dueDate && t.dueDate <= TODAY &&
+                    (t.assignedToUserId === activeUser || t.repId === myRepId)
                   );
-                  if (!dueToday.length) return null;
-                  return (
-                    <div style={{background:`${C.green}08`,border:`1.5px solid ${C.green}44`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                        <span style={{fontSize:14}}>✅</span>
-                        <span className="sans" style={{fontWeight:700,fontSize:13,color:C.green}}>
-                          {dueToday.length} action item{dueToday.length!==1?"s":""} due today
-                        </span>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                        {dueToday.map(t=>(
-                          <div key={t.id} style={{display:"flex",alignItems:"center",gap:10,background:`${C.green}06`,borderRadius:5,padding:"6px 10px"}}>
-                            <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{t.title}</span>
-                            {t.clientCompany&&<span style={{fontSize:10,color:C.dim}}>{t.clientCompany}</span>}
-                            <span style={{background:`${t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority}</span>
-                            <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
-                              style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontFamily:"'DM Mono',monospace"}}>
-                              {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
-                            </select>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
+                  const followUpsToday = (meetings||[]).filter(m=>
+                    m.repId===myRepId && m.followUpDate===TODAY
                   );
-                })()}
-
-                {/* ── My Support Requests (open IRs raised by this rep) ── */}
-                {(()=>{
-                  const myOpenSRs = internalReqs.filter(r=>
+                  const openSRs = internalReqs.filter(r=>
                     r.repId===myRepId &&
                     r.type==="Support Request" &&
                     !["Done","Withdrawn"].includes(r.status||"")
                   );
-                  if (!myOpenSRs.length) return null;
+                  const totalItems = coldDeals.length + overdueTasks.length + followUpsToday.length + openSRs.length;
+
+                  if (totalItems === 0) return (
+                    <div style={{background:`${C.green}08`,border:`1px solid ${C.green}33`,borderRadius:8,padding:"10px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
+                      <span style={{fontSize:16}}>✓</span>
+                      <span className="sans" style={{fontWeight:700,fontSize:12,color:C.green}}>All clear — nothing urgent today</span>
+                    </div>
+                  );
+
                   return (
-                    <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:14}}>🆘</span>
-                          <span className="sans" style={{fontWeight:700,fontSize:13,color:C.purple}}>
-                            {myOpenSRs.length} open support request{myOpenSRs.length!==1?"s":""}
-                          </span>
-                        </div>
-                        <button onClick={()=>setView("internal-requests")}
-                          style={{background:C.purple,color:"#fff",border:"none",borderRadius:5,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>View All →</button>
+                    <div style={{background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:8,marginBottom:16,overflow:"hidden"}}>
+                      <div style={{background:`${C.red}10`,borderBottom:`1px solid ${C.border}`,padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:14}}>⚡</span>
+                        <span className="sans" style={{fontWeight:700,fontSize:13,color:C.text}}>TODAY'S ACTIONS</span>
+                        <span style={{marginLeft:"auto",background:`${C.red}22`,color:C.red,padding:"1px 8px",borderRadius:10,fontSize:11,fontWeight:700}}>{totalItems}</span>
                       </div>
-                      {myOpenSRs.map(sr=>{
-                        const pColor = sr.priority==="Urgent"?C.red:sr.priority==="High"?C.orange:sr.priority==="Medium"?C.blue:C.green;
-                        const sc = sr.status==="In Progress"?C.blue:sr.status==="Accepted"?C.green:C.orange;
-                        return (
-                          <div key={sr.id} style={{display:"flex",alignItems:"center",gap:8,background:`${C.purple}05`,borderRadius:5,padding:"6px 10px",marginBottom:5,borderLeft:`3px solid ${sc}`}}>
-                            <div style={{flex:1,minWidth:0}}>
-                              <div style={{fontWeight:600,fontSize:12,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sr.subject.replace(/^\[Support\]\s*/,"")}</div>
-                              {sr.clientCompany&&<div style={{fontSize:10,color:C.dim}}>Re: {sr.clientCompany}</div>}
+                      <div style={{padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
+
+                        {/* At-risk deals */}
+                        {coldDeals.length > 0 && (
+                          <div>
+                            <div style={{fontSize:9,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
+                              ⚠ {coldDeals.length} deal{coldDeals.length!==1?"s":""} going cold
                             </div>
-                            <span style={{background:`${sc}22`,color:sc,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{sr.status}</span>
-                            <span style={{background:`${pColor}18`,color:pColor,padding:"2px 6px",borderRadius:4,fontSize:10,whiteSpace:"nowrap"}}>{sr.priority}</span>
-                            <span style={{fontSize:10,color:C.muted,whiteSpace:"nowrap"}}>{sr.dept}</span>
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              {coldDeals.map(d=>{
+                                const idle = daysSince(d.lastDealMeetingDate||d.lastContact);
+                                const ds = dealStage(d);
+                                return (
+                                  <div key={d.id} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}}
+                                    style={{display:"flex",alignItems:"center",gap:8,background:`${C.red}06`,borderRadius:5,padding:"5px 10px",cursor:"pointer"}}>
+                                    <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{d.clientCompany}</span>
+                                    <span style={{background:`${oColor(ds)}18`,color:oColor(ds),padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{ds}</span>
+                                    <span style={{color:C.red,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{idle}d idle</span>
+                                    <button onClick={e=>{e.stopPropagation();setLogForm(f=>({...BLANK_LOG,repId:String(myRepId||""),dealId:d.id,clientAgencyName:d.clientCompany}));setLogOpen(true);}}
+                                      style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                                      Log Touchpoint →
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                            </div>
                           </div>
-                        );
-                      })}
+                        )}
+
+                        {/* Overdue tasks (dueDate ≤ today) */}
+                        {overdueTasks.length > 0 && (
+                          <div>
+                            <div style={{fontSize:9,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
+                              ✗ {overdueTasks.length} overdue task{overdueTasks.length!==1?"s":""}
+                            </div>
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              {overdueTasks.map(t=>{
+                                const isOver = t.dueDate < TODAY;
+                                const pColor = t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.dim;
+                                return (
+                                  <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,background:`${C.orange}05`,borderRadius:5,padding:"5px 10px"}}>
+                                    <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{t.title}</span>
+                                    {t.clientCompany&&<span style={{fontSize:10,color:C.dim}}>{t.clientCompany}</span>}
+                                    {isOver&&<span style={{color:C.red,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>Due {t.dueDate}</span>}
+                                    <span style={{background:`${pColor}18`,color:pColor,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority||"Normal"}</span>
+                                    <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
+                                      style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontFamily:"'DM Mono',monospace"}}>
+                                      {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
+                                    </select>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Follow-ups due today */}
+                        {followUpsToday.length > 0 && (
+                          <div>
+                            <div style={{fontSize:9,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
+                              📅 {followUpsToday.length} follow-up{followUpsToday.length!==1?"s":""} due today
+                            </div>
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              {followUpsToday.map(m=>(
+                                <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,background:`${C.blue}06`,borderRadius:5,padding:"5px 10px"}}>
+                                  <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{m.clientCompany||m.clientAgencyName||"Client"}</span>
+                                  {m.nextSteps&&<span style={{fontSize:10,color:C.dim,flex:1}}>{m.nextSteps}</span>}
+                                  <button onClick={()=>{setLogForm(f=>({...BLANK_LOG,repId:String(myRepId||""),clientAgencyName:m.clientCompany||m.clientAgencyName||""}));setLogOpen(true);}}
+                                    style={{background:C.blue,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                                    Log Meeting →
+                                  </button>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Open support requests */}
+                        {openSRs.length > 0 && (
+                          <div>
+                            <div style={{fontSize:9,color:C.purple,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
+                              🆘 {openSRs.length} open support request{openSRs.length!==1?"s":""}
+                            </div>
+                            <div style={{display:"flex",alignItems:"center",gap:8,background:`${C.purple}06`,borderRadius:5,padding:"5px 10px"}}>
+                              <span style={{flex:1,fontSize:12,color:C.dim}}>
+                                {openSRs.map(r=>r.subject.replace(/^\[Support\]\s*/,"")).join(" · ")}
+                              </span>
+                              <button onClick={()=>setView("internal-requests")}
+                                style={{background:C.purple,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
+                                View All →
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                      </div>
                     </div>
                   );
                 })()}
@@ -11510,13 +11534,34 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const stalledDeals    = visibleDeals.filter(d=>myRepIds2.includes(d.repId)&&!["Lost","RO Received"].includes(d.outcome||"")&&daysSince(d.lastContact||d.createdAt||TODAY)>=7);
             const myEscalations   = internalReqs.filter(r=>r.dept==="Region Head"&&r.status!=="Done"&&r.status!=="Withdrawn"&&USER_ROLES.find(u=>u.id===r.raisedBy)?.region===rhRegion);
             const flags = [
-              {label:"Reps not logged today",         items:notLoggedToday,    color:C.red,    icon:"⚠",   nav:"rh-team-plan",    detail:(u:any)=>u.name},
-              {label:"Reps not planned for tomorrow", items:notPlannedTmrw,    color:C.orange, icon:"⏰",   nav:"rh-team-plan",    detail:(u:any)=>u.name},
-              {label:"Target approvals pending",      items:pendingApprovals,  color:C.accent, icon:"◎",   nav:"target-approvals", detail:(t:any)=>t.repName},
-              {label:"IR approvals pending",          items:pendingIRs,        color:C.accent, icon:"⬆",   nav:"target-approvals", detail:(r:any)=>r.subject},
-              {label:"Overdue action items",          items:overdueActions,    color:C.red,    icon:"✗",   nav:"rh-team-report",   detail:(t:any)=>t.title},
-              {label:"Stalled deals (7+ days idle)",  items:stalledDeals,      color:C.purple, icon:"⏸",   nav:"rh-team-plan",    detail:(d:any)=>d.clientCompany},
-              {label:"Escalated items to you",        items:myEscalations,     color:C.red,    icon:"⬆",   nav:"rh-escalations",  detail:(r:any)=>r.subject},
+              {label:"Reps not logged today",         items:notLoggedToday,    color:C.red,    icon:"⚠",
+                nav:"rh-team-plan",    detail:(u:any)=>u.name,
+                headerClick:()=>{setRhTeamFilter(f=>({...f,rep:"",dateRange:"today"}));setView("rh-team-plan");},
+                chipClick:(u:any)=>{setRhTeamFilter(f=>({...f,rep:String(u.repId),dateRange:"today"}));setView("rh-team-plan");}},
+              {label:"Reps not planned for tomorrow", items:notPlannedTmrw,    color:C.orange, icon:"⏰",
+                nav:"rh-team-plan",    detail:(u:any)=>u.name,
+                headerClick:()=>{setRhTeamFilter(f=>({...f,rep:"",dateRange:"tomorrow"}));setView("rh-team-plan");},
+                chipClick:(u:any)=>{setRhTeamFilter(f=>({...f,rep:String(u.repId),dateRange:"tomorrow"}));setView("rh-team-plan");}},
+              {label:"Target approvals pending",      items:pendingApprovals,  color:C.accent, icon:"◎",
+                nav:"target-approvals", detail:(t:any)=>t.repName,
+                headerClick:()=>setView("target-approvals"),
+                chipClick:()=>setView("target-approvals")},
+              {label:"IR approvals pending",          items:pendingIRs,        color:C.accent, icon:"⬆",
+                nav:"internal-requests", detail:(r:any)=>r.subject,
+                headerClick:()=>setView("internal-requests"),
+                chipClick:()=>setView("internal-requests")},
+              {label:"Overdue action items",          items:overdueActions,    color:C.red,    icon:"✗",
+                nav:"rh-team-report",   detail:(t:any)=>t.title,
+                headerClick:()=>setView("rh-team-report"),
+                chipClick:()=>setView("rh-team-report")},
+              {label:"Stalled deals (7+ days idle)",  items:stalledDeals,      color:C.purple, icon:"⏸",
+                nav:"warroom",          detail:(d:any)=>d.clientCompany,
+                headerClick:()=>setView("warroom"),
+                chipClick:()=>setView("warroom")},
+              {label:"Escalated items to you",        items:myEscalations,     color:C.red,    icon:"⬆",
+                nav:"rh-escalations",  detail:(r:any)=>r.subject,
+                headerClick:()=>setView("rh-escalations"),
+                chipClick:()=>setView("rh-escalations")},
             ].filter(f=>f.items.length>0);
             return (
               <div className="fin">
@@ -11527,17 +11572,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                   <div style={{fontSize:10,color:C.muted}}>{TODAY}</div>
                 </div>
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20,marginTop:14}}>
+                <div style={{display:"flex",gap:8,marginBottom:16,marginTop:10,flexWrap:"wrap"}}>
                   {[
-                    {label:"REGION TARGET",   value:fmtR(regionTarget),    color:C.accent,                                       sub:`${filterQ} approved targets`},
-                    {label:"ACHIEVED",        value:fmtR(regionAchieved),  color:C.green,                                        sub:"Revenue logged this quarter"},
-                    {label:"SHORTFALL",       value:fmtR(regionShortfall), color:regionShortfall>0?C.red:C.green,                sub:"Target – Achieved"},
-                    {label:"ACTIVE PIPELINE", value:fmtR(regionPipeline),  color:C.blue,                                        sub:"Weighted by stage probability"},
+                    {label:"TARGET",   value:fmtR(regionTarget),    color:C.accent},
+                    {label:"ACHIEVED", value:fmtR(regionAchieved),  color:C.green},
+                    {label:"SHORTFALL",value:fmtR(regionShortfall), color:regionShortfall>0?C.red:C.green},
+                    {label:"PIPELINE", value:fmtR(regionPipeline),  color:C.blue},
                   ].map(card=>(
-                    <div key={card.label} className="card" style={{padding:"14px 16px",borderTop:`2px solid ${card.color}`}}>
-                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
-                      <div className="sans" style={{fontSize:20,fontWeight:800,color:card.color,marginBottom:3}}>{card.value}</div>
-                      <div style={{fontSize:9,color:C.muted}}>{card.sub}</div>
+                    <div key={card.label} style={{flex:"1 1 100px",background:C.surface,border:`1px solid ${card.color}33`,borderLeft:`3px solid ${card.color}`,borderRadius:6,padding:"8px 12px"}}>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>{card.label}</div>
+                      <div className="sans" style={{fontSize:15,fontWeight:800,color:card.color}}>{card.value}</div>
                     </div>
                   ))}
                 </div>
@@ -11554,7 +11598,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
                   {flags.map((flag,fi)=>(
                     <div key={fi} style={{background:C.surface,border:`1px solid ${flag.color}33`,borderRadius:8,overflow:"hidden"}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:`${flag.color}10`,borderBottom:`1px solid ${flag.color}22`,cursor:"pointer"}} onClick={()=>setView(flag.nav)}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:`${flag.color}10`,borderBottom:`1px solid ${flag.color}22`,cursor:"pointer"}} onClick={flag.headerClick}>
                         <span style={{fontSize:14}}>{flag.icon}</span>
                         <span style={{fontWeight:700,fontSize:12,color:flag.color}}>{flag.label}</span>
                         <span style={{marginLeft:"auto",background:`${flag.color}22`,color:flag.color,padding:"1px 8px",borderRadius:10,fontSize:11,fontWeight:700}}>{flag.items.length}</span>
@@ -11562,7 +11606,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                       <div style={{padding:"8px 14px",display:"flex",flexWrap:"wrap",gap:6}}>
                         {flag.items.slice(0,8).map((item:any,i:number)=>(
-                          <span key={i} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 8px",fontSize:11,color:C.text}}>{flag.detail(item)}</span>
+                          <span key={i} onClick={()=>flag.chipClick(item)}
+                            title="Click to view →"
+                            style={{background:C.s2,border:`1px solid ${flag.color}44`,borderRadius:4,padding:"3px 8px",fontSize:11,color:C.text,cursor:"pointer",transition:"background .1s"}}
+                            onMouseOver={e=>(e.currentTarget.style.background=`${flag.color}18`)}
+                            onMouseOut={e=>(e.currentTarget.style.background=C.s2)}>
+                            {flag.detail(item)}
+                          </span>
                         ))}
                         {flag.items.length>8&&<span style={{fontSize:11,color:C.muted,padding:"3px 8px"}}>+{flag.items.length-8} more</span>}
                       </div>
@@ -13582,10 +13632,53 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         </div>
       )}
 
-      {addDealOpen && (
+      {addDealOpen && (()=>{
+        const formRepId = String(dealForm.repId);
+        const approvedTargetClients = targetSubs
+          .filter(s=>String(s.repId)===formRepId && s.status==="Approved")
+          .flatMap((s:any)=>s.clients||[]);
+        const isDuplicateDeal = !!(dealForm.clientCompany && dealForm.dealType && dealForm.quarter &&
+          deals.some(d=>
+            String(d.repId)===formRepId &&
+            (d.clientCompany||"").toLowerCase()===(dealForm.clientCompany||"").toLowerCase() &&
+            d.quarter===dealForm.quarter &&
+            d.dealType===dealForm.dealType
+          ));
+        return (
         <div className="overlay" onClick={()=>setAddDealOpen(false)}>
           <div className="modal fin" onClick={e=>e.stopPropagation()}>
             <div className="sans" style={{fontSize:16,fontWeight:700,marginBottom:16}}>ADD NEW DEAL</div>
+
+            {/* ── Approved target client quick-picks ── */}
+            {approvedTargetClients.length > 0 && (
+              <div style={{background:`${C.accent}08`,border:`1px solid ${C.accent}33`,borderRadius:7,padding:"10px 14px",marginBottom:14}}>
+                <div style={{fontSize:9,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:6}}>Target Clients · Quick Pick</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
+                  {approvedTargetClients.map((c:any,i:number)=>{
+                    const isSelected = dealForm.clientCompany.toLowerCase()===(c.clientCompany||"").toLowerCase() && dealForm.dealType===c.dealType;
+                    return (
+                      <button key={i}
+                        onClick={()=>setDealForm(p=>({...p,clientCompany:c.clientCompany,dealType:c.dealType||p.dealType,targetAmount:c.targetAmount||p.targetAmount}))}
+                        style={{padding:"3px 10px",fontSize:11,borderRadius:4,border:`1px solid ${isSelected?C.accent:C.border}`,background:isSelected?`${C.accent}18`:C.s2,color:isSelected?C.accent:C.text,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:isSelected?700:400}}>
+                        {c.clientCompany}{c.dealType?` · ${c.dealType}`:""}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {/* ── Duplicate warning ── */}
+            {isDuplicateDeal && (
+              <div style={{background:`${C.orange}10`,border:`1.5px solid ${C.orange}55`,borderRadius:7,padding:"8px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
+                <span style={{fontSize:14}}>⚠️</span>
+                <div>
+                  <span style={{fontWeight:700,fontSize:12,color:C.orange}}>Possible duplicate — </span>
+                  <span style={{fontSize:12,color:C.dim}}>a {dealForm.dealType} deal for <strong>{dealForm.clientCompany}</strong> in {dealForm.quarter} already exists. You can still save this as a new entry.</span>
+                </div>
+              </div>
+            )}
+
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
               {/* Client Company — Zoho live search */}
               <div>
@@ -13634,7 +13727,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* LOG TOUCHPOINT MODAL — aligned to Today's Meetings Excel sheet */}
       {logOpen && (
