@@ -1609,6 +1609,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [nshRHDrill,  setNshRHDrill]      = useState(null); // NSH drills into specific RH region
   const [rhDrillPlan, setRhDrillPlan]     = useState<any>(null); // RH team meetings drill-down item
   const [rhTeamFilter, setRhTeamFilter]   = useState({rep:"",dateRange:"today-tomorrow",client:"",status:""}); // RH team meetings filter
+  const [rhWarroomClient, setRhWarroomClient] = useState(""); // pre-filter warroom to a stalled client from dashboard
   const [nshRegion,   setNshRegion]       = useState("all"); // NSH rep-CRM region filter
   const BLANK_TASK_FORM = {title:"",assignedTo:"",assignedToUserId:"",clientCompany:"",description:"",priority:"High",dueDate:TOMORROW};
   const [taskForm, setTaskForm]           = useState(BLANK_TASK_FORM);
@@ -5287,12 +5288,26 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             return (
               <div className="fin">
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:rhWarroomClient?8:16}}>
                   <div>
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>WAR ROOM</div>
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}</div>
                   </div>
                 </div>
+
+                {/* ── STALLED CLIENT FILTER BANNER (from dashboard chip click) ── */}
+                {rhWarroomClient && (
+                  <div style={{display:"flex",alignItems:"center",gap:10,background:`${C.purple}10`,border:`1.5px solid ${C.purple}44`,borderRadius:7,padding:"7px 14px",marginBottom:14}}>
+                    <span style={{fontSize:13}}>⏸</span>
+                    <span style={{flex:1,fontSize:12,color:C.purple,fontWeight:600}}>
+                      Filtered to stalled deal: <strong>{rhWarroomClient}</strong>
+                    </span>
+                    <button onClick={()=>setRhWarroomClient("")}
+                      style={{background:"none",border:`1px solid ${C.purple}55`,borderRadius:4,padding:"2px 10px",fontSize:11,color:C.purple,fontWeight:700,cursor:"pointer"}}>
+                      × Clear filter
+                    </button>
+                  </div>
+                )}
 
                 {/* ── PIPELINE GAP STRIP ── */}
                 {(()=>{
@@ -5501,10 +5516,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
 
                 {/* Part 9: Tiered escalation alerts — 7 / 10 / 14 day triggers */}
-                {rh14d.length>0&&(
+                {rh14d.filter(d=>!rhWarroomClient||d.clientCompany===rhWarroomClient).length>0&&(
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⚠ INTERVENE REQUIRED — 14+ DAYS NO DEAL MEETING</div>
-                    {rh14d.map(d=>{
+                    {rh14d.filter(d=>!rhWarroomClient||d.clientCompany===rhWarroomClient).map(d=>{
                       const rep=reps.find(r=>r.id===d.repId);
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       const taskId=`rh14-${d.id}`;
@@ -5529,10 +5544,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     })}
                   </div>
                 )}
-                {rh10d.filter(d=>!rh14d.includes(d)).length>0&&(
+                {rh10d.filter(d=>!rh14d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)).length>0&&(
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>ℹ 10+ DAYS NO DEAL MEETING — MONITOR CLOSELY</div>
-                    {rh10d.filter(d=>!rh14d.includes(d)).map(d=>{
+                    {rh10d.filter(d=>!rh14d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)).map(d=>{
                       const rep=reps.find(r=>r.id===d.repId);
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       return (
@@ -5546,10 +5561,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     })}
                   </div>
                 )}
-                {rhAtRisk.filter(d=>!rh10d.includes(d)).length>0&&(
+                {rhAtRisk.filter(d=>!rh10d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)).length>0&&(
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NO DEAL MEETING 7+ DAYS — TEAM AT RISK</div>
-                    {rhAtRisk.filter(d=>!rh10d.includes(d)).map(d=>{
+                    {rhAtRisk.filter(d=>!rh10d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)).map(d=>{
                       const rep=reps.find(r=>r.id===d.repId);
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       return (
@@ -11572,8 +11587,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 chipClick:()=>setView("rh-team-report")},
               {label:"Stalled deals (7+ days idle)",  items:stalledDeals,      color:C.purple, icon:"⏸",
                 nav:"warroom",          detail:(d:any)=>d.clientCompany,
-                headerClick:()=>setView("warroom"),
-                chipClick:(d:any)=>{setRhTeamFilter(f=>({...f,client:d.clientCompany,rep:String(d.repId||""),dateRange:"all"}));setView("rh-team-plan");}},
+                headerClick:()=>{setRhWarroomClient("");setView("warroom");},
+                chipClick:(d:any)=>{setRhWarroomClient(d.clientCompany);setView("warroom");}},
               {label:"Escalated items to you",        items:myEscalations,     color:C.red,    icon:"⬆",
                 nav:"rh-escalations",  detail:(r:any)=>r.subject,
                 headerClick:()=>setView("rh-escalations"),
