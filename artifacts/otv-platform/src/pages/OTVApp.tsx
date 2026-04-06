@@ -1596,7 +1596,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [calDayView, setCalDayView]       = useState<string|null>(null); // date string "YYYY-MM-DD"
   const [myPlanTab,  setMyPlanTab]        = useState<"plan"|"log">("plan"); // My Plan sub-tabs
   const [addPlanFor, setAddPlanFor]       = useState(null);
-  const [planForm, setPlanForm]           = useState({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
+  const [planForm, setPlanForm]           = useState({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
   const [planEditId, setPlanEditId]       = useState<string|null>(null);
   const [planEditForm, setPlanEditForm]   = useState({time:"",clientAgencyName:"",contactName:"",phone:"",agenda:"",pitchType:""});
   const [loginProvider, setLoginProvider] = useState<"google"|"zoho"|"demo">("demo");
@@ -1654,25 +1654,32 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const BLANK_DEAL = { clientCompany:"", zohoAccountId:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", zohoAgencyId:"", reqs:[], auditLog:[] };
   const BLANK_NEXT_STEP_ITEM = {action:"", actionType:"", details:"", neededFrom:"", remarks:"", dueDate:""};
   const ACTION_TYPES = ["Approval needed","Document needed","Attend a meeting","Introduction needed","Flag for follow-up"];
+  const BLANK_ACTION_REQUIRED = {what:"", from:"", description:"", byWhen:""};
   const BLANK_LOG = {
     repId:"",
     meetingTime:"", clientOrAgency:"Client",
-    dealId:"", clientAgencyName:"", dealAmount:"",
+    dealId:"", clientAgencyName:"",
+    agency:"", client:"", brand:"",
+    dealAmount:"",
     contactName:"", designation:"", mobile:"",
     meetingType:"Physical",
     // Part 1: new Touchpoint fields
     touchpointType:"Deal Meeting",    // "Deal Meeting" | "Relationship"
     contactLevel:"",                  // C-Suite / VP-GM / etc.
     discussion:"", clientFeedback:"", // `discussion` = whatHappened (kept for legacy)
-    stageUpdate:"",                   // required for Deal Meeting
+    stageUpdate:"",                   // required for Deal Meeting — moved to end of form
+    lossReason:"",
     pitchType:"", nextSteps:"", followUpDate:"", status:"",
-    nextStepItems:[{...BLANK_NEXT_STEP_ITEM}],
+    // Unified Action Required (replaces nextStepItems + supportRequest)
+    actionRequired:[{...BLANK_ACTION_REQUIRED}],
     seniorRequested:"No", seniorRequestedName:"", seniorRequestedRole:"",
     scheduleNext:false,
     nextMeetingDate:"", nextMeetingTime:"", nextAgenda:"",
     calendarPlatform:"google", addMeetLink:true,
     attendeeEmails:"",
     calendarEventId:"", meetLink:"", calendarStatus:"",
+    // Legacy compat — kept for existing meetings in state
+    nextStepItems:[] as any[],
     supportRequest:{dept:"", description:"", priority:"Medium", dueDate:""},
   };
   const [dealForm, setDealForm]   = useState(BLANK_DEAL);
@@ -2494,10 +2501,10 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       return null;
     };
 
-    // Build a summary of next steps for the meeting record
-    const nextStepsSummary = (logForm.nextStepItems||[])
-      .filter(i=>i.action)
-      .map(i=>`${i.action}${i.neededFrom?" (→ "+i.neededFrom+")":""}${i.remarks?" — "+i.remarks:""}`)
+    // Build a summary of next steps for the meeting record (uses new actionRequired structure)
+    const nextStepsSummary = (logForm.actionRequired||[])
+      .filter(i=>i.what)
+      .map(i=>`${i.what}${i.from?" (→ "+i.from+")":""}${i.description?" — "+i.description:""}`)
       .join("; ");
 
     const tpType = logForm.touchpointType || "Deal Meeting";
@@ -2538,7 +2545,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       contactDesignation: logForm.designation, contactLevel: logForm.contactLevel,
       whatHappened: logForm.discussion, clientFeedback: logForm.clientFeedback,
       stageUpdate: tpType === "Deal Meeting" ? stageNow : "",
-      actionItems: (logForm.nextStepItems||[]).filter(i=>i.action),
+      actionItems: (logForm.actionRequired||[]).filter(i=>i.what),
       loggedAt, loggedLate: late, loggedByUserId: activeUser,
     }, ...p]);
 
@@ -2548,44 +2555,40 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const newTasks: any[] = [];
     const newIRsFromLog: any[] = [];
     const attendPlans: any[] = [];
-    (logForm.nextStepItems||[]).filter(i=>(i.actionType||i.action)&&i.neededFrom).forEach(i=>{
-      const aType = i.actionType||i.action;
-      const details = i.details||i.remarks||"";
-      const ts = `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-      if (i.neededFrom==="Self") {
-        // Self-assigned: goes only to rep's own tasks
-        newTasks.push({id:ts,assignedTo:null,assignedToUserId:null,assignedDept:"Self",repId:repIdInt,clientCompany,title:`${aType} — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
-      } else if (i.neededFrom!=="Client") {
-        if (aType==="Approval needed") {
-          // → Approvals tab (Internal Request of type Approval) + Task for approver
-          const irSubject = `Approval needed — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160);
-          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:i.neededFrom,subject:irSubject,details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
-          newTasks.push({id:`t_appr_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:irSubject,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-        } else if (aType==="Attend a meeting") {
-          // → My Plan of tagged person as unscheduled meeting request
-          attendPlans.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserId(i.neededFrom,repIdInt)||i.neededFrom,date:i.dueDate||TOMORROW,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repName}] ${details||`Re: ${clientCompany}`}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repName});
-          // Task for the tagged person to confirm
-          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-          // IR so rep can track this request
-          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Attend Meeting",dept:i.neededFrom,subject:`[Meeting request] ${clientCompany} — ${details||"Attend meeting"} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
-        } else if (aType==="Document needed" || aType==="Document / plan needed") {
-          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Document needed",dept:i.neededFrom,subject:`[Doc needed] ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
-        } else if (aType==="Introduction needed" || aType==="Client introduction needed") {
-          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Introduction needed",dept:i.neededFrom,subject:`[Intro needed] ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
-        } else if (aType==="Flag for follow-up") {
-          // T005: Flag for follow-up → Task only (no IR — it's a personal reminder, not a departmental request)
-          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt)||activeUser,assignedDept:i.neededFrom||"Self",repId:repIdInt,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW}`.slice(0,150),description:`Flagged by ${repName}. ${details}`,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-        } else {
-          // Legacy fallback for old "action" type
-          newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(i.neededFrom,repIdInt),assignedDept:i.neededFrom,repId:repIdInt,clientCompany,title:i.action||aType,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true});
-          newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:aType,dept:i.neededFrom,subject:`${aType} — ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""});
+    // Process new unified Action Required items → create Task + IR for each
+      (logForm.actionRequired||[]).filter(i=>i.what&&i.from).forEach(i=>{
+        const aType = i.what;
+        const details = i.description||"";
+        const dueDate = i.byWhen||TOMORROW;
+        const neededFrom = i.from;
+        const ts = `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+        if (neededFrom==="Self") {
+          newTasks.push({id:ts,assignedTo:null,assignedToUserId:activeUser,assignedDept:"Self",repId:repIdInt,clientCompany,title:`${aType} — ${clientCompany} — ${details} — by ${dueDate} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+        } else if (neededFrom!=="Client") {
+          if (aType==="Approval needed") {
+            const irSubject = `Approval needed — ${clientCompany} — ${details} — by ${dueDate} — from ${repName}`.slice(0,160);
+            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:neededFrom,subject:irSubject,details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
+            newTasks.push({id:`t_appr_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:irSubject,description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+          } else if (aType==="Attend a meeting") {
+            attendPlans.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserId(neededFrom,repIdInt)||neededFrom,date:dueDate,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repName}] ${details||"Re: "+clientCompany}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repName});
+            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${dueDate} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Attend Meeting",dept:neededFrom,subject:`[Meeting request] ${clientCompany} — ${details||"Attend meeting"} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
+          } else if (aType==="Document needed" || aType==="Document / plan needed") {
+            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${dueDate} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Document needed",dept:neededFrom,subject:`[Doc needed] ${clientCompany} — ${details} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
+          } else if (aType==="Introduction needed" || aType==="Client introduction needed") {
+            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Introduction needed",dept:neededFrom,subject:`[Intro needed] ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
+          } else if (aType==="Flag for follow-up") {
+            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt)||activeUser,assignedDept:neededFrom||"Self",repId:repIdInt,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — by ${dueDate}`.slice(0,150),description:`Flagged by ${repName}. ${details}`,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+          } else {
+            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:`${aType} — ${clientCompany} — ${details}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
+            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:aType,dept:neededFrom,subject:`${aType} — ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
+          }
         }
-      }
-    });
-    // T004: Auto-create a task when plain "Next Steps" text is filled but no explicit nextStepItems action exists
-    const hasStepItemAction = (logForm.nextStepItems||[]).some(i => i.action);
+      });
+      // T004: Auto-create a task when plain "Next Steps" text is filled but no explicit actionRequired items exist
+    const hasStepItemAction = (logForm.actionRequired||[]).some(i => i.what);
     if (logForm.nextSteps?.trim() && !hasStepItemAction) {
       newTasks.push({
         id: `t_ns_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
@@ -2848,9 +2851,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     if (!logForm.clientFeedback?.trim()) { showToast("Client feedback is required", "err"); return; }
     if (!logForm.status) { showToast("Meeting status is required", "err"); return; }
     if (!logForm.followUpDate) { showToast("Follow-up date is required", "err"); return; }
-    const hasValidNextStep = (logForm.nextStepItems||[]).some(i => i.action && i.neededFrom);
-    if (!hasValidNextStep) { showToast("At least one next step with an owner is required", "err"); return; }
-    if (logForm.seniorRequested === "Yes" && !logForm.seniorRequestedName?.trim()) { showToast("Senior's name is required when escalation is Yes", "err"); return; }
+    // Action Required is optional — rep can log touchpoint without any action items
     // Part 1+3: Stage Update required for Deal Meeting touchpoint
     if ((logForm.touchpointType || "Deal Meeting") === "Deal Meeting" && !logForm.stageUpdate && !logForm.status) {
       showToast("Select a Stage Update for this Deal Meeting", "err"); return;
@@ -3270,6 +3271,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         N("tasks","Tasks","✓",myRepTaskBadge),
         N("revenue-log","Revenue Log","₹"),
         N("internal-requests","Internal Requests","⬆",irBadge),
+        N("hr","HR Report","⊘",hrBadge),
       ]},
     ];
 
@@ -3902,9 +3904,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const pf = planForm; const setPf = setPlanForm;
 
             const doAddPlan = (date) => {
-              if (!pf.clientAgencyName.trim()) return;
+              const clientName = (pf.client||pf.agency||"").trim();
+              if (!clientName) return;
               const planTime = pf.time||"10:00";
-              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myPlanRepId,date,time:planTime,clientAgencyName:pf.clientAgencyName.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
+              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myPlanRepId,date,time:planTime,clientAgencyName:clientName,agency:pf.agency.trim(),client:pf.client.trim(),brand:pf.brand.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -3913,8 +3916,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 const endH = String(h+1).padStart(2,"0"); const endM = String(m).padStart(2,"0");
                 const startH = String(h).padStart(2,"0");
                 const dateParts = date.replace(/-/g,""); // YYYYMMDD
-                const title = encodeURIComponent(`[OTV] Meeting: ${pf.clientAgencyName.trim()}`);
-                const details = encodeURIComponent(`Contact: ${pf.contactName.trim()}${pf.agenda?"\nAgenda: "+pf.agenda:""}`);
+                const cName = (pf.client||pf.agency||"").trim();
+                const title = encodeURIComponent(`[OTV] Meeting: ${cName}`);
+                const details = encodeURIComponent(`Contact: ${pf.contactName.trim()}${pf.agenda?"\nAgenda: "+pf.agenda:""}${pf.brand?"\nBrand: "+pf.brand:""}`);
                 if (pf.calPlatform==="google") {
                   const startDT = `${dateParts}T${startH}${endM}00`;
                   const endDT   = `${dateParts}T${endH}${endM}00`;
@@ -3926,7 +3930,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     "BEGIN:VEVENT",
                     `DTSTART:${dateParts}T${startH}${endM}00`,
                     `DTEND:${dateParts}T${endH}${endM}00`,
-                    `SUMMARY:[OTV] Meeting: ${pf.clientAgencyName.trim()}`,
+                    `SUMMARY:[OTV] Meeting: ${cName}`,
                     `DESCRIPTION:Contact: ${pf.contactName.trim()}${pf.agenda?"\\nAgenda: "+pf.agenda:""}`,
                     `UID:otv-${Date.now()}@odishatv.com`,
                     "STATUS:CONFIRMED","END:VEVENT","END:VCALENDAR"
@@ -3934,7 +3938,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const blob = new Blob([ics],{type:"text/calendar;charset=utf-8"});
                   const a = document.createElement("a");
                   a.href = URL.createObjectURL(blob);
-                  a.download = `OTV-${pf.clientAgencyName.trim().replace(/\s+/g,"-")}.ics`;
+                  a.download = `OTV-${cName.replace(/\s+/g,"-")}.ics`;
                   a.click();
                 } else if (pf.calPlatform==="outlook") {
                   const startISO = `${date}T${startH}:${endM}:00`;
@@ -3943,7 +3947,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 }
               }
 
-              setPf({clientAgencyName:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform});
+              setPf({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform});
               setAddPlanFor(null);
               showToast(pf.syncToCalendar?"Meeting planned ✓ · Calendar opening…":"Meeting planned ✓");
             };
@@ -4971,17 +4975,25 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                       <div style={{display:"flex",flexDirection:"column",gap:10}}>
 
-                        {/* Client / Agency — dropdown from existing deals + free text */}
-                        <div>
-                          <label>Client / Agency *</label>
-                          <div style={{display:"flex",gap:6}}>
-                            <select value={pf.clientAgencyName} onChange={e=>setPf(p=>({...p,clientAgencyName:e.target.value}))} style={{flex:1}}>
-                              <option value="">Select from your pipeline…</option>
+                        {/* Agency / Client / Brand — separate fields */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
+                          <div>
+                            <label>Agency Name</label>
+                            <input placeholder="e.g. Dentsu, Omnicom…" value={pf.agency} onChange={e=>setPf(p=>({...p,agency:e.target.value}))} />
+                          </div>
+                          <div>
+                            <label>Client Name *</label>
+                            <select value={pf.client} onChange={e=>setPf(p=>({...p,client:e.target.value}))} style={{marginBottom:4}}>
+                              <option value="">Select from pipeline…</option>
                               {[...new Set(deals.filter(d=>d.repId===myRepId).map(d=>d.clientCompany))].sort().map(c=>(
                                 <option key={c} value={c}>{c}</option>
                               ))}
                             </select>
-                            <input placeholder="Or type new client" value={pf.clientAgencyName} onChange={e=>setPf(p=>({...p,clientAgencyName:e.target.value}))} style={{flex:1}} />
+                            <input placeholder="Or type client name…" value={pf.client} onChange={e=>setPf(p=>({...p,client:e.target.value}))} />
+                          </div>
+                          <div>
+                            <label>Brand / Product</label>
+                            <input placeholder="e.g. Surf Excel…" value={pf.brand} onChange={e=>setPf(p=>({...p,brand:e.target.value}))} />
                           </div>
                         </div>
 
@@ -5063,7 +5075,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                       <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
                         <button className="btn btn-ghost" onClick={()=>setAddPlanFor(null)}>Cancel</button>
-                        <button className="btn btn-primary" onClick={()=>doAddPlan(addPlanFor)} disabled={!pf.clientAgencyName.trim()||!pf.contactName.trim()}>Plan This Meeting</button>
+                        <button className="btn btn-primary" onClick={()=>doAddPlan(addPlanFor)} disabled={!(pf.client||pf.agency).trim()||!pf.contactName.trim()}>Plan This Meeting</button>
                       </div>
                     </div>
                   </div>
@@ -10113,10 +10125,30 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {(()=>{
                     const rf = revForm;
                     const setRf = setRevForm;
-                    // Spec §8: Revenue Log client = clientAccounts where approvalStatus = "Approved" only
+                    // Spec §8: Revenue Log client = clients in fully CRO-approved targetSubs for this rep
+                    // Note: clientAccounts.approvalStatus is never set; derive from targetSubs instead
                     const myApprovedAccts = isRep
-                      ? clientAccounts.filter(a=>a.repId===myRepId&&a.approvalStatus==="Approved")
-                      : clientAccounts.filter(a=>a.approvalStatus==="Approved");
+                      ? (()=>{
+                          // Collect all client names from approved targetSubs for this rep
+                          const approvedNames = new Set<string>(
+                            targetSubs
+                              .filter(s=>s.repId===myRepId&&s.status==="Approved")
+                              .flatMap(s=>(s.clients||[])
+                                .filter(cl=>!cl.clientStatus||cl.clientStatus==="Approved")
+                                .map((cl:any)=>cl.clientCompany||cl.clientName||"")
+                              )
+                              .filter(Boolean)
+                          );
+                          // Match to clientAccounts (for zohoAccountId, etc.)
+                          const fromAccts = clientAccounts.filter(a=>a.repId===myRepId&&approvedNames.has(a.clientName));
+                          const matched   = new Set(fromAccts.map(a=>a.clientName));
+                          // For approved names not yet in clientAccounts, create minimal stubs
+                          const stubs = [...approvedNames]
+                            .filter(n=>!matched.has(n))
+                            .map(n=>({id:`stub_${n}`,clientName:n,repId:myRepId,zohoAccountId:""}));
+                          return [...fromAccts,...stubs];
+                        })()
+                      : clientAccounts; // Managers/admins see all accounts
                     return (
                       <div>
                         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:8}}>
@@ -13249,11 +13281,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             {/* SECTION 1 — Who */}
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Who</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
               <div>
                 <label>Sales Rep *</label>
                 {isRep ? (
-                  // Rep sees their own name — no dropdown
+                  // Rep sees their own name — no dropdown; region auto-derived from profile
                   <input readOnly value={reps.find(r=>r.id===parseInt(logForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />
                 ) : reps.length===0 ? (
                   <div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>
@@ -13265,70 +13297,72 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 )}
               </div>
               <div>
-                <label>Region</label>
-                <input readOnly value={reps.find(r=>r.id===parseInt(logForm.repId))?.region||""} style={{color:C.dim,background:C.s2,cursor:"default"}} />
-              </div>
-              <div>
                 <label>Meeting Time</label>
                 <input type="time" value={logForm.meetingTime||""} onChange={e=>setLogForm(p=>({...p,meetingTime:e.target.value}))} />
               </div>
-              <div>
-                <label>Meeting Type</label>
-                <div style={{display:"flex",gap:6,marginTop:4}}>
-                  {MEETING_TYPES.map(mt=>(
-                    <button key={mt} onClick={()=>setLogForm(p=>({...p,meetingType:mt}))}
-                      style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.border}`,background:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?`${C.green}18`:mt==="Online"?"#4285F418":`${C.accent}18`):"transparent",color:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",transition:"all .1s",textAlign:"center"}}>
-                      {mt==="Physical"?"🤝":mt==="Online"?"💻":"📞"} {mt}
-                    </button>
-                  ))}
-                </div>
+            </div>
+            <div style={{marginBottom:14}}>
+              <label>Meeting Type</label>
+              <div style={{display:"flex",gap:6,marginTop:4}}>
+                {MEETING_TYPES.map(mt=>(
+                  <button key={mt} onClick={()=>setLogForm(p=>({...p,meetingType:mt}))}
+                    style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.border}`,background:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?`${C.green}18`:mt==="Online"?"#4285F418":`${C.accent}18`):"transparent",color:(logForm.meetingType===mt||logForm.meetingType===mt+" Meeting")?(mt==="Physical"?C.green:mt==="Online"?"#4285F4":C.accent):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",transition:"all .1s",textAlign:"center"}}>
+                    {mt==="Physical"?"🤝":mt==="Online"?"💻":"📞"} {mt}
+                  </button>
+                ))}
               </div>
             </div>
 
-            {/* SECTION 2 — Client/Agency */}
-            <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Client / Agency</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
+            {/* SECTION 2 — Client / Agency / Brand */}
+            <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Client / Agency / Brand</div>
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
               <div>
-                <label>Client or Agency?</label>
-                <select value={logForm.clientOrAgency} onChange={e=>setLogForm(p=>({...p,clientOrAgency:e.target.value}))}>
-                  {CLIENT_OR_AGENCY.map(c=><option key={c}>{c}</option>)}
-                </select>
+                <label>Agency Name</label>
+                <input placeholder="e.g. Dentsu, Omnicom…" value={logForm.agency||""} onChange={e=>setLogForm(p=>({...p,agency:e.target.value}))} />
               </div>
               <div>
-                <label>{logForm.clientOrAgency} Name *</label>
+                <label>Client Name *</label>
                 <select value={logForm.dealId} onChange={e=>{
                   const deal=deals.find(d=>d.id===e.target.value);
-                  setLogForm(p=>({...p,dealId:e.target.value,clientAgencyName:deal?.clientCompany||""}));
+                  setLogForm(p=>({...p,dealId:e.target.value,clientAgencyName:deal?.clientCompany||"",client:deal?.clientCompany||""}));
                 }}>
                   <option value="">Select from CRM</option>
                   {deals.filter(d=>!logForm.repId||d.repId===parseInt(logForm.repId)).map(d=><option key={d.id} value={d.id}>{d.clientCompany}</option>)}
                 </select>
+                {/* Manual override if client not in CRM yet */}
+                {!logForm.dealId && (
+                  <input placeholder="Or type client name…" value={logForm.client||""} onChange={e=>setLogForm(p=>({...p,client:e.target.value,clientAgencyName:e.target.value}))} style={{marginTop:4}} />
+                )}
               </div>
-              {/* Helper: if no deal selected yet, nudge rep to add client in Revenue Tracker first */}
-              {!logForm.dealId && (
-                <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:6,padding:"8px 10px",fontSize:11,color:C.blue}}>
-                  Client not in your pipeline yet? <strong>Add a deal in Revenue Tracker first</strong>, then come back to log this touchpoint.
-                </div>
-              )}
-              {/* Deal value prompt — only shown when selected deal has ₹0 amount */}
-              {(()=>{
-                const selDeal = logForm.dealId ? deals.find(d=>d.id===logForm.dealId) : null;
-                if (!selDeal || (selDeal.amount && selDeal.amount > 0)) return null;
-                return (
-                  <div style={{background:`${C.accent}10`,border:`1px solid ${C.accent}44`,borderRadius:6,padding:"8px 10px"}}>
-                    <div style={{fontSize:10,color:C.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>
-                      This deal has no value — set it now so it appears in your pipeline
-                    </div>
-                    <input
-                      placeholder="e.g. 15,00,000"
-                      value={logForm.dealAmount||""}
-                      onChange={e=>setLogForm(p=>({...p,dealAmount:e.target.value}))}
-                      style={{fontSize:12,width:"100%"}}
-                    />
-                  </div>
-                );
-              })()}
+              <div>
+                <label>Brand / Product</label>
+                <input placeholder="e.g. Surf Excel, Maggi…" value={logForm.brand||""} onChange={e=>setLogForm(p=>({...p,brand:e.target.value}))} />
+              </div>
             </div>
+            {/* Helper hint if no CRM deal linked */}
+            {!logForm.dealId && (
+              <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:6,padding:"7px 10px",fontSize:11,color:C.blue,marginBottom:10}}>
+                Tip: Select a client from the CRM dropdown to auto-link this touchpoint to your pipeline deal.
+              </div>
+            )}
+            {/* Deal value prompt — only shown when selected deal has ₹0 amount */}
+            {(()=>{
+              const selDeal = logForm.dealId ? deals.find(d=>d.id===logForm.dealId) : null;
+              if (!selDeal || (selDeal.amount && selDeal.amount > 0)) return null;
+              return (
+                <div style={{background:`${C.accent}10`,border:`1px solid ${C.accent}44`,borderRadius:6,padding:"8px 10px",marginBottom:10}}>
+                  <div style={{fontSize:10,color:C.accent,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:4}}>
+                    Deal has no value — set it now so it appears in pipeline
+                  </div>
+                  <input
+                    placeholder="e.g. 15,00,000"
+                    value={logForm.dealAmount||""}
+                    onChange={e=>setLogForm(p=>({...p,dealAmount:e.target.value}))}
+                    style={{fontSize:12,width:"100%"}}
+                  />
+                </div>
+              );
+            })()}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:14}}>
               <div>
                 <label>Name of Person Met *</label>
@@ -13354,38 +13388,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
             {/* SECTION 3 — Touchpoint Content */}
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Touchpoint Content</div>
-            {/* Part 3: Stage Update — required for Deal Meeting, hidden for Relationship */}
-            {logForm.touchpointType === "Deal Meeting" && (
-              <div style={{marginBottom:14,background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"10px 14px"}}>
-                <label style={{color:C.blue}}>Stage Update * <span style={{fontWeight:400,color:C.dim,fontSize:10}}>(required — where is this deal now?)</span></label>
-                <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
-                  {DEAL_STAGES.filter(s=>s!=="RO Received").map(s=>(
-                    <button key={s} onClick={()=>setLogForm(p=>({...p,stageUpdate:s,status:s}))}
-                      style={{padding:"5px 12px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.stageUpdate===s?oColor(s):C.border}`,background:logForm.stageUpdate===s?`${oColor(s)}18`:C.s2,color:logForm.stageUpdate===s?oColor(s):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:logForm.stageUpdate===s?700:400}}>
-                      {s}
-                    </button>
-                  ))}
-                </div>
-                {/* Part 9: Loss reason mandatory when Lost selected */}
-                {logForm.stageUpdate==="Lost"&&(
-                  <div style={{marginTop:10}}>
-                    <label style={{color:C.red,fontWeight:700}}>Loss Reason * <span style={{fontWeight:400,color:C.dim,fontSize:10}}>(required — why was this deal lost?)</span></label>
-                    <select value={logForm.lossReason||""} onChange={e=>setLogForm(p=>({...p,lossReason:e.target.value}))} style={{marginTop:4,borderColor:!logForm.lossReason?C.red:C.border}}>
-                      <option value="">Select reason...</option>
-                      <option>Budget cut / Budget not available</option>
-                      <option>Went to competitor</option>
-                      <option>Client postponed</option>
-                      <option>No response / Client went silent</option>
-                      <option>Decision not made</option>
-                      <option>Price too high</option>
-                      <option>Campaign cancelled</option>
-                      <option>Agency overruled</option>
-                      <option>Other</option>
-                    </select>
-                  </div>
-                )}
-              </div>
-            )}
             <div style={{marginBottom:10}}>
               <label>Pitch Type (Darpan's dropdown — only structured field)</label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -13406,137 +13408,68 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <textarea rows={2} placeholder="Positive, hesitant, needs approval, competitor mentioned..." value={logForm.clientFeedback||""} onChange={e=>setLogForm(p=>({...p,clientFeedback:e.target.value}))} style={{resize:"vertical"}} />
             </div>
 
-            {/* SECTION 4 — Senior Escalation (Darpan requirement) */}
-            <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"12px 14px",marginBottom:14}}>
-              <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Senior Meeting Request (Darpan: track escalations)</div>
-              <div style={{display:"grid",gridTemplateColumns:"auto 1fr 1fr",gap:10,alignItems:"end"}}>
-                <div>
-                  <label>Senior requested?</label>
-                  <div style={{display:"flex",gap:6,marginTop:4}}>
-                    {["No","Yes"].map(v=>(
-                      <button key={v} onClick={()=>setLogForm(p=>({...p,seniorRequested:v}))}
-                        style={{padding:"6px 14px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.seniorRequested===v?(v==="Yes"?C.orange:C.green):C.border}`,background:logForm.seniorRequested===v?(v==="Yes"?`${C.orange}22`:`${C.green}22`):C.s2,color:logForm.seniorRequested===v?(v==="Yes"?C.orange:C.green):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                        {v}
+            {/* SECTION 4 — Action Required (unified: what/from/description/byWhen) */}
+              <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Action Required</div>
+              <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 14px",marginBottom:14}}>
+                <div style={{fontSize:11,color:C.purple,fontWeight:700,marginBottom:8}}>
+                  What do you need to move this forward? Each item auto-creates a task + IR for the receiving dept, with an escalation clock.
+                </div>
+
+                {(logForm.actionRequired||[{...BLANK_ACTION_REQUIRED}]).map((item,idx)=>(
+                  <div key={idx} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:7,padding:"10px 12px",marginBottom:8}}>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
+                      <div>
+                        <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>What do I need? *</div>
+                        <select value={item.what||""} onChange={e=>{const arr=[...(logForm.actionRequired||[])];arr[idx]={...arr[idx],what:e.target.value};setLogForm(p=>({...p,actionRequired:arr}));}}>
+                          <option value="">Select type…</option>
+                          {ACTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
+                        </select>
+                      </div>
+                      <div>
+                        <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>From who? *</div>
+                        <select value={item.from||""} onChange={e=>{const arr=[...(logForm.actionRequired||[])];arr[idx]={...arr[idx],from:e.target.value};setLogForm(p=>({...p,actionRequired:arr}));}}>
+                          <option value="">Department / person…</option>
+                          <optgroup label="Internal Departments">
+                            {APPROVAL_TARGETS.map(t=><option key={t} value={t}>{t}</option>)}
+                          </optgroup>
+                          <optgroup label="Self">
+                            <option value="Self">Myself</option>
+                          </optgroup>
+                          <optgroup label="Client">
+                            <option value="Client">Client</option>
+                          </optgroup>
+                        </select>
+                      </div>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 150px 28px",gap:8,alignItems:"end"}}>
+                      <div>
+                        <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Description <span style={{fontWeight:400,color:C.muted}}>(max 150 chars)</span></div>
+                        <input maxLength={150} placeholder="What exactly is needed…" value={item.description||""} onChange={e=>{const arr=[...(logForm.actionRequired||[])];arr[idx]={...arr[idx],description:e.target.value};setLogForm(p=>({...p,actionRequired:arr}));}} />
+                      </div>
+                      <div>
+                        <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>By When *</div>
+                        <input type="date" min="2020-01-01" max="2099-12-31" value={item.byWhen||""} onChange={e=>{const arr=[...(logForm.actionRequired||[])];arr[idx]={...arr[idx],byWhen:e.target.value};setLogForm(p=>({...p,actionRequired:arr}));}} />
+                      </div>
+                      <button onClick={()=>{const arr=(logForm.actionRequired||[]).filter((_,i)=>i!==idx);setLogForm(p=>({...p,actionRequired:arr.length?arr:[{...BLANK_ACTION_REQUIRED}]}));}}
+                        style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,padding:0,lineHeight:1,textAlign:"center",height:34}}>
+                        ✕
                       </button>
-                    ))}
+                    </div>
+                    {item.what&&item.from&&(
+                      <div style={{marginTop:6,fontSize:10,color:C.purple,fontWeight:600}}>
+                        → Auto-creates task for <strong>{item.from}</strong>{item.byWhen?` · due ${item.byWhen}`:""}. If overdue, escalates: RH → NSH → Strategy → CRO.
+                      </div>
+                    )}
                   </div>
-                </div>
-                {logForm.seniorRequested==="Yes" && <>
-                  <div>
-                    <label>Senior's Name</label>
-                    <input placeholder="Name of senior needed" value={logForm.seniorRequestedName||""} onChange={e=>setLogForm(p=>({...p,seniorRequestedName:e.target.value}))} />
-                  </div>
-                  <div>
-                    <label>Role / Level</label>
-                    <select value={logForm.seniorRequestedRole||""} onChange={e=>setLogForm(p=>({...p,seniorRequestedRole:e.target.value}))}>
-                      <option value="">Select</option>
-                      <option>Region Head</option>
-                      <option>Sales Head</option>
-                      <option>CXO</option>
-                      <option>National Sales Head</option>
-                      <option>Sales Strategy</option>
-                    </select>
-                  </div>
-                </>}
-              </div>
-            </div>
+                ))}
 
-            {/* SECTION 5 — RO Reminder — shown only for Mail Confirmed */}
-            {logForm.stageUpdate==="Mail Confirmed" && (
-              <div style={{background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:8,padding:"12px 16px",marginBottom:14}}>
-                <div style={{fontSize:12,fontWeight:700,color:C.green,marginBottom:6}}>✓ Mail Confirmed — Waiting for RO?</div>
-                <div style={{fontSize:11,color:C.dim,marginBottom:10}}>Set a reminder to follow up if the RO has not arrived:</div>
-                <div style={{display:"flex",gap:8}}>
-                  {[3,5,7].map(days=>{
-                    const rd=new Date(TODAY);rd.setDate(rd.getDate()+days);
-                    const reminderDate=rd.toISOString().slice(0,10);
-                    return (
-                      <button key={days} onClick={()=>{
-                        setPlans((prev:any[])=>[...prev,{id:`p_ro_${Date.now()}_${days}`,repId:myRepId,date:reminderDate,time:"10:00",clientAgencyName:logForm.clientCompany||logForm.clientAgencyName||"",contactName:"",phone:"",agenda:`[RO Reminder] Follow up — RO not yet received`,pitchType:"",meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"ro-reminder"}]);
-                        showToast(`RO follow-up reminder set for ${days} days`);
-                      }} style={{padding:"6px 16px",background:C.green,color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace",fontWeight:600}}>
-                        +{days}d
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* SECTION 5 — Next Steps — hidden for Relationship type and terminal stages */}
-            {(logForm.touchpointType||"Deal Meeting")==="Deal Meeting" && !["Mail Confirmed","Lost","RO Received"].includes(logForm.stageUpdate||"") && (<>
-            <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Next Steps</div>
-
-            {/* Structured action items — one row per action */}
-            <div style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",marginBottom:10}}>
-              <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:10}}>
-                Action Items — each row auto-creates a task for the dept + follow-up in your pipeline
+                <button onClick={()=>setLogForm(p=>({...p,actionRequired:[...(p.actionRequired||[]),{...BLANK_ACTION_REQUIRED}]}))}
+                  style={{background:"transparent",border:`1px dashed ${C.border}`,borderRadius:5,padding:"5px 14px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginTop:4,width:"100%"}}>
+                  + Add another action item
+                </button>
               </div>
 
-              {(logForm.nextStepItems||[{...BLANK_NEXT_STEP_ITEM}]).map((item,idx)=>(
-                <div key={idx} style={{background:C.surface||"#fff",border:`1px solid ${C.border}`,borderRadius:7,padding:"10px 12px",marginBottom:8}}>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
-                    {/* Action Type — 5 types from spec */}
-                    <div>
-                      <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Action Type *</div>
-                      <select value={item.actionType||item.action||""} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],actionType:e.target.value,action:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}}>
-                        <option value="">Select type…</option>
-                        {ACTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-                    {/* Who */}
-                    <div>
-                      <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Who *</div>
-                      <select value={item.neededFrom} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],neededFrom:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}}>
-                        <option value="">Needed from…</option>
-                        <optgroup label="Internal Departments">
-                          {APPROVAL_TARGETS.map(t=><option key={t} value={t}>{t}</option>)}
-                        </optgroup>
-                        <optgroup label="Self">
-                          <option value="Self">Myself</option>
-                        </optgroup>
-                        <optgroup label="Client">
-                          <option value="Client">Client</option>
-                        </optgroup>
-                      </select>
-                    </div>
-                  </div>
-                  <div style={{display:"grid",gridTemplateColumns:"1fr 150px 28px",gap:8,alignItems:"end"}}>
-                    {/* Specific Details */}
-                    <div>
-                      <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Specific Details <span style={{fontWeight:400,color:C.muted}}>(max 150 chars)</span></div>
-                      <input maxLength={150} placeholder="What exactly is needed…" value={item.details||item.remarks||""} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],details:e.target.value,remarks:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
-                    </div>
-                    {/* By When */}
-                    <div>
-                      <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>By When *</div>
-                      <input type="date" min="2020-01-01" max="2099-12-31" value={item.dueDate} onChange={e=>{const arr=[...(logForm.nextStepItems||[])];arr[idx]={...arr[idx],dueDate:e.target.value};setLogForm(p=>({...p,nextStepItems:arr}));}} />
-                    </div>
-                    {/* Remove */}
-                    <button onClick={()=>{const arr=(logForm.nextStepItems||[]).filter((_,i)=>i!==idx);setLogForm(p=>({...p,nextStepItems:arr.length?arr:[{...BLANK_NEXT_STEP_ITEM}]}));}}
-                      style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,padding:0,lineHeight:1,textAlign:"center",height:34}}>
-                      ✕
-                    </button>
-                  </div>
-                  {/* Routing indicator */}
-                  {(item.actionType||item.action)&&item.neededFrom&&(
-                    <div style={{marginTop:6,fontSize:10,color:C.blue,fontWeight:600}}>
-                      {(item.actionType||item.action)==="Approval needed" && `→ Approvals tab of ${item.neededFrom}`}
-                      {(item.actionType||item.action)==="Attend a meeting" && `→ My Plan of ${item.neededFrom} (unscheduled meeting request)`}
-                      {["Document needed","Document / plan needed","Introduction needed","Client introduction needed","Flag for follow-up"].includes(item.actionType||item.action) && `→ My Tasks of ${item.neededFrom}`}
-                    </div>
-                  )}
-                </div>
-              ))}
-
-              <button onClick={()=>setLogForm(p=>({...p,nextStepItems:[...(p.nextStepItems||[]),{...BLANK_NEXT_STEP_ITEM}]}))}
-                style={{background:"transparent",border:`1px dashed ${C.border}`,borderRadius:5,padding:"5px 14px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginTop:4,width:"100%"}}>
-                + Add another action item
-              </button>
-            </div>
-            </>)}
-
-            {/* Follow-up date + meeting status side by side */}
+                          {/* Follow-up date + meeting status side by side */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
               <div>
                 <label>Follow-Up Date</label>
@@ -13646,53 +13579,71 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               )}
             </div>
 
-            {/* SUPPORT REQUEST SECTION — dedicated quick-IR panel */}
-            <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 14px",marginBottom:12}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
-                <div style={{fontSize:10,color:C.purple,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase"}}>🆘 Support Needed from Another Dept?</div>
-                <span style={{fontSize:10,color:C.muted}}>(optional — raises an Internal Request)</span>
-              </div>
-              <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr",gap:8,marginBottom:8}}>
-                <div>
-                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Department</div>
-                  <select value={logForm.supportRequest?.dept||""} onChange={e=>setLogForm(p=>({...p,supportRequest:{...p.supportRequest,dept:e.target.value}}))}>
-                    <option value="">— None —</option>
-                    <option>Sales Strategy</option>
-                    <option>Digi Ops</option>
-                    <option>CRO</option>
-                    <option>Finance</option>
-                    <option>Marketing</option>
-                    <option>Legal</option>
-                    <option>Other</option>
-                  </select>
-                </div>
-                <div>
-                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Priority</div>
-                  <select value={logForm.supportRequest?.priority||"Medium"} onChange={e=>setLogForm(p=>({...p,supportRequest:{...p.supportRequest,priority:e.target.value}}))} disabled={!logForm.supportRequest?.dept}>
-                    <option>Low</option>
-                    <option>Medium</option>
-                    <option>High</option>
-                    <option>Urgent</option>
-                  </select>
-                </div>
-                <div>
-                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Needed By</div>
-                  <input type="date" min="2020-01-01" max="2099-12-31" value={logForm.supportRequest?.dueDate||""} onChange={e=>setLogForm(p=>({...p,supportRequest:{...p.supportRequest,dueDate:e.target.value}}))} disabled={!logForm.supportRequest?.dept} />
-                </div>
-              </div>
-              {logForm.supportRequest?.dept && (
-                <div>
-                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>What do you need? *</div>
-                  <textarea rows={2} placeholder={`Describe what you need from ${logForm.supportRequest.dept}…`}
-                    value={logForm.supportRequest?.description||""}
-                    onChange={e=>setLogForm(p=>({...p,supportRequest:{...p.supportRequest,description:e.target.value}}))}
-                    style={{width:"100%",resize:"vertical",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"6px 8px",border:`1px solid ${C.border}`,borderRadius:5,background:C.surface}}
-                  />
-                  <div style={{fontSize:10,color:C.purple,marginTop:3}}>→ Will create a Support Request in {logForm.supportRequest.dept}'s inbox when you log this touchpoint</div>
+
+              {/* STAGE UPDATE — moved to end of form per spec (Deal Meeting only) */}
+              {logForm.touchpointType === "Deal Meeting" && (
+                <div style={{marginBottom:14,background:`${C.blue}08`,border:`1px solid ${C.blue}55`,borderRadius:6,padding:"12px 14px"}}>
+                  <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Stage Update *</div>
+                  <div style={{fontSize:10,color:C.dim,marginBottom:8}}>Where is this deal now? Select one — updates pipeline and resets the escalation clock.</div>
+                  <div style={{display:"flex",gap:6,flexWrap:"wrap",marginBottom:6}}>
+                    {DEAL_STAGES.map(s=>(
+                      <button key={s} onClick={()=>setLogForm(p=>({...p,stageUpdate:s,status:s}))}
+                        style={{padding:"6px 14px",fontSize:11,borderRadius:4,border:`1px solid ${logForm.stageUpdate===s?oColor(s):C.border}`,background:logForm.stageUpdate===s?`${oColor(s)}18`:C.s2,color:logForm.stageUpdate===s?oColor(s):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:logForm.stageUpdate===s?700:400,transition:"all .1s"}}>
+                        {s}
+                      </button>
+                    ))}
+                  </div>
+                  {logForm.stageUpdate==="Lost"&&(
+                    <div style={{marginTop:10}}>
+                      <label style={{color:C.red,fontWeight:700}}>Loss Reason * <span style={{fontWeight:400,color:C.dim,fontSize:10}}>(required)</span></label>
+                      <select value={logForm.lossReason||""} onChange={e=>setLogForm(p=>({...p,lossReason:e.target.value}))} style={{marginTop:4,borderColor:!logForm.lossReason?C.red:C.border}}>
+                        <option value="">Select reason...</option>
+                        <option>Budget cut / Budget not available</option>
+                        <option>Went to competitor</option>
+                        <option>Client postponed</option>
+                        <option>No response / Client went silent</option>
+                        <option>Decision not made</option>
+                        <option>Price too high</option>
+                        <option>Campaign cancelled</option>
+                        <option>Agency overruled</option>
+                        <option>Other</option>
+                      </select>
+                    </div>
+                  )}
+                  {logForm.stageUpdate==="RO Received"&&(
+                    <div style={{marginTop:10,background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"10px 12px"}}>
+                      <div style={{fontSize:12,fontWeight:700,color:C.green,marginBottom:4}}>🎉 RO Received — great work!</div>
+                      <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Log your revenue entry so it reflects in your pipeline right away.</div>
+                      <button onClick={()=>{setLogOpen(false);setLogForm(BLANK_LOG);setView("revenue-log");}}
+                        style={{background:C.green,color:"#fff",border:"none",borderRadius:5,padding:"6px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                        → Go to Revenue Log
+                      </button>
+                      <span style={{fontSize:10,color:C.dim,marginLeft:8}}>or finish logging touchpoint first, then add revenue after</span>
+                    </div>
+                  )}
+                  {logForm.stageUpdate==="Mail Confirmed"&&(
+                    <div style={{marginTop:10,background:`${C.accent}10`,border:`1px solid ${C.accent}44`,borderRadius:6,padding:"10px 12px"}}>
+                      <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:4}}>Mail Confirmed — waiting for RO?</div>
+                      <div style={{fontSize:10,color:C.dim,marginBottom:6}}>Set a follow-up reminder so nothing slips:</div>
+                      <div style={{display:"flex",gap:6}}>
+                        {[3,5,7].map(days=>{
+                          const rd=new Date(TODAY);rd.setDate(rd.getDate()+days);
+                          const reminderDate=rd.toISOString().slice(0,10);
+                          return (
+                            <button key={days} onClick={()=>{
+                              setPlans((prev:any[])=>[...prev,{id:`p_ro_${Date.now()}_${days}`,repId:myRepId,date:reminderDate,time:"10:00",clientAgencyName:logForm.clientAgencyName||logForm.client||"",contactName:"",phone:"",agenda:`[RO Reminder] Follow up — RO not received yet`,pitchType:"",meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"ro-reminder"}]);
+                              showToast(`RO follow-up reminder set for +${days} days ✓`);
+                            }} style={{padding:"5px 14px",background:C.accent,color:"#fff",border:"none",borderRadius:5,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace",fontWeight:600}}>
+                              +{days}d
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
-            </div>
-
+  
             <div style={{display:"flex",gap:8,justifyContent:"flex-end",alignItems:"center"}}>
               {calendarLoading && <span style={{fontSize:11,color:C.dim}}>Creating calendar event...</span>}
               <button className="btn btn-ghost" onClick={()=>{setLogOpen(false);setLogForm(BLANK_LOG);}}>Cancel</button>

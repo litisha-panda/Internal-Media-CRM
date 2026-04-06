@@ -1,0 +1,137 @@
+Build the Sales Rep workflow first. Ignore CRO/NSH/RH refinements for now unless needed to support the Sales Rep flow.
+
+Objective:
+Make the Sales Rep experience clean, linear, and fully execution-focused.
+
+Sales Rep should see only these 6 tabs:
+1. Target
+2. My Plan / Calendar
+3. Revenue Log
+4. Internal Requests
+5. Tasks
+6. HR Report
+
+Do not show Sales Rep:
+- War Room
+- Revenue Tracker
+- By Region
+- All Sales Reps
+- Access Management
+- Platform Config
+- leadership dashboards
+
+Build the Sales Rep flow exactly like this:
+
+PHASE A — TARGET
+1. In the Target tab, Sales Rep should upload / enter client-wise and channel-wise targets.
+2. Sales Rep submits targets for approval.
+3. Once approved, targets are locked and Sales Rep cannot edit them.
+4. Target screen should show:
+   - Total Target
+   - Achieved
+   - Shortfall
+   - client-wise target list
+
+PHASE B — MY PLAN / CALENDAR
+This is the Sales Rep’s main working screen.
+
+Requirements:
+1. Sales Rep must do 2 things every day:
+   - log today’s meetings/touchpoints
+   - schedule tomorrow’s meetings/touchpoints
+2. If either of the above is not done by 11:30 PM, mark the rep absent / non-compliant in HR Report.
+3. My Plan should contain:
+   - Today section
+   - Tomorrow section
+   - Full calendar below
+4. If a meeting is scheduled for tomorrow, it should show in Tomorrow.
+5. When the next day starts, that item should automatically move into Today.
+6. From Today, rep should get a clear “Log Touchpoint” action.
+
+PHASE C — SCHEDULE TOUCHPOINT FORM
+When scheduling tomorrow’s touchpoint:
+1. Separate fields:
+   - Agency
+   - Client
+   - Brand
+2. Do not keep Client/Agency as one combined field.
+3. If Agency or Client does not exist, provide a + button inline to add new Agency / Client without leaving the workflow.
+4. Once saved, it must appear in Tomorrow section.
+
+PHASE D — LOG TOUCHPOINT FORM
+When logging a touchpoint:
+1. If this touchpoint came from a planned item, auto-fetch:
+   - Agency
+   - Client
+   - Brand
+   - who they are meeting
+2. Remove Region field entirely from this form. Region should come from the logged-in rep profile.
+3. Stage Update should be the last field in the form.
+4. Replace “Mail Confirmed” with “RO Received”.
+5. If rep selects “RO Received”, prompt the rep to log revenue and connect that to Revenue Log.
+6. If meeting/touchpoint status is Closed, follow-up should not be required.
+
+PHASE E — ACTION REQUIRED SYSTEM
+We do not need separate “Next Steps” and “Support Needed”.
+Replace them with one unified section:
+
+Action Required:
+- What do I need?
+- From who?
+- Description
+- By when?
+
+Example:
+What: Digital Deck
+From who: Digi Ops
+Description: Test
+By when: 07.04.2026
+
+On save, system must automatically create:
+1. A Task for the receiver (Digi Ops / Strategy / CRO / RH / etc.)
+2. An Internal Request visible to the Sales Rep
+3. A calendar reminder for the Sales Rep
+4. A calendar reminder for the receiver
+
+If the Sales Rep enters:
+- Follow-up date → create calendar reminder
+- Next meeting date → create calendar item
+- Action due date → create calendar reminder
+
+PHASE F — ESCALATION
+If the Action Required item is not closed by due date:
+- +12 hours → escalate to Region Head
+- +12 hours → escalate to NSH
+- +12 hours → escalate to Sales Strategy
+- +12 hours → escalate to CRO
+
+Escalations should appear in the Escalation tab / view for the respective roles.
+
+PHASE G — REVENUE LOG
+1. Revenue should be logged only against clients from the approved target list.
+2. When revenue is logged, Achieved should update immediately in the Target dashboard.
+
+Important implementation rules:
+- Start with Sales Rep flow only.
+- Make this flow fully usable before refining leadership dashboards.
+- Optimize for clarity and low cognitive load.
+- Minimize tabs, duplicate fields, and duplicate workflows.
+- The system should feel like:
+  Target → Plan → Log Touchpoint → Raise Action Required → Log Revenue
+
+Deliverables expected from you:
+1. Updated Sales Rep sidebar
+2. Updated Target tab
+3. Updated My Plan / Calendar flow
+4. Updated Schedule Touchpoint form
+5. Updated Log Touchpoint form
+6. Unified Action Required workflow
+7. Escalation workflow
+8. Revenue Log linkage
+9. HR absence / compliance logic
+
+Before changing CRO/NSH/RH, complete Sales Rep flow first and then show:
+- the updated Sales Rep sidebar
+- the 6 tabs
+- screenshots or code confirmation of each major screen
+- exact data flow for Target → Plan → Touchpoint → Action Required → Revenue
