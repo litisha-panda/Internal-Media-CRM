@@ -4081,9 +4081,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* ── TODAY'S ACTIONS (first thing after CTAs) ── */}
                 {isRep && (()=>{
-                  const _repTgt = targetSubs.filter(s=>s.repId===myRepId&&s.status==="Approved").reduce((sum,s)=>sum+(s.totalTarget||(s.clients||[]).reduce((ss:number,c:any)=>ss+(c.targetAmount||0),0)||0),0);
-                  const _repAch = revenueEntries.filter(e=>e.repId===myRepId&&!e.isReversed&&!e.reversalOf).reduce((sum,e)=>sum+(e.amount||0),0);
-                  const _actPipe= deals.filter(d=>d.repId===myRepId&&["In Discussion","Negotiation"].includes(dealStage(d))).reduce((sum,d)=>sum+(d.amount||d.targetAmount||0),0);
+                  const _repTgt = targetSubs.filter(s=>s.repId===myRepId&&s.status==="Approved"&&qMatch(s.quarter||filterQ)).reduce((sum,s)=>sum+(s.totalTarget||(s.clients||[]).reduce((ss:number,c:any)=>ss+(c.targetAmount||0),0)||0),0);
+                  const _repAch = revenueEntries.filter(e=>e.repId===myRepId&&!e.isReversed&&!e.reversalOf&&qMatch(e.quarter)).reduce((sum,e)=>sum+(e.amount||0),0);
+                  const _actPipe= deals.filter(d=>d.repId===myRepId&&["In Discussion","Negotiation"].includes(dealStage(d))&&qMatch(d.quarter||filterQ)).reduce((sum,d)=>sum+(d.amount||d.targetAmount||0),0);
                   const _gap    = Math.max(0,_repTgt-_repAch-_actPipe);
                   const coldDeals = atRiskDeals;
                   const overdueTasks = tasks.filter(t=>
@@ -11572,12 +11572,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const flags = [
               {label:"Reps not logged today",         items:notLoggedToday,    color:C.red,    icon:"⚠",
                 nav:"rh-team-plan",    detail:(u:any)=>u.name,
-                headerClick:()=>{setRhTeamFilter(f=>({...f,rep:"",dateRange:"today"}));setView("rh-team-plan");},
-                chipClick:(u:any)=>{setRhTeamFilter(f=>({...f,rep:String(u.repId),dateRange:"today"}));setView("rh-team-plan");}},
+                headerClick:()=>{setRhTeamFilter({rep:"",dateRange:"today",client:"",status:""});setView("rh-team-plan");},
+                chipClick:(u:any)=>{setRhTeamFilter({rep:String(u.repId),dateRange:"today",client:"",status:""});setView("rh-team-plan");}},
               {label:"Reps not planned for tomorrow", items:notPlannedTmrw,    color:C.orange, icon:"⏰",
                 nav:"rh-team-plan",    detail:(u:any)=>u.name,
-                headerClick:()=>{setRhTeamFilter(f=>({...f,rep:"",dateRange:"tomorrow"}));setView("rh-team-plan");},
-                chipClick:(u:any)=>{setRhTeamFilter(f=>({...f,rep:String(u.repId),dateRange:"tomorrow"}));setView("rh-team-plan");}},
+                headerClick:()=>{setRhTeamFilter({rep:"",dateRange:"tomorrow",client:"",status:""});setView("rh-team-plan");},
+                chipClick:(u:any)=>{setRhTeamFilter({rep:String(u.repId),dateRange:"tomorrow",client:"",status:""});setView("rh-team-plan");}},
               {label:"Target approvals pending",      items:pendingApprovals,  color:C.accent, icon:"◎",
                 nav:"target-approvals", detail:(t:any)=>t.repName,
                 headerClick:()=>setView("target-approvals"),
