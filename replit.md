@@ -59,6 +59,11 @@ All API routes are prefixed with `/api/` and include modules for Authentication,
   - Client account threads provide a comprehensive view of client interactions.
   - Action items are routed based on their type to tasks, internal requests, or plans.
   - A pre-launch gate for reps is managed via `platformLive` in `adminConfig`.
+  - Sales Rep default landing page is `my-plan` (not `target-submit`).
+  - "Meeting" terminology replaced with "Touchpoint" in all user-facing labels throughout the app.
+  - Touchpoint log form auto-creates a task when `nextSteps` plain text is filled but no structured `nextStepItems` action exists.
+  - Revenue Tracker includes a "Revenue Report" tab with month/client/channel/region breakdowns sourced exclusively from `revenueEntries` (reversals excluded).
+  - Pipeline Gap metric (`Target − Achieved − Active Pipeline`) is surfaced in: My Plan (target summary strip), RH War Room (metric strip below header), and General War Room (all non-RH/non-NSH roles). NSH War Room already had a comprehensive GAP dashboard.
 
 ## External Dependencies
 

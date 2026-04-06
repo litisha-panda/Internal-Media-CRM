@@ -1506,7 +1506,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (role === "REGION HEAD") return "warroom";
     if (["SALES HEAD","CRO","SALES STRATEGY"].includes(role)) return "warroom";
     if (role === "DIGI OPS") return "digi-deals";
-    return "target-submit"; // Sales Rep — Targets is the first screen per workflow
+    return "my-plan"; // Sales Rep — My Plan is the daily execution home
   };
   const [view, setView] = useState(getCRMDefaultView);
   // T009: Reset landing view whenever the logged-in user switches roles
@@ -2579,6 +2579,21 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         }
       }
     });
+    // T004: Auto-create a task when plain "Next Steps" text is filled but no explicit nextStepItems action exists
+    const hasStepItemAction = (logForm.nextStepItems||[]).some(i => i.action);
+    if (logForm.nextSteps?.trim() && !hasStepItemAction) {
+      newTasks.push({
+        id: `t_ns_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+        assignedTo: null, assignedToUserId: activeUser, assignedDept: "Self",
+        repId: repIdInt, clientCompany,
+        title: `${logForm.nextSteps.trim()}${clientCompany ? ` — ${clientCompany}` : ""}`.slice(0, 160),
+        description: logForm.nextSteps.trim(),
+        priority: "High", status: "Open",
+        dueDate: logForm.followUpDate || TOMORROW,
+        createdAt: TODAY, assignedBy: activeUser, assignedByName: repName,
+        fromMeetingLog: true,
+      });
+    }
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
     if (newIRsFromLog.length) setInternalReqs(p => [...newIRsFromLog, ...p]);
     if (attendPlans.length) setPlans(p => [...p, ...attendPlans]);
@@ -3900,7 +3915,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                   <div>
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY PLAN</div>
-                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>Click any planned meeting to log it · Add new ones via + on calendar</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>Click any planned touchpoint to log it · Add new ones via + on calendar</div>
                   </div>
                   <div style={{display:"flex",gap:8,alignItems:"center"}}>
                     {/* Daily timer */}
@@ -3913,6 +3928,79 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   </div>
                 </div>
+
+                {/* ── Target Summary + Pipeline Gap (Sales Rep only) ── */}
+                {isRep && (()=>{
+                  const repTarget = targetSubs
+                    .filter(s => s.repId === myRepId && s.status === "Approved")
+                    .reduce((sum, s) => sum + (s.totalTarget || (s.clients||[]).reduce((ss, c) => ss + (c.targetAmount||0), 0) || 0), 0);
+                  const repAchieved = revenueEntries
+                    .filter(e => e.repId === myRepId && !e.isReversed && !e.reversalOf)
+                    .reduce((sum, e) => sum + (e.amount||0), 0);
+                  const activePipeline = deals
+                    .filter(d => d.repId === myRepId && ["In Discussion","Negotiation"].includes(dealStage(d)))
+                    .reduce((sum, d) => sum + (d.amount||d.targetAmount||0), 0);
+                  const pipelineGap = Math.max(0, repTarget - repAchieved - activePipeline);
+                  const pendingTaskCount = tasks.filter(t =>
+                    (t.repId === myRepId || t.assignedToUserId === activeUser) &&
+                    !["Done","Closed"].includes(t.status)
+                  ).length;
+                  const achPct  = repTarget > 0 ? Math.min(100, Math.round((repAchieved    / repTarget) * 100)) : 0;
+                  const pipePct = repTarget > 0 ? Math.min(100 - achPct, Math.round((activePipeline / repTarget) * 100)) : 0;
+
+                  if (repTarget === 0) return (
+                    <div style={{background:`${C.accent}08`,border:`1px solid ${C.accent}33`,borderRadius:8,padding:"12px 16px",marginBottom:16,fontSize:12,color:C.dim}}>
+                      No approved targets yet — your Region Head will assign your annual target once approved.
+                    </div>
+                  );
+
+                  return (
+                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 18px",marginBottom:16}}>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,marginBottom:10}}>
+                        <div>
+                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>Annual Target</div>
+                          <div className="sans" style={{fontSize:17,fontWeight:800,color:C.text}}>{fmtR(repTarget)}</div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:9,color:C.green,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>Achieved</div>
+                          <div className="sans" style={{fontSize:17,fontWeight:800,color:C.green}}>
+                            {fmtR(repAchieved)} <span style={{fontSize:11,fontWeight:600,color:C.dim}}>{achPct}%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:9,color:C.accent,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>Active Pipeline</div>
+                          <div className="sans" style={{fontSize:17,fontWeight:800,color:C.accent}}>
+                            {fmtR(activePipeline)} <span style={{fontSize:11,fontWeight:600,color:C.dim}}>{pipePct}%</span>
+                          </div>
+                        </div>
+                        <div>
+                          <div style={{fontSize:9,color:pipelineGap===0?C.green:C.red,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>Pipeline Gap</div>
+                          <div className="sans" style={{fontSize:17,fontWeight:800,color:pipelineGap===0?C.green:C.red}}>
+                            {pipelineGap===0?"✓ On track":fmtR(pipelineGap)}
+                          </div>
+                        </div>
+                      </div>
+                      {/* Progress bar: Achieved (green) + Pipeline (amber) */}
+                      <div style={{height:6,background:C.s3,borderRadius:3,overflow:"hidden",marginBottom:8}}>
+                        <div style={{display:"flex",height:"100%"}}>
+                          <div style={{width:`${achPct}%`,background:C.green,transition:"width .4s"}} />
+                          <div style={{width:`${pipePct}%`,background:`${C.accent}99`,transition:"width .4s"}} />
+                        </div>
+                      </div>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                          <span style={{fontSize:10,color:C.dim}}>🟢 Achieved &nbsp;🟡 Pipeline</span>
+                          {pendingTaskCount > 0 && <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>⬡ {pendingTaskCount} task{pendingTaskCount!==1?"s":""} pending</span>}
+                          {atRiskDeals.length > 0 && <span style={{background:`${C.red}18`,color:C.red,padding:"1px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>⚠ {atRiskDeals.length} at risk</span>}
+                        </div>
+                        <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(myRepId||"")}));setLogOpen(true);}}
+                          style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"6px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
+                          + Add Touchpoint
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* ── At-Risk Alert Banner ── */}
                 {atRiskDeals.length > 0 && (
@@ -3936,9 +4024,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               No deal meeting {idle}d
                             </span>
                             <button
-                              onClick={e=>{e.stopPropagation();setMeetingForm(f=>({...f,dealId:d.id,clientAgencyName:d.clientCompany}));setMeetingOpen(true);}}
+                              onClick={e=>{e.stopPropagation();setLogForm(f=>({...BLANK_LOG,repId:String(myRepId||""),dealId:d.id,clientAgencyName:d.clientCompany}));setLogOpen(true);}}
                               style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                              Log Meeting →
+                              Log Touchpoint →
                             </button>
                           </div>
                         );
@@ -4517,8 +4605,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       }
                                       setPlanLoggedMsg(prev=>({...prev,[p.id]:logMsg}));
                                       const planCount = (act&&bywhen?1:0)+(nm?1:0)+(fu?1:0);
-                                      showToast((act&&frm?"Meeting logged + task created ✓":"Meeting logged ✓")+(planCount>0?` · ${planCount} calendar entry added`:""));
-                                    }}>Log Meeting ✓</button>
+                                      showToast((act&&frm?"Touchpoint logged + task created ✓":"Touchpoint logged ✓")+(planCount>0?` · ${planCount} calendar entry added`:""));
+                                    }}>Log Touchpoint ✓</button>
                                   </div>
                                 </div>
                                 );
@@ -4659,7 +4747,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </div>
                           </div>
                           <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                            {!dvIsPast&&<button className="btn btn-primary" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>{setCalDayView(null);setAddPlanFor(dvDate);}}>+ Add Meeting</button>}
+                            {!dvIsPast&&<button className="btn btn-primary" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>{setCalDayView(null);setAddPlanFor(dvDate);}}>+ Add Touchpoint</button>}
                             <button onClick={()=>setCalDayView(null)} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
                           </div>
                         </div>
@@ -4963,6 +5051,27 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}</div>
                   </div>
                 </div>
+
+                {/* ── PIPELINE GAP STRIP ── */}
+                {(()=>{
+                  const rhGap = Math.max(0, rhT - rhC - rhP);
+                  const rhPipelinePct = rhT>0?Math.round((rhP/rhT)*100):0;
+                  return (
+                    <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+                      {[
+                        {label:"ANNUAL TARGET", val:fmtR(rhT), color:C.text},
+                        {label:`ACHIEVED (${rhPct}%)`, val:fmtR(rhC), color:C.green},
+                        {label:`ACTIVE PIPELINE (${rhPipelinePct}%)`, val:fmtR(rhP), color:C.blue},
+                        {label:"PIPELINE GAP", val:rhGap===0?"✓ On track":fmtR(rhGap), color:rhGap===0?C.green:C.red},
+                      ].map(m=>(
+                        <div key={m.label} style={{flex:"1 1 140px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px"}}>
+                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>{m.label}</div>
+                          <div className="sans" style={{fontSize:16,fontWeight:800,color:m.color}}>{m.val}</div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()}
 
                 {/* ── SECTION A: MY ACTIONABLES ── */}
                 <div style={{marginBottom:20}}>
@@ -5924,6 +6033,33 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
               </div>
 
+              {/* ── PIPELINE GAP STRIP ── */}
+              {(()=>{
+                const wrAllD = visibleDeals.filter(d=>qMatch(d.quarter));
+                const wrT  = wrAllD.reduce((s,d)=>s+(d.targetAmount||0),0);
+                const wrC  = revenueEntries.filter(e=>visibleRepIdsSet.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                const wrP  = wrAllD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
+                const wrGap = Math.max(0, wrT - wrC - wrP);
+                const wrPct  = wrT>0?Math.round((wrC/wrT)*100):0;
+                const wrPPct = wrT>0?Math.round((wrP/wrT)*100):0;
+                if(!wrT) return null;
+                return (
+                  <div style={{display:"flex",gap:10,marginBottom:16,flexWrap:"wrap"}}>
+                    {[
+                      {label:"TARGET", val:fmtR(wrT), color:C.text},
+                      {label:`ACHIEVED (${wrPct}%)`, val:fmtR(wrC), color:C.green},
+                      {label:`PIPELINE (${wrPPct}%)`, val:fmtR(wrP), color:C.blue},
+                      {label:"PIPELINE GAP", val:wrGap===0?"✓ On track":fmtR(wrGap), color:wrGap===0?C.green:C.red},
+                    ].map(m=>(
+                      <div key={m.label} style={{flex:"1 1 120px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"10px 14px"}}>
+                        <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>{m.label}</div>
+                        <div className="sans" style={{fontSize:16,fontWeight:800,color:m.color}}>{m.val}</div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+
               {/* REP ACTION ITEMS — only for sales reps */}
               {isRep && (()=>{
                 const myRepId = user_role?.repId;
@@ -6131,12 +6267,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {id:"digi-internal",label:"Internal",    sub:"Cross-sell"},
                     {id:"digi-prog",   label:"Programmatic", sub:"Automated"},
                   ] : [
-                    {id:"accounts",    label:"Accounts",            sub:"All clients"},
-                    {id:"linear-tv",   label:"Linear TV",           sub:"TV deals"},
-                    {id:"properties",  label:"IPs",                 sub:"IP inventory"},
-                    {id:"digital",     label:"Digital",             sub:"Online deals"},
-                    {id:"brand",       label:"Media Solutions",     sub:"Custom packages"},
-                    {id:"integrated",  label:"Integrated Packages", sub:"Multi-platform"},
+                    {id:"accounts",        label:"Accounts",            sub:"All clients"},
+                    {id:"linear-tv",       label:"Linear TV",           sub:"TV deals"},
+                    {id:"properties",      label:"IPs",                 sub:"IP inventory"},
+                    {id:"digital",         label:"Digital",             sub:"Online deals"},
+                    {id:"brand",           label:"Media Solutions",     sub:"Custom packages"},
+                    {id:"integrated",      label:"Integrated Packages", sub:"Multi-platform"},
+                    {id:"revenue-report",  label:"Revenue Report",      sub:"From entries"},
                   ]).map(t=>(
                     <button key={t.id} onClick={()=>setRtTab(t.id)}
                       style={{padding:"10px 16px",background:"transparent",border:"none",borderBottom:rtTab===t.id?`2px solid ${C.accent}`:"2px solid transparent",color:rtTab===t.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:rtTab===t.id?700:400,textAlign:"left",whiteSpace:"nowrap"}}>
@@ -6692,7 +6829,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             </div>
                             <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                               <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(d.repId),dealId:d.id,clientAgencyName:d.clientCompany,contactName:d.contactName||""}));setLogOpen(true);}}
-                                style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Meeting</button>
+                                style={{background:`${C.accent}18`,border:"none",color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Log Touchpoint</button>
                               <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Support",dept:"Branding Team",subject:`Brand Solutions deck for ${d.clientCompany}`,details:`Custom package deck needed. Estimated value: ${fmtR(d.amount)}.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Deck request raised → Branding Team ✓");}}
                                 style={{background:`${C.purple}18`,border:"none",color:C.purple,borderRadius:4,padding:"3px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Request Deck</button>
                               <button onClick={()=>{const ir={id:`ir${Date.now()}`,type:"Approval",dept:"NSH",subject:`Brand Solutions approval: ${d.clientCompany} — ${fmtR(d.amount)}`,details:`Custom package deal needs NSH sign-off before presenting to client.`,raisedBy:activeUser,raisedByName:user_role?.name||"",repId:d.repId,dealId:d.id,clientCompany:d.clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""};setInternalReqs(p=>[ir,...p]);showToast("Approval request raised → NSH ✓");}}
@@ -6905,6 +7042,92 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     })}
                   </div>
                 )}
+
+                {/* ── REVENUE REPORT TAB — from revenue_entries only ── */}
+                {rtTab==="revenue-report" && (()=>{
+                  const visibleEntries = revenueEntries.filter(e =>
+                    !e.isReversed && !e.reversalOf && visibleRepIdsSet.has(e.repId)
+                  );
+                  const totalRev = visibleEntries.reduce((s, e) => s + (e.amount||0), 0);
+
+                  const byMonth: Record<string,number> = {};
+                  visibleEntries.forEach(e => {
+                    const ym = (e.date||e.createdAt||"").slice(0,7) || "Unknown";
+                    byMonth[ym] = (byMonth[ym]||0) + (e.amount||0);
+                  });
+                  const monthRows = Object.entries(byMonth).sort((a,b)=>b[0].localeCompare(a[0]));
+
+                  const byClient: Record<string,number> = {};
+                  visibleEntries.forEach(e => { const k=e.clientCompany||"Unknown"; byClient[k]=(byClient[k]||0)+(e.amount||0); });
+                  const clientRows = Object.entries(byClient).sort((a,b)=>b[1]-a[1]).slice(0,20);
+
+                  const byChannel: Record<string,number> = {};
+                  visibleEntries.forEach(e => { const k=e.dealType||e.channel||"Other"; byChannel[k]=(byChannel[k]||0)+(e.amount||0); });
+                  const channelRows = Object.entries(byChannel).sort((a,b)=>b[1]-a[1]);
+
+                  const byRegion: Record<string,number> = {};
+                  visibleEntries.forEach(e => { const rep=reps.find(r=>r.id===e.repId); const k=rep?.region||e.region||"Unknown"; byRegion[k]=(byRegion[k]||0)+(e.amount||0); });
+                  const regionRows = Object.entries(byRegion).sort((a,b)=>b[1]-a[1]);
+
+                  const RevTbl = ({rows, col1}:{rows:[string,number][], col1:string}) => (
+                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead><tr>
+                          <th style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{col1}</th>
+                          <th style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"right",borderBottom:`1px solid ${C.border}`,width:140}}>Revenue</th>
+                          <th style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"right",borderBottom:`1px solid ${C.border}`,width:80}}>Share</th>
+                        </tr></thead>
+                        <tbody>
+                          {rows.map(([k,v])=>(
+                            <tr key={k} style={{borderBottom:`1px solid ${C.s2}`}}
+                              onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                              onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                              <td style={{padding:"8px 14px",fontWeight:600,color:C.text}}>{k}</td>
+                              <td style={{padding:"8px 14px",textAlign:"right",fontWeight:700,color:C.green}}>{fmtR(v)}</td>
+                              <td style={{padding:"8px 14px",textAlign:"right",color:C.dim,fontSize:11}}>{totalRev>0?`${Math.round((v/totalRev)*100)}%`:"—"}</td>
+                            </tr>
+                          ))}
+                          {rows.length===0&&<tr><td colSpan={3} style={{padding:"20px",color:C.muted,textAlign:"center",fontSize:11}}>No revenue entries yet</td></tr>}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+
+                  return (
+                    <div>
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 20px",marginBottom:16,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                        <div>
+                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>Total Revenue — All Entries</div>
+                          <div className="sans" style={{fontSize:24,fontWeight:800,color:C.green}}>{fmtR(totalRev)}</div>
+                        </div>
+                        <div style={{textAlign:"right"}}>
+                          <div style={{fontSize:10,color:C.dim}}>{visibleEntries.length} entr{visibleEntries.length===1?"y":"ies"}</div>
+                          <div style={{fontSize:10,color:C.muted,marginTop:2}}>Revenue entries only · Reversals excluded</div>
+                        </div>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16,marginBottom:16}}>
+                        <div>
+                          <div style={{fontSize:10,color:C.dim,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Month-wise</div>
+                          <RevTbl rows={monthRows} col1="Month" />
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:C.dim,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Channel-wise</div>
+                          <RevTbl rows={channelRows} col1="Channel" />
+                        </div>
+                      </div>
+                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:16}}>
+                        <div>
+                          <div style={{fontSize:10,color:C.dim,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Client-wise (Top 20)</div>
+                          <RevTbl rows={clientRows} col1="Client" />
+                        </div>
+                        <div>
+                          <div style={{fontSize:10,color:C.dim,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em",marginBottom:8}}>Region-wise</div>
+                          <RevTbl rows={regionRows} col1="Region" />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
               </div>
           )}
 
@@ -8259,7 +8482,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>ACTIVITY LOG</div>
                   <div style={{fontSize:11,color:C.dim,marginTop:2}}>Every client interaction. Log before 12pm. {meetings.length} meetings recorded.</div>
                 </div>
-                {canLogMeeting && <button className="btn btn-primary" onClick={()=>setLogOpen(true)}>+ Log Meeting</button>}
+                {canLogMeeting && <button className="btn btn-primary" onClick={()=>setLogOpen(true)}>+ Log Touchpoint</button>}
               </div>
 
               {/* KPI cards — filtered to own meetings for reps */}
@@ -8418,7 +8641,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:8,padding:40,textAlign:"center"}}>
                   <div style={{fontSize:28,marginBottom:10}}>📝</div>
                   <div className="sans" style={{fontWeight:700,marginBottom:5}}>No meetings logged yet</div>
-                  <div style={{color:C.dim,fontSize:12,marginBottom:16}}>Click "+ Log Meeting" above to record today's client meetings</div>
+                  <div style={{color:C.dim,fontSize:12,marginBottom:16}}>Click "+ Log Touchpoint" above to record today's client touchpoints</div>
                 </div>
               )}
 
@@ -12786,7 +13009,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         </div>
       )}
 
-      {/* LOG MEETING MODAL — aligned to Today's Meetings Excel sheet */}
+      {/* LOG TOUCHPOINT MODAL — aligned to Today's Meetings Excel sheet */}
       {logOpen && (
         <div className="overlay" onClick={()=>setLogOpen(false)}>
           <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:640,maxHeight:"90vh",overflowY:"auto"}}>
@@ -12794,8 +13017,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             {/* Header */}
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
               <div>
-                <div className="sans" style={{fontSize:16,fontWeight:700}}>LOG MEETING</div>
-                <div style={{fontSize:11,color:C.dim,marginTop:2}}>{TODAY} · Today's Meetings</div>
+                <div className="sans" style={{fontSize:16,fontWeight:700}}>LOG TOUCHPOINT</div>
+                <div style={{fontSize:11,color:C.dim,marginTop:2}}>{TODAY} · Today's Touchpoints</div>
               </div>
             </div>
             <div style={{height:1,background:C.border,margin:"12px 0"}} />
@@ -12873,7 +13096,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               {/* Helper: if no deal selected yet, nudge rep to add client in Revenue Tracker first */}
               {!logForm.dealId && (
                 <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:6,padding:"8px 10px",fontSize:11,color:C.blue}}>
-                  Client not in your pipeline yet? <strong>Add a deal in Revenue Tracker first</strong>, then come back to log this meeting.
+                  Client not in your pipeline yet? <strong>Add a deal in Revenue Tracker first</strong>, then come back to log this touchpoint.
                 </div>
               )}
               {/* Deal value prompt — only shown when selected deal has ₹0 amount */}
@@ -12918,8 +13141,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               </div>
             </div>
 
-            {/* SECTION 3 — Meeting Content (GK decision: free text, no discussion dropdown) */}
-            <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Meeting Content</div>
+            {/* SECTION 3 — Touchpoint Content */}
+            <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Touchpoint Content</div>
             {/* Part 3: Stage Update — required for Deal Meeting, hidden for Relationship */}
             {logForm.touchpointType === "Deal Meeting" && (
               <div style={{marginBottom:14,background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"10px 14px"}}>
