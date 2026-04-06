@@ -5695,202 +5695,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             );
           })()}
 
-          {/* ═══ RH ESCALATIONS (Region Head — escalations directed to RH/NSH) ═══ */}
-          {view==="rh-escalations" && isRH && (()=>{
-            const rhRegion = user_role?.region;
-            const myRepIds = reps.filter(r=>r.region===rhRegion).map(r=>r.id);
-
-            // Deals awaiting NSH/RH approval from this region
-            const pendingApprovals = visibleDeals.filter(d=>
-              d.awaitingApproval === "NSH" &&
-              d.awaitingApprovalSince &&
-              myRepIds.includes(d.repId)
-            );
-            // Tasks assigned with dept=NSH from this region's reps
-            const pendingTasks = tasks.filter(t=>
-              t.dept==="NSH" && t.status!=="Done" && myRepIds.includes(t.repId)
-            );
-            // Overdue next steps in region
-            const overdueInRegion = visibleDeals.filter(d=>
-              d.nextStepDate && d.nextStepDate<TODAY && d.outcome!=="Mail Confirmed" && myRepIds.includes(d.repId)
-            );
-            // Internal Requests directed to this RH from their reps
-            const rhIncomingIRs = internalReqs.filter(r=>
-              r.dept==="Region Head" &&
-              r.status!=="Done" && r.status!=="Withdrawn" &&
-              USER_ROLES.find(u=>u.id===r.raisedBy)?.region===rhRegion
-            );
-
-            const total = pendingApprovals.length + pendingTasks.length + rhIncomingIRs.length;
-
-            return (
-              <div className="fin">
-                <div style={{marginBottom:16}}>
-                  <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>ESCALATIONS</div>
-                  <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · Items directed to you that need a decision</div>
-                </div>
-
-                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:18}}>
-                  {[
-                    {label:"REQUESTS TO YOU",   value:rhIncomingIRs.length,    color:C.accent},
-                    {label:"PENDING APPROVALS",  value:pendingApprovals.length, color:C.orange},
-                    {label:"TASKS FOR YOU",       value:pendingTasks.length,    color:C.blue},
-                    {label:"OVERDUE IN REGION",   value:overdueInRegion.length, color:C.red},
-                  ].map(k=>(
-                    <div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}>
-                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div>
-                      <div className="sans" style={{fontSize:26,fontWeight:700,color:k.color}}>{k.value}</div>
-                    </div>
-                  ))}
-                </div>
-
-                {total===0&&overdueInRegion.length===0&&(
-                  <div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center"}}>
-                    <div style={{fontSize:22,marginBottom:8}}>✓</div>
-                    <div className="sans" style={{fontWeight:700,color:C.green,marginBottom:4}}>No escalations</div>
-                    <div style={{fontSize:11,color:C.dim}}>All items in {rhRegion} are on track.</div>
-                  </div>
-                )}
-
-                {/* Incoming requests from reps directed to this RH */}
-                {rhIncomingIRs.length>0&&(
-                  <div style={{marginBottom:18}}>
-                    <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📥 Requests to You from Your Team</div>
-                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead><tr>{["Rep","Type","Subject","Client","Raised","Status","Action"].map(h=>(
-                          <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                        ))}</tr></thead>
-                        <tbody>
-                          {rhIncomingIRs.map(r=>(
-                            <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}}>
-                              <td style={{padding:"10px 14px",fontWeight:600,fontSize:12}}>{r.raisedByName}</td>
-                              <td style={{padding:"10px 14px"}}><span style={{background:`${C.accent}18`,color:C.accent,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.type}</span></td>
-                              <td style={{padding:"10px 14px",maxWidth:200,fontSize:12}}>{r.subject}</td>
-                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{r.clientCompany||"—"}</td>
-                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11,whiteSpace:"nowrap"}}>{r.raisedAt}</td>
-                              <td style={{padding:"10px 14px"}}>{(()=>{const breached=r.status==="Pending"&&daysSince(r.raisedAt)>=APPROVAL_SLA_DAYS;return <span style={{background:breached?`${C.red}22`:r.status==="Pending"?`${C.orange}18`:r.status==="Overdue"?`${C.red}22`:`${C.blue}18`,color:breached?C.red:r.status==="Pending"?C.orange:r.status==="Overdue"?C.red:C.blue,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{breached?"⚠ SLA Breach":r.status}</span>;})()}</td>
-                              <td style={{padding:"10px 14px",whiteSpace:"nowrap",display:"flex",gap:4}}>
-                                <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress",resolverNote:"Acknowledged by "+user_role?.name}:x))}
-                                  style={{background:`${C.blue}18`,color:C.blue,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Accept</button>
-                                <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Resolved by "+user_role?.name}:x))}
-                                  style={{background:`${C.green}18`,color:C.green,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Done</button>
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Pending approvals */}
-                {pendingApprovals.length>0&&(
-                  <div style={{marginBottom:18}}>
-                    <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⏳ Awaiting Your Approval</div>
-                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead><tr>{["Client","Rep","Amount","Waiting","Days","Stage","Action"].map(h=>(
-                          <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                        ))}</tr></thead>
-                        <tbody>
-                          {pendingApprovals.map(d=>{
-                            const rep=reps.find(r=>r.id===d.repId);
-                            const dw=daysSince(d.awaitingApprovalSince);
-                            return (
-                              <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:dw>=APPROVAL_SLA_DAYS?`${C.red}04`:`${C.orange}04`}}
-                                onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                                onMouseOut={e=>e.currentTarget.style.background=dw>=APPROVAL_SLA_DAYS?`${C.red}04`:`${C.orange}04`}>
-                                <td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
-                                <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td>
-                                <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td>
-                                <td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:700}}>NSH</span></td>
-                                <td style={{padding:"10px 14px",color:dw>=APPROVAL_SLA_DAYS?C.red:C.orange,fontWeight:700}}>{dw}d</td>
-                                <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
-                                <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
-                                  <button onClick={()=>(()=>{ if(!canApprove(d)){showToast("Only the designated approver can approve this deal","err");return;} openNoteModal("Approval Note", "Approved", note => approveDeal(d.id, note)); })()}
-                                    style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>Approve</button>
-                                  <button onClick={()=>setView("pipeline")}
-                                    style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>View</button>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Tasks for RH */}
-                {pendingTasks.length>0&&(
-                  <div style={{marginBottom:18}}>
-                    <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📋 Tasks Requiring Your Action</div>
-                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead><tr>{["Task","From Rep","Client","Priority","Due","Update"].map(h=>(
-                          <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                        ))}</tr></thead>
-                        <tbody>
-                          {pendingTasks.map(t=>{
-                            const rep=reps.find(r=>r.id===t.repId);
-                            const overdue=t.dueDate<TODAY;
-                            return (
-                              <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:overdue?`${C.red}04`:"transparent"}}
-                                onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                                onMouseOut={e=>e.currentTarget.style.background=overdue?`${C.red}04`:"transparent"}>
-                                <td style={{padding:"10px 14px"}}><div style={{fontWeight:600}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:2,maxWidth:200,whiteSpace:"normal"}}>{t.description}</div>}</td>
-                                <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
-                                <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td>
-                                <td style={{padding:"10px 14px"}}><span style={{background:t.priority==="High"?`${C.red}18`:`${C.orange}18`,color:t.priority==="High"?C.red:C.orange,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.priority}</span></td>
-                                <td style={{padding:"10px 14px",color:overdue?C.red:C.dim,fontSize:11}}>{t.dueDate}</td>
-                                <td style={{padding:"10px 14px"}}>
-                                  <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
-                                    style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>
-                                    {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
-                                  </select>
-                                </td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-
-                {/* Overdue next steps in region */}
-                {overdueInRegion.length>0&&(
-                  <div>
-                    <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⚠ Overdue Next Steps in Region</div>
-                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead><tr>{["Client","Rep","Next Step","Was Due","Amount"].map(h=>(
-                          <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                        ))}</tr></thead>
-                        <tbody>
-                          {overdueInRegion.map(d=>{
-                            const rep=reps.find(r=>r.id===d.repId);
-                            return (
-                              <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}}
-                                onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                                onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                                <td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td>
-                                <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td>
-                                <td style={{padding:"10px 14px",color:C.dim,fontSize:11,maxWidth:180,whiteSpace:"normal"}}>{d.nextStep||"—"}</td>
-                                <td style={{padding:"10px 14px",color:C.red,fontWeight:600}}>{d.nextStepDate}</td>
-                                <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td>
-                              </tr>
-                            );
-                          })}
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-                )}
-              </div>
-            );
-          })()}
 
           {/* ═══ NSH WAR ROOM ═══ */}
           {view==="warroom" && isNSHDashboard && (()=>{
@@ -8506,43 +8310,55 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {view==="rh-escalations" && isRH && (
             <div className="fin">
               <div style={{marginBottom:16}}>
-                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>ESCALATIONS</div>
-                <div style={{fontSize:11,color:C.dim,marginTop:2}}>Approvals waiting on you · Stuck requests from your team · Overdue tasks in your region</div>
+                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY ESCALATIONS</div>
+                <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · Items escalated to you because SLA was missed · Distinct from Approvals queue</div>
               </div>
               {(()=>{
                 const myRegion = user_role?.region;
-                // 1. Deals in region awaiting RH's approval specifically
-                const rhApproval = visibleDeals.filter(d=>
-                  (d.awaitingApproval==="NSH" || d.awaitingApproval===myRegion) &&
-                  d.awaitingApprovalSince &&
-                  daysSince(d.awaitingApprovalSince) >= APPROVAL_SLA_DAYS &&
-                  d.outcome !== "Mail Confirmed" && d.outcome !== "Not Interested"
-                );
-                // 2. Any deal in region where rep is blocked (all awaiting approvals)
-                const regionBlocked = visibleDeals.filter(d=>
-                  d.awaitingApproval &&
-                  d.awaitingApprovalSince &&
-                  daysSince(d.awaitingApprovalSince) >= APPROVAL_SLA_DAYS &&
-                  !["Mail Confirmed","Not Interested"].includes(d.outcome)
-                );
-                // 3. Overdue tasks assigned to reps in this region
                 const myRepIds = reps.filter(r=>r.region===myRegion).map(r=>r.id);
-                const overdueRepTasks = tasks.filter(t=>
-                  myRepIds.includes(t.repId||t.assignedTo) &&
-                  t.dueDate < TODAY && t.status !== "Done"
+
+                // 1. IRs escalated to RH via ESC_CHAIN (escDept="Region Head" or dept=Region Head + past SLA)
+                const escalatedIRs = internalReqs.filter(r=>
+                  (r.escDept==="Region Head" || (r.dept==="Region Head" && r.status==="Overdue" && daysSince(r.raisedAt)>=(r.slaHours||48)/24)) &&
+                  r.status!=="Done" && r.status!=="Withdrawn"
                 );
-                // 4. Tasks assigned directly to RH
-                const rhTasks = tasks.filter(t=>
-                  t.dept === myRegion || t.dept === "NSH" || t.assignedByName?.includes("Region")
-                ).filter(t => t.status !== "Done" && t.dueDate < TODAY);
-                const total = rhApproval.length + regionBlocked.length + overdueRepTasks.length;
+
+                // 2. Tasks escalated to RH (assignedToUserId=activeUser and overdue, or escDept=Region Head)
+                const escalatedTasks = tasks.filter(t=>
+                  (t.escDept==="Region Head" || t.assignedToUserId===activeUser) &&
+                  t.status!=="Done" && t.dueDate && t.dueDate < TODAY
+                );
+
+                // 3. Stalled deals in region (no contact 7+ days, not closed)
+                const stalledDeals = visibleDeals.filter(d=>
+                  myRepIds.includes(d.repId) &&
+                  !["Lost","RO Received","Mail Confirmed"].includes(d.outcome||"") &&
+                  daysSince(d.lastContact||d.createdAt||TODAY) >= 7
+                );
+
+                // 4. Overdue rep tasks in region (broader — for rep management)
+                const overdueRepTasks = tasks.filter(t=>
+                  myRepIds.includes(t.repId) &&
+                  t.dueDate < TODAY && t.status !== "Done" &&
+                  t.assignedToUserId !== activeUser // exclude RH's own tasks (shown in #2)
+                );
+
+                // Historical: deals awaiting approval past SLA
+                const blockedDeals = visibleDeals.filter(d=>
+                  myRepIds.includes(d.repId) &&
+                  d.awaitingApproval && d.awaitingApprovalSince &&
+                  daysSince(d.awaitingApprovalSince) >= APPROVAL_SLA_DAYS &&
+                  !["Mail Confirmed","RO Received","Not Interested"].includes(d.outcome||"")
+                );
+                const total = escalatedIRs.length + escalatedTasks.length + stalledDeals.length + overdueRepTasks.length + blockedDeals.length;
                 return (
                   <div>
-                    <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:10,marginBottom:18}}>
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:18}}>
                       {[
-                        {label:"APPROVALS WAITING ON YOU", value:rhApproval.length,      color:C.red,    desc:"Deals where your sign-off is needed"},
-                        {label:"REGION DEALS BLOCKED",     value:regionBlocked.length,   color:C.orange, desc:"Any approval pending past SLA in region"},
-                        {label:"REP TASKS OVERDUE",        value:overdueRepTasks.length, color:C.blue,   desc:"Tasks assigned to your reps, past due"},
+                        {label:"ESCALATED IRs",      value:escalatedIRs.length,    color:C.red,    desc:"Requests overdue → escalated to you"},
+                        {label:"TASKS ON YOU",        value:escalatedTasks.length,  color:C.orange, desc:"Overdue tasks assigned to you"},
+                        {label:"STALLED DEALS",       value:stalledDeals.length,    color:C.purple, desc:"No contact for 7+ days"},
+                        {label:"REP TASKS OVERDUE",   value:overdueRepTasks.length, color:C.blue,   desc:"Rep tasks past due date"},
                       ].map(k=>(
                         <div key={k.label} className="card" style={{padding:13,borderTop:`2px solid ${k.color}`}}>
                           <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.label}</div>
@@ -8555,34 +8371,33 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {total===0 && <div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center"}}>
                       <div style={{fontSize:22,marginBottom:8}}>✓</div>
                       <div className="sans" style={{fontWeight:700,color:C.green,marginBottom:4}}>No escalations</div>
-                      <div style={{fontSize:11,color:C.dim}}>Your region is on track.</div>
+                      <div style={{fontSize:11,color:C.dim}}>All items in {rhRegion} are on track. Approvals are under My Approvals →</div>
                     </div>}
 
-                    {rhApproval.length>0&&(
+                    {/* Escalated IRs */}
+                    {escalatedIRs.length>0&&(
                       <div style={{marginBottom:18}}>
-                        <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⏳ Waiting on Your Approval</div>
+                        <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⬆ Escalated Requests (SLA Breached)</div>
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                            <thead><tr>{["Client","Rep","Amount","Requested By","Days Waiting","Stage","Action"].map(h=>(
+                            <thead><tr>{["Rep","Subject","Type","Raised","SLA","Status","Action"].map(h=>(
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
-                            <tbody>{rhApproval.map(d=>{
-                              const rep=reps.find(r=>r.id===d.repId);
-                              const dw=daysSince(d.awaitingApprovalSince);
+                            <tbody>{escalatedIRs.map(r=>{
+                              const dw=daysSince(r.raisedAt);
                               return (
-                                <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.red}04`}} onMouseOver={e=>e.currentTarget.style.background=`${C.red}08`} onMouseOut={e=>e.currentTarget.style.background=`${C.red}04`}>
-                                  <td style={{padding:"10px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div><div style={{fontSize:10,color:C.dim}}>{d.dealType}</div></td>
-                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td>
-                                  <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td>
-                                  <td style={{padding:"10px 14px"}}><span style={{background:`${C.red}22`,color:C.red,padding:"2px 9px",borderRadius:5,fontSize:11,fontWeight:700}}>{d.awaitingApproval}</span></td>
+                                <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.red}04`}}>
+                                  <td style={{padding:"10px 14px",fontWeight:600}}>{r.raisedByName||"—"}</td>
+                                  <td style={{padding:"10px 14px",maxWidth:200,fontSize:12}}>{r.subject}</td>
+                                  <td style={{padding:"10px 14px"}}><span style={{background:`${C.accent}18`,color:C.accent,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.type}</span></td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{r.raisedAt}</td>
                                   <td style={{padding:"10px 14px",color:C.red,fontWeight:700}}>{dw}d</td>
-                                  <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
-                                  <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
-                                    <button onClick={()=>{
-                                      if(!canApprove(d)){showToast("Only the designated approver can approve","err");return;}
-                                      openNoteModal("Approval Note","Approved",note=>approveDeal(d.id,note));
-                                    }} style={{background:`${C.green}22`,border:"none",color:C.green,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginRight:4}}>Approve →</button>
-                                    <button onClick={()=>setView("pipeline")} style={{background:C.s2,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 9px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>View Deal</button>
+                                  <td style={{padding:"10px 14px"}}><span style={{background:`${C.red}22`,color:C.red,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.status}</span></td>
+                                  <td style={{padding:"10px 14px",whiteSpace:"nowrap",display:"flex",gap:4}}>
+                                    <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"In Progress",resolverNote:"Acknowledged by "+user_role?.name}:x))}
+                                      style={{background:`${C.blue}18`,color:C.blue,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Accept</button>
+                                    <button onClick={()=>setInternalReqs(p=>p.map(x=>x.id===r.id?{...x,status:"Done",resolvedAt:TODAY,resolverNote:"Resolved by "+user_role?.name}:x))}
+                                      style={{background:`${C.green}18`,color:C.green,border:"none",borderRadius:4,padding:"3px 8px",fontSize:10,cursor:"pointer",fontWeight:600}}>Done</button>
                                   </td>
                                 </tr>
                               );
@@ -8592,30 +8407,25 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                     )}
 
-                    {regionBlocked.filter(d=>!rhApproval.find(r=>r.id===d.id)).length>0&&(
+                    {/* Tasks escalated to RH */}
+                    {escalatedTasks.length>0&&(
                       <div style={{marginBottom:18}}>
-                        <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>🔧 Other Blocked Deals in Your Region</div>
+                        <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⚠ Overdue Tasks Assigned to You</div>
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                            <thead><tr>{["Client","Rep","Amount","Waiting For","Days","Update"].map(h=>(
+                            <thead><tr>{["Task","From","Client","Priority","Due","Days Over","Update"].map(h=>(
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
-                            <tbody>{regionBlocked.filter(d=>!rhApproval.find(r=>r.id===d.id)).map(d=>{
-                              const rep=reps.find(r=>r.id===d.repId);
-                              const dw=daysSince(d.awaitingApprovalSince);
+                            <tbody>{escalatedTasks.map(t=>{
                               return (
-                                <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                                  <td style={{padding:"10px 14px"}}><div className="sans" style={{fontWeight:700}}>{d.clientCompany}</div></td>
-                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name}</td>
-                                  <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td>
-                                  <td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 7px",borderRadius:5,fontSize:11,fontWeight:600}}>{d.awaitingApproval}</span></td>
-                                  <td style={{padding:"10px 14px",color:C.orange,fontWeight:600}}>{dw}d</td>
-                                  <td style={{padding:"10px 14px"}}>
-                                    <select value={d.awaitingApproval||""} onChange={e=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:e.target.value||null,awaitingApprovalSince:e.target.value?TODAY:null}:x))} style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>
-                                      <option value="">— Resolved —</option>
-                                      {APPROVAL_TARGETS.map(t=><option key={t}>{t}</option>)}
-                                    </select>
-                                  </td>
+                                <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.orange}04`}}>
+                                  <td style={{padding:"10px 14px",fontWeight:600}}>{t.title}</td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{t.assignedByName||"—"}</td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td>
+                                  <td style={{padding:"10px 14px"}}><span style={{background:t.priority==="High"?`${C.red}18`:t.priority==="Medium"?`${C.orange}18`:`${C.green}18`,color:t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.green,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{t.priority}</span></td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{t.dueDate}</td>
+                                  <td style={{padding:"10px 14px",color:C.red,fontWeight:700}}>{daysSince(t.dueDate)}d</td>
+                                  <td style={{padding:"10px 14px"}}><select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))} style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>{TASK_STATUSES.map(s=><option key={s}>{s}</option>)}</select></td>
                                 </tr>
                               );
                             })}</tbody>
@@ -8624,8 +8434,36 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                     )}
 
+                    {/* Stalled deals */}
+                    {stalledDeals.length>0&&(
+                      <div style={{marginBottom:18}}>
+                        <div style={{fontSize:10,color:C.purple,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⏸ Stalled Deals (No Contact 7+ Days)</div>
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>{["Client","Rep","Amount","Stage","Last Contact","Days Idle"].map(h=>(
+                              <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                            ))}</tr></thead>
+                            <tbody>{stalledDeals.map(d=>{
+                              const rep=reps.find(r=>r.id===d.repId);
+                              return (
+                                <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=""}>
+                                  <td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                  <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td>
+                                  <td style={{padding:"10px 14px"}}><span style={{background:`${oColor(d.outcome)}18`,color:oColor(d.outcome),padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{d.outcome}</span></td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{d.lastContact||d.createdAt||"—"}</td>
+                                  <td style={{padding:"10px 14px",color:C.purple,fontWeight:700}}>{daysSince(d.lastContact||d.createdAt||TODAY)}d</td>
+                                </tr>
+                              );
+                            })}</tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Overdue rep tasks in region */}
                     {overdueRepTasks.length>0&&(
-                      <div>
+                      <div style={{marginBottom:18}}>
                         <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>📋 Rep Tasks Overdue in Your Region</div>
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
@@ -8633,9 +8471,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
                             <tbody>{overdueRepTasks.map(t=>{
-                              const rep=reps.find(r=>r.id===(t.repId||t.assignedTo));
+                              const rep=reps.find(r=>r.id===t.repId);
                               return (
-                                <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=""}>
                                   <td style={{padding:"10px 14px",fontWeight:600}}>{t.title}</td>
                                   <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
                                   <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td>
@@ -8643,6 +8481,33 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{t.dueDate}</td>
                                   <td style={{padding:"10px 14px",color:C.red,fontWeight:700}}>{daysSince(t.dueDate)}d</td>
                                   <td style={{padding:"10px 14px"}}><select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))} style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}>{TASK_STATUSES.map(s=><option key={s}>{s}</option>)}</select></td>
+                                </tr>
+                              );
+                            })}</tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Blocked deals */}
+                    {blockedDeals.length>0&&(
+                      <div>
+                        <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>🔒 Deals Blocked — Approval Past SLA</div>
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>{["Client","Rep","Amount","Waiting For","Days","Update"].map(h=>(
+                              <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                            ))}</tr></thead>
+                            <tbody>{blockedDeals.map(d=>{
+                              const rep=reps.find(r=>r.id===d.repId);
+                              return (
+                                <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=""}>
+                                  <td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td>
+                                  <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{rep?.name||"—"}</td>
+                                  <td style={{padding:"10px 14px",fontWeight:600}}>{fmtR(d.amount)}</td>
+                                  <td style={{padding:"10px 14px"}}><span style={{background:`${C.orange}22`,color:C.orange,padding:"2px 7px",borderRadius:5,fontSize:11,fontWeight:600}}>{d.awaitingApproval}</span></td>
+                                  <td style={{padding:"10px 14px",color:C.orange,fontWeight:600}}>{daysSince(d.awaitingApprovalSince)}d</td>
+                                  <td style={{padding:"10px 14px"}}><select value={d.awaitingApproval||""} onChange={e=>setDeals(p=>p.map(x=>x.id===d.id?{...x,awaitingApproval:e.target.value||null,awaitingApprovalSince:e.target.value?TODAY:null}:x))} style={{fontSize:10,padding:"3px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text}}><option value="">— Resolved —</option>{APPROVAL_TARGETS.map(t2=><option key={t2}>{t2}</option>)}</select></td>
                                 </tr>
                               );
                             })}</tbody>
@@ -11900,7 +11765,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>MY TASKS</div>
                     <div style={{fontSize:11,color:C.dim}}>{openCount} open · {doneCount} done · Tasks assigned to you or created by you</div>
                   </div>
-                  <button className="btn btn-primary" onClick={openSelfTask}>+ Create Task</button>
+                  <div style={{display:"flex",gap:8}}>
+                    <button className="btn btn-primary" onClick={openSelfTask}>+ Create Task</button>
+                    <button className="btn btn-primary" onClick={()=>setTaskModal(true)}
+                      style={{background:C.blue,borderColor:C.blue}}>+ Assign to Rep</button>
+                  </div>
                 </div>
 
                 {/* Summary cards */}
@@ -12166,13 +12035,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
           {/* ═══ RH MY HR ═══ */}
           {view==="rh-my-hr" && isRH && (()=>{
-            const myRepId     = user_role?.repId;
-            const myAbs       = absenceReports.filter((r:any)=>r.repId===myRepId);
+            // RH has no repId — use userId (activeUser) as their identifier throughout
+            const myPlanRepId = user_role?.id; // "rh_north", "rh_south", etc.
+            const myAbs       = absenceReports.filter((r:any)=>r.userId===activeUser||(r.repId!=null&&r.repId===user_role?.repId));
             const absentDays  = myAbs.filter((r:any)=>r.markedAs==="Absent").length;
             const exceptions  = myAbs.filter((r:any)=>r.exception==="Overridden").length;
             const sentToHR    = myAbs.filter((r:any)=>r.status==="Sent to HR").length;
-            const loggedToday = (meetings||[]).some(m=>m.repId===myRepId&&m.date===TODAY);
-            const plannedTmrw = (plans||[]).some(p=>p.repId===myRepId&&p.date===TOMORROW);
+            // RH logs meetings with loggedByUserId; plans stored with repId = their userId string
+            const loggedToday = (meetings||[]).some(m=>m.loggedByUserId===activeUser&&m.date===TODAY);
+            const plannedTmrw = (plans||[]).some(p=>p.repId===myPlanRepId&&p.date===TOMORROW);
             return (
               <div className="fin">
                 <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>MY HR REPORTS</div>
@@ -12202,26 +12073,88 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   ))}
                 </div>
-                {myAbs.length===0 ? (
-                  <div style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:8,padding:32,textAlign:"center",color:C.dim,fontSize:12}}>No attendance records yet.</div>
-                ) : (
-                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                      <thead><tr>{["Date","Status","Exception","Approved By","Notes"].map(h=>(
-                        <th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                      ))}</tr></thead>
-                      <tbody>{[...myAbs].sort((a:any,b:any)=>b.date>a.date?1:-1).map((r:any)=>(
-                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}}>
-                          <td style={{padding:"9px 12px",fontWeight:600}}>{r.date}</td>
-                          <td style={{padding:"9px 12px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
-                          <td style={{padding:"9px 12px"}}>{r.exception?<span style={{color:C.green,fontSize:11}}>{r.exception}</span>:<span style={{color:C.muted}}>—</span>}</td>
-                          <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{r.exceptionBy||"—"}</td>
-                          <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{r.exceptionReason||"—"}</td>
-                        </tr>
-                      ))}</tbody>
-                    </table>
-                  </div>
-                )}
+                {/* RH compliance history: show last 30 working days based on logged meetings */}
+                {(()=>{
+                  // Build a 30-day compliance history for RH from meeting logs
+                  const rhMeetings = (meetings||[]).filter(m=>m.loggedByUserId===activeUser||m.loggedByUserId===myPlanRepId);
+                  const rhPlans    = (plans||[]).filter(p=>p.repId===myPlanRepId);
+                  const checkDays: string[] = [];
+                  for (let d = 0; d < 30; d++) {
+                    const dt = new Date(Date.now() - d * 86400000);
+                    const dow = dt.getDay(); // 0=Sun, 6=Sat
+                    if (dow === 0) continue; // skip Sundays
+                    checkDays.push(dt.toISOString().split("T")[0]);
+                  }
+                  const rows2 = checkDays.map(day => {
+                    const logged  = rhMeetings.some(m=>m.date===day);
+                    const planned = rhPlans.some(p=>p.date===day);
+                    const late    = rhMeetings.filter(m=>m.date===day&&m.loggedLate).length > 0;
+                    return {day, logged, planned, late};
+                  });
+                  const loggedDays = rows2.filter(r=>r.logged).length;
+                  const missedDays = rows2.filter(r=>r.day<TODAY&&!r.logged).length;
+                  const lateDays   = rows2.filter(r=>r.late).length;
+                  const hitPct     = checkDays.filter(d=>d<TODAY).length > 0
+                    ? Math.round(loggedDays / Math.max(1, checkDays.filter(d=>d<=TODAY).length) * 100) : 100;
+                  return (
+                    <div>
+                      <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:14}}>
+                        {[
+                          {l:"DAYS LOGGED (30d)",  v:loggedDays,    c:C.green},
+                          {l:"DAYS MISSED",        v:missedDays,    c:missedDays>0?C.red:C.green},
+                          {l:"LATE LOGS",          v:lateDays,      c:lateDays>0?C.orange:C.green},
+                          {l:"COMPLIANCE %",       v:`${hitPct}%`,  c:hitPct>=90?C.green:hitPct>=70?C.orange:C.red},
+                        ].map(k=>(
+                          <div key={k.l} className="card" style={{padding:12,borderTop:`2px solid ${k.c}`}}>
+                            <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div>
+                            <div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div>
+                          </div>
+                        ))}
+                      </div>
+                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>LAST 30 WORKING DAYS</div>
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead><tr>{["Date","Day","Logged?","Planned?","Late?"].map(h=>(
+                            <th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                          ))}</tr></thead>
+                          <tbody>{rows2.map(r=>{
+                            const dow2 = new Date(r.day+"T00:00:00").toLocaleDateString("en-IN",{weekday:"short"});
+                            return (
+                              <tr key={r.day} style={{borderBottom:`1px solid ${C.s2}`,background:(!r.logged&&r.day<TODAY)?`${C.red}04`:"transparent"}}>
+                                <td style={{padding:"8px 12px",fontWeight:600,color:r.day===TODAY?C.accent:C.text}}>{r.day}{r.day===TODAY?" (today)":""}</td>
+                                <td style={{padding:"8px 12px",color:C.dim}}>{dow2}</td>
+                                <td style={{padding:"8px 12px"}}><span style={{color:r.logged?C.green:r.day<TODAY?C.red:C.muted,fontWeight:700}}>{r.logged?"✓ Yes":r.day<TODAY?"✗ No":"—"}</span></td>
+                                <td style={{padding:"8px 12px"}}><span style={{color:r.planned?C.green:C.muted,fontWeight:600}}>{r.planned?"✓":"—"}</span></td>
+                                <td style={{padding:"8px 12px"}}>{r.late?<span style={{color:C.orange,fontWeight:700}}>⚠ Late</span>:<span style={{color:C.muted}}>—</span>}</td>
+                              </tr>
+                            );
+                          })}</tbody>
+                        </table>
+                      </div>
+                      {myAbs.length>0&&(
+                        <div style={{marginTop:16}}>
+                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>EXCEPTION / ABSENCE RECORDS</div>
+                          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                            <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                              <thead><tr>{["Date","Status","Exception","Approved By","Notes"].map(h=>(
+                                <th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                              ))}</tr></thead>
+                              <tbody>{[...myAbs].sort((a:any,b:any)=>b.date>a.date?1:-1).map((r:any)=>(
+                                <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}}>
+                                  <td style={{padding:"8px 12px",fontWeight:600}}>{r.date}</td>
+                                  <td style={{padding:"8px 12px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 6px",borderRadius:5,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
+                                  <td style={{padding:"8px 12px"}}>{r.exception?<span style={{color:C.green,fontSize:11}}>{r.exception}</span>:<span style={{color:C.muted}}>—</span>}</td>
+                                  <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{r.exceptionBy||"—"}</td>
+                                  <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{r.exceptionReason||"—"}</td>
+                                </tr>
+                              ))}</tbody>
+                            </table>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </div>
             );
           })()}
@@ -12241,7 +12174,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               const plannedTmrw = (plans||[]).some(p=>p.repId===repId&&p.date===TOMORROW);
               const openTasks   = tasks.filter(t=>t.repId===repId&&t.status!=="Done").length;
               const overdueTasks= tasks.filter(t=>t.repId===repId&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY).length;
-              return {rep,repId,target,achieved,shortfall,pct,pipeline,mtgsThisWk,loggedToday,plannedTmrw,openTasks,overdueTasks};
+              const escCount    = internalReqs.filter(r=>r.repId===repId&&r.status!=="Done"&&r.status!=="Withdrawn"&&(r.escLevel>0||r.status==="Overdue")).length;
+              return {rep,repId,target,achieved,shortfall,pct,pipeline,mtgsThisWk,loggedToday,plannedTmrw,openTasks,overdueTasks,escCount};
             });
             const totTarget   = rows.reduce((s,r)=>s+r.target,0);
             const totAchieved = rows.reduce((s,r)=>s+r.achieved,0);
@@ -12270,7 +12204,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
                 <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead><tr>{["Rep","Target","Achieved","Hit%","Pipeline","Mtgs (wk)","Today","Tmrw","Tasks","Overdue"].map(h=>(
+                    <thead><tr>{["Rep","Target","Achieved","Hit%","Pipeline","Mtgs (wk)","Today","Tmrw","Tasks","Overdue","Esc"].map(h=>(
                       <th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                     ))}</tr></thead>
                     <tbody>
@@ -12295,6 +12229,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <td style={{padding:"10px 12px",textAlign:"center"}}><span style={{color:row.plannedTmrw?C.green:C.orange,fontSize:16}}>{row.plannedTmrw?"✓":"⏰"}</span></td>
                           <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:row.openTasks>0?C.orange:C.green}}>{row.openTasks}</td>
                           <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:row.overdueTasks>0?C.red:C.green}}>{row.overdueTasks||"—"}</td>
+                          <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:row.escCount>0?C.red:C.green}}>{row.escCount||"—"}</td>
                         </tr>
                       ))}
                     </tbody>
