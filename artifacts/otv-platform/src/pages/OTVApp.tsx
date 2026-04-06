@@ -12277,7 +12277,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {rhTeamReportRep&&(
                   <div style={{display:"flex",alignItems:"center",gap:10,background:`${C.red}08`,border:`1.5px solid ${C.red}33`,borderRadius:7,padding:"7px 14px",marginBottom:14}}>
                     <span style={{flex:1,fontSize:12,color:C.red,fontWeight:600}}>
-                      Showing overdue tasks for: <strong>{filterRepName||"Rep"}</strong>
+                      Filtered to rep: <strong>{filterRepName||"Rep"}</strong> <span style={{fontWeight:400,color:C.dim}}>· navigated from overdue action items</span>
                     </span>
                     <button onClick={()=>setRhTeamReportRep("")}
                       style={{background:"transparent",border:`1px solid ${C.red}66`,borderRadius:4,padding:"3px 10px",color:C.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
@@ -12306,7 +12306,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
                 <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead><tr>{["Rep","Target","Achieved","Hit%","Pipeline","Mtgs (wk)","Today","Tmrw","Tasks","Overdue","Esc",""].map(h=>(
+                    <thead><tr>{["Rep","Target","Achieved","Hit%","Pipeline","Mtgs (wk)","Today","Tmrw","Tasks","Overdue","Esc","View"].map(h=>(
                       <th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                     ))}</tr></thead>
                     <tbody>
@@ -12334,7 +12334,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:row.openTasks>0?C.orange:C.green}}>{row.openTasks}</td>
                           <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:row.overdueTasks>0?C.red:C.green}}>{row.overdueTasks||"—"}</td>
                           <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:row.escCount>0?C.red:C.green}}>{row.escCount||"—"}</td>
-                          <td style={{padding:"10px 12px",textAlign:"center",color:C.muted,fontSize:12}}>›</td>
+                          <td style={{padding:"10px 12px",textAlign:"center",color:C.blue,fontSize:11,fontWeight:600,whiteSpace:"nowrap"}}>View ›</td>
                         </tr>
                       ))}
                     </tbody>
