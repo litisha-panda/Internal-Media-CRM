@@ -1,4 +1,4 @@
-import { pgTable, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";
 
 export const tasks = pgTable("tasks", {
   id:               text("id").primaryKey(),
@@ -26,6 +26,8 @@ export const internalRequests = pgTable("internal_requests", {
   id:           text("id").primaryKey(),
   type:         text("type"),
   dept:         text("dept"),
+  /** Canonical backend-owned routing role (derived from dept on creation, never overridden by client). */
+  routedToRole: text("routed_to_role"),
   subject:      text("subject").notNull(),
   details:      text("details"),
   raisedBy:     text("raised_by"),
@@ -42,11 +44,29 @@ export const internalRequests = pgTable("internal_requests", {
   dueDate:      text("due_date"),
   notes:        text("notes"),
   acceptedAt:   text("accepted_at"),
+  /** Backend-managed escalation dept (current stop in ESC_CHAIN). */
+  escDept:      text("esc_dept"),
+  escalatedAt:  text("escalated_at"),
+  escHistory:   jsonb("esc_history").$type<any[]>().default([]),
   createdAt:    timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
-export type Task              = typeof tasks.$inferSelect;
-export type NewTask           = typeof tasks.$inferInsert;
-export type InternalRequest    = typeof internalRequests.$inferSelect;
-export type NewInternalRequest = typeof internalRequests.$inferInsert;
+/** Daily attendance / compliance record created by the governance engine at 23:30 each day. */
+export const attendanceRecords = pgTable("attendance_records", {
+  id:        text("id").primaryKey(),
+  userId:    text("user_id").notNull(),
+  userName:  text("user_name"),
+  region:    text("region"),
+  date:      text("date").notNull(),
+  status:    text("status").notNull().default("absent"), // "present" | "absent"
+  note:      text("note"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export type Task                = typeof tasks.$inferSelect;
+export type NewTask             = typeof tasks.$inferInsert;
+export type InternalRequest     = typeof internalRequests.$inferSelect;
+export type NewInternalRequest  = typeof internalRequests.$inferInsert;
+export type AttendanceRecord    = typeof attendanceRecords.$inferSelect;
+export type NewAttendanceRecord = typeof attendanceRecords.$inferInsert;

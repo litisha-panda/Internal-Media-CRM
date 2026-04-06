@@ -40,8 +40,17 @@ All API routes are prefixed with `/api/` and include modules for Authentication,
   - **Color Palette**: `bg:#f0f4f9`, `surface:#ffffff`, `s2:#e8eef7`, `s3:#dde5f0`, `border:#c8d3e5`, `accent:#c47d00` (amber), `text:#18243a` (dark navy), `dim:#4d5e78`, `muted:#8a97ae`.
   - The theme constants are defined in `OTVApp.tsx` and `artifacts/otv-platform/src/utils.ts`.
 
+### Governance Engine (`artifacts/api-server/src/governance.ts`)
+A backend scheduler (5-minute tick) handles three automated workflows:
+- **IR Escalation Hops**: After SLA breach (default 48h), IRs advance along `ESC_CHAIN = ["Region Head","NSH","Sales Strategy","CRO"]` every 12h. State stored in `routedToRole`, `escalatedAt`, `escDept`, `escHistory`.
+- **Stalled Deal Flagging**: Sets `atRisk = true` on deals with 7+ days since last `lastContact`.
+- **Attendance Records**: At 23:30 checks each active Sales Rep's touchpoints for the day; inserts `present`/`absent` into `attendanceRecords` table.
+
+### Canonical Role Names
+`"SALES REP" | "REGION HEAD" | "SALES HEAD" | "CRO" | "SALES STRATEGY" | "DIGI OPS" | "ADMIN"` — `"NATIONAL SALES HEAD"` does not exist in the system.
+
 ### Feature Specifications
-- **Role-Based Views**: Six distinct roles (Sales Rep, Region Head, National Sales Head, Sales Strategy, CRO, Admin, Digi Ops) each have a customized view and navigation.
+- **Role-Based Views**: Seven distinct roles (Sales Rep, Region Head, Sales Head, Sales Strategy, CRO, Admin, Digi Ops) each have a customized view and navigation.
 - **Sales Workflow**:
   - Reps log meetings, which update deal `lastContact` and trigger automated approvals.
   - Deals auto-escalate after 14 days of no contact.

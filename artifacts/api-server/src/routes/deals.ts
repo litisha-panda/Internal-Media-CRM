@@ -29,14 +29,14 @@ function derivePipeline(deal: any) {
 
 function scopeCondition(user: any) {
   const role = user.role;
-  if (role === "SALES REP") return eq(deals.repId, user.repId!);
+  if (role === "SALES REP")   return eq(deals.repId,  user.repId!);
   if (role === "REGION HEAD") return eq(deals.region, user.region!);
   return undefined;
 }
 
 function caCondition(user: any) {
   const role = user.role;
-  if (role === "SALES REP") return eq(clientAccounts.repId, user.repId!);
+  if (role === "SALES REP")   return eq(clientAccounts.repId,  user.repId!);
   if (role === "REGION HEAD") return eq(clientAccounts.region, user.region!);
   return undefined;
 }
@@ -62,7 +62,7 @@ router.get("/deals/:id", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(deals)
-      .where(eq(deals.id, req.params.id))
+      .where(eq(deals.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: derivePipeline(rows[0]) });
@@ -80,41 +80,49 @@ router.post("/deals", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "id and clientCompany required" });
     }
 
+    // ── Issue #3: force ownership from session for SALES REP ─────────────────
+    const authorRepId  = u.role === "SALES REP" ? u.repId!  : (body.repId  ?? u.repId  ?? 0);
+    const authorRepNm  = u.role === "SALES REP" ? u.name    : (body.repName ?? u.name);
+    const authorRegion = u.role === "SALES REP" ? u.region! : (body.region  ?? u.region ?? "");
+
+    // ── Issue #7: outcome is always kept in sync with stage ──────────────────
+    const stage = body.stage ?? "Prospect";
+
     const row = await db
       .insert(deals)
       .values({
         id:                    body.id,
-        repId:                 body.repId             ?? u.repId ?? 0,
-        repName:               body.repName           ?? u.name,
-        region:                body.region            ?? u.region ?? "",
+        repId:                 authorRepId,
+        repName:               authorRepNm,
+        region:                authorRegion,
         clientCompany:         body.clientCompany,
-        zohoAccountId:         body.zohoAccountId     ?? null,
-        clientAccountId:       body.clientAccountId   ?? null,
-        contactName:           body.contactName        ?? null,
-        designation:           body.designation        ?? null,
-        contactLevel:          body.contactLevel       ?? null,
-        phone:                 body.phone              ?? null,
-        email:                 body.email              ?? null,
-        dealType:              body.dealType           ?? null,
-        stage:                 body.stage              ?? "Prospect",
-        outcome:               body.outcome            ?? body.stage ?? "Prospect",
-        amount:                body.amount             ?? 0,
-        targetAmount:          body.targetAmount       ?? 0,
-        lossReason:            body.lossReason         ?? null,
-        priority:              body.priority           ?? "Regular",
-        quarter:               body.quarter            ?? null,
-        notes:                 body.notes              ?? null,
-        nextStep:              body.nextStep           ?? null,
-        nextStepDate:          body.nextStepDate       ?? null,
-        agencyName:            body.agencyName         ?? null,
-        zohoAgencyId:          body.zohoAgencyId       ?? null,
-        lastContact:           body.lastContact        ?? null,
-        lastDealMeetingDate:   body.lastDealMeetingDate ?? null,
-        atRisk:                body.atRisk             ?? false,
-        awaitingApproval:      body.awaitingApproval   ?? null,
+        zohoAccountId:         body.zohoAccountId       ?? null,
+        clientAccountId:       body.clientAccountId     ?? null,
+        contactName:           body.contactName          ?? null,
+        designation:           body.designation          ?? null,
+        contactLevel:          body.contactLevel         ?? null,
+        phone:                 body.phone                ?? null,
+        email:                 body.email                ?? null,
+        dealType:              body.dealType             ?? null,
+        stage,
+        outcome:               stage, // always mirror stage — issue #7
+        amount:                body.amount               ?? 0,
+        // targetAmount: intentionally omitted from normative deal model (issue #7)
+        lossReason:            body.lossReason           ?? null,
+        priority:              body.priority             ?? "Regular",
+        quarter:               body.quarter              ?? null,
+        notes:                 body.notes                ?? null,
+        nextStep:              body.nextStep             ?? null,
+        nextStepDate:          body.nextStepDate         ?? null,
+        agencyName:            body.agencyName           ?? null,
+        zohoAgencyId:          body.zohoAgencyId         ?? null,
+        lastContact:           body.lastContact          ?? null,
+        lastDealMeetingDate:   body.lastDealMeetingDate  ?? null,
+        atRisk:                false, // governance engine sets this — not client
+        awaitingApproval:      body.awaitingApproval     ?? null,
         awaitingApprovalSince: body.awaitingApprovalSince ?? null,
-        reqs:                  body.reqs               ?? [],
-        auditLog:              body.auditLog            ?? [],
+        reqs:                  body.reqs                 ?? [],
+        auditLog:              body.auditLog             ?? [],
       })
       .onConflictDoNothing()
       .returning();
@@ -130,12 +138,17 @@ router.patch("/deals/:id", requireAuth, async (req, res) => {
   try {
     const body = req.body;
     // Strip read-only / derived fields
-    const { id: _id, createdAt: _ca, pipelineAmount: _pa, ...rest } = body;
+    const { id: _id, createdAt: _ca, pipelineAmount: _pa, targetAmount: _ta, ...rest } = body;
+
+    // ── Issue #7: keep outcome in sync whenever stage changes ────────────────
+    if (rest.stage !== undefined && rest.outcome === undefined) {
+      rest.outcome = rest.stage;
+    }
 
     const updated = await db
       .update(deals)
       .set({ ...rest, updatedAt: new Date() })
-      .where(eq(deals.id, req.params.id))
+      .where(eq(deals.id, String(req.params["id"])))
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
@@ -166,7 +179,7 @@ router.get("/client-accounts/:id", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(clientAccounts)
-      .where(eq(clientAccounts.id, req.params.id))
+      .where(eq(clientAccounts.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
@@ -184,14 +197,18 @@ router.post("/client-accounts", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "id and clientName required" });
     }
 
+    // ── Issue #3: force ownership for SALES REP ──────────────────────────────
+    const authorRepId  = u.role === "SALES REP" ? u.repId!  : (body.repId  ?? u.repId ?? 0);
+    const authorRegion = u.role === "SALES REP" ? u.region! : (body.region ?? u.region ?? "");
+
     const row = await db
       .insert(clientAccounts)
       .values({
         id:                  body.id,
         clientName:          body.clientName,
-        repId:               body.repId              ?? u.repId ?? 0,
+        repId:               authorRepId,
         zohoAccountId:       body.zohoAccountId      ?? null,
-        region:              body.region             ?? u.region ?? "",
+        region:              authorRegion,
         fiscalYear:          body.fiscalYear         ?? "FY26",
         annualTarget:        body.annualTarget        ?? 0,
         currentStage:        body.currentStage        ?? "Prospect",
@@ -214,7 +231,7 @@ router.patch("/client-accounts/:id", requireAuth, async (req, res) => {
     const updated = await db
       .update(clientAccounts)
       .set({ ...rest, updatedAt: new Date() })
-      .where(eq(clientAccounts.id, req.params.id))
+      .where(eq(clientAccounts.id, String(req.params["id"])))
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });

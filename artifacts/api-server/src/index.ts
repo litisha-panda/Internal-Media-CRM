@@ -2,6 +2,7 @@ import app from "./app";
 import { logger } from "./lib/logger";
 import bcrypt from "bcryptjs";
 import { db, users } from "@workspace/db";
+import { startGovernanceScheduler } from "./governance";
 
 const rawPort = process.env["PORT"];
 
@@ -85,4 +86,7 @@ app.listen(port, async (err) => {
 
   // Seed demo users if the DB is fresh (non-blocking failure)
   await seedDemoIfEmpty();
+
+  // Start backend governance scheduler (escalations, attendance, stalled deals)
+  startGovernanceScheduler();
 });

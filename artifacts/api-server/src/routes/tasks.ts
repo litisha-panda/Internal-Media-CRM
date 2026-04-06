@@ -5,10 +5,31 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 
-// A task is visible if: assignedToUserId === me, OR I raised it (assignedBy matches me), OR I'm admin/manager
+// ─── Role constants ───────────────────────────────────────────────────────────
+// Canonical role names. "NATIONAL SALES HEAD" is NOT valid — use "SALES HEAD".
+const ELEVATED_ALL  = ["ADMIN", "SALES HEAD", "CRO", "SALES STRATEGY", "REGION HEAD"];
+const ELEVATED_MGMT = ["ADMIN", "SALES HEAD", "CRO", "SALES STRATEGY"];
+
+// ─── Issue #5: dept → canonical receiving role ───────────────────────────────
+// Internal requests are routed to a role, not a free-text dept string.
+const DEPT_TO_ROLE: Record<string, string> = {
+  "NSH":              "SALES HEAD",
+  "Sales Strategy":   "SALES STRATEGY",
+  "CRO":              "CRO",
+  "Region Head":      "REGION HEAD",
+  "Digital":          "DIGI OPS",
+  "Admin":            "ADMIN",
+};
+
+function routeFromDept(dept: string | undefined | null): string | null {
+  if (!dept) return null;
+  return DEPT_TO_ROLE[dept] ?? null;
+}
+
+// ─── Scope conditions ─────────────────────────────────────────────────────────
+
 function taskScopeCondition(user: any) {
-  const elevated = ["ADMIN","NATIONAL SALES HEAD","CRO","SALES STRATEGY","REGION HEAD"];
-  if (elevated.includes(user.role)) return undefined; // see all
+  if (ELEVATED_ALL.includes(user.role)) return undefined; // elevated roles see all tasks
   return or(
     eq(tasks.assignedToUserId, user.id),
     eq(tasks.assignedBy, user.name),
@@ -17,12 +38,12 @@ function taskScopeCondition(user: any) {
 }
 
 function reqScopeCondition(user: any) {
-  const elevated = ["ADMIN","NATIONAL SALES HEAD","CRO","SALES STRATEGY"];
-  if (elevated.includes(user.role)) return undefined; // see all
+  if (ELEVATED_MGMT.includes(user.role)) return undefined; // SALES HEAD/CRO/Strategy/Admin see all
   if (user.role === "REGION HEAD") {
+    // RH sees: their own requests + requests routed to REGION HEAD
     return or(
       eq(internalRequests.raisedBy, user.id),
-      ...(user.repId ? [eq(internalRequests.repId, user.repId!)] : []),
+      eq(internalRequests.routedToRole, "REGION HEAD"),
     );
   }
   // SALES REP sees their own raised requests
@@ -53,7 +74,7 @@ router.get("/tasks/:id", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(tasks)
-      .where(eq(tasks.id, req.params.id))
+      .where(eq(tasks.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
@@ -80,18 +101,19 @@ router.post("/tasks", requireAuth, async (req, res) => {
         assignedTo:       body.assignedTo        ?? null,
         assignedToUserId: body.assignedToUserId  ?? null,
         assignedDept:     body.assignedDept      ?? null,
-        repId:            body.repId             ?? u.repId ?? null,
+        // ── Issue #3: for SALES REP, repId always comes from session ──────────
+        repId:            u.role === "SALES REP" ? u.repId : (body.repId ?? u.repId ?? null),
         clientCompany:    body.clientCompany     ?? null,
         priority:         body.priority          ?? "Medium",
         status:           body.status            ?? "Open",
         dueDate:          body.dueDate           ?? null,
         createdAt:        body.createdAt         ?? new Date().toISOString(),
-        assignedBy:       body.assignedBy        ?? u.name,
-        assignedByName:   body.assignedByName    ?? u.name,
-        fromMeetingLog:   body.fromMeetingLog     ?? false,
-        actionType:       body.actionType        ?? null,
-        dealId:           body.dealId            ?? null,
-        notes:            body.notes             ?? null,
+        assignedBy:       u.name,           // always from session — issue #3
+        assignedByName:   u.name,           // always from session
+        fromMeetingLog:   body.fromMeetingLog ?? false,
+        actionType:       body.actionType    ?? null,
+        dealId:           body.dealId        ?? null,
+        notes:            body.notes         ?? null,
       })
       .onConflictDoNothing()
       .returning();
@@ -105,11 +127,11 @@ router.post("/tasks", requireAuth, async (req, res) => {
 // PATCH /api/tasks/:id — update status, notes, dueDate
 router.patch("/tasks/:id", requireAuth, async (req, res) => {
   try {
-    const { id: _id, createdAt: _ca, ...rest } = req.body;
+    const { id: _id, createdAt: _ca, assignedBy: _ab, assignedByName: _abn, repId: _ri, ...rest } = req.body;
     const updated = await db
       .update(tasks)
       .set({ ...rest, updatedAt: new Date() })
-      .where(eq(tasks.id, req.params.id))
+      .where(eq(tasks.id, String(req.params["id"])))
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
@@ -140,7 +162,7 @@ router.get("/internal-requests/:id", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(internalRequests)
-      .where(eq(internalRequests.id, req.params.id))
+      .where(eq(internalRequests.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
@@ -158,17 +180,21 @@ router.post("/internal-requests", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "id and subject required" });
     }
 
+    // ── Issue #5: derive routedToRole from dept — backend owns routing ────────
+    const resolvedRoutedToRole = routeFromDept(body.dept);
+
     const row = await db
       .insert(internalRequests)
       .values({
         id:           body.id,
         type:         body.type          ?? null,
         dept:         body.dept          ?? null,
+        routedToRole: resolvedRoutedToRole,  // backend-derived, not client-supplied
         subject:      body.subject,
         details:      body.details       ?? null,
-        raisedBy:     body.raisedBy      ?? u.id,
-        raisedByName: body.raisedByName  ?? u.name,
-        repId:        body.repId         ?? u.repId ?? null,
+        raisedBy:     u.id,           // always from session — issue #3
+        raisedByName: u.name,         // always from session
+        repId:        u.role === "SALES REP" ? u.repId : (body.repId ?? u.repId ?? null),
         dealId:       body.dealId        ?? null,
         clientCompany:body.clientCompany ?? null,
         status:       body.status        ?? "Pending",
@@ -180,6 +206,9 @@ router.post("/internal-requests", requireAuth, async (req, res) => {
         dueDate:      body.dueDate       ?? null,
         notes:        body.notes         ?? null,
         acceptedAt:   null,
+        escDept:      null,    // governance engine will set this when SLA is breached
+        escalatedAt:  null,
+        escHistory:   [],
       })
       .onConflictDoNothing()
       .returning();
@@ -193,11 +222,13 @@ router.post("/internal-requests", requireAuth, async (req, res) => {
 // PATCH /api/internal-requests/:id — update status + resolver note
 router.patch("/internal-requests/:id", requireAuth, async (req, res) => {
   try {
-    const { id: _id, createdAt: _ca, raisedAt: _ra, raisedBy: _rb, ...rest } = req.body;
+    // Strip immutable ownership fields and backend-owned fields
+    const { id: _id, createdAt: _ca, raisedAt: _ra, raisedBy: _rb, raisedByName: _rbn,
+            routedToRole: _rtr, ...rest } = req.body;
     const updated = await db
       .update(internalRequests)
       .set({ ...rest, updatedAt: new Date() })
-      .where(eq(internalRequests.id, req.params.id))
+      .where(eq(internalRequests.id, String(req.params["id"])))
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });

@@ -5,11 +5,12 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 
+// ── Issue #2: RH scope is by region, not by repId ───────────────────────────
 function scopeCondition(user: any) {
   const role = user.role;
-  if (role === "SALES REP") return eq(revenueEntries.repId, user.repId!);
-  if (role === "REGION HEAD") return eq(revenueEntries.repId, user.repId!); // region scope via repId for now
-  return undefined;
+  if (role === "SALES REP")   return eq(revenueEntries.repId,  user.repId!);
+  if (role === "REGION HEAD") return eq(revenueEntries.region, user.region!);
+  return undefined; // SALES HEAD, CRO, SALES STRATEGY, ADMIN see all
 }
 
 // GET /api/revenue — list entries (scoped by role)
@@ -51,12 +52,13 @@ router.get("/revenue/achieved", requireAuth, async (req, res) => {
     const rows = await db
       .select({
         repId:  revenueEntries.repId,
+        region: revenueEntries.region,
         total:  sql<number>`SUM(${revenueEntries.amount})`,
         count:  sql<number>`COUNT(*)`,
       })
       .from(revenueEntries)
       .where(and(...conditions))
-      .groupBy(revenueEntries.repId);
+      .groupBy(revenueEntries.repId, revenueEntries.region);
 
     res.json({ ok: true, data: rows });
   } catch (err: any) {
@@ -70,7 +72,7 @@ router.get("/revenue/:id", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(revenueEntries)
-      .where(eq(revenueEntries.id, req.params.id))
+      .where(eq(revenueEntries.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
@@ -84,7 +86,7 @@ router.post("/revenue", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
     const {
-      id, repId, clientCompany, zohoAccountId, dealType,
+      id, clientCompany, zohoAccountId, dealType,
       amount, invoiceRef, date, quarter, fiscalYear,
       notes, reversalOf, dealId,
     } = req.body;
@@ -93,13 +95,18 @@ router.post("/revenue", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "id, clientCompany, and amount are required" });
     }
 
+    // ── Issue #3: force ownership from session for SALES REP ────────────────
+    const authorRepId  = u.role === "SALES REP" ? u.repId!  : (req.body.repId  ?? u.repId ?? 0);
+    const authorRegion = u.role === "SALES REP" ? u.region! : (req.body.region ?? u.region ?? null);
+
     const isReversal = !!reversalOf;
 
     const row = await db
       .insert(revenueEntries)
       .values({
         id,
-        repId:         repId ?? u.repId ?? 0,
+        repId:         authorRepId,
+        region:        authorRegion,
         clientCompany,
         zohoAccountId: zohoAccountId ?? null,
         dealType:      dealType ?? null,
@@ -139,7 +146,7 @@ router.patch("/revenue/:id/notes", requireAuth, async (req, res) => {
     const updated = await db
       .update(revenueEntries)
       .set({ notes, updatedAt: new Date() })
-      .where(eq(revenueEntries.id, req.params.id))
+      .where(eq(revenueEntries.id, String(req.params["id"])))
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
@@ -149,15 +156,14 @@ router.patch("/revenue/:id/notes", requireAuth, async (req, res) => {
   }
 });
 
-// PATCH /api/revenue/:id — general PATCH that enforces immutability:
-// only the `notes` field is extracted and updated; all other fields are ignored.
+// PATCH /api/revenue/:id — general PATCH: only `notes` field is mutable (immutability rule)
 router.patch("/revenue/:id", requireAuth, async (req, res) => {
   try {
-    const { notes } = req.body; // all other fields intentionally ignored (immutability rule)
+    const { notes } = req.body; // all other fields intentionally ignored
     const updated = await db
       .update(revenueEntries)
       .set({ notes: notes ?? null, updatedAt: new Date() })
-      .where(eq(revenueEntries.id, req.params.id))
+      .where(eq(revenueEntries.id, String(req.params["id"])))
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });

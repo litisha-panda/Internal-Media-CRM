@@ -5,9 +5,14 @@ import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
 
+// ─── Role constants ──────────────────────────────────────────────────────────
+// ALL role names must match the canonical set in users.role:
+//   "SALES REP" | "REGION HEAD" | "SALES HEAD" | "SALES STRATEGY" | "CRO" | "ADMIN" | "DIGI OPS"
+// "NATIONAL SALES HEAD" is NOT a valid role — use "SALES HEAD".
+
 const APPROVAL_CHAIN: Record<string, string> = {
   "Pending RH":       "REGION HEAD",
-  "Pending NSH":      "NATIONAL SALES HEAD",
+  "Pending NSH":      "SALES HEAD",       // was wrongly "NATIONAL SALES HEAD"
   "Pending Strategy": "SALES STRATEGY",
   "Pending CRO":      "CRO",
 };
@@ -25,9 +30,9 @@ function canApprove(role: string, status: string): boolean {
 
 function scopeCondition(user: any) {
   const role = user.role;
-  if (role === "SALES REP") return eq(targetSubmissions.repId, user.repId!);
-  if (role === "REGION HEAD") return eq(targetSubmissions.region, user.region!);
-  return undefined;
+  if (role === "SALES REP")    return eq(targetSubmissions.repId, user.repId!);
+  if (role === "REGION HEAD")  return eq(targetSubmissions.region, user.region!);
+  return undefined; // SALES HEAD, CRO, SALES STRATEGY, ADMIN see all
 }
 
 // GET /api/targets — list (scoped by role)
@@ -49,7 +54,7 @@ router.get("/targets/:id", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(targetSubmissions)
-      .where(eq(targetSubmissions.id, req.params.id))
+      .where(eq(targetSubmissions.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
@@ -62,17 +67,22 @@ router.get("/targets/:id", requireAuth, async (req, res) => {
 router.post("/targets", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    const { id, repId, repName, region, quarter, clients, totalTarget } = req.body;
+    const { id, quarter, clients, totalTarget } = req.body;
     if (!id || !quarter) return void res.status(400).json({ ok: false, error: "id and quarter required" });
+
+    // ── Issue #3: never trust client-supplied ownership for SALES REP ──
+    const authorRepId  = u.role === "SALES REP" ? u.repId!   : (req.body.repId   ?? u.repId ?? 0);
+    const authorRegion = u.role === "SALES REP" ? u.region!  : (req.body.region  ?? u.region ?? "");
+    const authorName   = u.role === "SALES REP" ? u.name     : (req.body.repName ?? u.name);
 
     const now = new Date().toISOString();
     const row = await db
       .insert(targetSubmissions)
       .values({
         id,
-        repId:           repId  ?? u.repId ?? 0,
-        repName:         repName ?? u.name,
-        region:          region ?? u.region ?? "",
+        repId:           authorRepId,
+        repName:         authorName,
+        region:          authorRegion,
         quarter,
         clients:         clients ?? [],
         totalTarget:     totalTarget ?? 0,
@@ -98,7 +108,7 @@ router.post("/targets/:id/approve", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(targetSubmissions)
-      .where(eq(targetSubmissions.id, req.params.id))
+      .where(eq(targetSubmissions.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
 
@@ -120,7 +130,7 @@ router.post("/targets/:id/approve", requireAuth, async (req, res) => {
         frozenTarget: nextStatus === "Approved" ? sub.totalTarget : sub.frozenTarget,
         updatedAt:    new Date(),
       })
-      .where(eq(targetSubmissions.id, req.params.id))
+      .where(eq(targetSubmissions.id, String(req.params["id"])))
       .returning();
 
     res.json({ ok: true, data: updated[0] });
@@ -136,7 +146,7 @@ router.post("/targets/:id/reject", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(targetSubmissions)
-      .where(eq(targetSubmissions.id, req.params.id))
+      .where(eq(targetSubmissions.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
 
@@ -152,7 +162,7 @@ router.post("/targets/:id/reject", requireAuth, async (req, res) => {
     const updated = await db
       .update(targetSubmissions)
       .set({ status: "Rejected", approvalLog: newLog, updatedAt: new Date() })
-      .where(eq(targetSubmissions.id, req.params.id))
+      .where(eq(targetSubmissions.id, String(req.params["id"])))
       .returning();
 
     res.json({ ok: true, data: updated[0] });
@@ -168,12 +178,11 @@ router.patch("/targets/:id", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(targetSubmissions)
-      .where(eq(targetSubmissions.id, req.params.id))
+      .where(eq(targetSubmissions.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
 
     const sub = rows[0];
-    // Only the owning rep (or ADMIN) can edit a rejected/draft submission
     if (u.role === "SALES REP" && sub.repId !== u.repId) {
       return void res.status(403).json({ ok: false, error: "Cannot edit another rep's submission" });
     }
@@ -191,7 +200,7 @@ router.patch("/targets/:id", requireAuth, async (req, res) => {
         status:    "Pending RH",
         updatedAt: new Date(),
       })
-      .where(eq(targetSubmissions.id, req.params.id))
+      .where(eq(targetSubmissions.id, String(req.params["id"])))
       .returning();
 
     res.json({ ok: true, data: updated[0] });

@@ -76,7 +76,7 @@ router.get("/admin/users", requireAuth, requireAdmin, async (req, res) => {
 // ─── POST /api/admin/users/:id/approve ──────────────────────────────────────
 // Activates a pending user and assigns their role + region.
 router.post("/admin/users/:id/approve", requireAuth, requireAdmin, async (req, res) => {
-  const { id } = req.params;
+  const id = String(req.params["id"]);
   const { role, region } = req.body as { role?: string; region?: string };
 
   if (!role || !(VALID_ROLES as readonly string[]).includes(role)) {
@@ -124,7 +124,7 @@ router.post("/admin/users/:id/approve", requireAuth, requireAdmin, async (req, r
 // ─── POST /api/admin/users/:id/reject ───────────────────────────────────────
 // Rejects a pending signup request. Sets status=revoked, kills any sessions.
 router.post("/admin/users/:id/reject", requireAuth, requireAdmin, async (req, res) => {
-  const { id } = req.params;
+  const id = String(req.params["id"]);
 
   if (id === req.user!.id) {
     res.status(400).json({ ok: false, error: "Cannot reject your own account" });
@@ -158,7 +158,7 @@ router.post("/admin/users/:id/reject", requireAuth, requireAdmin, async (req, re
 // Takes effect immediately on next request — no session kill needed
 // because requireAuth re-joins live user data from DB on every request.
 router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res) => {
-  const { id } = req.params;
+  const id = String(req.params["id"]);
   const { role, region } = req.body as { role?: string; region?: string };
 
   if (!role || !(VALID_ROLES as readonly string[]).includes(role)) {
@@ -202,7 +202,7 @@ router.patch("/admin/users/:id/role", requireAuth, requireAdmin, async (req, res
 // Revokes access. Soft-delete only — sets status=revoked for audit trail.
 // Kills all sessions immediately.
 router.delete("/admin/users/:id", requireAuth, requireAdmin, async (req, res) => {
-  const { id } = req.params;
+  const id = String(req.params["id"]);
 
   if (id === req.user!.id) {
     res.status(400).json({ ok: false, error: "Cannot revoke your own account" });
@@ -251,7 +251,7 @@ router.delete("/admin/users/:id", requireAuth, requireAdmin, async (req, res) =>
 // then upgrades to bcrypt automatically.
 // Kills all sessions so the user must log in with the new password.
 router.post("/admin/users/:id/reset-password", requireAuth, requireAdmin, async (req, res) => {
-  const { id } = req.params;
+  const id = String(req.params["id"]);
   const { temporaryPassword } = req.body as { temporaryPassword?: string };
 
   if (!temporaryPassword || temporaryPassword.trim().length < 6) {
