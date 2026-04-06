@@ -1673,6 +1673,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     calendarPlatform:"google", addMeetLink:true,
     attendeeEmails:"",
     calendarEventId:"", meetLink:"", calendarStatus:"",
+    supportRequest:{dept:"", description:"", priority:"Medium", dueDate:""},
   };
   const [dealForm, setDealForm]   = useState(BLANK_DEAL);
   const [logForm, setLogForm]     = useState(BLANK_LOG);
@@ -2182,8 +2183,12 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (dept==="CXO")            return "admin";
     if (dept==="Sales Strategy") return "sales_strategy";
     if (dept==="Digital")        return "digi_ops";
+    if (dept==="Digi Ops")       return "digi_ops";
     if (dept==="CRO")            return "sales_analysis";
-    return "admin"; // Finance, Legal, HR, Branding, Content → admin
+    if (dept==="Finance")        return "admin";
+    if (dept==="Legal")          return "admin";
+    if (dept==="Marketing")      return "admin";
+    return "admin"; // HR, Branding, Content, Other → admin
   };
 
   // Auto-fill repId when log meeting modal opens for a Sales Rep
@@ -2594,6 +2599,34 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
         fromMeetingLog: true,
       });
     }
+    // Support Request from dedicated panel in log form
+    if (logForm.supportRequest?.dept && logForm.supportRequest.description?.trim()) {
+      const sr = logForm.supportRequest;
+      const srDept = sr.dept==="Digi Ops"?"Digital":sr.dept;
+      const slaH = {"Sales Strategy":24,"Digi Ops":24,"CRO":48,"Finance":48,"Marketing":48,"Legal":72,"Other":48};
+      newIRsFromLog.push({
+        id:`sr${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+        type:"Support Request",
+        dept: srDept,
+        subject:`[Support] ${sr.dept} — ${clientCompany || "General"} — from ${repName}`.slice(0,160),
+        details: sr.description.trim(),
+        raisedBy: activeUser,
+        raisedByName: repName,
+        repId: repIdInt,
+        dealId: logForm.dealId||null,
+        clientCompany,
+        status:"Pending",
+        raisedAt:TODAY,
+        slaHours: slaH[sr.dept]||48,
+        resolvedAt:null,
+        resolverNote:"",
+        priority: sr.priority||"Medium",
+        dueDate: sr.dueDate||null,
+        notes:"",
+        acceptedAt:null,
+      });
+    }
+
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
     if (newIRsFromLog.length) setInternalReqs(p => [...newIRsFromLog, ...p]);
     if (attendPlans.length) setPlans(p => [...p, ...attendPlans]);
@@ -2947,6 +2980,26 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         }
       }
     });
+    // Support Request from dedicated panel in log form
+    if (updatedForm.supportRequest?.dept && updatedForm.supportRequest.description?.trim()) {
+      const sr = updatedForm.supportRequest;
+      const srDept = sr.dept==="Digi Ops"?"Digital":sr.dept;
+      const slaH = {"Sales Strategy":24,"Digi Ops":24,"CRO":48,"Finance":48,"Marketing":48,"Legal":72,"Other":48};
+      newIRs.push({
+        id:`sr${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
+        type:"Support Request",
+        dept: srDept,
+        subject:`[Support] ${sr.dept} — ${clientCompany || "General"} — from ${repNameC}`.slice(0,160),
+        details: sr.description.trim(),
+        raisedBy: activeUser, raisedByName: repNameC,
+        repId: repIdIntC, dealId: updatedForm.dealId||null, clientCompany,
+        status:"Pending", raisedAt:TODAY, slaHours: slaH[sr.dept]||48,
+        resolvedAt:null, resolverNote:"",
+        priority: sr.priority||"Medium", dueDate: sr.dueDate||null,
+        notes:"", acceptedAt:null,
+      });
+    }
+
     if (newTasksC.length) setTasks(p => [...newTasksC, ...p]);
     if (newIRs.length) setInternalReqs(p => [...newIRs, ...p]);
     if (attendPlansC.length) setPlans(p => [...p, ...attendPlansC]);
@@ -4071,6 +4124,45 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   );
                 })()}
 
+                {/* ── My Support Requests (open IRs raised by this rep) ── */}
+                {(()=>{
+                  const myOpenSRs = internalReqs.filter(r=>
+                    r.repId===myRepId &&
+                    r.type==="Support Request" &&
+                    !["Done","Withdrawn"].includes(r.status||"")
+                  );
+                  if (!myOpenSRs.length) return null;
+                  return (
+                    <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:14}}>🆘</span>
+                          <span className="sans" style={{fontWeight:700,fontSize:13,color:C.purple}}>
+                            {myOpenSRs.length} open support request{myOpenSRs.length!==1?"s":""}
+                          </span>
+                        </div>
+                        <button onClick={()=>setView("internal-requests")}
+                          style={{background:C.purple,color:"#fff",border:"none",borderRadius:5,padding:"4px 12px",fontSize:11,fontWeight:700,cursor:"pointer"}}>View All →</button>
+                      </div>
+                      {myOpenSRs.map(sr=>{
+                        const pColor = sr.priority==="Urgent"?C.red:sr.priority==="High"?C.orange:sr.priority==="Medium"?C.blue:C.green;
+                        const sc = sr.status==="In Progress"?C.blue:sr.status==="Accepted"?C.green:C.orange;
+                        return (
+                          <div key={sr.id} style={{display:"flex",alignItems:"center",gap:8,background:`${C.purple}05`,borderRadius:5,padding:"6px 10px",marginBottom:5,borderLeft:`3px solid ${sc}`}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontWeight:600,fontSize:12,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sr.subject.replace(/^\[Support\]\s*/,"")}</div>
+                              {sr.clientCompany&&<div style={{fontSize:10,color:C.dim}}>Re: {sr.clientCompany}</div>}
+                            </div>
+                            <span style={{background:`${sc}22`,color:sc,padding:"2px 8px",borderRadius:5,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>{sr.status}</span>
+                            <span style={{background:`${pColor}18`,color:pColor,padding:"2px 6px",borderRadius:4,fontSize:10,whiteSpace:"nowrap"}}>{sr.priority}</span>
+                            <span style={{fontSize:10,color:C.muted,whiteSpace:"nowrap"}}>{sr.dept}</span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
+
                 {/* ── Revenue Confirmation Prompt ── */}
                 {(()=>{
                   const pendingRevenue = revenueEntries.filter(e=>
@@ -5073,6 +5165,43 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   );
                 })()}
 
+                {/* ── SUPPORT REQUESTS (to RH's region reps) ── */}
+                {(()=>{
+                  const regionSRs = internalReqs.filter(r=>
+                    r.type==="Support Request" &&
+                    !["Done","Withdrawn","Rejected"].includes(r.status||"") &&
+                    myRepIds.includes(r.repId as any)
+                  );
+                  if (!regionSRs.length) return null;
+                  return (
+                    <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:13}}>🆘</span>
+                          <span className="sans" style={{fontWeight:700,fontSize:12,color:C.purple}}>SUPPORT REQUESTS · {regionSRs.length} open from your region</span>
+                        </div>
+                        <button onClick={()=>setView("internal-requests")} style={{background:C.purple,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>View All →</button>
+                      </div>
+                      {regionSRs.slice(0,4).map(sr=>{
+                        const pColor = sr.priority==="Urgent"?C.red:sr.priority==="High"?C.orange:C.blue;
+                        const sc = sr.status==="Accepted"?C.green:sr.status==="In Progress"?C.blue:C.orange;
+                        const rep = reps.find(r=>r.id===sr.repId);
+                        return (
+                          <div key={sr.id} style={{display:"flex",alignItems:"center",gap:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",marginBottom:5,borderLeft:`3px solid ${sc}`}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontWeight:600,fontSize:11,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sr.subject.replace(/^\[Support\]\s*/,"")}</div>
+                              <div style={{fontSize:10,color:C.dim}}>{rep?.name||sr.raisedByName} · → {sr.dept}</div>
+                            </div>
+                            <span style={{background:`${sc}22`,color:sc,padding:"1px 7px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>{sr.status}</span>
+                            {sr.priority&&sr.priority!=="Medium"&&<span style={{background:`${pColor}18`,color:pColor,padding:"1px 6px",borderRadius:4,fontSize:9,whiteSpace:"nowrap"}}>{sr.priority}</span>}
+                          </div>
+                        );
+                      })}
+                      {regionSRs.length>4&&<div style={{fontSize:10,color:C.muted,textAlign:"center",marginTop:4}}>+{regionSRs.length-4} more</div>}
+                    </div>
+                  );
+                })()}
+
                 {/* ── SECTION A: MY ACTIONABLES ── */}
                 <div style={{marginBottom:20}}>
                   <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase",marginBottom:10}}>
@@ -5940,6 +6069,41 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   ))}
                 </div>
 
+                {/* ── SUPPORT REQUESTS panel (NSH War Room) ── */}
+                {(()=>{
+                  const openSRsNSH = internalReqs.filter(r=>
+                    r.type==="Support Request" &&
+                    !["Done","Withdrawn","Rejected"].includes(r.status||"")
+                  );
+                  if (!openSRsNSH.length) return null;
+                  return (
+                    <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                        <div style={{display:"flex",alignItems:"center",gap:8}}>
+                          <span style={{fontSize:13}}>🆘</span>
+                          <span className="sans" style={{fontWeight:700,fontSize:12,color:C.purple}}>SUPPORT REQUESTS · {openSRsNSH.length} open</span>
+                        </div>
+                        <button onClick={()=>setView("internal-requests")} style={{background:C.purple,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>View All →</button>
+                      </div>
+                      {openSRsNSH.slice(0,4).map(sr=>{
+                        const pColor = sr.priority==="Urgent"?C.red:sr.priority==="High"?C.orange:C.blue;
+                        const sc = sr.status==="Accepted"?C.green:sr.status==="In Progress"?C.blue:C.orange;
+                        return (
+                          <div key={sr.id} style={{display:"flex",alignItems:"center",gap:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",marginBottom:5,borderLeft:`3px solid ${sc}`}}>
+                            <div style={{flex:1,minWidth:0}}>
+                              <div style={{fontWeight:600,fontSize:11,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sr.subject.replace(/^\[Support\]\s*/,"")}</div>
+                              <div style={{fontSize:10,color:C.dim}}>{sr.raisedByName} · → {sr.dept}</div>
+                            </div>
+                            <span style={{background:`${sc}22`,color:sc,padding:"1px 7px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>{sr.status}</span>
+                            {sr.priority&&sr.priority!=="Medium"&&<span style={{background:`${pColor}18`,color:pColor,padding:"1px 6px",borderRadius:4,fontSize:9,whiteSpace:"nowrap"}}>{sr.priority}</span>}
+                          </div>
+                        );
+                      })}
+                      {openSRsNSH.length>4&&<div style={{fontSize:10,color:C.muted,textAlign:"center",marginTop:4}}>+{openSRsNSH.length-4} more</div>}
+                    </div>
+                  );
+                })()}
+
                 {/* ── DYNAMIC ANALYSIS ── */}
                 {(()=>{
                   const activeD  = allD.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome));
@@ -6056,6 +6220,41 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         <div className="sans" style={{fontSize:16,fontWeight:800,color:m.color}}>{m.val}</div>
                       </div>
                     ))}
+                  </div>
+                );
+              })()}
+
+              {/* ── SUPPORT REQUESTS (system-wide open, visible to Strategy/CRO/Admin) ── */}
+              {!isRep && (()=>{
+                const openSRs = internalReqs.filter(r=>
+                  r.type==="Support Request" &&
+                  !["Done","Withdrawn","Rejected"].includes(r.status||"")
+                );
+                if (!openSRs.length) return null;
+                return (
+                  <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
+                    <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                        <span style={{fontSize:13}}>🆘</span>
+                        <span className="sans" style={{fontWeight:700,fontSize:12,color:C.purple}}>SUPPORT REQUESTS · {openSRs.length} open system-wide</span>
+                      </div>
+                      <button onClick={()=>setView("internal-requests")} style={{background:C.purple,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:11,fontWeight:700,cursor:"pointer"}}>View All →</button>
+                    </div>
+                    {openSRs.slice(0,5).map(sr=>{
+                      const pColor = sr.priority==="Urgent"?C.red:sr.priority==="High"?C.orange:C.blue;
+                      const sc = sr.status==="Accepted"?C.green:sr.status==="In Progress"?C.blue:C.orange;
+                      return (
+                        <div key={sr.id} style={{display:"flex",alignItems:"center",gap:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",marginBottom:5,borderLeft:`3px solid ${sc}`}}>
+                          <div style={{flex:1,minWidth:0}}>
+                            <div style={{fontWeight:600,fontSize:11,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{sr.subject.replace(/^\[Support\]\s*/,"")}</div>
+                            <div style={{fontSize:10,color:C.dim}}>{sr.raisedByName} · → {sr.dept}</div>
+                          </div>
+                          <span style={{background:`${sc}22`,color:sc,padding:"1px 7px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>{sr.status}</span>
+                          {sr.priority&&sr.priority!=="Medium"&&<span style={{background:`${pColor}18`,color:pColor,padding:"1px 6px",borderRadius:4,fontSize:9,whiteSpace:"nowrap"}}>{sr.priority}</span>}
+                        </div>
+                      );
+                    })}
+                    {openSRs.length>5&&<div style={{fontSize:10,color:C.muted,textAlign:"center",marginTop:4}}>+{openSRs.length-5} more</div>}
                   </div>
                 );
               })()}
@@ -7417,8 +7616,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
                   {[
                     {label:"Pending / Overdue", count:pending.length, color:C.red},
+                    {label:"Accepted",           count:myReqs.filter(r=>r.status==="Accepted").length, color:C.green},
                     {label:"In Progress",        count:inprog.length,  color:C.blue},
                     {label:"Done",               count:done.length,    color:C.green},
+                    {label:"Rejected",           count:myReqs.filter(r=>r.status==="Rejected").length, color:C.red},
                   ].map(s=>(
                     <div key={s.label} style={{background:C.surface,border:`1px solid ${s.color}44`,borderRadius:8,padding:"10px 16px",minWidth:120}}>
                       <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{s.label}</div>
@@ -7429,7 +7630,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                 {/* Status filter */}
                 <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-                  {["all","Pending","Overdue","In Progress","Done","Withdrawn"].map(s=>(
+                  {["all","Pending","Accepted","In Progress","Done","Rejected","Withdrawn"].map(s=>(
                     <button key={s} onClick={()=>setIrStatusFilter(s)}
                       style={{padding:"4px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:irStatusFilter===s?700:400,
                         background:irStatusFilter===s?C.accent:`${C.accent}12`,
@@ -7467,16 +7668,26 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           </div>
                           <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
                           {req.clientCompany&&<div style={{fontSize:11,color:C.dim,marginBottom:4}}>Re: {req.clientCompany}{deal?` · ${fmtR(deal.amount)}`:""}</div>}
-                          {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.5}}>{req.details}</div>}
+                          {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:6,lineHeight:1.5}}>{req.details}</div>}
+                          {req.priority&&req.priority!=="Medium"&&<div style={{fontSize:10,fontWeight:700,color:req.priority==="Urgent"?C.red:req.priority==="High"?C.orange:C.green,marginBottom:6}}>Priority: {req.priority}{req.dueDate?` · Needed by ${req.dueDate}`:""}</div>}
+                          {req.notes&&<div style={{fontSize:11,color:C.blue,background:`${C.blue}08`,padding:"5px 9px",borderRadius:5,marginBottom:6}}>💬 {req.notes}</div>}
                           {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:8}}>✓ {req.resolverNote}</div>}
-                          {req.status!=="Done" && (
-                            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                              {req.status!=="In Progress"&&(
-                                <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))}
-                                  style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
+                          {req.status!=="Done" && req.status!=="Rejected" && (
+                            <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                              {req.status==="Pending"&&(
+                                <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Accepted",acceptedAt:TODAY}:r))}
+                                  style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Accept</button>
                               )}
+                              {req.status!=="In Progress"&&req.status!=="Accepted"&&(
+                                <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))}
+                                  style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
+                              )}
+                              <button onClick={()=>openNoteModal("Add Note / Update","Noted",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,notes:note}:r)))}
+                                style={{background:`${C.accent}12`,border:`1px solid ${C.accent}33`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Note</button>
                               <button onClick={()=>openNoteModal("Resolution Note","Resolved",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)))}
-                                style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark Done</button>
+                                style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark Done</button>
+                              <button onClick={()=>openNoteModal("Reason for rejection","Rejected",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:r)))}
+                                style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✗ Reject</button>
                             </div>
                           )}
                         </div>
@@ -13431,6 +13642,53 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                     )}
                   </div>
+                </div>
+              )}
+            </div>
+
+            {/* SUPPORT REQUEST SECTION — dedicated quick-IR panel */}
+            <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 14px",marginBottom:12}}>
+              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}>
+                <div style={{fontSize:10,color:C.purple,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase"}}>🆘 Support Needed from Another Dept?</div>
+                <span style={{fontSize:10,color:C.muted}}>(optional — raises an Internal Request)</span>
+              </div>
+              <div style={{display:"grid",gridTemplateColumns:"1.5fr 1fr 1fr",gap:8,marginBottom:8}}>
+                <div>
+                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Department</div>
+                  <select value={logForm.supportRequest?.dept||""} onChange={e=>setLogForm(p=>({...p,supportRequest:{...p.supportRequest,dept:e.target.value}}))}>
+                    <option value="">— None —</option>
+                    <option>Sales Strategy</option>
+                    <option>Digi Ops</option>
+                    <option>CRO</option>
+                    <option>Finance</option>
+                    <option>Marketing</option>
+                    <option>Legal</option>
+                    <option>Other</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Priority</div>
+                  <select value={logForm.supportRequest?.priority||"Medium"} onChange={e=>setLogForm(p=>({...p,supportRequest:{...p.supportRequest,priority:e.target.value}}))} disabled={!logForm.supportRequest?.dept}>
+                    <option>Low</option>
+                    <option>Medium</option>
+                    <option>High</option>
+                    <option>Urgent</option>
+                  </select>
+                </div>
+                <div>
+                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Needed By</div>
+                  <input type="date" min="2020-01-01" max="2099-12-31" value={logForm.supportRequest?.dueDate||""} onChange={e=>setLogForm(p=>({...p,supportRequest:{...p.supportRequest,dueDate:e.target.value}}))} disabled={!logForm.supportRequest?.dept} />
+                </div>
+              </div>
+              {logForm.supportRequest?.dept && (
+                <div>
+                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>What do you need? *</div>
+                  <textarea rows={2} placeholder={`Describe what you need from ${logForm.supportRequest.dept}…`}
+                    value={logForm.supportRequest?.description||""}
+                    onChange={e=>setLogForm(p=>({...p,supportRequest:{...p.supportRequest,description:e.target.value}}))}
+                    style={{width:"100%",resize:"vertical",fontFamily:"'DM Mono',monospace",fontSize:12,padding:"6px 8px",border:`1px solid ${C.border}`,borderRadius:5,background:C.surface}}
+                  />
+                  <div style={{fontSize:10,color:C.purple,marginTop:3}}>→ Will create a Support Request in {logForm.supportRequest.dept}'s inbox when you log this touchpoint</div>
                 </div>
               )}
             </div>

@@ -64,6 +64,9 @@ All API routes are prefixed with `/api/` and include modules for Authentication,
   - Touchpoint log form auto-creates a task when `nextSteps` plain text is filled but no structured `nextStepItems` action exists.
   - Revenue Tracker includes a "Revenue Report" tab with month/client/channel/region breakdowns sourced exclusively from `revenueEntries` (reversals excluded).
   - Pipeline Gap metric (`Target − Achieved − Active Pipeline`) is surfaced in: My Plan (target summary strip), RH War Room (metric strip below header), and General War Room (all non-RH/non-NSH roles). NSH War Room already had a comprehensive GAP dashboard.
+  - **Support Request workflow**: Touchpoint log form has a dedicated "Support Needed" section (dept: Sales Strategy, Digi Ops, CRO, Finance, Marketing, Legal, Other) that creates an Internal Request of `type: "Support Request"` with `priority`, `dueDate`, and `notes`. IR inbox (dept recipients) can Accept, Add Note, Mark Done, or Reject requests. Open Support Requests surface in: My Plan (rep's open SRs panel), RH War Room (region SRs panel), NSH War Room (system-wide SRs panel), and General War Room (system-wide SRs panel).
+  - `internalRequests` schema extended with: `priority` (text, default "Medium"), `dueDate` (text), `notes` (text), `acceptedAt` (text).
+  - `irStatusFilter` now includes "Accepted" and "Rejected" pills.
 
 ## External Dependencies
 

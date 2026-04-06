@@ -176,6 +176,10 @@ router.post("/internal-requests", requireAuth, async (req, res) => {
         slaHours:     body.slaHours      ?? 48,
         resolvedAt:   null,
         resolverNote: null,
+        priority:     body.priority      ?? "Medium",
+        dueDate:      body.dueDate       ?? null,
+        notes:        body.notes         ?? null,
+        acceptedAt:   null,
       })
       .onConflictDoNothing()
       .returning();

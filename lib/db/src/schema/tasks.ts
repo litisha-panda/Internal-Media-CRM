@@ -38,6 +38,10 @@ export const internalRequests = pgTable("internal_requests", {
   slaHours:     integer("sla_hours").default(48),
   resolvedAt:   text("resolved_at"),
   resolverNote: text("resolver_note"),
+  priority:     text("priority").default("Medium"),
+  dueDate:      text("due_date"),
+  notes:        text("notes"),
+  acceptedAt:   text("accepted_at"),
   createdAt:    timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
