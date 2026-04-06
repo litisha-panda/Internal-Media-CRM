@@ -1095,6 +1095,9 @@ function useApiEntityState<T extends { id: string }>(
   initial: T[],
 ): [T[], React.Dispatch<React.SetStateAction<T[]>>, boolean, string|null] {
   const backendIds = useRef<Set<string>>(new Set());
+  // Only dispatch logout event if this hook has previously received a valid 200.
+  // Prevents demo-mode (no API session) from triggering logout on initial mount 401.
+  const hadValidSession = useRef(false);
 
   // Seed from localStorage cache for instant first paint, overwritten by API on mount
   const [state, setState] = useState<T[]>(() => {
@@ -1112,12 +1115,16 @@ function useApiEntityState<T extends { id: string }>(
       const r = await fetch(apiPath);
       if (r.status === 401) {
         if (isInitial) setLoading(false);
-        window.dispatchEvent(new CustomEvent("otv:unauthorized"));
+        // Only force logout if we previously had a valid session (not demo mode)
+        if (hadValidSession.current) {
+          window.dispatchEvent(new CustomEvent("otv:unauthorized"));
+        }
         return;
       }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const json = await r.json();
       if (json?.ok && Array.isArray(json.data)) {
+        hadValidSession.current = true;
         setState(json.data);
         backendIds.current = new Set(json.data.map((i: T) => i.id));
         try { localStorage.setItem(localKey, JSON.stringify(json.data)); } catch {}
