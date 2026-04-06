@@ -6,6 +6,11 @@ import roParserRouter from "./ro-parser";
 import claudeProxyRouter from "./claude-proxy";
 import stateRouter from "./state";
 import zohoRouter from "./zoho";
+import targetsRouter from "./targets";
+import revenueRouter from "./revenue";
+import dealsRouter from "./deals";
+import touchpointsRouter from "./touchpoints";
+import tasksRouter from "./tasks";
 
 const router: IRouter = Router();
 
@@ -16,5 +21,20 @@ router.use(roParserRouter);
 router.use(claudeProxyRouter);
 router.use(stateRouter);
 router.use(zohoRouter);
+
+// Phase 3 — Target submissions
+router.use(targetsRouter);
+
+// Phase 4 — Revenue entries
+router.use(revenueRouter);
+
+// Phase 5 — Deals + client accounts
+router.use(dealsRouter);
+
+// Phase 6 — Touchpoints
+router.use(touchpointsRouter);
+
+// Phase 7 — Tasks + internal requests
+router.use(tasksRouter);
 
 export default router;

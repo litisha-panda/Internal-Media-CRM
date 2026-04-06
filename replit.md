@@ -9,19 +9,64 @@ Internal sales management platform for Odisha Television Network. Private, not f
 - `lib/db/` — Drizzle ORM + PostgreSQL (Replit built-in DB)
 - Build tool: Vite. One secret: `ANTHROPIC_API_KEY`
 
-## Data Persistence — PostgreSQL via API
+## Data Persistence — Hybrid PostgreSQL Architecture
 
-All shared state lives in the `app_state` table (key TEXT PRIMARY KEY, value JSONB). 
-The `usePersistedState` hook in OTVApp.tsx syncs every collection to the server:
-- On mount: fetches latest from `/api/state/:key` (overrides localStorage with server data)
-- On change: debounces 1s then writes to server via PUT `/api/state/:key`
-- Polls every 20s to pick up changes from other users (skips if user recently wrote)
-- Falls back to localStorage if server unreachable
+### Normalized Tables (Phases 0–8) — Source of Truth for Business Entities
 
-Collections synced: `otv_deals`, `otv_tasks`, `otv_targetSubs`, `otv_meetings`, `otv_plans`,
-`otv_wplans`, `otv_internalReqs`, `otv_att`, `otv_absence`, `otv_revenueEntries`,
-`otv_ipProposals`, `otv_properties`, `otv_liveRoles`, `otv_pendingUsers`, `otv_adminConfig`,
-`otv_savedROs`, `otv_reps` (sales rep master, editable by Admin), `otv_masterClients` (client master list)
+| Table | Phase | Purpose |
+|---|---|---|
+| `otv_users` | 0 | Auth users — all roles, bcrypt passwords, approval status |
+| `otv_sessions` | 0 | HTTP-only session tokens (24h TTL) |
+| `deals` | 5 | Sales pipeline. NO delete — use stage=Lost/Archived. `pipelineAmount` derived at read, never stored. |
+| `client_accounts` | 5 | Per-client account records, one per rep+client pair |
+| `touchpoints` | 6 | Meeting log. Immutable entries. Relationship TPs don't update `lastDealMeetingDate`. |
+| `revenue_entries` | 4 | Revenue log. IMMUTABLE except `notes`. Corrections via reversal entries. |
+| `target_submissions` | 3 | Target plans through 4-step approval chain (Pending RH → NSH → Strategy → CRO → Approved) |
+| `tasks` | 7 | Action items assigned across roles |
+| `internal_requests` | 7 | Inter-department requests with SLA tracking |
+| `app_state` | — | Generic JSONB blob store for secondary entities (see below) |
+
+### API Routes (all under `/api/`)
+
+**Auth (Phase 1):** `POST /api/auth/signup|login|logout`, `GET /api/auth/me`, `POST /api/auth/seed-demo`  
+**Admin (Phase 2):** `GET /api/admin/users`, approve/reject/role/delete, config CRUD, dev reset  
+**Targets (Phase 3):** `GET|POST /api/targets`, `GET /api/targets/:id`, approve/reject  
+**Revenue (Phase 4):** `GET|POST /api/revenue`, `GET /api/revenue/achieved`, `PATCH /api/revenue/:id` (notes only)  
+**Deals (Phase 5):** `GET|POST|PATCH /api/deals/:id`, `GET|POST|PATCH /api/client-accounts/:id`  
+**Touchpoints (Phase 6):** `GET|POST /api/touchpoints`, `PATCH /api/touchpoints/:id/action-items`  
+**Tasks (Phase 7):** `GET|POST|PATCH /api/tasks/:id`, `GET|POST|PATCH /api/internal-requests/:id`  
+
+### Frontend State — Dual-layer Pattern
+
+**7 core entities** use `useApiEntityState(apiPath, localKey, initial)`:
+- Reads from normalized API on mount → seeds localStorage for instant UI
+- Debounce-syncs writes to normalized API (1.5s): POST for new items, PATCH for changed items
+- Falls back to localStorage when unauthenticated or offline
+- Entities: `deals`, `tasks`, `internalReqs`, `targetSubs`, `revenueEntries`, `clientAccounts`, `touchpoints`
+
+**Secondary entities** continue to use `usePersistedState(key, initial)` via generic `/api/state/:key` blob store:
+- `otv_plans`, `otv_wplans` — daily/weekly plans
+- `otv_meetings` — legacy meeting log (kept for backward compat; touchpoints is the new system)
+- `otv_att`, `otv_absence` — attendance/absence records
+- `otv_savedROs` — RO Parser data (NEVER touched)
+- `otv_properties`, `otv_ipProposals` — IP catalog
+- `otv_reps`, `otv_masterClients` — rep/client master lists
+
+**User management (admin panel):**
+- On load: fetches `/api/admin/users` → merges API pending/active users into `pendingUsers`/`liveRoles`
+- Approve button → calls `POST /api/admin/users/:id/approve` (for API-registered users)
+- Reject button → calls `POST /api/admin/users/:id/reject`
+- Role change → calls `PATCH /api/admin/users/:id/role`
+- Revoke → calls `DELETE /api/admin/users/:id`
+
+### Golden Rules (never violate)
+
+1. **ACHIEVED = `revenueEntries` only** — never `deal.amount`, never stage sum
+2. **Never touch RO Parser** — `view === "ro-parser"` block and all RO engine functions are frozen
+3. **Pipeline is derived** — `pipelineAmount = amount × STAGE_PROB[stage] / 100` at read time, never stored
+4. **Revenue entries are immutable** except `notes` — corrections via reversal entries (`reversalOf` FK)
+5. **No DELETE on deals** — use `stage = "Lost" | "Archived" | "Cancelled"`
+6. **Admin demo password**: `demo123` for all 21 seeded users at `@odishatv.com`
 
 ## What it does
 

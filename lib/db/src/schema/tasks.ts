@@ -1,0 +1,48 @@
+import { pgTable, text, integer, boolean, timestamp } from "drizzle-orm/pg-core";
+
+export const tasks = pgTable("tasks", {
+  id:               text("id").primaryKey(),
+  title:            text("title").notNull(),
+  description:      text("description"),
+  assignedTo:       text("assigned_to"),
+  assignedToUserId: text("assigned_to_user_id"),
+  assignedDept:     text("assigned_dept"),
+  repId:            integer("rep_id"),
+  clientCompany:    text("client_company"),
+  priority:         text("priority").default("Medium"),
+  status:           text("status").default("Open"),
+  dueDate:          text("due_date"),
+  createdAt:        text("created_at"),
+  assignedBy:       text("assigned_by"),
+  assignedByName:   text("assigned_by_name"),
+  fromMeetingLog:   boolean("from_meeting_log").default(false),
+  actionType:       text("action_type"),
+  dealId:           text("deal_id"),
+  notes:            text("notes"),
+  updatedAt:        timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const internalRequests = pgTable("internal_requests", {
+  id:           text("id").primaryKey(),
+  type:         text("type"),
+  dept:         text("dept"),
+  subject:      text("subject").notNull(),
+  details:      text("details"),
+  raisedBy:     text("raised_by"),
+  raisedByName: text("raised_by_name"),
+  repId:        integer("rep_id"),
+  dealId:       text("deal_id"),
+  clientCompany:text("client_company"),
+  status:       text("status").default("Pending"),
+  raisedAt:     text("raised_at"),
+  slaHours:     integer("sla_hours").default(48),
+  resolvedAt:   text("resolved_at"),
+  resolverNote: text("resolver_note"),
+  createdAt:    timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:    timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export type Task              = typeof tasks.$inferSelect;
+export type NewTask           = typeof tasks.$inferInsert;
+export type InternalRequest    = typeof internalRequests.$inferSelect;
+export type NewInternalRequest = typeof internalRequests.$inferInsert;

@@ -1082,6 +1082,83 @@ function usePersistedState(key, initial) {
   return [state, setState];
 }
 
+/**
+ * useApiEntityState — like usePersistedState but backed by a normalized REST endpoint.
+ * Reads from the API on mount (seeds localStorage for instant UI on next load).
+ * Debounce-syncs writes back: POST for new items, PATCH for changed items.
+ * Falls back gracefully when unauthenticated or offline.
+ */
+function useApiEntityState<T extends { id: string }>(
+  apiPath: string,
+  localKey: string,
+  initial: T[],
+): [T[], React.Dispatch<React.SetStateAction<T[]>>] {
+  const backendIds  = useRef<Set<string>>(new Set());
+  const loaded      = useRef(false);
+  const isFirst     = useRef(true);
+  const timer       = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const [state, setState] = useState<T[]>(() => {
+    try {
+      const s = localStorage.getItem(localKey);
+      return s ? JSON.parse(s) : initial;
+    } catch { return initial; }
+  });
+
+  // On mount: load from normalized API endpoint
+  useEffect(() => {
+    fetch(apiPath)
+      .then(r => (r.ok ? r.json() : null))
+      .then(data => {
+        if (data?.ok && Array.isArray(data.data) && data.data.length > 0) {
+          setState(data.data);
+          backendIds.current = new Set(data.data.map((i: T) => i.id));
+          try { localStorage.setItem(localKey, JSON.stringify(data.data)); } catch {}
+        }
+      })
+      .catch(() => {/* offline or unauthenticated — use localStorage */})
+      .finally(() => { loaded.current = true; });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiPath]);
+
+  // On state change: mirror to localStorage + debounce-sync to API
+  useEffect(() => {
+    try { localStorage.setItem(localKey, JSON.stringify(state)); } catch {}
+
+    if (isFirst.current) { isFirst.current = false; return; }
+
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(async () => {
+      if (!loaded.current) return;
+      for (const item of state) {
+        try {
+          if (backendIds.current.has(item.id)) {
+            // Existing item — PATCH (backend enforces field-level immutability per entity)
+            await fetch(`${apiPath}/${item.id}`, {
+              method:  "PATCH",
+              headers: { "Content-Type": "application/json" },
+              body:    JSON.stringify(item),
+            });
+          } else {
+            // New item — POST
+            const r = await fetch(apiPath, {
+              method:  "POST",
+              headers: { "Content-Type": "application/json" },
+              body:    JSON.stringify(item),
+            });
+            if (r.ok) backendIds.current.add(item.id);
+          }
+        } catch {/* offline */}
+      }
+    }, 1500);
+
+    return () => { if (timer.current) clearTimeout(timer.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [state]);
+
+  return [state, setState];
+}
+
 // ── DATA VERSION AUTO-CLEAR ────────────────────────────────────────────────
 // Bump this string whenever seed data or schema changes to wipe stale localStorage.
 const DATA_VERSION = "v3-clean";
@@ -1104,7 +1181,7 @@ export default function OTVApp() {
   const [plans, setPlans]             = usePersistedState("otv_plans",    SEED_PLANS);
   const [weeklyPlans, setWeeklyPlans] = usePersistedState("otv_wplans",   SEED_WEEKLY_PLANS);
   const [meetings, setMeetings]       = usePersistedState("otv_meetings", SEED_MEETINGS);
-  const [deals, setDeals]             = usePersistedState("otv_deals",    SEED_DEALS);
+  const [deals, setDeals]             = useApiEntityState("/api/deals",    "otv_deals",    SEED_DEALS);
 
   const handleLogin  = (user) => { setLoginUser(user); setLoggedIn(true); setSection(user?.role === "admin" ? "crm" : "home"); if (user?.provider) setLoginProvider(user.provider); };
   const handleLogout = ()     => { setLoggedIn(false); setLoginUser(null); setSection("home"); };
@@ -1409,7 +1486,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [noteModal, setNoteModal] = useState(null);   // {title, placeholder, onSubmit}
   const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
-  const [tasks, setTasks]         = usePersistedState("otv_tasks", SEED_TASKS);
+  const [tasks, setTasks]         = useApiEntityState("/api/tasks", "otv_tasks", SEED_TASKS);
   const [taskModal, setTaskModal]       = useState(false);
   const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -1578,14 +1655,14 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [ipPropNote, setIpPropNote]                    = useState("");
   const [ipPropValue, setIpPropValue]                  = useState("");
   const [ipApprovalPrices, setIpApprovalPrices]        = useState<Record<string,string>>({});
-  const [internalReqs, setInternalReqs]               = usePersistedState("otv_internalReqs", SEED_INTERNAL_REQS);
+  const [internalReqs, setInternalReqs]               = useApiEntityState("/api/internal-requests", "otv_internalReqs", SEED_INTERNAL_REQS);
   const [irStatusFilter, setIrStatusFilter]            = useState("all");
   const [lbTab, setLbTab]                              = useState("team");
-  const [targetSubs, setTargetSubs]                    = usePersistedState("otv_targetSubs", SEED_TARGET_SUBMISSIONS);
-  const [revenueEntries, setRevenueEntries]             = usePersistedState("otv_revenueEntries", SEED_REVENUE_ENTRIES);
+  const [targetSubs, setTargetSubs]                    = useApiEntityState("/api/targets",            "otv_targetSubs",      SEED_TARGET_SUBMISSIONS);
+  const [revenueEntries, setRevenueEntries]             = useApiEntityState("/api/revenue",             "otv_revenueEntries",  SEED_REVENUE_ENTRIES);
   // ── Part 1: New data model objects ──────────────────────────────────────
-  const [clientAccounts, setClientAccounts] = usePersistedState("otv_clientAccounts", []);
-  const [touchpoints,    setTouchpoints]    = usePersistedState("otv_touchpoints",    []);
+  const [clientAccounts, setClientAccounts] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
+  const [touchpoints,    setTouchpoints]    = useApiEntityState("/api/touchpoints",     "otv_touchpoints",    []);
 
   // Part 1: One-time migration — runs when clientAccounts is empty but deals/meetings exist
   useEffect(() => {
@@ -1714,6 +1791,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [irForm, setIrForm]                             = useState(BLANK_IR_FORM);
   const [editIrId, setEditIrId]                         = useState<string|null>(null);
   const [pendingUsers, setPendingUsers]                 = usePersistedState("otv_pendingUsers", []);
+  const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles", []);
   // Merge any self-registered pending signups into admin's queue
   useEffect(() => {
     try {
@@ -1727,7 +1805,31 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       }
     } catch {}
   }, []);
-  const [liveRoles, setLiveRoles]                       = usePersistedState("otv_liveRoles", []);
+  // Reconcile with the real auth API — picks up users who signed up via /api/auth/signup
+  useEffect(() => {
+    fetch("/api/admin/users")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (!data?.ok || !Array.isArray(data.data)) return;
+        const apiUsers: any[] = data.data;
+        setPendingUsers(prev => {
+          const existEmails = new Set(prev.map((u: any) => u.email));
+          const toAdd = apiUsers
+            .filter(u => u.status === "pending" && !existEmails.has(u.email))
+            .map(u => ({ id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email, requestedAt: u.requestedAt ?? u.createdAt, intendedRole: u.role }));
+          return toAdd.length ? [...prev, ...toAdd] : prev;
+        });
+        setLiveRoles(prev => {
+          const existEmails = new Set(prev.map((u: any) => u.email));
+          const toAdd = apiUsers
+            .filter(u => u.status === "active" && !existEmails.has(u.email))
+            .map(u => ({ id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email, role: u.role, region: u.region ?? "", canView: u.role === "SALES REP" ? "self" : u.role === "REGION HEAD" ? "region" : "all" }));
+          return toAdd.length ? [...prev, ...toAdd] : prev;
+        });
+      })
+      .catch(() => {/* unauthenticated or offline — use localStorage data */});
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
   const [reps, setReps]                                 = usePersistedState("otv_reps", REPS);
   const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", []);
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
@@ -7203,14 +7305,19 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               {REGIONS.map(r=><option key={r}>{r}</option>)}
                             </select>
                             <div style={{display:"flex",gap:6}}>
-                              <button onClick={()=>{
+                              <button onClick={async ()=>{
                                 const roleEl   = document.getElementById(`role-${pu.id}`);
                                 const regionEl = document.getElementById(`region-${pu.id}`);
                                 const role     = roleEl?.value || "SALES REP";
                                 const region   = regionEl?.value || "North";
-                                const newUser  = {id:`u_${pu.id}`,name:pu.name,role,canView:role==="SALES REP"?"self":role==="REGION HEAD"?"region":"all",region};
+                                // Call backend for auth-system users
+                                if (pu._apiId) {
+                                  try {
+                                    await fetch(`/api/admin/users/${pu._apiId}/approve`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({role,region}) });
+                                  } catch {}
+                                }
+                                const newUser  = {id:`u_${pu.id}`,_apiId:pu._apiId,name:pu.name,email:pu.email,role,canView:role==="SALES REP"?"self":role==="REGION HEAD"?"region":"all",region};
                                 setLiveRoles(p=>[...p, newUser]);
-                                // If approved as SALES REP, also add to reps list for attendance/targets tracking
                                 if (role === "SALES REP") {
                                   setReps(prev => {
                                     const nextId = prev.length > 0 ? Math.max(...prev.map(r=>r.id)) + 1 : 1;
@@ -7219,7 +7326,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   });
                                 }
                                 setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
-                                // If they signed up via the form, unlock their login credentials
                                 if (pu.passwordHash) {
                                   const stored = JSON.parse(localStorage.getItem("otv_crm_users")||"[]");
                                   if (!stored.find(u=>u.email===pu.email)) {
@@ -7232,9 +7338,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                                 ✓ Approve
                               </button>
-                              <button onClick={()=>{
+                              <button onClick={async ()=>{
+                                if (pu._apiId) {
+                                  try { await fetch(`/api/admin/users/${pu._apiId}/reject`, { method:"POST" }); } catch {}
+                                }
                                 setPendingUsers(p=>p.filter(u=>u.id!==pu.id));
-                                // Also remove from pending signups if applicable
                                 if (pu.passwordHash) {
                                   const sups = JSON.parse(localStorage.getItem("otv_pendingSignups")||"[]");
                                   localStorage.setItem("otv_pendingSignups", JSON.stringify(sups.filter(s=>s.id!==pu.id)));
@@ -7262,15 +7370,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <div style={{fontSize:10,color:C.dim}}>{u.region||"All regions"}</div>
                           </div>
                           {/* Editable role */}
-                          <select value={u.role} onChange={e=>{
+                          <select value={u.role} onChange={async e=>{
                             const newRole = e.target.value;
+                            if (u._apiId) {
+                              try { await fetch(`/api/admin/users/${u._apiId}/role`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({role:newRole,region:u.region}) }); } catch {}
+                            }
                             setLiveRoles(p=>p.map(r=>r.id===u.id?{...r,role:newRole,canView:newRole==="SALES REP"?"self":newRole==="REGION HEAD"?"region":"all"}:r));
                             showToast(`${u.name} role updated to ${newRole}`);
                           }} style={{padding:"4px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
                             {ALL_ROLES.map(r=><option key={r}>{r}</option>)}
                           </select>
-                          <button onClick={()=>{
+                          <button onClick={async ()=>{
                             if(!window.confirm(`Revoke access for ${u.name}?`)) return;
+                            if (u._apiId) {
+                              try { await fetch(`/api/admin/users/${u._apiId}`, { method:"DELETE" }); } catch {}
+                            }
                             setLiveRoles(p=>p.filter(r=>r.id!==u.id));
                             showToast(`${u.name}'s access revoked`,"err");
                           }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"4px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Revoke</button>
