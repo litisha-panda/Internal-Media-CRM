@@ -1,0 +1,134 @@
+Good progress on the Region Head flow. The direction is right.
+
+Please proceed, but lock these corrections clearly:
+
+1. Region Head tabs must now be only:
+- Dashboard
+- My Team’s Meetings
+- My Plan
+- My Approvals
+- My Escalations
+- My Tasks
+- Internal Requests
+- My HR Reports
+- My Team Report
+
+Do not show Region Head:
+- Access Management
+- Target Import
+- Platform Config
+- CRO / national-only dashboards unless needed as read-only escalation context
+
+2. Dashboard must be the Region Head landing screen.
+It must show:
+- Region Target
+- Achieved
+- Shortfall
+- Active Pipeline
+- Important flags
+
+Important flags must include at minimum:
+- reps who did not log today’s touchpoints
+- reps who did not schedule tomorrow’s touchpoints
+- overdue action items
+- stalled deals
+- pending approvals
+- escalations pending with RH
+
+3. My Team’s Meetings must give RH full visibility into rep activity.
+It should show:
+- today’s touchpoints
+- tomorrow’s planned touchpoints
+- upcoming calendar items
+- filter by rep / date / client / status
+- click-through details for Agency / Client / Brand / who they met / summary / stage / action required
+
+This is a monitoring view, not a separate data-entry workflow.
+
+4. My Plan for Region Head must use the exact same execution logic as Sales Rep:
+- log today’s touchpoints
+- schedule tomorrow’s touchpoints
+- full monthly calendar
+- 11:30 PM compliance rule
+- tomorrow items move automatically into today
+- no Region field in the form
+
+RH is both a manager and an operator, so their own plan must work exactly like a rep’s plan.
+
+5. My Approvals must show anything routed for RH approval, including:
+- target approvals at RH stage
+- sales rep requests requiring RH approval
+- any workflow where RH is the assigned approver
+
+Each approval item should show:
+- who raised it
+- client
+- deal / touchpoint context
+- amount if relevant
+- due date / SLA
+- Approve / Reject / Send Back actions
+
+6. My Escalations must show anything escalated to RH due to missed due dates or delayed actions.
+Each escalation should show:
+- original requester
+- current assignee
+- what was needed
+- due date
+- how overdue it is
+- escalation level
+- Take Ownership / Reassign / Close / Escalate Upward actions
+
+7. My Tasks must support both:
+- tasks assigned to RH
+- tasks RH assigns to others
+
+Task creation from RH should include:
+- What
+- Assigned to whom
+- Description
+- Due date
+- Priority
+- client / deal / touchpoint linkage where relevant
+
+8. Internal Requests for RH must work exactly like Sales Rep:
+If RH enters:
+- What do I need?
+- From who?
+- Description
+- By when?
+
+System must create:
+- Task for the receiver
+- Internal Request for RH
+- reminder / calendar item for RH
+- reminder / calendar item for receiver
+- escalation if due date is missed
+
+9. My HR Reports must show RH’s own compliance:
+- logged today?
+- planned tomorrow?
+- absent / non-compliant days
+- late logs
+- exceptions
+
+10. My Team Report must show rep-wise management view:
+- target
+- achieved
+- shortfall / hit %
+- pipeline
+- touchpoints logged
+- logged today
+- planned tomorrow
+- open tasks
+- overdue tasks
+- escalations
+
+Before moving to NSH / CRO refinement, please confirm these 5 things specifically:
+A. Does RH land on Dashboard by default?
+B. Can RH see every rep’s today / tomorrow touchpoints in My Team’s Meetings?
+C. Does RH’s own My Plan behave exactly like Sales Rep’s My Plan?
+D. Do approvals and escalations appear as separate queues for RH?
+E. Can RH create a task or internal request from their own workflow and have it route correctly downstream?
+
+After that, show me only the Region Head flow end-to-end:
+Dashboard → My Team’s Meetings → My Plan → My Approvals → My Escalations → My Tasks → Internal Requests → My HR Reports → My Team Report

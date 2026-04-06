@@ -21,7 +21,7 @@ const STAGE_PROB = { "Prospect": 10, "In Discussion": 40, "Negotiation": 70, "Ma
   // legacy mapping so old records still resolve
   "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 10, "Not Interested": 0 };
 const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
-const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "Mail Confirmed"];
+const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "RO Received"];
 const MEETING_TYPES  = ["Physical", "Online", "Phone Call"];
 const CLIENT_OR_AGENCY = ["Client", "Agency"];
 const TASK_PRIORITIES = ["High", "Medium", "Low"];
@@ -2210,30 +2210,70 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     }
   }, [logOpen, activeUser]);
 
-  // Section 18 — Trigger 3: actionItems & tasks where dueDate < today AND status = "Open" → set status = "Escalated"
+  // Section 18 — Trigger 3: actionItems & tasks where dueDate < today AND status = "Open" → escalate
+  // 4-step escalation chain: Original → +12h → Region Head → +12h → NSH → +12h → Sales Strategy → +12h → CRO
+  const ESC_CHAIN = ["Region Head","NSH","Sales Strategy","CRO"];
   useEffect(() => {
-    const hasOpenTasks = tasks.some(t => t.dueDate && t.dueDate < TODAY && t.status === "Open");
+    const now = Date.now();
+    const hasOpenTasks = tasks.some(t => t.dueDate && t.dueDate < TODAY && ["Open","Escalated"].includes(t.status||"Open"));
     if (hasOpenTasks) {
-      setTasks(prev => prev.map(t =>
-        t.dueDate && t.dueDate < TODAY && t.status === "Open"
-          ? { ...t, status: "Escalated" }
-          : t
-      ));
+      setTasks(prev => prev.map(t => {
+        if (!t.dueDate || t.dueDate >= TODAY) return t;
+        if (!["Open","Escalated"].includes(t.status||"Open")) return t;
+        const level = t.escLevel||0;
+        const escAt = t.escAt ? new Date(t.escAt).getTime() : new Date(t.dueDate).getTime() + 12*3600000;
+        if (now < escAt) return t.status==="Open"?{...t,status:"Escalated",escAt:t.escAt||new Date(new Date(t.dueDate).getTime()+12*3600000).toISOString()}:t;
+        const newLevel = Math.min(level+1, ESC_CHAIN.length);
+        const nextEscAt = new Date(escAt+12*3600000).toISOString();
+        return {...t,status:"Escalated",escLevel:newLevel,escDept:ESC_CHAIN[newLevel-1]||t.escDept,escAt:nextEscAt};
+      }));
     }
-    const hasTpOverdue = touchpoints.some(tp =>
-      (tp.actionItems || []).some((ai: any) => ai.dueDate && ai.dueDate < TODAY && ai.status === "Open")
-    );
-    if (hasTpOverdue) {
-      setTouchpoints(prev => prev.map(tp => ({
-        ...tp,
-        actionItems: (tp.actionItems || []).map((ai: any) =>
-          ai.dueDate && ai.dueDate < TODAY && ai.status === "Open"
-            ? { ...ai, status: "Escalated" }
-            : ai
-        )
-      })));
+    // Auto-escalate IRs along the 4-step chain
+    const hasOpenIRs = internalReqs.some(r => r.status==="Pending"&&r.escalationAt&&new Date(r.escalationAt).getTime()<now);
+    if (hasOpenIRs) {
+      setInternalReqs(prev => prev.map(r => {
+        if (r.status!=="Pending"||!r.escalationAt) return r;
+        if (new Date(r.escalationAt).getTime()>=now) return r;
+        const level = r.escLevel||0;
+        const newLevel = Math.min(level+1, ESC_CHAIN.length);
+        const nextEscAt = new Date(new Date(r.escalationAt).getTime()+12*3600000).toISOString();
+        return {...r,status:"Pending",escLevel:newLevel,escDept:ESC_CHAIN[newLevel-1]||r.dept,escalationAt:nextEscAt};
+      }));
     }
   }, []); // Run once on page load
+
+  // Auto-absence marking: check if any working day in the past week has no logged meeting and mark absent
+  useEffect(() => {
+    if (!isRep||!user_role?.repId) return;
+    const repId = user_role.repId;
+    const now = new Date();
+    const hour = now.getHours()+now.getMinutes()/60;
+    // Build list of past working days (Mon–Sat) going back 7 days
+    const pastDays: string[] = [];
+    for (let i=1; i<=7; i++) {
+      const d = new Date(now);
+      d.setDate(d.getDate()-i);
+      const dow = d.getDay(); // 0=Sun
+      if (dow===0) continue; // skip Sunday
+      pastDays.push(d.toISOString().slice(0,10));
+    }
+    // Check today too if past 11:30 PM (hour >= 23.5)
+    if (hour >= 23.5) pastDays.unshift(TODAY);
+    const toMark: string[] = [];
+    pastDays.forEach(day => {
+      const hasLog = (meetings||[]).some(m=>m.repId===repId&&m.date===day);
+      const alreadyMarked = (absenceReports||[]).some(a=>a.repId===repId&&a.date===day);
+      if (!hasLog&&!alreadyMarked) toMark.push(day);
+    });
+    if (toMark.length>0) {
+      setAbsenceReports((prev:any[])=>[...prev,...toMark.map(day=>({
+        id:`abs_auto_${day}_${repId}`,repId,date:day,markedAs:"Absent",
+        exception:null,exceptionBy:null,exceptionReason:null,
+        status:"Auto-marked",autoMarked:true,createdAt:TODAY,
+      }))]);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeUser]); // Re-check when user switches
 
   // Annual mode helpers — when "FY26 Annual" is selected the quarter filter spans all quarters
   const isAnnual = filterQ === "FY26 Annual";
@@ -2635,6 +2675,22 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
     if (newIRsFromLog.length) setInternalReqs(p => [...newIRsFromLog, ...p]);
     if (attendPlans.length) setPlans(p => [...p, ...attendPlans]);
+    // Auto-create plan reminders for each Action Required item:
+    // 1. Self-reminder for the rep on byWhen date
+    // 2. Calendar reminder for the receiver on byWhen date
+    const arRepReminders = (logForm.actionRequired||[]).filter(i=>i.what&&i.byWhen).map((i:any,idx:number)=>({
+      id:`p_ar_rep_${Date.now()}_${idx}`,repId:repIdInt,date:i.byWhen,time:"09:00",
+      clientAgencyName:clientCompany,agency:logForm.agency||"",client:logForm.client||"",brand:logForm.brand||"",
+      agenda:`[Action due] ${i.what}${i.from&&i.from!=="Self"?" → "+i.from:""}: ${i.description||""}`.slice(0,160),
+      meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-reminder-rep",
+    }));
+    const arRecvReminders = (logForm.actionRequired||[]).filter(i=>i.what&&i.from&&i.from!=="Self"&&i.from!=="Client"&&i.byWhen).map((i:any,idx:number)=>({
+      id:`p_ar_recv_${Date.now()}_${idx+1000}`,repId:getNeededFromUserId(i.from,repIdInt)||i.from,date:i.byWhen,time:"09:00",
+      clientAgencyName:clientCompany,agency:logForm.agency||"",client:logForm.client||"",brand:logForm.brand||"",
+      agenda:`[Action requested by ${repName}] ${i.what}: ${i.description||""}`.slice(0,160),
+      meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-reminder-receiver",
+    }));
+    if (arRepReminders.length||arRecvReminders.length) setPlans(p=>[...p,...arRepReminders,...arRecvReminders]);
 
     // Update deal last contact, outcome, stage (Part 3), and next step
     const firstFollowUpItem = (logForm.nextStepItems||[]).find(i=>i.action);
@@ -2763,14 +2819,21 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       }]);
     }
 
+    const roReceived = logForm.stageUpdate === "RO Received";
     setAtt(p => ({ ...p, [TODAY]: { ...(p[TODAY]||{}), [parseInt(logForm.repId)]: true } }));
     setLogForm(BLANK_LOG);
     setLogOpen(false);
     const taskMsg  = newTasks.length      ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
     const irMsgL   = newIRsFromLog.length ? ` · ${newIRsFromLog.length} request${newIRsFromLog.length>1?"s":""} raised` : "";
+    const arMsgL   = (arRepReminders.length+arRecvReminders.length) > 0 ? ` · ${arRepReminders.length+arRecvReminders.length} reminders added` : "";
     const planMsg  = (logForm.nextMeetingDate ? 1 : 0) + (logForm.followUpDate ? 1 : 0);
     const planMsgStr = planMsg > 0 ? ` · ${planMsg} calendar entry added` : "";
-    showToast((late ? "Logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsgL + planMsgStr);
+    if (roReceived && isRep) {
+      showToast("RO Received logged ✓ — now log your revenue!");
+      setTimeout(() => setView("revenue-log"), 1200);
+    } else {
+      showToast((late ? "Logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsgL + arMsgL + planMsgStr);
+    }
   };
 
   // ─── CALENDAR INTEGRATION ────────────────────────────────────────────────────
@@ -3275,13 +3338,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
     // ── SALES REP ──
     if (isRep) return [
-      { label:"MY TARGETS",  items:[N("target-submit","My Targets","◎",targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null)] },
-      { label:"PLANNING",    items:[N("my-plan","My Plan","◎")] },
-      { label:"EXECUTION",   items:[
-        N("tasks","Tasks","✓",myRepTaskBadge),
-        N("revenue-log","Revenue Log","₹"),
-        N("internal-requests","Internal Requests","⬆",irBadge),
-        N("hr","HR Report","⊘",hrBadge),
+      { label:"MY WORKFLOW", items:[
+        N("target-submit",       "Target",              "◎", targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
+        N("my-plan",             "My Plan / Calendar",  "◎"),
+        N("revenue-log",         "Revenue Log",         "₹"),
+        N("internal-requests",   "Internal Requests",   "⬆", irBadge),
+        N("tasks",               "Tasks",               "✓", myRepTaskBadge),
+        N("hr",                  "HR Report",           "⊘", hrBadge),
       ]},
     ];
 
@@ -4425,8 +4488,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   } else if (isFuture) {
                                     showToast(`This meeting is on ${p.date}. Come back on the day to log it.`);
                                   } else {
-                                    // T007: Open full log modal pre-filled from plan chip
-                                    setLogForm(f=>({...BLANK_LOG,repId:String(myRepId),clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",meetingType:p.meetingType||"Physical"}));
+                                    // T007: Open full log modal pre-filled from plan chip (auto-fetch agency/client/brand)
+                                    setLogForm(f=>({...BLANK_LOG,repId:String(myRepId),
+                                      clientAgencyName:p.client||p.agency||p.clientAgencyName||"",
+                                      agency:p.agency||"",client:p.client||p.clientAgencyName||"",brand:p.brand||"",
+                                      contactName:p.contactName||"",phone:p.phone||"",
+                                      meetingType:p.meetingType||"Physical",
+                                      pitchType:p.pitchType||"",agenda:p.agenda||"",
+                                      planId:p.id,
+                                    }));
                                     setLogOpen(true);
                                   }
                                 }}

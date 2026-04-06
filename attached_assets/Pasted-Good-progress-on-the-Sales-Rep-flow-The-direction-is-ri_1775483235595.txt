@@ -1,0 +1,64 @@
+Good progress on the Sales Rep flow. The direction is right.
+
+Please proceed, but lock these corrections clearly:
+
+1. Sales Rep tabs must now be only:
+- Target
+- My Plan / Calendar
+- Revenue Log
+- Internal Requests
+- Tasks
+- HR Report
+
+2. My Plan / Calendar must enforce daily discipline:
+- log today’s touchpoints
+- schedule tomorrow’s touchpoints
+- if either is not done by 11:30 PM, mark absent / non-compliant in HR Report
+
+3. Schedule Touchpoint flow is correct only if:
+- Agency, Client, Brand are separate fields
+- inline + button exists to add missing Agency / Client
+- saving a touchpoint for tomorrow shows in Tomorrow
+- the next day it automatically moves to Today
+- Today items must have a clear Log Touchpoint action
+
+4. Log Touchpoint form must enforce:
+- Agency / Client / Brand auto-fetched if the touchpoint came from yesterday’s plan
+- Region field removed
+- Stage Update is the last field
+- “Mail Confirmed” replaced with “RO Received”
+- if RO Received is selected, force / prompt revenue logging through Revenue Log
+- if status is Closed, follow-up is not required
+
+5. Action Required must be the only workflow:
+Remove the old split between “Next Steps” and “Support Needed”.
+Keep only:
+- What do I need?
+- From who?
+- Description
+- By when?
+
+On save, system must automatically create:
+- Task for the receiver
+- Internal Request for the Sales Rep
+- Calendar reminder for the Sales Rep
+- Calendar reminder for the receiver
+
+6. Escalation logic must be implemented exactly:
+If action item is not closed by due date:
+- +12h → Region Head
+- +12h → NSH
+- +12h → Sales Strategy
+- +12h → CRO
+
+7. Revenue Log must allow reps to log revenue only against approved target clients. Good that you fixed this by deriving from approved target submissions.
+
+Before moving ahead, please confirm these 5 things specifically:
+A. Does My Plan automatically move tomorrow’s touchpoint into today’s section on the next day?
+B. Does missing today log or tomorrow plan by 11:30 PM mark the rep absent / non-compliant in HR Report?
+C. Does selecting RO Received immediately trigger / force revenue logging?
+D. Does Action Required create all 4 objects automatically: task, internal request, and 2 reminders?
+E. Does escalation appear correctly in the escalation views after each 12-hour step?
+
+After that, show me only the Sales Rep flow end-to-end:
+Target → My Plan → Schedule Touchpoint → Log Touchpoint → Action Required → Revenue Log → HR compliance
