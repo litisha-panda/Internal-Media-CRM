@@ -44,6 +44,11 @@ export const internalRequests = pgTable("internal_requests", {
   dueDate:      text("due_date"),
   notes:        text("notes"),
   acceptedAt:   text("accepted_at"),
+  /**
+   * IR subtype — classifies the nature of the request for typed workflow routing.
+   * "Support Request" | "Deal Escalation" | "Override Request" | "Attendance Exception" | "Other"
+   */
+  irSubtype:    text("ir_subtype").default("Support Request"),
   /** Backend-managed escalation dept (current stop in ESC_CHAIN). */
   escDept:      text("esc_dept"),
   escalatedAt:  text("escalated_at"),
