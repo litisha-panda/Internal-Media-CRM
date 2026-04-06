@@ -1,0 +1,477 @@
+## Recommendation
+
+Convert this into a **clear product specification for Replit with actionable implementation tasks**, not a conceptual explanation.
+Replit needs **concrete engineering instructions**: what screens to build, what APIs to connect, what to remove, and what rules must be enforced.
+
+Below is the **clean execution brief you should send to Replit**.
+
+---
+
+# Message to Replit
+
+## Objective
+
+Align the OTV Internal Platform to a **3-phase operating system**:
+
+1. Annual Target Setup
+2. Daily Sales Execution
+3. Revenue Recognition & Management Visibility
+
+The system must function as a **controlled sales operating system**, not a generic CRM.
+
+---
+
+# Core Business Rules (Non-Negotiable)
+
+These rules must be enforced in backend and frontend.
+
+### Rule 1 — Targets Freeze After CRO Approval
+
+Once CRO approves:
+
+* targets become read-only
+* no edits allowed
+* no overwriting
+* no recalculation
+* only revenue affects achievement
+
+Targets become the **denominator of performance**.
+
+---
+
+### Rule 2 — Achieved Revenue Comes Only from Revenue Entries
+
+Achieved must be calculated from:
+
+```
+revenue_entries table
+```
+
+Not from:
+
+* deal stage
+* proposal
+* mail confirmation
+* pipeline
+
+Mail Confirmed is not achieved.
+
+Only RO Received → Revenue Entry → Achieved.
+
+---
+
+### Rule 3 — My Plan Drives Pipeline
+
+Pipeline must not be created manually.
+
+Pipeline should come from:
+
+```
+My Plan → Touchpoints → Deal Stage → Pipeline
+```
+
+No duplicate deal creation logic.
+
+---
+
+### Rule 4 — Role-Based Access
+
+System must read from:
+
+```
+otv_users.role
+otv_users.region
+```
+
+and automatically show correct screens.
+
+No manual switching.
+
+---
+
+# Phase 1 — Annual Target Setup
+
+## Required Implementation
+
+### Admin
+
+Admin should see:
+
+* Access Management
+* Target Import
+* Platform Config
+
+---
+
+### Target Import
+
+Admin uploads Excel:
+
+Rep Name
+Region
+Client Company
+Channel
+Deal Type
+Annual Target Amount
+
+---
+
+### Backend should:
+
+Validate:
+
+* rep exists
+* region exists
+* client exists
+* amount valid
+
+Store in:
+
+```
+target_allocations
+```
+
+Aggregate:
+
+* rep targets
+* region targets
+* NSH targets
+* CRO targets
+* client targets
+* channel targets
+
+---
+
+### Approval Chain
+
+Targets move through:
+
+Pending RH
+Pending NSH
+Pending Strategy
+Pending CRO
+Approved
+
+---
+
+### CRO Approval
+
+After CRO approves:
+
+```
+targets_locked = true
+```
+
+System freezes targets.
+
+No further editing allowed.
+
+---
+
+# Phase 2 — Daily Sales Execution
+
+## Sales Rep Landing Screen
+
+Sales rep should land on:
+
+## My Plan
+
+Not Home.
+Not War Room.
+
+---
+
+## My Plan Should Show
+
+Today’s plan
+Overdue touchpoints
+Target vs achieved
+Pipeline gap
+Pending tasks
+
+Button:
+
+```
+Add Touchpoint
+```
+
+---
+
+## Touchpoint
+
+Touchpoint must capture:
+
+Client
+Discussion
+Stage after meeting
+Next action
+Support needed
+
+---
+
+## From Touchpoint System Creates
+
+Task
+Internal Request
+Follow-up
+Deal stage update
+
+Automatically.
+
+---
+
+## Deal Stages
+
+Prospect
+In Discussion
+Negotiation
+Mail Confirmed
+RO Received
+Lost
+
+Only RO Received contributes to achieved.
+
+---
+
+# Phase 3 — Revenue Recognition
+
+## Revenue Flow
+
+RO arrives.
+
+Rep uploads or confirms.
+
+---
+
+## Backend Creates
+
+```
+revenue_entry
+```
+
+Fields:
+
+Client
+Amount
+Channel
+Month
+RO Reference
+Deal Reference
+
+---
+
+## System Updates
+
+Achieved
+Shortfall
+War Room
+Leaderboard
+Revenue Tracker
+
+All from revenue_entries.
+
+---
+
+# Role-Based Screens
+
+## Sales Rep
+
+Show:
+
+My Plan
+My Targets
+Tasks
+Revenue Log
+Internal Requests
+
+Hide:
+
+War Room
+Revenue Tracker
+By Region
+All Sales Reps
+
+---
+
+## Region Head
+
+Show:
+
+War Room (region)
+My Team
+Targets
+Revenue Tracker
+Internal Requests
+
+---
+
+## NSH
+
+Show:
+
+War Room (national)
+By Region
+Revenue Tracker
+Targets
+
+---
+
+## CRO
+
+Show:
+
+War Room (organisation)
+Revenue Tracker
+All Sales Reps
+Targets
+
+---
+
+## Admin
+
+Show:
+
+Access Management
+Target Import
+Platform Config
+
+---
+
+# War Room Redesign
+
+War Room is a monitoring dashboard.
+
+It should show:
+
+Target
+Achieved
+Pipeline
+Shortfall
+Inactive reps
+Stalled deals
+Region performance
+
+Not operational workflow.
+
+---
+
+# Revenue Tracker
+
+Revenue Tracker should show:
+
+Month-wise revenue
+Client-wise revenue
+Channel-wise revenue
+Region-wise revenue
+
+Only reporting.
+
+---
+
+# Remove Platform Launch Screen
+
+Current screen:
+
+Platform launching soon
+
+Should be removed.
+
+Replace with:
+
+If targets exist → show My Plan
+If targets not assigned → show:
+
+No targets assigned yet.
+
+---
+
+# Simplified Navigation
+
+Planning
+
+My Plan
+My Targets
+Revenue Log
+
+Execution
+
+Tasks
+Internal Requests
+
+Leadership
+
+War Room
+Revenue Tracker
+
+Admin
+
+Access Management
+Target Import
+
+---
+
+# Technical Implementation Needed
+
+## Frontend
+
+* role-based sidebar
+* remove launch screen
+* My Plan as landing page
+* hide leadership modules for reps
+* connect targets API
+* connect revenue API
+
+---
+
+## Backend
+
+* target aggregation after import
+* target freeze logic
+* revenue-only achievement logic
+* touchpoint-driven pipeline
+* role-based permissions
+
+---
+
+# Expected Outcome
+
+Sales Rep logs in → sees My Plan → logs touchpoints → executes work → uploads RO → achieved updates
+
+Region Head logs in → sees War Room → monitors team
+
+CRO logs in → sees organisation performance
+
+Admin logs in → controls system
+
+---
+
+# Deliverables Expected from Replit
+
+1. Updated sidebar
+2. Updated landing screen
+3. Target import working
+4. Target freeze working
+5. Revenue-only achievement working
+6. War Room monitoring dashboard
+7. Role-based access enforcement
+
+---
+
+# Priority Order
+
+### Immediate
+
+Role-based sidebar
+Remove launch screen
+My Plan landing
+Target import aggregation
+
+### Next
+
+Revenue-only achievement
+War Room redesign
+Revenue tracker reporting
+
+---
+
+If you want, I can now **convert this into a technical Jira-style task list (with APIs, tables, and frontend components mapped)** so Replit can execute Phase 3–8 without ambiguity.
