@@ -1611,6 +1611,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [rhTeamFilter, setRhTeamFilter]   = useState({rep:"",dateRange:"today-tomorrow",client:"",status:""}); // RH team meetings filter
   const [rhWarroomClient, setRhWarroomClient] = useState(""); // pre-filter warroom to a stalled client from dashboard
   const [rhWarroomRep,    setRhWarroomRep]    = useState(""); // pre-filter warroom to a stalled rep from dashboard
+  const [rhTeamReportRep, setRhTeamReportRep] = useState(""); // pre-filter team report to a specific rep from dashboard overdue chip
   const [nshRegion,   setNshRegion]       = useState("all"); // NSH rep-CRM region filter
   const BLANK_TASK_FORM = {title:"",assignedTo:"",assignedToUserId:"",clientCompany:"",description:"",priority:"High",dueDate:TOMORROW};
   const [taskForm, setTaskForm]           = useState(BLANK_TASK_FORM);
@@ -4415,6 +4416,12 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <span style={{fontSize:12,color:todayLogged?C.green:C.red,fontWeight:700}}>{todayLogged?"✓":"✗"} Today logged</span>
                   <span style={{fontSize:12,color:tmrwPlanned?C.green:C.red,fontWeight:700}}>{tmrwPlanned?"✓":"✗"} Tomorrow planned</span>
                   <span style={{fontSize:11,color:C.dim,marginLeft:"auto"}}>{todayLogged&&tmrwPlanned?"All done ✓":"Complete both before 11:30 PM"}</span>
+                  {!tmrwPlanned&&(
+                    <button onClick={()=>setAddPlanFor(TOMORROW)}
+                      style={{background:C.accent,color:"#fff",border:"none",borderRadius:4,padding:"3px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
+                      + Plan tomorrow
+                    </button>
+                  )}
                 </div>
 
                 {/* Part 8: Time-based deadline countdown banner (6PM / 9PM / 11PM levels) */}
@@ -4456,60 +4463,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     );
                   }
                   return null;
-                })()}
-
-                {/* DUE DATE ALERTS */}
-                {(()=>{
-                  // Only self-assigned or non-routed tasks — routed items go to My Tasks / Approvals
-                  const repTasks = tasks.filter(t =>
-                    (t.repId===myRepId||t.assignedTo===myRepId||t.assignedToUserId===activeUser) &&
-                    t.status!=="Done" &&
-                    (t.assignedDept === "Self" || !t.fromMeetingLog)
-                  );
-                  const autoDuePlans = (plans||[]).filter(p =>
-                    p.repId===myRepId &&
-                    (p.autoCreatedFrom==="next-step" || p.autoCreatedFrom==="follow-up" || p.autoCreatedFrom==="next-meeting") &&
-                    p.status!=="Done" && p.status!=="Cancelled"
-                  );
-                  const overdue   = [...repTasks.filter(t=>t.dueDate&&t.dueDate<TODAY), ...autoDuePlans.filter(p=>p.date<TODAY)];
-                  const dueToday  = [...repTasks.filter(t=>t.dueDate===TODAY), ...autoDuePlans.filter(p=>p.date===TODAY)];
-                  const dueTmrw   = [...repTasks.filter(t=>t.dueDate===TOMORROW), ...autoDuePlans.filter(p=>p.date===TOMORROW)];
-                  if (!overdue.length && !dueToday.length && !dueTmrw.length) return null;
-                  const markItemDone = (item) => {
-                    if (repTasks.find(t=>t.id===item.id)) {
-                      setTasks(q=>q.map(t=>t.id===item.id?{...t,status:"Done"}:t));
-                    } else {
-                      setPlans(q=>q.map(p=>p.id===item.id?{...p,status:"Done"}:p));
-                    }
-                  };
-                  const renderItem = (item, urgency) => {
-                    const title   = item.title || item.agenda || "—";
-                    const dept    = item.assignedDept || item.dept || item.neededFrom || "";
-                    const client  = item.clientCompany || item.clientAgencyName || "";
-                    const clr     = urgency==="overdue"?C.red:urgency==="today"?C.orange:C.blue;
-                    return (
-                      <div key={item.id} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 12px",background:C.s2,borderRadius:5,marginBottom:4,borderLeft:`3px solid ${clr}`}}>
-                        <div style={{flex:1}}>
-                          <div style={{fontSize:12,fontWeight:600,color:C.text}}>{title}</div>
-                          {(client||dept)&&<div style={{fontSize:10,color:C.dim}}>{client}{client&&dept?" · ":""}{dept&&`→ ${dept}`}</div>}
-                        </div>
-                        <span style={{fontSize:10,fontWeight:700,color:clr,whiteSpace:"nowrap"}}>
-                          {urgency==="overdue"?"⚠ OVERDUE":urgency==="today"?"Due TODAY":"Due TOMORROW"}
-                        </span>
-                        <button onClick={()=>markItemDone(item)} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"3px 10px",color:C.green,fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✓ Done</button>
-                      </div>
-                    );
-                  };
-                  return (
-                    <div style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
-                      <div style={{fontSize:10,fontWeight:700,color:C.orange,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>
-                        ⏰ Action Item Due Dates ({overdue.length+dueToday.length+dueTmrw.length})
-                      </div>
-                      {overdue.map(i=>renderItem(i,"overdue"))}
-                      {dueToday.map(i=>renderItem(i,"today"))}
-                      {dueTmrw.map(i=>renderItem(i,"tomorrow"))}
-                    </div>
-                  );
                 })()}
 
                 {/* TODAY + TOMORROW cards */}
@@ -11591,8 +11544,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 chipClick:()=>setView("internal-requests")},
               {label:"Overdue action items",          items:overdueActions,    color:C.red,    icon:"✗",
                 nav:"rh-team-report",   detail:(t:any)=>t.title,
-                headerClick:()=>setView("rh-team-report"),
-                chipClick:()=>setView("rh-team-report")},
+                headerClick:()=>{setRhTeamReportRep("");setView("rh-team-report");},
+                chipClick:(t:any)=>{setRhTeamReportRep(String(t.repId||""));setView("rh-team-report");}},
               {label:"Stalled deals (7+ days idle)",  items:stalledDeals,      color:C.purple, icon:"⏸",
                 nav:"warroom",          detail:(d:any)=>d.clientCompany,
                 headerClick:()=>{setRhWarroomClient("");setRhWarroomRep("");setView("warroom");},
@@ -11658,7 +11611,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   ))}
                 </div>
-                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>REP STATUS TODAY</div>
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>REP STATUS TODAY <span style={{fontSize:9,fontWeight:400,color:C.muted}}>· click any card to view their meetings</span></div>
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
                   {myReps.map(rep=>{
                     const repId=rep.repId;
@@ -11669,10 +11622,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     const tgtT     =targetSubs.filter(s=>s.repId===repId&&s.status==="Approved").reduce((s,t)=>s+t.totalTarget,0);
                     const pctT     =tgtT>0?Math.round(achT/tgtT*100):0;
                     return (
-                      <div key={rep.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 12px"}}>
+                      <div key={rep.id}
+                        onClick={()=>{setRhTeamFilter({rep:String(repId),dateRange:"today-tomorrow",client:"",status:""});setView("rh-team-plan");}}
+                        style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 12px",cursor:"pointer",transition:"border-color .12s"}}
+                        onMouseOver={e=>e.currentTarget.style.borderColor=C.accent}
+                        onMouseOut={e=>e.currentTarget.style.borderColor=C.border}>
                         <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
                           <div style={{width:24,height:24,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.accent}}>{rep.name[0]}</div>
-                          <span style={{fontWeight:600,fontSize:12}}>{rep.name}</span>
+                          <span style={{fontWeight:600,fontSize:12,flex:1}}>{rep.name}</span>
+                          <span style={{fontSize:9,color:C.muted}}>›</span>
                         </div>
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,fontSize:10}}>
                           <span style={{color:loggedT?C.green:C.red,fontWeight:600}}>{loggedT?"✓ Logged":"✗ Not logged"}</span>
@@ -11723,6 +11681,23 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <span style={{fontSize:11,color:C.dim}}>{todayTP.length} today · {tmrwTP.length} tomorrow</span>
                   </div>
                 </div>
+
+                {/* Active rep filter banner — shown when navigated from dashboard/report with a pre-set rep */}
+                {tf.rep&&(()=>{
+                  const filterRepUser=USER_ROLES.find(u=>String(u.repId)===tf.rep)||myUserReps.find(u=>String(u.repId)===tf.rep);
+                  return (
+                    <div style={{display:"flex",alignItems:"center",gap:10,background:`${C.blue}10`,border:`1.5px solid ${C.blue}44`,borderRadius:7,padding:"7px 14px",marginBottom:14,marginTop:10}}>
+                      <span style={{flex:1,fontSize:12,color:C.blue,fontWeight:600}}>
+                        Filtered to: <strong>{filterRepUser?.name||"Rep"}</strong>
+                        {tf.dateRange&&tf.dateRange!=="today-tomorrow"&&<span style={{fontWeight:400,color:C.dim}}> · {tf.dateRange}</span>}
+                      </span>
+                      <button onClick={()=>setRhTeamFilter({rep:"",dateRange:"today-tomorrow",client:"",status:""})}
+                        style={{background:"transparent",border:`1px solid ${C.blue}66`,borderRadius:4,padding:"3px 10px",color:C.blue,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                        × Clear filter
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {/* Quick-glance today/tomorrow cards */}
                 <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16,marginTop:14}}>
@@ -12293,8 +12268,23 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const totAchieved = rows.reduce((s,r)=>s+r.achieved,0);
             const totPipeline = rows.reduce((s,r)=>s+r.pipeline,0);
             const totOverdue  = rows.reduce((s,r)=>s+r.overdueTasks,0);
+            // Filter table rows when navigated from overdue items chip
+            const displayRows = rhTeamReportRep ? rows.filter(r=>String(r.repId)===rhTeamReportRep) : rows;
+            const filterRepName = rhTeamReportRep ? (USER_ROLES.find(u=>String(u.repId)===rhTeamReportRep)||myReps.find(u=>String(u.repId)===rhTeamReportRep))?.name : "";
             return (
               <div className="fin">
+                {/* Active rep filter banner */}
+                {rhTeamReportRep&&(
+                  <div style={{display:"flex",alignItems:"center",gap:10,background:`${C.red}08`,border:`1.5px solid ${C.red}33`,borderRadius:7,padding:"7px 14px",marginBottom:14}}>
+                    <span style={{flex:1,fontSize:12,color:C.red,fontWeight:600}}>
+                      Showing overdue tasks for: <strong>{filterRepName||"Rep"}</strong>
+                    </span>
+                    <button onClick={()=>setRhTeamReportRep("")}
+                      style={{background:"transparent",border:`1px solid ${C.red}66`,borderRadius:4,padding:"3px 10px",color:C.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                      × Show all reps
+                    </button>
+                  </div>
+                )}
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
                   <div>
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY TEAM REPORT</div>
@@ -12316,13 +12306,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
                 <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"auto"}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead><tr>{["Rep","Target","Achieved","Hit%","Pipeline","Mtgs (wk)","Today","Tmrw","Tasks","Overdue","Esc"].map(h=>(
+                    <thead><tr>{["Rep","Target","Achieved","Hit%","Pipeline","Mtgs (wk)","Today","Tmrw","Tasks","Overdue","Esc",""].map(h=>(
                       <th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                     ))}</tr></thead>
                     <tbody>
-                      {rows.length===0&&<tr><td colSpan={10} style={{padding:24,textAlign:"center",color:C.muted}}>No reps in {rhRegion} region</td></tr>}
-                      {rows.map(row=>(
-                        <tr key={row.repId} style={{borderBottom:`1px solid ${C.s2}`}}
+                      {displayRows.length===0&&<tr><td colSpan={12} style={{padding:24,textAlign:"center",color:C.muted}}>No reps in {rhRegion} region</td></tr>}
+                      {displayRows.map(row=>(
+                        <tr key={row.repId}
+                          style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}
+                          onClick={()=>{setRhTeamFilter({rep:String(row.repId),dateRange:"today-tomorrow",client:"",status:""});setView("rh-team-plan");}}
                           onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=""}>
                           <td style={{padding:"10px 12px"}}>
                             <div style={{display:"flex",alignItems:"center",gap:6}}>
@@ -12342,6 +12334,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:row.openTasks>0?C.orange:C.green}}>{row.openTasks}</td>
                           <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:row.overdueTasks>0?C.red:C.green}}>{row.overdueTasks||"—"}</td>
                           <td style={{padding:"10px 12px",textAlign:"center",fontWeight:700,color:row.escCount>0?C.red:C.green}}>{row.escCount||"—"}</td>
+                          <td style={{padding:"10px 12px",textAlign:"center",color:C.muted,fontSize:12}}>›</td>
                         </tr>
                       ))}
                     </tbody>
