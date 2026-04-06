@@ -57,11 +57,16 @@ All date/time operations in the backend must use this module:
 - `nowISO()` — current UTC ISO timestamp for DB writes
 
 ### Ownership Validation (`artifacts/api-server/src/lib/ownership.ts`)
-`resolveOwnership(user, body)` — enforces on-behalf authorization for write operations:
-- **SALES REP**: always session data; body.repId/region ignored
-- **REGION HEAD**: body.repId must be an active SALES REP in RH's own region (DB-validated). Cross-region returns 403.
-- **ADMIN/Elevated**: body.repId must exist in DB; body.region trusted
-Used in: deals POST, revenue POST, touchpoints POST, client-accounts POST.
+`resolveOwnership(user, body)` — enforces on-behalf authorization for all write operations. Returns `{ repId, region, name, isSelfAction }`.
+- **SALES REP**: always session data; body values ignored entirely
+- **REGION HEAD**: body.repId required; must be an active SALES REP in RH's own region (DB-validated). Cross-region → 403.
+- **Admin/Elevated + body.repId provided**: repId must resolve to a real user in DB. Unknown repId → 400 (no silent fallback).
+- **Admin/Elevated + no body.repId**: self-action, uses session user's own repId/region. Callers guard against `owner.repId === null` for tables with `NOT NULL` constraint.
+- Wired into: deals POST, revenue POST, touchpoints POST, client-accounts POST.
+- Touchpoints, deals, and revenue entries all guard: if `owner.repId` is null after resolution → explicit 400 with clear message.
+
+### Target Allocations (`lib/db/src/schema/target_allocations.ts`, `GET /api/targets/:id/allocations`)
+New `target_allocations` table — normalized line items for target submissions. One row per client per submission. Columns: `id, submissionId, repId, region, quarter, clientName, zohoAccountId, allocatedAmount, channel, dealType, notes, createdAt`. Written atomically with the parent `targetSubmissions` row on POST `/api/targets`. The `clients` JSONB array on the parent row is kept for backward compatibility but `target_allocations` is the source of truth for accounting. Enables SQL-level channel/dealType aggregations without parsing JSONB.
 
 ### Daily Plans (`lib/db/src/schema/daily_plans.ts`, `GET|POST /api/daily-plans`)
 New `daily_plans` table — upsert per user per date. One record per userId+planDate (unique constraint). Contains `items` (JSONB), `itemCount`, `planDate` (YYYY-MM-DD for the day being planned for). Governance checks this table for compliance. Team view at `GET /api/daily-plans/team` (RH+ scoped).

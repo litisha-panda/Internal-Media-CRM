@@ -90,11 +90,19 @@ router.post("/touchpoints", requireAuth, async (req, res) => {
     }
 
     // ── Validate ownership — RH on-behalf actions must target reps in their region ──
-    let owner: { repId: number; region: string; name: string };
+    let owner: { repId: number | null; region: string; name: string; isSelfAction: boolean };
     try {
       owner = await resolveOwnership(u, { repId: body.repId, region: body.region });
     } catch (e: any) {
       return void res.status(e.status ?? 400).json({ ok: false, error: e.error ?? String(e) });
+    }
+
+    // Touchpoints require a repId — elevated self-acting users without one must specify body.repId
+    if (!owner.repId) {
+      return void res.status(400).json({
+        ok:    false,
+        error: `Touchpoints require a repId. Your role (${u.role}) has no assigned rep ID — provide body.repId to log a touchpoint on behalf of a rep.`,
+      });
     }
 
     const today = todayIST();

@@ -15,6 +15,7 @@ import kpiRouter from "./kpi";
 import notificationsRouter from "./notifications";
 import activityLogRouter from "./activity-log";
 import dailyPlansRouter from "./daily-plans";
+import rhTeamFeedRouter from "./rh-team-feed";
 
 const router: IRouter = Router();
 
@@ -52,5 +53,8 @@ router.use(activityLogRouter);
 
 // Phase 9 — Daily plans (compliance)
 router.use(dailyPlansRouter);
+
+// Phase 9 — RH team feed (plans + touchpoints + compliance summary)
+router.use(rhTeamFeedRouter);
 
 export default router;

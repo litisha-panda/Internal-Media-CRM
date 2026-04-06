@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, targetSubmissions, TARGET_APPROVAL_CHAIN, TARGET_NEXT_STATUS } from "@workspace/db";
+import { db, targetSubmissions, targetAllocations, TARGET_APPROVAL_CHAIN, TARGET_NEXT_STATUS } from "@workspace/db";
 import type { ClientAllocation } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -115,6 +115,23 @@ router.get("/targets/:id", requireAuth, async (req, res) => {
   }
 });
 
+// GET /api/targets/:id/allocations — fetch normalized line items for a submission
+router.get("/targets/:id/allocations", requireAuth, async (req, res) => {
+  try {
+    const rows = await db
+      .select()
+      .from(targetAllocations)
+      .where(eq(targetAllocations.submissionId, String(req.params["id"])))
+      .orderBy(targetAllocations.clientName);
+
+    const total = rows.reduce((acc, r) => acc + (r.allocatedAmount ?? 0), 0);
+
+    res.json({ ok: true, data: rows, total });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 // POST /api/targets — submit new target plan
 router.post("/targets", requireAuth, async (req, res) => {
   try {
@@ -168,7 +185,7 @@ router.post("/targets", requireAuth, async (req, res) => {
         repName:         authorName,
         region:          authorRegion,
         quarter,
-        clients:         clients ?? [],
+        clients:         clientList,          // keep JSONB copy for backward compat
         totalTarget:     totalTarget ?? 0,
         status:          "Pending RH",
         submittedAt:     now,
@@ -178,6 +195,24 @@ router.post("/targets", requireAuth, async (req, res) => {
       })
       .onConflictDoNothing()
       .returning();
+
+    // ── Write normalized allocation line items ────────────────────────────────
+    if (clientList.length > 0) {
+      const allocationRows = clientList.map((c, i) => ({
+        id:              `${id}_alloc_${i}`,
+        submissionId:    id,
+        repId:           authorRepId,
+        region:          authorRegion,
+        quarter,
+        clientName:      c.clientName,
+        zohoAccountId:   c.zohoAccountId ?? null,
+        allocatedAmount: Math.round(c.allocatedAmount),
+        channel:         c.channel ?? null,
+        dealType:        c.dealType ?? null,
+        notes:           c.notes ?? null,
+      }));
+      await db.insert(targetAllocations).values(allocationRows).onConflictDoNothing();
+    }
 
     void logActivity({
       userId:     u.id,
