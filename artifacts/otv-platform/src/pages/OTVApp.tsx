@@ -1610,6 +1610,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [rhDrillPlan, setRhDrillPlan]     = useState<any>(null); // RH team meetings drill-down item
   const [rhTeamFilter, setRhTeamFilter]   = useState({rep:"",dateRange:"today-tomorrow",client:"",status:""}); // RH team meetings filter
   const [rhWarroomClient, setRhWarroomClient] = useState(""); // pre-filter warroom to a stalled client from dashboard
+  const [rhWarroomRep,    setRhWarroomRep]    = useState(""); // pre-filter warroom to a stalled rep from dashboard
   const [nshRegion,   setNshRegion]       = useState("all"); // NSH rep-CRM region filter
   const BLANK_TASK_FORM = {title:"",assignedTo:"",assignedToUserId:"",clientCompany:"",description:"",priority:"High",dueDate:TOMORROW};
   const [taskForm, setTaskForm]           = useState(BLANK_TASK_FORM);
@@ -5295,19 +5296,23 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   </div>
                 </div>
 
-                {/* ── STALLED CLIENT FILTER BANNER (from dashboard chip click) ── */}
-                {rhWarroomClient && (
-                  <div style={{display:"flex",alignItems:"center",gap:10,background:`${C.purple}10`,border:`1.5px solid ${C.purple}44`,borderRadius:7,padding:"7px 14px",marginBottom:14}}>
-                    <span style={{fontSize:13}}>⏸</span>
-                    <span style={{flex:1,fontSize:12,color:C.purple,fontWeight:600}}>
-                      Filtered to stalled deal: <strong>{rhWarroomClient}</strong>
-                    </span>
-                    <button onClick={()=>setRhWarroomClient("")}
-                      style={{background:"none",border:`1px solid ${C.purple}55`,borderRadius:4,padding:"2px 10px",fontSize:11,color:C.purple,fontWeight:700,cursor:"pointer"}}>
-                      × Clear filter
-                    </button>
-                  </div>
-                )}
+                {/* ── STALLED CLIENT/REP FILTER BANNER (from dashboard chip click) ── */}
+                {rhWarroomClient && (()=>{
+                  const filterRep = reps.find(r=>String(r.id)===rhWarroomRep);
+                  return (
+                    <div style={{display:"flex",alignItems:"center",gap:10,background:`${C.purple}10`,border:`1.5px solid ${C.purple}44`,borderRadius:7,padding:"7px 14px",marginBottom:14}}>
+                      <span style={{fontSize:13}}>⏸</span>
+                      <span style={{flex:1,fontSize:12,color:C.purple,fontWeight:600}}>
+                        Filtered to stalled deal: <strong>{rhWarroomClient}</strong>
+                        {filterRep && <span style={{fontWeight:400,color:C.dim}}> · {filterRep.name}</span>}
+                      </span>
+                      <button onClick={()=>{setRhWarroomClient("");setRhWarroomRep("");}}
+                        style={{background:"none",border:`1px solid ${C.purple}55`,borderRadius:4,padding:"2px 10px",fontSize:11,color:C.purple,fontWeight:700,cursor:"pointer"}}>
+                        × Clear filter
+                      </button>
+                    </div>
+                  );
+                })()}
 
                 {/* ── PIPELINE GAP STRIP ── */}
                 {(()=>{
@@ -5516,10 +5521,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 </div>
 
                 {/* Part 9: Tiered escalation alerts — 7 / 10 / 14 day triggers */}
-                {rh14d.filter(d=>!rhWarroomClient||d.clientCompany===rhWarroomClient).length>0&&(
+                {rh14d.filter(d=>(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).length>0&&(
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⚠ INTERVENE REQUIRED — 14+ DAYS NO DEAL MEETING</div>
-                    {rh14d.filter(d=>!rhWarroomClient||d.clientCompany===rhWarroomClient).map(d=>{
+                    {rh14d.filter(d=>(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).map(d=>{
                       const rep=reps.find(r=>r.id===d.repId);
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       const taskId=`rh14-${d.id}`;
@@ -5544,10 +5549,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     })}
                   </div>
                 )}
-                {rh10d.filter(d=>!rh14d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)).length>0&&(
+                {rh10d.filter(d=>!rh14d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).length>0&&(
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>ℹ 10+ DAYS NO DEAL MEETING — MONITOR CLOSELY</div>
-                    {rh10d.filter(d=>!rh14d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)).map(d=>{
+                    {rh10d.filter(d=>!rh14d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).map(d=>{
                       const rep=reps.find(r=>r.id===d.repId);
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       return (
@@ -5561,10 +5566,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     })}
                   </div>
                 )}
-                {rhAtRisk.filter(d=>!rh10d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)).length>0&&(
+                {rhAtRisk.filter(d=>!rh10d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).length>0&&(
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NO DEAL MEETING 7+ DAYS — TEAM AT RISK</div>
-                    {rhAtRisk.filter(d=>!rh10d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)).map(d=>{
+                    {rhAtRisk.filter(d=>!rh10d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).map(d=>{
                       const rep=reps.find(r=>r.id===d.repId);
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       return (
@@ -11587,8 +11592,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 chipClick:()=>setView("rh-team-report")},
               {label:"Stalled deals (7+ days idle)",  items:stalledDeals,      color:C.purple, icon:"⏸",
                 nav:"warroom",          detail:(d:any)=>d.clientCompany,
-                headerClick:()=>{setRhWarroomClient("");setView("warroom");},
-                chipClick:(d:any)=>{setRhWarroomClient(d.clientCompany);setView("warroom");}},
+                headerClick:()=>{setRhWarroomClient("");setRhWarroomRep("");setView("warroom");},
+                chipClick:(d:any)=>{setRhWarroomClient(d.clientCompany);setRhWarroomRep(String(d.repId||""));setView("warroom");}},
               {label:"Escalated items to you",        items:myEscalations,     color:C.red,    icon:"⬆",
                 nav:"rh-escalations",  detail:(r:any)=>r.subject,
                 headerClick:()=>setView("rh-escalations"),
