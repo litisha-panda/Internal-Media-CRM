@@ -4115,8 +4115,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {/* At-risk deals */}
                         {coldDeals.length > 0 && (
                           <div>
-                            <div style={{fontSize:9,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
-                              ⚠ {coldDeals.length} deal{coldDeals.length!==1?"s":""} going cold
+                            <div onClick={()=>setView("pipeline")} style={{fontSize:9,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
+                              ⚠ {coldDeals.length} deal{coldDeals.length!==1?"s":""} going cold →
                             </div>
                             <div style={{display:"flex",flexDirection:"column",gap:4}}>
                               {coldDeals.map(d=>{
@@ -4142,20 +4142,20 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {/* Overdue tasks (dueDate ≤ today) */}
                         {overdueTasks.length > 0 && (
                           <div>
-                            <div style={{fontSize:9,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
-                              ✗ {overdueTasks.length} overdue task{overdueTasks.length!==1?"s":""}
+                            <div onClick={()=>setView("tasks")} style={{fontSize:9,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
+                              ✗ {overdueTasks.length} overdue task{overdueTasks.length!==1?"s":""} →
                             </div>
                             <div style={{display:"flex",flexDirection:"column",gap:4}}>
                               {overdueTasks.map(t=>{
                                 const isOver=t.dueDate<TODAY;
                                 const pColor=t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.dim;
                                 return (
-                                  <div key={t.id} style={{display:"flex",alignItems:"center",gap:8,background:`${C.orange}05`,borderRadius:5,padding:"5px 10px"}}>
+                                  <div key={t.id} onClick={()=>setView("tasks")} style={{display:"flex",alignItems:"center",gap:8,background:`${C.orange}05`,borderRadius:5,padding:"5px 10px",cursor:"pointer"}}>
                                     <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{t.title}</span>
                                     {t.clientCompany&&<span style={{fontSize:10,color:C.dim}}>{t.clientCompany}</span>}
                                     {isOver&&<span style={{color:C.red,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>Due {t.dueDate}</span>}
                                     <span style={{background:`${pColor}18`,color:pColor,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority||"Normal"}</span>
-                                    <select value={t.status} onChange={e=>setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x))}
+                                    <select value={t.status} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x));}}
                                       style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontFamily:"'DM Mono',monospace"}}>
                                       {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
                                     </select>
@@ -4169,8 +4169,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {/* Follow-ups due today */}
                         {followUpsToday.length > 0 && (
                           <div>
-                            <div style={{fontSize:9,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
-                              📅 {followUpsToday.length} follow-up{followUpsToday.length!==1?"s":""} due today
+                            <div onClick={()=>setView("revenue-log")} style={{fontSize:9,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
+                              📅 {followUpsToday.length} follow-up{followUpsToday.length!==1?"s":""} due today →
                             </div>
                             <div style={{display:"flex",flexDirection:"column",gap:4}}>
                               {followUpsToday.map(m=>(
@@ -4190,15 +4190,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {/* Open support requests */}
                         {openSRs.length > 0 && (
                           <div>
-                            <div style={{fontSize:9,color:C.purple,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
-                              🆘 {openSRs.length} open support request{openSRs.length!==1?"s":""}
+                            <div onClick={()=>setView("internal-requests")} style={{fontSize:9,color:C.purple,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
+                              🆘 {openSRs.length} open support request{openSRs.length!==1?"s":""} →
                             </div>
-                            <div style={{display:"flex",alignItems:"center",gap:8,background:`${C.purple}06`,borderRadius:5,padding:"5px 10px"}}>
-                              <span style={{flex:1,fontSize:12,color:C.dim}}>{openSRs.map(r=>r.subject.replace(/^\[Support\]\s*/,"")).join(" · ")}</span>
-                              <button onClick={()=>setView("internal-requests")}
-                                style={{background:C.purple,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                                View All →
-                              </button>
+                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
+                              {openSRs.map(r=>(
+                                <div key={r.id} onClick={()=>setView("internal-requests")}
+                                  style={{display:"flex",alignItems:"center",gap:8,background:`${C.purple}06`,borderRadius:5,padding:"5px 10px",cursor:"pointer"}}>
+                                  <span style={{flex:1,fontSize:12,color:C.text,fontWeight:600}}>{r.subject.replace(/^\[Support\]\s*/,"")}</span>
+                                  <span style={{background:`${C.purple}18`,color:C.purple,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{r.status||"Open"}</span>
+                                  <span style={{color:C.purple,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>View →</span>
+                                </div>
+                              ))}
                             </div>
                           </div>
                         )}
@@ -4206,8 +4209,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         {/* Pipeline gap alert */}
                         {hasGapAlert && (
                           <div>
-                            <div style={{fontSize:9,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>
-                              ◈ Pipeline gap needs filling
+                            <div onClick={()=>setView("pipeline")} style={{fontSize:9,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
+                              ◈ Pipeline gap needs filling →
                             </div>
                             <div style={{display:"flex",alignItems:"center",gap:8,background:`${C.red}05`,borderRadius:5,padding:"5px 10px"}}>
                               <span style={{flex:1,fontSize:12,color:C.dim}}>
