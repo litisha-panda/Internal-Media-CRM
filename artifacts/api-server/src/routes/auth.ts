@@ -27,8 +27,8 @@ function generateToken(): string {
 function cookieOpts(expiresAt: Date) {
   return {
     httpOnly:  true,
-    secure:    false,          // proxy handles TLS; internal connection is plain
-    sameSite:  "lax" as const,
+    secure:    true,           // required for SameSite=None (proxy uses HTTPS externally)
+    sameSite:  "none" as const, // allow cross-path/cross-site in Replit's proxy environment
     path:      "/",
     expires:   expiresAt,
   };
@@ -174,8 +174,11 @@ router.post("/auth/login", async (req, res) => {
 
     res.cookie(COOKIE_NAME, token, cookieOpts(expiresAt));
 
+    // Also return token in body — allows clients to use X-Session-Token header
+    // as a fallback when cookie-based auth is unreliable (e.g. Replit proxy env)
     res.json({
-      ok:   true,
+      ok:    true,
+      token, // client stores in localStorage, sends as X-Session-Token header
       user: {
         id:     user.id,
         name:   user.name,
@@ -193,7 +196,9 @@ router.post("/auth/login", async (req, res) => {
 
 // ─── POST /api/auth/logout ───────────────────────────────────────────────────
 router.post("/auth/logout", async (req, res) => {
-  const token = req.cookies?.[COOKIE_NAME] as string | undefined;
+  // Accept token from cookie OR X-Session-Token header
+  const token = (req.cookies?.[COOKIE_NAME] as string | undefined)
+    || (req.headers["x-session-token"] as string | undefined);
 
   if (token) {
     try {

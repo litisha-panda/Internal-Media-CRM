@@ -1,0 +1,338 @@
+Recommendation
+
+Tell Replit not to implement further changes yet and instead run a structured verification checklist to confirm the new workflow actually works in the UI and database.
+Right now, they have made many changes (login fix, role-based sidebar, target-first landing, removal of launching screen), but this must be validated with real user journeys, not just code-level confirmation.
+
+Below is the exact instruction you should send.
+
+⸻
+
+Message to Replit
+
+Send this.
+
+⸻
+
+Next Step: Full Functional Verification (Do Not Add New Features Yet)
+
+Good progress on login fixes and CRM simplification.
+
+Before proceeding further, we need strict end-to-end verification of the new workflow with real user journeys and database validation.
+
+Do not implement new features yet.
+First confirm that the current system works exactly as intended.
+
+⸻
+
+Test 1 — Login Flow
+
+Verify
+	1.	Signup works using
+
+POST /api/auth/signup
+
+	2.	Login creates session using
+
+POST /api/auth/login
+
+	3.	Logout clears session using
+
+POST /api/auth/logout
+
+	4.	Refresh page keeps user logged in
+	5.	Session expiry logs user out automatically
+
+Expected
+
+User remains logged in until session expires or logout is clicked.
+
+No instant logout.
+
+⸻
+
+Test 2 — Role Recognition
+
+Create 4 users:
+
+User	Role
+Admin	admin
+CRO	cro
+Region Head	region_head
+Sales Rep	sales_rep
+
+Verify:
+
+After login each user lands in CRM and sees correct sidebar.
+
+Expected
+
+Sales Rep sees:
+	•	My Targets
+	•	My Plan
+	•	Tasks
+	•	Revenue Log
+	•	Internal Requests
+
+Region Head sees:
+	•	War Room
+	•	Revenue Tracker
+	•	My Team
+	•	Targets
+
+Admin sees:
+	•	Access Management
+	•	Target Import
+	•	Platform Config
+	•	War Room
+	•	Revenue Tracker
+
+⸻
+
+Test 3 — Target Import
+
+Admin uploads Excel:
+
+Rep Name
+Region
+Client
+Channel
+Deal Type
+Annual Target Amount
+
+Verify
+
+System stores in Supabase:
+
+target_allocations
+
+and aggregates:
+
+rep target
+region target
+cro target
+channel target
+client target
+
+Expected
+
+Sales Rep logs in and sees:
+
+My Target
+Client Targets
+Shortfall
+
+Region Head sees:
+
+Region Target
+Team Targets
+
+
+⸻
+
+Test 4 — Target First Landing
+
+Sales Rep logs in.
+
+Expected
+
+First screen:
+
+My Targets
+
+Not:
+
+Home
+My Plan
+War Room
+
+Targets should be default.
+
+⸻
+
+Test 5 — My Plan Creates Pipeline
+
+Sales Rep clicks:
+
+Create My Plan
+
+Adds:
+
+Client
+Deal
+Amount
+Month
+Stage
+
+Verify
+
+System creates:
+
+deal
+pipeline
+forecast
+shortfall update
+
+Expected
+
+Pipeline updates automatically.
+
+No manual deal creation needed.
+
+⸻
+
+Test 6 — Platform Launch Banner
+
+When no targets exist:
+
+Sales Rep sees:
+
+No targets assigned yet
+
+as banner.
+
+Verify
+
+User can still:
+	•	open My Plan
+	•	open Tasks
+	•	open Revenue Log
+
+Platform must not block access.
+
+⸻
+
+Test 7 — War Room
+
+Region Head logs in.
+
+Verify:
+
+War Room shows:
+
+Region target
+Achieved
+Pipeline
+Shortfall
+Stalled deals
+
+Sales Rep should not see War Room.
+
+⸻
+
+Test 8 — Revenue Log
+
+Sales Rep logs revenue.
+
+Verify:
+
+Revenue saved
+Target updated
+Shortfall reduced
+Revenue tracker updated
+
+
+⸻
+
+Test 9 — Supabase Validation
+
+Check tables:
+
+users
+targets
+deals
+revenue
+tasks
+touchpoints
+sessions
+
+Verify data consistency.
+
+No fake seed data.
+
+⸻
+
+Test 10 — Full Workflow
+
+Run complete flow:
+
+Admin uploads targets
+
+Sales Rep logs in
+
+Sees targets
+
+Creates plan
+
+Pipeline created
+
+Revenue logged
+
+Region Head monitors
+
+CRO sees performance
+
+Expected
+
+Entire workflow runs without manual intervention.
+
+⸻
+
+Deliverables Required
+
+Replit should provide:
+
+1
+
+Screenshots of each role dashboard
+
+Admin
+CRO
+Region Head
+Sales Rep
+
+⸻
+
+2
+
+Supabase table snapshots
+
+targets
+deals
+revenue
+users
+
+⸻
+
+3
+
+End-to-end workflow video
+
+Admin → Sales Rep → Revenue → War Room
+
+⸻
+
+4
+
+List of any remaining issues
+
+bugs
+UI inconsistencies
+missing logic
+
+⸻
+
+Important Instruction
+
+Do not add new modules or features.
+
+Only:
+	•	verify workflow
+	•	confirm UI alignment
+	•	confirm database behavior
+	•	confirm role-based access
+
+After verification, we will move to final UI refinement and rollout.
+
+⸻
+
+If you want, I can also create a 30-minute live testing script for your internal team to run simultaneously with Replit so both technical and business validation happen in parallel.

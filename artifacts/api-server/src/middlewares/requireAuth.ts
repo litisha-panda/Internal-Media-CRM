@@ -25,7 +25,10 @@ export async function requireAuth(
   res: Response,
   next: NextFunction,
 ): Promise<void> {
-  const token = req.cookies?.otv_session as string | undefined;
+  // Accept session token from cookie OR from X-Session-Token header
+  // (header fallback used when cookies are blocked by the Replit proxy environment)
+  const token = (req.cookies?.otv_session as string | undefined)
+    || (req.headers["x-session-token"] as string | undefined);
 
   if (!token) {
     res.status(401).json({ ok: false, error: "Not authenticated" });

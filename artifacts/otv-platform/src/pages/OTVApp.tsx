@@ -728,6 +728,7 @@ function LoginScreen({ onLogin }) {
         // Signup: POST to API signup endpoint
         const r = await fetch("/api/auth/signup", {
           method: "POST",
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             name: name.trim(), email: email.toLowerCase().trim(), password,
@@ -748,11 +749,13 @@ function LoginScreen({ onLogin }) {
       // Login: always call the API — creates a real server session
       const r = await fetch("/api/auth/login", {
         method: "POST",
+        credentials: "include",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email: email.toLowerCase().trim(), password }),
       });
       const data = await r.json();
       if (r.ok && data.ok) {
+        if (data.token) setSessionTokenStore(data.token); // persist for session restore
         onLogin(data.user);
       } else if (r.status === 403) {
         // Account exists but pending admin approval
@@ -771,15 +774,18 @@ function LoginScreen({ onLogin }) {
     setLoading(true);
     fetch("/api/auth/login", {
       method: "POST",
+      credentials: "include",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email: account.email, password: "demo123" }),
     })
       .then(r => r.json())
       .then(data => {
-        if (data.ok) onLogin(data.user);
-        else onLogin({ name: account.label, email: account.email, role: account.role || "SALES REP" });
+        if (data.ok) {
+          if (data.token) setSessionTokenStore(data.token); // persist for session restore
+          onLogin(data.user);
+        } else setLoading(false);
       })
-      .catch(() => onLogin({ name: account.label, email: account.email, role: account.role || "SALES REP" }))
+      .catch(() => setLoading(false))
       .finally(() => setLoading(false));
   };
 
@@ -902,7 +908,7 @@ function LoginScreen({ onLogin }) {
                       { label:"CRO",                  email:"darpan@odishatv.com",      color:"#c47d00" },
                     ].map(a => (
                       <button key={a.email}
-                        onClick={() => onLogin({ name:a.label, email:a.email })}
+                        onClick={() => handleDemo(a)}
                         style={{ background:"#f0f4f9", border:`1px solid ${a.color}44`, borderRadius:6, padding:"8px 10px", cursor:"pointer", textAlign:"left", transition:"border-color .15s, background .15s" }}
                         onMouseOver={e=>{ e.currentTarget.style.borderColor=a.color; e.currentTarget.style.background="#e8eef7"; }}
                         onMouseOut={e=>{ e.currentTarget.style.borderColor=`${a.color}44`; e.currentTarget.style.background="#f0f4f9"; }}>
@@ -1094,6 +1100,22 @@ function usePersistedState(key, initial) {
   return [state, setState];
 }
 
+// ── Session token store ───────────────────────────────────────────────────────
+// Replit's path-based proxy prevents httpOnly cookies from being forwarded reliably.
+// We store the session token in localStorage and send it as X-Session-Token header
+// on all API requests. The server accepts either cookie OR this header.
+const SESSION_TOKEN_KEY = "otv_session_token";
+function getSessionToken(): string | null {
+  try { return localStorage.getItem(SESSION_TOKEN_KEY); } catch { return null; }
+}
+function setSessionTokenStore(t: string | null): void {
+  try { t ? localStorage.setItem(SESSION_TOKEN_KEY, t) : localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
+}
+function authHeaders(extra?: Record<string, string>): Record<string, string> {
+  const t = getSessionToken();
+  return { ...(t ? { "X-Session-Token": t } : {}), ...extra };
+}
+
 /**
  * useApiEntityState — API is the single source of truth.
  * Fetches on mount and polls every 30s for multi-user consistency.
@@ -1124,7 +1146,7 @@ function useApiEntityState<T extends { id: string }>(
   // Fetch from API — used on mount and by the 30s polling interval
   const fetchAll = useCallback(async (isInitial?: boolean) => {
     try {
-      const r = await fetch(apiPath);
+      const r = await fetch(apiPath, { credentials: "include", headers: authHeaders() });
       if (r.status === 401) {
         if (isInitial) setLoading(false);
         // Only force logout if we previously had a valid session (not demo mode)
@@ -1162,7 +1184,9 @@ function useApiEntityState<T extends { id: string }>(
             if (!backendIds.current.has(item.id)) {
               // New item — POST
               const r = await fetch(apiPath, {
-                method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify(item),
+                method: "POST", credentials: "include",
+                headers: authHeaders({"Content-Type":"application/json"}),
+                body: JSON.stringify(item),
               });
               if (r.ok) { const d = await r.json(); if (d.ok) backendIds.current.add(item.id); }
             } else {
@@ -1170,7 +1194,9 @@ function useApiEntityState<T extends { id: string }>(
               const old = prev.find(i => i.id === item.id);
               if (old && JSON.stringify(old) !== JSON.stringify(item)) {
                 await fetch(`${apiPath}/${item.id}`, {
-                  method: "PATCH", headers: {"Content-Type":"application/json"}, body: JSON.stringify(item),
+                  method: "PATCH", credentials: "include",
+                  headers: authHeaders({"Content-Type":"application/json"}),
+                  body: JSON.stringify(item),
                 });
               }
             }
@@ -1194,7 +1220,7 @@ const DATA_VERSION = "v3-clean";
   try {
     if (localStorage.getItem("otv_data_version") !== DATA_VERSION) {
       const keysToRemove = Object.keys(localStorage).filter(k =>
-        k.startsWith("otv_") && k !== "otv_data_version"
+        k.startsWith("otv_") && k !== "otv_data_version" && k !== SESSION_TOKEN_KEY
       );
       keysToRemove.forEach(k => localStorage.removeItem(k));
       localStorage.setItem("otv_data_version", DATA_VERSION);
@@ -1203,16 +1229,35 @@ const DATA_VERSION = "v3-clean";
 })();
 
 export default function OTVApp() {
-  const [loggedIn, setLoggedIn]       = useState(false);
-  const [loginUser, setLoginUser]     = useState(null);
-  const [section, setSection]         = useState("home"); // "home" | "ro" | "crm"
+  const [loggedIn, setLoggedIn]           = useState(false);
+  const [loginUser, setLoginUser]         = useState(null);
+  const [section, setSection]             = useState("home"); // "home" | "ro" | "crm"
+  const [sessionChecking, setSessionChecking] = useState(true); // true until /me resolves
   const [plans, setPlans]             = usePersistedState("otv_plans",    SEED_PLANS);
   const [weeklyPlans, setWeeklyPlans] = usePersistedState("otv_wplans",   SEED_WEEKLY_PLANS);
   const [meetings, setMeetings]       = usePersistedState("otv_meetings", SEED_MEETINGS);
   const [deals, setDeals]             = useApiEntityState("/api/deals",    "otv_deals",    []);
 
+  // On mount: restore session from stored token (localStorage) or cookie
+  useEffect(() => {
+    fetch("/api/auth/me", { credentials: "include", headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.ok && data.user) {
+          setLoginUser(data.user);
+          setLoggedIn(true);
+          setSection("crm");
+        } else {
+          setSessionTokenStore(null); // clear stale token
+        }
+      })
+      .catch(() => {})
+      .finally(() => setSessionChecking(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleLogin  = (user) => {
-    // Clear entity localStorage caches on every login so API data always wins from first paint
+    // Clear entity localStorage caches on every fresh login so API data always wins from first paint
     ["otv_deals","otv_tasks","otv_internalReqs","otv_targetSubs",
      "otv_revenueEntries","otv_clientAccounts","otv_touchpoints"
     ].forEach(k => { try { localStorage.removeItem(k); } catch {} });
@@ -1221,7 +1266,11 @@ export default function OTVApp() {
     if (user?.provider) setLoginProvider(user.provider);
   };
   const handleLogout = () => {
-    fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    fetch("/api/auth/logout", {
+      method: "POST", credentials: "include",
+      headers: authHeaders(),
+    }).catch(() => {});
+    setSessionTokenStore(null); // clear stored token
     setLoggedIn(false); setLoginUser(null); setSection("home");
   };
 
@@ -1234,6 +1283,13 @@ export default function OTVApp() {
   }, []);
   const handleSelect = (s)    => setSection(s);
   const handleBack   = ()     => setSection("home");
+
+  // While checking session cookie — show neutral loader, never flash the login screen
+  if (sessionChecking) return (
+    <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#f0f4f9"}}>
+      <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#8a97ae",letterSpacing:".08em"}}>OTV CRM</div>
+    </div>
+  );
 
   if (!loggedIn) return <LoginScreen onLogin={handleLogin} />;
   if (section === "home") return <HomeScreen user={loginUser} onSelect={handleSelect} onLogout={handleLogout} />;
