@@ -710,8 +710,8 @@ function LoginScreen({ onLogin }) {
     { label:"Sales Head (NSH)",    email:"saleshead@odishatv.com",  role:"SALES HEAD",     color:"#0891b2" },
     { label:"Sachin (Strategy)",   email:"sachin@odishatv.com",     role:"SALES STRATEGY", color:"#7c2d12" },
     { label:"Digi Ops",            email:"digiops@odishatv.com",    role:"DIGI OPS",       color:"#1e40af" },
-    { label:"RH – National",       email:"rhn@odishatv.com",        role:"REGION HEAD",    color:"#7c3aed" },
-    { label:"RH – North",          email:"rhnorth@odishatv.com",    role:"REGION HEAD",    color:"#7c3aed" },
+    { label:"RH – National",       email:"rh.national@odishatv.com", role:"REGION HEAD",    color:"#7c3aed" },
+    { label:"RH – North",          email:"rh.north@odishatv.com",   role:"REGION HEAD",    color:"#7c3aed" },
     { label:"Arjun (Sales Rep)",   email:"arjun@odishatv.com",      role:"SALES REP",      color:"#2563eb" },
     { label:"Vikram (Sales Rep)",  email:"vikram@odishatv.com",     role:"SALES REP",      color:"#2563eb" },
   ];
@@ -901,7 +901,7 @@ function LoginScreen({ onLogin }) {
                   <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6 }}>
                     {[
                       { label:"Sales Rep",           email:"arjun@odishatv.com",      color:"#1d5db4" },
-                      { label:"Region Head",          email:"rhnorth@odishatv.com",     color:"#7920e8" },
+                      { label:"Region Head",          email:"rh.north@odishatv.com",    color:"#7920e8" },
                       { label:"National Sales Head",  email:"saleshead@odishatv.com",   color:"#0369a1" },
                       { label:"Digi Ops",             email:"digiops@odishatv.com",     color:"#1e40af" },
                       { label:"Sales Strategy",       email:"sachin@odishatv.com",      color:"#15803d" },
@@ -1503,7 +1503,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (section === "ro") return "ro-parser";
     const role = user?.role || "";
     if (role === "ADMIN" || user?.email==="admin@odishatv.com") return "admin-access";
-    if (role === "REGION HEAD") return "warroom";
+    if (role === "REGION HEAD") return "rh-dashboard";
     if (["SALES HEAD","CRO","SALES STRATEGY"].includes(role)) return "warroom";
     if (role === "DIGI OPS") return "digi-deals";
     return "my-plan"; // Sales Rep — My Plan is the daily execution home
@@ -1563,11 +1563,12 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       "admin@odishatv.com":      "admin",
       "digiops@odishatv.com":    "digi_ops",
       "digital@odishatv.com":    "digi_ops",
-      "rhn@odishatv.com":        "rh_national",
-      "rhnorth@odishatv.com":    "rh_north",
-      "rhsouth@odishatv.com":    "rh_south",
-      "rheast@odishatv.com":     "rh_east",
-      "rhwest@odishatv.com":     "rh_west",
+      "rh.national@odishatv.com": "rh_national",
+      "rh.north@odishatv.com":   "rh_north",
+      "rh.south@odishatv.com":   "rh_south",
+      "rh.east@odishatv.com":    "rh_east",
+      "rh.west@odishatv.com":    "rh_west",
+      "rh.central@odishatv.com": "rh_central",
       "arjun@odishatv.com":      "rep_arjun",
       "priya@odishatv.com":      "rep_priya",
       "rohit@odishatv.com":      "rep_rohit",
@@ -3338,28 +3339,35 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
     // ── SALES REP ──
     if (isRep) return [
-      { label:"MY WORKFLOW", items:[
-        N("target-submit",       "Target",              "◎", targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
-        N("my-plan",             "My Plan / Calendar",  "◎"),
+      { label:"DAILY WORK", items:[
+        N("my-plan",             "My Plan",             "◎"),
+        N("pipeline",            "My Pipeline",         "◈"),
         N("revenue-log",         "Revenue Log",         "₹"),
-        N("internal-requests",   "Internal Requests",   "⬆", irBadge),
         N("tasks",               "Tasks",               "✓", myRepTaskBadge),
+        N("target-submit",       "Target",              "◎", targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
+        N("internal-requests",   "Requests",            "⬆", irBadge),
         N("hr",                  "HR Report",           "⊘", hrBadge),
       ]},
     ];
 
     // ── REGION HEAD ──
     if (isRH) return [
-      { label:"MY REGION", items:[
+      { label:"MY TEAM", items:[
         N("rh-dashboard",        "Dashboard",           "⬡", rhDashBadge),
-        N("rh-team-plan",        "My Team's Meetings",  "◎"),
+        N("rh-team-plan",        "Team Meetings",       "◎"),
+        N("warroom",             "War Room",            "⬡"),
+        N("pipeline",            "Pipeline",            "◈"),
+      ]},
+      { label:"MY WORK", items:[
         N("my-plan",             "My Plan",             "◎"),
-        N("target-approvals",    "My Approvals",        "◎", rhApprovalBadge),
-        N("rh-escalations",      "My Escalations",      "⚠", rhEscBadge),
+        N("target-approvals",    "Approvals",           "◎", rhApprovalBadge),
         N("my-tasks",            "My Tasks",            "✓", rhTaskBadge),
-        N("internal-requests",   "Internal Requests",   "⬆", irBadge),
-        N("rh-my-hr",            "My HR Reports",       "⊘", hrBadge),
-        N("rh-team-report",      "My Team Report",      "◈"),
+        N("internal-requests",   "Requests",            "⬆", irBadge),
+      ]},
+      { label:"REPORTS", items:[
+        N("rh-escalations",      "Escalations",         "⚠", rhEscBadge),
+        N("rh-team-report",      "Team Report",         "◈"),
+        N("rh-my-hr",            "My HR",               "⊘", hrBadge),
       ]},
     ];
 
@@ -4037,7 +4045,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             return (
               <div className="fin">
                 {/* Header */}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:isRep?10:14}}>
                   <div>
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY PLAN</div>
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>Click any planned touchpoint to log it · Add new ones via + on calendar</div>
@@ -4053,6 +4061,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </div>
                   </div>
                 </div>
+                {/* ── Quick-action CTA row (Sales Rep only) ── */}
+                {isRep && (
+                  <div style={{display:"flex",gap:8,marginBottom:14}}>
+                    <button
+                      onClick={()=>{setLogForm(f=>({...BLANK_LOG,repId:String(user_role?.repId||"")}));setLogOpen(true);}}
+                      style={{flex:1,background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"9px 0",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                      + Log Touchpoint
+                    </button>
+                    <button
+                      onClick={()=>{setDealForm({...BLANK_DEAL,repId:String(user_role?.repId||""),quarter:filterQ});setAddDealOpen(true);}}
+                      style={{flex:1,background:C.blue,color:"#fff",border:"none",borderRadius:6,padding:"9px 0",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                      + Add Deal
+                    </button>
+                  </div>
+                )}
 
                 {/* ── Target Summary + Pipeline Gap (Sales Rep only) ── */}
                 {isRep && (()=>{
