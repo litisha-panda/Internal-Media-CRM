@@ -1,0 +1,293 @@
+CRM Workflow Simplification Instruction
+
+We need to simplify the CRM and align the frontend with the business workflow.
+Right now there are too many modules (War Room, Revenue Tracker, My Plan, My Targets, etc.) which creates confusion.
+
+The system should follow a clear linear workflow.
+
+Core Workflow
+
+The CRM should operate like this:
+
+1. Admin uploads targets
+2. Users signup and roles are assigned
+3. System assigns targets automatically
+4. User logs in and sees their targets
+5. User creates their plan
+6. Plan creates pipeline
+7. Tasks and touchpoints drive execution
+8. Revenue gets logged
+9. Leadership monitors performance
+
+Everything should support this flow.
+
+Required Changes
+1. Role-Based Sidebar
+
+The sidebar should change based on role.
+
+Sales Rep Sidebar
+
+Show only:
+
+My Targets
+My Plan
+Tasks
+Revenue Log
+Internal Requests
+
+Hide:
+
+War Room
+Revenue Tracker
+By Region
+All Sales Reps
+HR Reports
+
+Sales reps should not see leadership dashboards.
+
+Region Head Sidebar
+
+Show:
+
+War Room (region view)
+My Team
+Revenue Tracker
+Targets
+Internal Requests
+
+Hide:
+
+HR Reports
+All Sales Reps
+CRO Sidebar
+
+Show:
+
+War Room (organisation view)
+Revenue Tracker
+By Region
+All Sales Reps
+Targets
+Internal Requests
+
+Full visibility.
+
+Admin Sidebar
+
+Show:
+
+Access Management
+Target Import
+Platform Config
+War Room
+Revenue Tracker
+
+Admin controls system.
+
+2. Remove "Platform Launching Soon" Screen
+
+Current screen blocks usage.
+
+Replace with:
+
+If user has targets → show dashboard
+If user has no targets → show:
+
+"No targets assigned yet. Contact Admin or CRO."
+
+Do not block the platform.
+
+3. Targets Should Be First Screen
+
+When any user logs in:
+
+First screen should be:
+
+My Targets
+
+Show:
+
+Total Target
+Achieved
+Pipeline
+Shortfall
+Client targets
+
+Add button:
+
+Create My Plan
+
+4. My Plan Should Create Pipeline
+
+When user adds plan:
+
+Client
+Deal
+Amount
+Month
+Stage
+Probability
+
+System should automatically:
+
+create deal
+update pipeline
+update forecast
+update shortfall
+
+No separate manual deal creation needed.
+
+My Plan should be the primary entry point.
+
+5. War Room Redefined
+
+War Room should be only a leadership monitoring dashboard.
+
+It should show:
+
+Region performance
+Rep performance
+Stalled deals
+Shortfall
+Pipeline risk
+
+Sales reps should not see War Room.
+
+6. Revenue Tracker Redefined
+
+Revenue Tracker should show:
+
+Booked revenue
+Month-wise revenue
+Client-wise revenue
+Channel-wise revenue
+
+This is a reporting dashboard.
+
+Not part of daily workflow.
+
+7. Target Import Flow
+
+Admin uploads Excel:
+
+Rep Name
+Region
+Client
+Channel
+Deal Type
+Annual Target Amount
+
+System automatically calculates:
+
+Sales rep targets
+Region targets
+NSH targets
+CRO targets
+Channel targets
+Client targets
+
+No manual target entry required.
+
+8. System Role Recognition
+
+System should identify users from:
+
+users table
+
+role
+region
+channel
+
+and load correct dashboard automatically.
+
+9. Simplified User Flow
+
+Sales Rep:
+
+Login
+See Targets
+Create Plan
+Execute Tasks
+Log Revenue
+
+Region Head:
+
+Monitor Team
+Push Deals
+Track Region
+
+CRO:
+
+Monitor Organisation
+Track Targets
+Intervene
+
+Admin:
+
+Upload Targets
+Assign Roles
+Manage Access
+
+10. UI Simplification
+
+Keep only essential modules.
+
+Structure:
+
+Planning
+
+My Targets
+My Plan
+Revenue Log
+
+Execution
+
+Tasks
+Internal Requests
+
+Leadership
+
+War Room
+Revenue Tracker
+
+Admin
+
+Access Management
+Target Import
+Expected Outcome
+
+When a sales rep logs in:
+
+They immediately see:
+
+My Target → My Plan → Tasks → Revenue
+
+Clear and simple.
+
+No confusion.
+
+Priority
+
+High priority:
+
+Role-based sidebar
+Remove launching screen
+Targets as first screen
+My Plan creates pipeline
+
+Medium priority:
+
+War Room redesign
+Revenue tracker redesign
+Target import aggregation
+Deliverables
+
+Replit should provide:
+
+Updated sidebar
+Updated dashboard flow
+Updated role-based views
+Working target-first landing screen
+
+If you want, I can also provide a visual wireframe of the new sidebar and dashboard screens so Replit can implement faster without interpretation errors.

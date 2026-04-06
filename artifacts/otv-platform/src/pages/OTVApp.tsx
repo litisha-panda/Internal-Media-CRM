@@ -719,56 +719,68 @@ function LoginScreen({ onLogin }) {
   const handleEmail = async (e) => {
     e.preventDefault(); setErr("");
     if (!email.trim()) { setErr("Email is required"); return; }
-    if (!password.trim()) { setErr("Password is required"); return; }
+    if (!isNew && !password.trim()) { setErr("Password is required"); return; }
     if (isNew && !name.trim()) { setErr("Full name is required"); return; }
     if (isNew && !phone.trim()) { setErr("Phone number is required"); return; }
     setLoading(true);
     try {
-      const stored  = JSON.parse(localStorage.getItem("otv_crm_users") || "[]");
-      const pending = JSON.parse(localStorage.getItem("otv_pendingSignups") || "[]");
-      const approved = stored.find(u => u.email.toLowerCase() === email.toLowerCase());
-      const inPending = pending.find(u => u.email.toLowerCase() === email.toLowerCase());
-
-      if (approved) {
-        // Existing approved user — normal login
-        const h = await hashPwd(password);
-        if (approved.passwordHash !== h && approved.password !== password) {
-          setErr("Incorrect password"); setLoading(false); return;
+      if (isNew) {
+        // Signup: POST to API signup endpoint
+        const r = await fetch("/api/auth/signup", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: name.trim(), email: email.toLowerCase().trim(), password,
+            phone: phone.trim(), designation: designation.trim(),
+            intendedRole, preferredRegion,
+          }),
+        });
+        const data = await r.json();
+        if (data.ok) {
+          setPendingApproval({ name: name.trim(), email: email.toLowerCase().trim() });
+        } else {
+          setErr(data.error || "Registration failed. Try again.");
         }
-        onLogin({ name: approved.name, email: approved.email });
-      } else if (inPending) {
-        // Account exists but not yet approved — check password then show holding screen
-        const h = await hashPwd(password);
-        if (inPending.passwordHash !== h) { setErr("Incorrect password"); setLoading(false); return; }
-        setPendingApproval(inPending); setLoading(false);
-      } else {
-        if (!isNew) { setErr("No account found. Click 'Create one' to sign up."); setLoading(false); return; }
-        // Brand-new signup — store in pending, do NOT log in yet
-        if (pending.find(u => u.email === email.toLowerCase())) {
-          setErr("A request for this email is already pending admin approval."); setLoading(false); return;
-        }
-        const h = await hashPwd(password);
-        const newPending = {
-          id: `ps_${Date.now()}`,
-          name: name.trim(), email: email.toLowerCase(), passwordHash: h,
-          phone: phone.trim(), designation: designation.trim(),
-          intendedRole, preferredRegion,
-          requestedAt: new Date().toISOString().split("T")[0],
-        };
-        localStorage.setItem("otv_pendingSignups", JSON.stringify([...pending, newPending]));
-        setPendingApproval(newPending); setLoading(false);
+        setLoading(false);
+        return;
       }
-    } catch(_err) {
-      setErr("Login error — try again."); setLoading(false);
+
+      // Login: always call the API — creates a real server session
+      const r = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: email.toLowerCase().trim(), password }),
+      });
+      const data = await r.json();
+      if (r.ok && data.ok) {
+        onLogin(data.user);
+      } else if (r.status === 403) {
+        // Account exists but pending admin approval
+        setPendingApproval({ name: data.user?.name || email, email: email.toLowerCase().trim() });
+        setLoading(false);
+      } else {
+        setErr(data.error || "Incorrect email or password.");
+        setLoading(false);
+      }
+    } catch {
+      setErr("Network error — check your connection."); setLoading(false);
     }
   };
 
   const handleDemo = (account) => {
     setLoading(true);
-    setTimeout(() => {
-      onLogin({ name: account.label, email: account.email });
-      setLoading(false);
-    }, 600);
+    fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: account.email, password: "demo123" }),
+    })
+      .then(r => r.json())
+      .then(data => {
+        if (data.ok) onLogin(data.user);
+        else onLogin({ name: account.label, email: account.email, role: account.role || "SALES REP" });
+      })
+      .catch(() => onLogin({ name: account.label, email: account.email, role: account.role || "SALES REP" }))
+      .finally(() => setLoading(false));
   };
 
   // ── Pending-approval holding screen ──
@@ -903,7 +915,7 @@ function LoginScreen({ onLogin }) {
 
                 {/* Admin quick-login — bottom, subtle */}
                 <button
-                  onClick={() => onLogin({ name:"Admin", email:"admin@odishatv.com", role:"admin" })}
+                  onClick={() => handleDemo({ label:"Admin", email:"admin@odishatv.com", role:"ADMIN" })}
                   style={{ width:"100%", marginTop:10, background:"transparent", border:"1px solid #c8d3e544", borderRadius:6, padding:"8px 16px", color:"#8a97ae", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", letterSpacing:".04em" }}>
                   ⚙ Admin access
                 </button>
@@ -1205,16 +1217,20 @@ export default function OTVApp() {
      "otv_revenueEntries","otv_clientAccounts","otv_touchpoints"
     ].forEach(k => { try { localStorage.removeItem(k); } catch {} });
     setLoginUser(user); setLoggedIn(true);
-    setSection(user?.role === "admin" ? "crm" : "home");
+    setSection("crm"); // all roles go directly to CRM — getCRMDefaultView routes per role
     if (user?.provider) setLoginProvider(user.provider);
   };
-  const handleLogout = ()     => { setLoggedIn(false); setLoginUser(null); setSection("home"); };
+  const handleLogout = () => {
+    fetch("/api/auth/logout", { method: "POST" }).catch(() => {});
+    setLoggedIn(false); setLoginUser(null); setSection("home");
+  };
 
-  // Session expiry: any useApiEntityState 401 dispatches "otv:unauthorized" → force logout
+  // Session expiry: any useApiEntityState 401 (with prior valid session) dispatches "otv:unauthorized"
   useEffect(() => {
-    const onUnauth = () => { setLoggedIn(false); setLoginUser(null); setSection("home"); };
+    const onUnauth = () => handleLogout();
     window.addEventListener("otv:unauthorized", onUnauth);
     return () => window.removeEventListener("otv:unauthorized", onUnauth);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const handleSelect = (s)    => setSection(s);
   const handleBack   = ()     => setSection("home");
@@ -1434,7 +1450,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (role === "REGION HEAD") return "warroom";
     if (["SALES HEAD","CRO","SALES STRATEGY"].includes(role)) return "warroom";
     if (role === "DIGI OPS") return "digi-deals";
-    return "my-plan"; // Sales Rep and others
+    return "target-submit"; // Sales Rep — Targets is the first screen per workflow
   };
   const [view, setView] = useState(getCRMDefaultView);
   // T009: Reset landing view whenever the logged-in user switches roles
@@ -3124,45 +3140,32 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
     // ── SALES REP ──
     if (isRep) return [
-      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("revenue-log","Revenue Log","₹")] },
-      { label:"MY CRM",      items:[
-        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
-        N("pipeline","Revenue Tracker","◈"),
-        N("target-submit","My Targets","◎",targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
+      { label:"MY TARGETS",  items:[N("target-submit","My Targets","◎",targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null)] },
+      { label:"PLANNING",    items:[N("my-plan","My Plan","◎")] },
+      { label:"EXECUTION",   items:[
         N("tasks","Tasks","✓",myRepTaskBadge),
+        N("revenue-log","Revenue Log","₹"),
         N("internal-requests","Internal Requests","⬆",irBadge),
-        N("hr","HR Reports","⊘"),
-      ]},
-      { label:"LEADERBOARD", items:[
-        N("lb-team","My Team","◇"),
-        N("lb-region","By Region","◇"),
-        N("lb-all","All Sales Reps","◇"),
       ]},
     ];
 
     // ── REGION HEAD ──
     if (isRH) return [
-      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("rh-team-plan","Team's Plan","◎")] },
-      { label:"MY CRM",      items:[
+      { label:"MONITORING",  items:[
         N("warroom","War Room","⬡",rhEscBadge),
         N("pipeline","Revenue Tracker","◈"),
-        N("revenue-log","Revenue Log","₹"),
+      ]},
+      { label:"MY TEAM",     items:[
+        N("rh-team-plan","Team's Plan","◎"),
+        N("rh-team-targets","Team's Targets","◎"),
         N("targets","My Targets","◎"),
         N("target-approvals","Approvals","◎",(targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length)||null),
+      ]},
+      { label:"MY WORK",     items:[
+        N("my-plan","My Plan","◎"),
+        N("revenue-log","Revenue Log","₹"),
         N("my-tasks","My Tasks","✓"),
-        N("rh-escalations","Escalations","▲",rhEscBadge),
         N("internal-requests","Internal Requests","⬆",irBadge),
-        N("hr","My HR Report","⊘"),
-      ]},
-      { label:"TEAM'S CRM",  items:[
-        N("rh-team-targets","Team's Targets","◈"),
-        N("rh-team-tasks","Team's Tasks","✓"),
-        N("rh-team-hr","Team's HR Reports","⊘"),
-      ]},
-      { label:"LEADERBOARD", items:[
-        N("lb-team","My Region","◇"),
-        N("lb-region","All Regions","◇"),
-        N("lb-all","All Sales Reps","◇"),
       ]},
     ];
 
@@ -3289,8 +3292,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     // ── ADMIN ──
     if (isAdmin) return [
       { label:"ACCESS",    items:[N("admin-access","Access Management","◎",pendingUsers.length||null)] },
+      { label:"PLATFORM",  items:[N("import","Target Import","⬆"), N("admin-config","Platform Config","⚙")] },
+      { label:"MONITOR",   items:[N("warroom","War Room","⬡"), N("pipeline","Revenue Tracker","◈")] },
       { label:"APPROVALS", items:[N("admin-approvals","Approval Queue","✦",internalReqs.filter(r=>r.status==="Pending"||r.status==="Overdue").length||null)] },
-      { label:"DATA",      items:[N("import","Data Management","⬆"), N("admin-config","System Config","⚙")] },
     ];
 
     // Fallback — should never reach here but prevents blank screen
@@ -3685,20 +3689,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         {/* MAIN */}
         <div data-tour="content-area" style={{flex:1,overflow:"auto",padding: isMobile ? 12 : 20}}>
 
-          {/* Part 7: Pre-launch gate — Sales Reps blocked until Admin goes live */}
-          {isRep && adminConfig.platformLive === false && (
-            <div style={{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",height:"60vh",gap:20,textAlign:"center"}}>
-              <div style={{fontSize:48}}>🚀</div>
-              <div className="sans" style={{fontSize:22,fontWeight:800,color:C.text}}>Platform launching soon</div>
-              <div style={{fontSize:14,color:C.dim,maxWidth:360,lineHeight:1.7}}>
-                Your targets are being finalised. The platform will be ready{adminConfig.launchDate ? ` on ${adminConfig.launchDate}` : " shortly"}.
-              </div>
-              <div style={{fontSize:12,color:C.muted}}>Contact your Region Head if you have questions.</div>
+          {/* Soft banner: targets not yet finalised — does not block the platform */}
+          {isRep && adminConfig.platformLive === false && view === "target-submit" && targetSubs.filter(t=>t.repId===user_role?.repId).length === 0 && (
+            <div style={{background:"#fffbeb",border:"1px solid #f59e0b44",borderRadius:8,padding:"12px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
+              <span style={{fontSize:18}}>⚠</span>
+              <span style={{fontSize:12,color:"#92400e",fontFamily:"'DM Sans',sans-serif"}}>No targets assigned yet. Contact your Admin or CRO to get started.</span>
             </div>
           )}
 
           {/* ═══ MY PLAN ═══ */}
-          {!(isRep && adminConfig.platformLive === false) && view==="my-plan" && (()=>{
+          {view==="my-plan" && (()=>{
             // ── SALES STRATEGY / CRO: monthly overview (read-only, no daily limits) ──
             if (isStrategy || isCRORole) {
               const allMeetings = meetings;
