@@ -1110,7 +1110,11 @@ function useApiEntityState<T extends { id: string }>(
   const fetchAll = useCallback(async (isInitial?: boolean) => {
     try {
       const r = await fetch(apiPath);
-      if (r.status === 401) { if (isInitial) setLoading(false); return; }
+      if (r.status === 401) {
+        if (isInitial) setLoading(false);
+        window.dispatchEvent(new CustomEvent("otv:unauthorized"));
+        return;
+      }
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const json = await r.json();
       if (json?.ok && Array.isArray(json.data)) {
@@ -1186,10 +1190,25 @@ export default function OTVApp() {
   const [plans, setPlans]             = usePersistedState("otv_plans",    SEED_PLANS);
   const [weeklyPlans, setWeeklyPlans] = usePersistedState("otv_wplans",   SEED_WEEKLY_PLANS);
   const [meetings, setMeetings]       = usePersistedState("otv_meetings", SEED_MEETINGS);
-  const [deals, setDeals]             = useApiEntityState("/api/deals",    "otv_deals",    SEED_DEALS);
+  const [deals, setDeals]             = useApiEntityState("/api/deals",    "otv_deals",    []);
 
-  const handleLogin  = (user) => { setLoginUser(user); setLoggedIn(true); setSection(user?.role === "admin" ? "crm" : "home"); if (user?.provider) setLoginProvider(user.provider); };
+  const handleLogin  = (user) => {
+    // Clear entity localStorage caches on every login so API data always wins from first paint
+    ["otv_deals","otv_tasks","otv_internalReqs","otv_targetSubs",
+     "otv_revenueEntries","otv_clientAccounts","otv_touchpoints"
+    ].forEach(k => { try { localStorage.removeItem(k); } catch {} });
+    setLoginUser(user); setLoggedIn(true);
+    setSection(user?.role === "admin" ? "crm" : "home");
+    if (user?.provider) setLoginProvider(user.provider);
+  };
   const handleLogout = ()     => { setLoggedIn(false); setLoginUser(null); setSection("home"); };
+
+  // Session expiry: any useApiEntityState 401 dispatches "otv:unauthorized" → force logout
+  useEffect(() => {
+    const onUnauth = () => { setLoggedIn(false); setLoginUser(null); setSection("home"); };
+    window.addEventListener("otv:unauthorized", onUnauth);
+    return () => window.removeEventListener("otv:unauthorized", onUnauth);
+  }, []);
   const handleSelect = (s)    => setSection(s);
   const handleBack   = ()     => setSection("home");
 
@@ -1487,7 +1506,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [noteModal, setNoteModal] = useState(null);   // {title, placeholder, onSubmit}
   const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
-  const [tasks, setTasks, tasksLoading, tasksError]         = useApiEntityState("/api/tasks", "otv_tasks", SEED_TASKS);
+  const [tasks, setTasks, tasksLoading, tasksError]         = useApiEntityState("/api/tasks", "otv_tasks", []);
   const [taskModal, setTaskModal]       = useState(false);
   const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -1656,11 +1675,11 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [ipPropNote, setIpPropNote]                    = useState("");
   const [ipPropValue, setIpPropValue]                  = useState("");
   const [ipApprovalPrices, setIpApprovalPrices]        = useState<Record<string,string>>({});
-  const [internalReqs, setInternalReqs, , irError]            = useApiEntityState("/api/internal-requests", "otv_internalReqs", SEED_INTERNAL_REQS);
+  const [internalReqs, setInternalReqs, , irError]            = useApiEntityState("/api/internal-requests", "otv_internalReqs", []);
   const [irStatusFilter, setIrStatusFilter]                   = useState("all");
   const [lbTab, setLbTab]                                     = useState("team");
-  const [targetSubs, setTargetSubs, targetLoading, targetError] = useApiEntityState("/api/targets",        "otv_targetSubs",      SEED_TARGET_SUBMISSIONS);
-  const [revenueEntries, setRevenueEntries, revLoading, revError] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  SEED_REVENUE_ENTRIES);
+  const [targetSubs, setTargetSubs, targetLoading, targetError] = useApiEntityState("/api/targets",        "otv_targetSubs",      []);
+  const [revenueEntries, setRevenueEntries, revLoading, revError] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  []);
   // ── Part 1: New data model objects ──────────────────────────────────────
   const [clientAccounts, setClientAccounts, , caError] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
   const [touchpoints,    setTouchpoints,    , tpError] = useApiEntityState("/api/touchpoints",     "otv_touchpoints",    []);
