@@ -11,6 +11,9 @@ import revenueRouter from "./revenue";
 import dealsRouter from "./deals";
 import touchpointsRouter from "./touchpoints";
 import tasksRouter from "./tasks";
+import kpiRouter from "./kpi";
+import notificationsRouter from "./notifications";
+import activityLogRouter from "./activity-log";
 
 const router: IRouter = Router();
 
@@ -36,5 +39,14 @@ router.use(touchpointsRouter);
 
 // Phase 7 — Tasks + internal requests
 router.use(tasksRouter);
+
+// Phase 8 — Centralized KPI calculations
+router.use(kpiRouter);
+
+// Phase 8 — In-app notifications
+router.use(notificationsRouter);
+
+// Phase 8 — Activity audit log
+router.use(activityLogRouter);
 
 export default router;

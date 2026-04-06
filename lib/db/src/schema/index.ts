@@ -6,4 +6,6 @@ export * from "./revenue";
 export * from "./deals";
 export * from "./touchpoints";
 export * from "./tasks";
+export * from "./activity_log";
+export * from "./notifications";
 // attendanceRecords is part of the tasks schema file

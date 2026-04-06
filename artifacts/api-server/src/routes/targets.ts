@@ -1,31 +1,46 @@
 import { Router } from "express";
-import { db, targetSubmissions } from "@workspace/db";
+import { db, targetSubmissions, TARGET_APPROVAL_CHAIN, TARGET_NEXT_STATUS } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { logActivity } from "../lib/activityLog";
+import { createNotification } from "../lib/notifications";
 
 const router = Router();
 
-// ─── Role constants ──────────────────────────────────────────────────────────
+// ─── Role constants ───────────────────────────────────────────────────────────
 // ALL role names must match the canonical set in users.role:
 //   "SALES REP" | "REGION HEAD" | "SALES HEAD" | "SALES STRATEGY" | "CRO" | "ADMIN" | "DIGI OPS"
 // "NATIONAL SALES HEAD" is NOT a valid role — use "SALES HEAD".
 
-const APPROVAL_CHAIN: Record<string, string> = {
-  "Pending RH":       "REGION HEAD",
-  "Pending NSH":      "SALES HEAD",       // was wrongly "NATIONAL SALES HEAD"
-  "Pending Strategy": "SALES STRATEGY",
-  "Pending CRO":      "CRO",
-};
+/**
+ * Hierarchy-aware approval check.
+ * Role must match the expected approver for the current status,
+ * AND for REGION HEAD specifically, the submission must be in their region.
+ */
+function canApprove(user: {
+  role:    string;
+  region?: string | null;
+}, sub: {
+  status:  string | null;
+  region?: string | null;
+  repId:   number;
+}): { ok: boolean; reason?: string } {
+  if (user.role === "ADMIN") return { ok: true };
 
-const NEXT_STATUS: Record<string, string> = {
-  "Pending RH":       "Pending NSH",
-  "Pending NSH":      "Pending Strategy",
-  "Pending Strategy": "Pending CRO",
-  "Pending CRO":      "Approved",
-};
+  const required = TARGET_APPROVAL_CHAIN[sub.status ?? ""];
+  if (!required) return { ok: false, reason: `No approver defined for status "${sub.status}"` };
+  if (required !== user.role) {
+    return { ok: false, reason: `Your role (${user.role}) cannot approve at status "${sub.status}" — expected ${required}` };
+  }
 
-function canApprove(role: string, status: string): boolean {
-  return APPROVAL_CHAIN[status] === role || role === "ADMIN";
+  // ── Hierarchy check: REGION HEAD may only approve reps in their own region ──
+  if (user.role === "REGION HEAD") {
+    if (!sub.region || sub.region !== user.region) {
+      return { ok: false, reason: `You can only approve target submissions for your region (${user.region ?? "unset"})` };
+    }
+  }
+
+  return { ok: true };
 }
 
 function scopeCondition(user: any) {
@@ -70,10 +85,26 @@ router.post("/targets", requireAuth, async (req, res) => {
     const { id, quarter, clients, totalTarget } = req.body;
     if (!id || !quarter) return void res.status(400).json({ ok: false, error: "id and quarter required" });
 
-    // ── Issue #3: never trust client-supplied ownership for SALES REP ──
+    // ── Never trust client-supplied ownership for SALES REP ──────────────────
     const authorRepId  = u.role === "SALES REP" ? u.repId!   : (req.body.repId   ?? u.repId ?? 0);
     const authorRegion = u.role === "SALES REP" ? u.region!  : (req.body.region  ?? u.region ?? "");
     const authorName   = u.role === "SALES REP" ? u.name     : (req.body.repName ?? u.name);
+
+    // ── Idempotency: reject if an active (non-rejected) submission exists for same rep+quarter ──
+    const existing = await db
+      .select({ id: targetSubmissions.id, status: targetSubmissions.status })
+      .from(targetSubmissions)
+      .where(and(eq(targetSubmissions.repId, authorRepId), eq(targetSubmissions.quarter, quarter)))
+      .limit(10);
+
+    const activeExisting = existing.filter((r) => !["Rejected"].includes(r.status ?? ""));
+    if (activeExisting.length > 0) {
+      return void res.status(409).json({
+        ok: false,
+        error: `An active target submission already exists for ${quarter} (id: ${activeExisting[0].id}, status: ${activeExisting[0].status}). Edit or withdraw it first.`,
+        existingId: activeExisting[0].id,
+      });
+    }
 
     const now = new Date().toISOString();
     const row = await db
@@ -95,6 +126,17 @@ router.post("/targets", requireAuth, async (req, res) => {
       .onConflictDoNothing()
       .returning();
 
+    void logActivity({
+      userId:     u.id,
+      userName:   u.name,
+      userRole:   u.role,
+      region:     authorRegion,
+      action:     "target.submitted",
+      entityType: "target_submission",
+      entityId:   id,
+      meta:       { quarter, totalTarget: totalTarget ?? 0 },
+    });
+
     res.status(201).json({ ok: true, data: row[0] });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
@@ -113,13 +155,14 @@ router.post("/targets/:id/approve", requireAuth, async (req, res) => {
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
 
     const sub = rows[0];
-    if (!canApprove(u.role, sub.status!)) {
-      return void res.status(403).json({ ok: false, error: `Your role (${u.role}) cannot approve at status "${sub.status}"` });
+    const check = canApprove(u, sub);
+    if (!check.ok) {
+      return void res.status(403).json({ ok: false, error: check.reason });
     }
 
-    const nextStatus = NEXT_STATUS[sub.status!] ?? "Approved";
+    const nextStatus = TARGET_NEXT_STATUS[sub.status!] ?? "Approved";
     const now = new Date().toISOString();
-    const logEntry = { step: sub.status, by: u.name, role: u.role, at: now, note: req.body.note ?? "" };
+    const logEntry = { step: sub.status, by: u.name, role: u.role, at: now, action: "Approved", note: req.body.note ?? "" };
     const newLog = [...((sub.approvalLog as any[]) ?? []), logEntry];
 
     const updated = await db
@@ -132,6 +175,37 @@ router.post("/targets/:id/approve", requireAuth, async (req, res) => {
       })
       .where(eq(targetSubmissions.id, String(req.params["id"])))
       .returning();
+
+    void logActivity({
+      userId:     u.id,
+      userName:   u.name,
+      userRole:   u.role,
+      action:     "target.approved",
+      entityType: "target_submission",
+      entityId:   sub.id,
+      meta:       { fromStatus: sub.status, toStatus: nextStatus },
+    });
+
+    // Notify rep that their target moved forward
+    if (sub.repId) {
+      // Look up rep user id from repId
+      void (async () => {
+        try {
+          const { users: usersTable } = await import("@workspace/db");
+          const repUsers = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.repId, sub.repId)).limit(1);
+          if (repUsers.length) {
+            void createNotification({
+              userId:     repUsers[0].id,
+              type:       "target_approved",
+              title:      nextStatus === "Approved" ? "Target plan fully approved!" : `Target plan advanced to ${nextStatus}`,
+              body:       `${u.name} (${u.role}) approved your ${sub.quarter} target plan.`,
+              entityType: "target_submission",
+              entityId:   sub.id,
+            });
+          }
+        } catch { /* best-effort */ }
+      })();
+    }
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
@@ -151,8 +225,9 @@ router.post("/targets/:id/reject", requireAuth, async (req, res) => {
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
 
     const sub = rows[0];
-    if (!canApprove(u.role, sub.status!)) {
-      return void res.status(403).json({ ok: false, error: `Your role cannot reject at status "${sub.status}"` });
+    const check = canApprove(u, sub);
+    if (!check.ok) {
+      return void res.status(403).json({ ok: false, error: check.reason });
     }
 
     const now = new Date().toISOString();
@@ -164,6 +239,36 @@ router.post("/targets/:id/reject", requireAuth, async (req, res) => {
       .set({ status: "Rejected", approvalLog: newLog, updatedAt: new Date() })
       .where(eq(targetSubmissions.id, String(req.params["id"])))
       .returning();
+
+    void logActivity({
+      userId:     u.id,
+      userName:   u.name,
+      userRole:   u.role,
+      action:     "target.rejected",
+      entityType: "target_submission",
+      entityId:   sub.id,
+      meta:       { fromStatus: sub.status, note: req.body.note ?? "" },
+    });
+
+    // Notify rep
+    if (sub.repId) {
+      void (async () => {
+        try {
+          const { users: usersTable } = await import("@workspace/db");
+          const repUsers = await db.select({ id: usersTable.id }).from(usersTable).where(eq(usersTable.repId, sub.repId)).limit(1);
+          if (repUsers.length) {
+            void createNotification({
+              userId:     repUsers[0].id,
+              type:       "target_rejected",
+              title:      `Target plan rejected by ${u.name}`,
+              body:       req.body.note ? `Reason: ${req.body.note}` : undefined,
+              entityType: "target_submission",
+              entityId:   sub.id,
+            });
+          }
+        } catch { /* best-effort */ }
+      })();
+    }
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
@@ -187,7 +292,7 @@ router.patch("/targets/:id", requireAuth, async (req, res) => {
       return void res.status(403).json({ ok: false, error: "Cannot edit another rep's submission" });
     }
     if (!["Rejected", "Pending RH"].includes(sub.status!)) {
-      return void res.status(400).json({ ok: false, error: "Cannot edit a submission that is already in approval chain" });
+      return void res.status(400).json({ ok: false, error: "Cannot edit a submission already in the approval chain" });
     }
 
     const { clients, totalTarget, quarter } = req.body;

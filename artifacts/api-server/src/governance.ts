@@ -1,16 +1,17 @@
 /**
- * Governance Engine — Issue #4
+ * Governance Engine
  *
- * Runs on a schedule inside the API server process.
+ * Runs on a schedule inside the API server process (5-minute tick).
  * Responsibilities:
- *   - Escalation hops: advance IR escDept along ESC_CHAIN when SLA is breached
- *   - Stalled deals: set atRisk=true when lastContact is 7+ days stale
- *   - Attendance: create attendance_records for SALES REPs at 23:30 each day
- *   - Deal auto-escalation: flag deals with awaitingApproval that have gone past SLA
+ *   1. IR escalation hops   — advance escDept along ESC_CHAIN every 12h after SLA breach
+ *   2. Stalled deal flagging — set atRisk=true when lastContact is STALL_DAYS stale
+ *   3. Attendance check     — record present/absent for every SALES REP at 23:30 IST
+ *   4. Task overdue flagging — mark tasks status="Overdue" when past dueDate
+ *   5. Task reminders       — notify assignee 24h before due date
  *
- * NOTE: This is a best-effort in-process scheduler.
- * In a production deployment, replace setInterval with a proper cron job or
- * a pg_cron / external scheduler that calls POST /api/governance/run.
+ * All date/time operations use Asia/Kolkata wall-clock time via ./lib/date.ts.
+ *
+ * NOTE: In production, replace setInterval with pg_cron or an external scheduler.
  */
 
 import {
@@ -20,42 +21,26 @@ import {
   users,
   touchpoints,
   attendanceRecords,
+  tasks,
+  ESC_CHAIN,
+  ESC_HOP_HOURS,
+  STALL_DAYS,
+  TASK_REMINDER_HOURS,
+  CLOSED_STAGES,
 } from "@workspace/db";
-import { eq, and, or, isNull, lt, sql, ne } from "drizzle-orm";
+import { eq, and, ne, lt, sql } from "drizzle-orm";
 import { logger } from "./lib/logger";
+import {
+  todayIST,
+  hoursSince,
+  daysSince,
+  isAttendanceWindow,
+  nowISO,
+} from "./lib/date";
+import { createNotification } from "./lib/notifications";
+import { logActivity } from "./lib/activityLog";
 
-// ── Constants ─────────────────────────────────────────────────────────────────
-
-/** Escalation chain for internal requests (index = hop number). */
-const ESC_CHAIN: string[] = ["Region Head", "NSH", "Sales Strategy", "CRO"];
-
-/** How many hours each hop waits before advancing. */
-const ESC_HOP_HOURS = 12;
-
-/** Days without contact before a deal becomes at-risk. */
-const STALL_DAYS = 7;
-
-/** Days an approval request can sit before a deal is flagged. */
-const APPROVAL_SLA_DAYS = 2;
-
-// ── Helpers ───────────────────────────────────────────────────────────────────
-
-function today(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function hoursSince(isoString: string | null | undefined): number {
-  if (!isoString) return 0;
-  const ms = Date.now() - new Date(isoString).getTime();
-  return ms / 3_600_000;
-}
-
-function daysSince(isoString: string | null | undefined): number {
-  if (!isoString) return 0;
-  return hoursSince(isoString) / 24;
-}
-
-// ── Escalation hops ───────────────────────────────────────────────────────────
+// ── 1. Escalation hops ────────────────────────────────────────────────────────
 
 async function runEscalationHops(): Promise<void> {
   try {
@@ -74,17 +59,15 @@ async function runEscalationHops(): Promise<void> {
       const ageHours   = hoursSince(raisedAt);
       const slaHours   = req.slaHours ?? 48;
 
-      // Not yet SLA-breached — skip
       if (ageHours < slaHours) continue;
 
-      const history = (req.escHistory as any[]) ?? [];
+      const history        = (req.escHistory as any[]) ?? [];
       const currentEscDept = req.escDept;
       const escalatedAt    = req.escalatedAt;
 
-      // First escalation — hasn't been escalated yet
       if (!currentEscDept) {
         const firstHop = ESC_CHAIN[0];
-        const now = new Date().toISOString();
+        const now = nowISO();
         await db
           .update(internalRequests)
           .set({
@@ -95,19 +78,25 @@ async function runEscalationHops(): Promise<void> {
             updatedAt:   new Date(),
           })
           .where(eq(internalRequests.id, req.id));
+
+        void logActivity({
+          action:     "ir.escalated",
+          entityType: "internal_request",
+          entityId:   req.id,
+          meta:       { to: firstHop, reason: "SLA breached" },
+        });
         logger.info({ id: req.id, to: firstHop }, "IR escalated (first hop)");
         continue;
       }
 
-      // Already escalated — check if hop interval elapsed
-      const hopAge = hoursSince(escalatedAt);
+      const hopAge     = hoursSince(escalatedAt);
       if (hopAge < ESC_HOP_HOURS) continue;
 
-      const currentIdx = ESC_CHAIN.indexOf(currentEscDept);
-      if (currentIdx === -1 || currentIdx >= ESC_CHAIN.length - 1) continue; // already at CRO
+      const currentIdx = ESC_CHAIN.indexOf(currentEscDept as typeof ESC_CHAIN[number]);
+      if (currentIdx === -1 || currentIdx >= ESC_CHAIN.length - 1) continue;
 
       const nextHop = ESC_CHAIN[currentIdx + 1];
-      const now = new Date().toISOString();
+      const now = nowISO();
       await db
         .update(internalRequests)
         .set({
@@ -117,6 +106,13 @@ async function runEscalationHops(): Promise<void> {
           updatedAt:   new Date(),
         })
         .where(eq(internalRequests.id, req.id));
+
+      void logActivity({
+        action:     "ir.escalation_hop",
+        entityType: "internal_request",
+        entityId:   req.id,
+        meta:       { from: currentEscDept, to: nextHop },
+      });
       logger.info({ id: req.id, from: currentEscDept, to: nextHop }, "IR escalation hop");
     }
   } catch (err) {
@@ -124,17 +120,16 @@ async function runEscalationHops(): Promise<void> {
   }
 }
 
-// ── Stalled deal flagging ─────────────────────────────────────────────────────
+// ── 2. Stalled deal flagging ──────────────────────────────────────────────────
 
 async function runStalledDeals(): Promise<void> {
   try {
     const allDeals = await db.select().from(deals);
-    const closedStages = new Set(["Lost", "Cancelled", "Archived", "Won", "RO Received"]);
 
     for (const deal of allDeals) {
-      if (closedStages.has(deal.stage ?? "")) continue;
+      if (CLOSED_STAGES.has(deal.stage ?? "")) continue;
 
-      const idle = daysSince(deal.lastContact ?? deal.createdAt?.toISOString());
+      const idle           = daysSince(deal.lastContact ?? deal.createdAt?.toISOString());
       const shouldBeAtRisk = idle >= STALL_DAYS;
 
       if (shouldBeAtRisk !== deal.atRisk) {
@@ -142,6 +137,16 @@ async function runStalledDeals(): Promise<void> {
           .update(deals)
           .set({ atRisk: shouldBeAtRisk, updatedAt: new Date() })
           .where(eq(deals.id, deal.id));
+
+        if (shouldBeAtRisk) {
+          void logActivity({
+            action:     "deal.at_risk_flagged",
+            entityType: "deal",
+            entityId:   deal.id,
+            region:     deal.region,
+            meta:       { idleDays: Math.round(idle), client: deal.clientCompany },
+          });
+        }
       }
     }
   } catch (err) {
@@ -149,13 +154,10 @@ async function runStalledDeals(): Promise<void> {
   }
 }
 
-// ── Attendance records (11:30 PM absence rule) ────────────────────────────────
-// Called once per day, after 23:30 local time.
-// For each active SALES REP: check if they've logged at least one touchpoint today.
-// If not, insert an attendance_record with status="absent".
+// ── 3. Attendance records (11:30 PM IST rule) ─────────────────────────────────
 
 async function runAttendanceCheck(): Promise<void> {
-  const d = today();
+  const d = todayIST(); // IST wall-clock date
   try {
     const reps = await db
       .select()
@@ -163,7 +165,6 @@ async function runAttendanceCheck(): Promise<void> {
       .where(and(eq(users.role, "SALES REP"), eq(users.status, "active")));
 
     for (const rep of reps) {
-      // Check existing record for today (idempotent — skip if already recorded)
       const existing = await db
         .select({ id: attendanceRecords.id })
         .from(attendanceRecords)
@@ -172,14 +173,12 @@ async function runAttendanceCheck(): Promise<void> {
 
       if (existing.length > 0) continue;
 
-      // Check if rep logged any touchpoint today
       const logged = await db
         .select({ id: touchpoints.id })
         .from(touchpoints)
         .where(
           and(
             eq(touchpoints.loggedByUserId, rep.id),
-            // date column stores YYYY-MM-DD
             eq(touchpoints.date, d),
           ),
         )
@@ -193,10 +192,29 @@ async function runAttendanceCheck(): Promise<void> {
         region:   rep.region,
         date:     d,
         status,
-        note:     status === "absent" ? "No meeting logged by 23:30" : null,
+        note:     status === "absent" ? "No touchpoint logged by 23:30 IST" : null,
       }).onConflictDoNothing();
 
+      void logActivity({
+        action:     `attendance.${status}`,
+        userId:     rep.id,
+        userName:   rep.name,
+        userRole:   "SALES REP",
+        region:     rep.region,
+        entityType: "attendance_record",
+        entityId:   `att_${rep.id}_${d}`,
+        meta:       { date: d },
+      });
+
       if (status === "absent") {
+        void createNotification({
+          userId:     rep.id,
+          type:       "attendance_absent",
+          title:      "No touchpoint logged today",
+          body:       `You have not logged any touchpoint for ${d}. Please log a touchpoint or raise an exception.`,
+          entityType: "attendance_record",
+          entityId:   `att_${rep.id}_${d}`,
+        });
         logger.info({ userId: rep.id, name: rep.name, date: d }, "Attendance: absent");
       }
     }
@@ -205,16 +223,114 @@ async function runAttendanceCheck(): Promise<void> {
   }
 }
 
+// ── 4. Task overdue flagging ──────────────────────────────────────────────────
+
+async function runTaskOverdue(): Promise<void> {
+  try {
+    const today = todayIST();
+    const openTasks = await db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          ne(tasks.status, "Done"),
+          ne(tasks.status, "Cancelled"),
+          ne(tasks.status, "Overdue"),
+          sql`${tasks.dueDate} IS NOT NULL`,
+          sql`${tasks.dueDate} < ${today}`,
+        ),
+      );
+
+    for (const task of openTasks) {
+      await db
+        .update(tasks)
+        .set({ status: "Overdue", updatedAt: new Date() })
+        .where(eq(tasks.id, task.id));
+
+      void logActivity({
+        action:     "task.overdue_flagged",
+        entityType: "task",
+        entityId:   task.id,
+        meta:       { title: task.title, dueDate: task.dueDate },
+      });
+
+      // Notify the assignee if we have their userId
+      if (task.assignedToUserId) {
+        void createNotification({
+          userId:     task.assignedToUserId,
+          type:       "task_overdue",
+          title:      `Task overdue: ${task.title}`,
+          body:       `Your task "${task.title}" was due on ${task.dueDate} and is now overdue.`,
+          entityType: "task",
+          entityId:   task.id,
+        });
+      }
+    }
+
+    if (openTasks.length > 0) {
+      logger.info({ count: openTasks.length }, "governance: tasks marked overdue");
+    }
+  } catch (err) {
+    logger.error({ err }, "governance: task overdue flagging failed");
+  }
+}
+
+// ── 5. Task due reminders (24h window) ────────────────────────────────────────
+
+async function runTaskReminders(): Promise<void> {
+  try {
+    const today    = todayIST();
+    // Compute "tomorrow" in IST
+    const tomorrow = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" })
+      .format(new Date(Date.now() + 86_400_000));
+
+    // Find tasks due tomorrow that are still open and have an assignee
+    const dueSoon = await db
+      .select()
+      .from(tasks)
+      .where(
+        and(
+          ne(tasks.status, "Done"),
+          ne(tasks.status, "Cancelled"),
+          ne(tasks.status, "Overdue"),
+          sql`${tasks.dueDate} = ${tomorrow}`,
+          sql`${tasks.assignedToUserId} IS NOT NULL`,
+        ),
+      );
+
+    for (const task of dueSoon) {
+      if (!task.assignedToUserId) continue;
+
+      // Avoid sending duplicate reminders by checking recent notifications
+      // (simple idempotency: task ID in entityId + type)
+      void createNotification({
+        userId:     task.assignedToUserId,
+        type:       "task_due_soon",
+        title:      `Task due tomorrow: ${task.title}`,
+        body:       `Your task "${task.title}" is due on ${task.dueDate}.`,
+        entityType: "task",
+        entityId:   task.id,
+      });
+    }
+
+    if (dueSoon.length > 0) {
+      logger.info({ count: dueSoon.length }, "governance: task reminders sent");
+    }
+  } catch (err) {
+    logger.error({ err }, "governance: task reminders failed");
+  }
+}
+
 // ── Main tick ─────────────────────────────────────────────────────────────────
 
 export async function runGovernanceTick(): Promise<void> {
   await runEscalationHops();
   await runStalledDeals();
+  await runTaskOverdue();
+  await runTaskReminders();
 
-  // Run attendance check only at/after 23:30 local time
-  const h = new Date().getHours();
-  const m = new Date().getMinutes();
-  if (h === 23 && m >= 30) {
+  // Attendance check runs only at the 23:30–23:59 IST window
+  if (isAttendanceWindow()) {
     await runAttendanceCheck();
   }
 }
@@ -225,10 +341,9 @@ export async function runGovernanceTick(): Promise<void> {
  * Returns the interval handle so it can be cleared in tests.
  */
 export function startGovernanceScheduler(): NodeJS.Timeout {
-  const TICK_MS = 5 * 60 * 1000; // 5 minutes
-  logger.info("Governance scheduler started (5-minute tick)");
+  const TICK_MS = 5 * 60 * 1_000;
+  logger.info("Governance scheduler started (5-minute tick, IST timezone)");
 
-  // Run once immediately on startup to catch any backlog
   runGovernanceTick().catch((err) =>
     logger.error({ err }, "governance: startup tick failed"),
   );

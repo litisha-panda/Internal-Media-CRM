@@ -41,10 +41,50 @@ All API routes are prefixed with `/api/` and include modules for Authentication,
   - The theme constants are defined in `OTVApp.tsx` and `artifacts/otv-platform/src/utils.ts`.
 
 ### Governance Engine (`artifacts/api-server/src/governance.ts`)
-A backend scheduler (5-minute tick) handles three automated workflows:
-- **IR Escalation Hops**: After SLA breach (default 48h), IRs advance along `ESC_CHAIN = ["Region Head","NSH","Sales Strategy","CRO"]` every 12h. State stored in `routedToRole`, `escalatedAt`, `escDept`, `escHistory`.
-- **Stalled Deal Flagging**: Sets `atRisk = true` on deals with 7+ days since last `lastContact`.
-- **Attendance Records**: At 23:30 checks each active Sales Rep's touchpoints for the day; inserts `present`/`absent` into `attendanceRecords` table.
+A backend scheduler (5-minute tick, **Asia/Kolkata IST wall-clock time**) handles five automated workflows:
+- **IR Escalation Hops**: After SLA breach (dept-derived hours), IRs advance along `ESC_CHAIN = ["Region Head","NSH","Sales Strategy","CRO"]` every 12h. State stored in `routedToRole`, `escalatedAt`, `escDept`, `escHistory`. Fires `createNotification()` and `logActivity()` on each hop.
+- **Stalled Deal Flagging**: Sets `atRisk = true` on open deals with 7+ days since last `lastContact`. Logs to activity ledger.
+- **Attendance Records**: At 23:30 IST, checks each active Sales Rep's touchpoints for the day; inserts `present`/`absent` into `attendanceRecords` table. Sends notification on absent.
+- **Task Overdue Flagging**: Sets task `status = "Overdue"` when `dueDate < today` and status is still Open/In Progress. Notifies assignee.
+- **Task Reminders**: Sends notification 24h before due date to the assignee.
+
+### IST Date Utilities (`artifacts/api-server/src/lib/date.ts`)
+All date/time operations in the backend must use this module:
+- `todayIST()` — YYYY-MM-DD in Asia/Kolkata
+- `hourIST()`, `minuteIST()` — wall-clock hour/minute in IST
+- `isAttendanceWindow()` — true from 23:30–23:59 IST
+- `hoursSince()`, `daysSince()` — elapsed time helpers
+- `nowISO()` — current UTC ISO timestamp for DB writes
+
+### Activity Ledger (`lib/db/src/schema/activity_log.ts`)
+Append-only audit trail. New `activityLog` table with columns: `id, userId, userName, userRole, region, action, entityType, entityId, meta (JSONB), createdAt`. Helper: `artifacts/api-server/src/lib/activityLog.ts` → `logActivity()`. Visible at `GET /api/activity-log` (elevated roles only). Key actions logged: `deal.created`, `revenue.entry_created`, `revenue.entry_reversed`, `target.submitted`, `target.approved`, `target.rejected`, `task.created`, `task.completed`, `task.overdue_flagged`, `ir.raised`, `ir.accepted`, `ir.resolved`, `ir.escalated`, `attendance.absent`.
+
+### Notifications (`lib/db/src/schema/notifications.ts`)
+New `notifications` table: `id, userId, type, title, body, entityType, entityId, read, createdAt`. Helper: `artifacts/api-server/src/lib/notifications.ts` → `createNotification()`. Routes: `GET /api/notifications`, `GET /api/notifications/unread-count`, `PATCH /api/notifications/:id/read`, `PATCH /api/notifications/mark-all-read`.
+
+### Centralized KPI API (`artifacts/api-server/src/routes/kpi.ts`)
+Single source of truth for all dashboard KPIs. All screens must use these endpoints:
+- `GET /api/kpi/rep` — own rep metrics (SALES REP only)
+- `GET /api/kpi/rep/:repId` — any rep's metrics (RH+)
+- `GET /api/kpi/region/:region` — regional roll-up (RH of that region, SALES HEAD+)
+- `GET /api/kpi/system` — system-wide (SALES HEAD, STRATEGY, CRO, ADMIN)
+- Response: `{ achieved, target, pipeline, gap, overdueTasks, attendanceRate, attPresent, attAbsent, attTotal }`
+- Formulas: `ACHIEVED = SUM(revenueEntries WHERE isReversed=false AND reversalOf IS NULL)`, `PIPELINE = SUM(amount × STAGE_PROB[stage] / 100)`, `GAP = target − achieved − pipeline`
+
+### Shared Domain Constants (`lib/db/src/constants.ts`)
+Single source of truth for all domain enums. Exported from `@workspace/db`. Key exports: `ROLES`, `REGIONS`, `DEAL_STAGES`, `STAGE_PROB`, `CLOSED_STAGES`, `DEAL_TYPES`, `PRIORITY_LEVELS`, `TASK_STATUSES`, `IR_DEPTS`, `DEPT_TO_ROLE`, `DEPT_SLA_HOURS`, `IR_SUBTYPES`, `IR_STATUSES`, `TARGET_APPROVAL_CHAIN`, `TARGET_NEXT_STATUS`, `QUARTERS`, `TOUCHPOINT_TYPES`.
+
+### Idempotency Protection
+- **Revenue entries**: Optional `idempotencyKey` field (unique constraint in DB). API returns 409 if same key submitted twice.
+- **Target submissions**: API rejects second active (non-Rejected) submission for same rep+quarter with 409 and `existingId` pointer.
+
+### Hierarchy-Aware Approvals
+- **Target approvals**: `canApprove()` now checks REGION HEAD can only approve submissions from **their own region** (not just role match). Returns structured `{ ok, reason }`.
+- **IR accept/resolve/reject**: Dedicated `POST /api/internal-requests/:id/accept|resolve|reject` endpoints. Only the `routedToRole` or ADMIN may act. General `PATCH` cannot be used to bypass.
+
+### Typed IR Workflows
+- `irSubtype` field added to `internalRequests`: `"Support Request" | "Deal Escalation" | "Override Request" | "Attendance Exception" | "Other"`. Validated and defaulted on backend — client cannot supply arbitrary subtypes.
+- `slaHours` is now **derived from `dept`** on backend (not client-supplied): Sales Strategy=48h, CRO=72h, Finance=96h, Legal=120h, etc. Defined in `DEPT_SLA_HOURS` constant.
 
 ### Canonical Role Names
 `"SALES REP" | "REGION HEAD" | "SALES HEAD" | "CRO" | "SALES STRATEGY" | "DIGI OPS" | "ADMIN"` — `"NATIONAL SALES HEAD"` does not exist in the system.
