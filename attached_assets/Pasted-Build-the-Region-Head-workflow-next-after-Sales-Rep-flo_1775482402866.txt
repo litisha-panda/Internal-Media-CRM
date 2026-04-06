@@ -1,0 +1,213 @@
+Build the Region Head workflow next, after Sales Rep flow. Do not generalize yet. Make Region Head a clean role with clear ownership and no unnecessary tabs.
+
+Region Head should see only these tabs:
+
+1. Dashboard
+2. My Team’s Meetings
+3. My Plan
+4. My Approvals
+5. My Escalations
+6. My Tasks
+7. Internal Requests
+8. My HR Reports
+9. My Team Report
+
+Do not show Region Head:
+- Access Management
+- Target Import
+- Platform Config
+- CRO/National-only views unless specifically needed for escalation context
+- irrelevant admin screens
+
+Build the Region Head flow exactly like this:
+
+PHASE A — DASHBOARD
+Region Head dashboard should show:
+- Region Target
+- Achieved
+- Shortfall
+- Active Pipeline
+- Important flags / alerts
+
+Important flags should include at minimum:
+- reps who did not log today’s touchpoints
+- reps who did not schedule tomorrow’s touchpoints
+- overdue action items in the region
+- stalled deals / deals with no movement
+- pending approvals
+- escalated items pending with RH
+
+This should be the first screen for Region Head.
+
+PHASE B — MY TEAM’S MEETINGS
+Region Head must be able to see every sales rep’s:
+- today’s meetings / touchpoints
+- tomorrow’s scheduled meetings / touchpoints
+- upcoming calendar items
+
+Requirements:
+1. Every time a Sales Rep adds today or tomorrow meetings, Region Head should see them.
+2. Region Head should be able to filter by:
+   - Sales Rep
+   - Date
+   - Client
+   - Status
+3. Region Head should be able to click into an item and see:
+   - Agency
+   - Client
+   - Brand
+   - whom they are meeting
+   - touchpoint summary
+   - stage update
+   - next action / action required
+4. This is visibility and monitoring, not separate data entry for the rep’s records.
+
+PHASE C — MY PLAN
+Region Head should have the same planning and calendar capabilities as a Sales Rep.
+
+All logic that applies to Sales Rep planning should apply to Region Head also:
+- log today’s touchpoints
+- schedule tomorrow’s touchpoints
+- full monthly calendar
+- if not logged and planned by 11:30 PM, mark absent / non-compliant in HR report
+- touchpoint scheduling should move from Tomorrow to Today automatically on the next day
+- Region field should not be manually entered; use logged-in profile region
+
+Region Head should be able to plan and log their own meetings exactly like Sales Rep.
+
+PHASE D — MY APPROVALS
+Anything that needs Region Head approval should appear here.
+
+This includes at minimum:
+- target approvals pending RH stage
+- any sales rep requests marked for RH approval
+- any workflows where RH is designated approver
+
+For each approval item, show:
+- who raised it
+- client
+- deal / touchpoint context
+- amount if relevant
+- due date / SLA
+- action buttons:
+  - Approve
+  - Reject
+  - Send Back / Clarify (if already supported, otherwise add)
+
+PHASE E — MY ESCALATIONS
+Anything escalated to Region Head should appear here.
+
+Escalation sources include:
+- missed action item deadlines from sales reps
+- missed support requests
+- delayed tasks
+- stalled execution items routed upward
+
+Each escalation item should show:
+- original requester
+- assignee
+- what was needed
+- due date
+- how overdue it is
+- current escalation level
+- action buttons:
+  - Take ownership
+  - Reassign
+  - Close
+  - Escalate upward
+
+PHASE F — MY TASKS
+Any task assigned to Region Head by:
+- Sales Rep
+- another Region Head
+- NSH
+- CRO
+- Strategy
+should appear here.
+
+Requirements:
+1. Region Head can mark task status.
+2. Region Head can assign tasks to others from this tab.
+3. Task creation should include:
+   - What
+   - Assigned to whom
+   - Description
+   - Due date
+   - Priority
+4. Tasks should be linked to client / deal / touchpoint where relevant.
+5. Overdue tasks should trigger escalation logic if not closed.
+
+PHASE G — INTERNAL REQUESTS
+Region Head should have the same Internal Requests capability as Sales Rep.
+
+If Region Head creates:
+- What do I need?
+- From who?
+- Description
+- By when?
+
+Then system should:
+1. Create a task for the receiver
+2. Create an Internal Request for the Region Head
+3. Create reminders / calendar entries for both
+4. Trigger escalation if not completed by due date
+
+Internal Requests for Region Head should show:
+- pending
+- in progress
+- completed
+- rejected
+- escalated
+
+PHASE H — MY HR REPORTS
+Region Head should see their own compliance:
+- whether they logged today’s touchpoints
+- whether they planned tomorrow’s touchpoints
+- attendance / absence marking
+- late logs
+- completion discipline
+
+PHASE I — MY TEAM REPORT
+Region Head should see team-level compliance and performance:
+- rep-wise target
+- achieved
+- shortfall
+- number of touchpoints logged
+- whether today was logged
+- whether tomorrow was planned
+- overdue tasks
+- escalations
+- active pipeline
+
+This should help Region Head know:
+- who is active
+- who is non-compliant
+- who is behind target
+- who needs intervention
+
+Important system rules:
+- Region Head is both a manager and an operator.
+- So RH must have their own My Plan, Tasks, Internal Requests, HR Reports exactly like a Sales Rep.
+- In addition, RH must have visibility into the team through Dashboard, My Team’s Meetings, My Approvals, My Escalations, and My Team Report.
+- Region Head should not need to switch modes to see “my work” vs “team work.” Keep these as separate tabs.
+
+Expected deliverables:
+1. Updated Region Head sidebar with only the 9 tabs above
+2. Dashboard defined and implemented
+3. My Team’s Meetings view implemented
+4. My Plan same logic as Sales Rep
+5. My Approvals connected
+6. My Escalations connected
+7. My Tasks with assign-task capability
+8. Internal Requests fully working for RH
+9. My HR Reports working
+10. My Team Report working
+
+Before moving to NSH/CRO refinement, complete Region Head flow first and then show:
+- updated RH sidebar
+- exact tabs
+- screen-by-screen logic
+- data flow for:
+  Sales Rep plan/touchpoint → RH visibility
+  Sales Rep approval/escalation → RH queue
+  RH task/internal request → downstream routing

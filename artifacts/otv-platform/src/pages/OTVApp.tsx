@@ -1606,6 +1606,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [weekSummaryDismissed, setWeekSummaryDismissed] = useState<string|null>(null); // "YYYY-MM-DD" of Monday dismissed
   const [rhRepDrill, setRhRepDrill]       = useState(null); // Region Head targets drilldown
   const [nshRHDrill,  setNshRHDrill]      = useState(null); // NSH drills into specific RH region
+  const [rhDrillPlan, setRhDrillPlan]     = useState<any>(null); // RH team meetings drill-down item
+  const [rhTeamFilter, setRhTeamFilter]   = useState({rep:"",dateRange:"today-tomorrow",client:"",status:""}); // RH team meetings filter
   const [nshRegion,   setNshRegion]       = useState("all"); // NSH rep-CRM region filter
   const BLANK_TASK_FORM = {title:"",assignedTo:"",assignedToUserId:"",clientCompany:"",description:"",priority:"High",dueDate:TOMORROW};
   const [taskForm, setTaskForm]           = useState(BLANK_TASK_FORM);
@@ -2329,7 +2331,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     const dealView    = isAdmin ? null : "pipeline";
     const meetingView = (isAdmin || isDigiOps) ? null : "my-plan";
     const taskView    = isRep      ? "tasks"
-                      : isRH       ? "rh-team-tasks"
+                      : isRH       ? "rh-dashboard"
                       : isNSH      ? "my-tasks"
                       : isStrategy ? "nsh-rep-tasks"
                       : isCRORole  ? "nsh-rep-tasks"
@@ -3247,6 +3249,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
   const escBadge   = allReqs.filter(r=>r.status==="Overdue").length||null;
   const hrBadge    = absenceReports.filter(r=>r.markedAs==="Absent"&&r.status==="Sent to HR").length||null;
   const rhRegion   = user_role?.region;
+  const rhApprovalBadge = isRH?(targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length)||null:null;
+  const rhTaskBadge    = isRH ? tasks.filter(t=>t.assignedToUserId===activeUser&&t.status!=="Done").length||null : null;
+  const rhDashBadge    = isRH ? (()=>{
+    const _myRepIdsDB = reps.filter(r=>r.region===rhRegion).map(r=>r.id);
+    const notLoggedDB = _myRepIdsDB.filter(id=>!(meetings||[]).some(m=>m.repId===id&&m.date===TODAY)).length;
+    const pendingAppDB= (targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length);
+    return (notLoggedDB+pendingAppDB)||null;
+  })() : null;
 
   const myRepTaskBadge = isRep
     ? tasks.filter(t=>(t.assignedToUserId===activeUser||t.assignedTo===user_role?.repId)&&t.status!=="Done").length||null
@@ -3277,21 +3287,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
     // ── REGION HEAD ──
     if (isRH) return [
-      { label:"MONITORING",  items:[
-        N("warroom","War Room","⬡",rhEscBadge),
-        N("pipeline","Revenue Tracker","◈"),
-      ]},
-      { label:"MY TEAM",     items:[
-        N("rh-team-plan","Team's Plan","◎"),
-        N("rh-team-targets","Team's Targets","◎"),
-        N("targets","My Targets","◎"),
-        N("target-approvals","Approvals","◎",(targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length)||null),
-      ]},
-      { label:"MY WORK",     items:[
-        N("my-plan","My Plan","◎"),
-        N("revenue-log","Revenue Log","₹"),
-        N("my-tasks","My Tasks","✓"),
-        N("internal-requests","Internal Requests","⬆",irBadge),
+      { label:"MY REGION", items:[
+        N("rh-dashboard",        "Dashboard",           "⬡", rhDashBadge),
+        N("rh-team-plan",        "My Team's Meetings",  "◎"),
+        N("my-plan",             "My Plan",             "◎"),
+        N("target-approvals",    "My Approvals",        "◎", rhApprovalBadge),
+        N("rh-escalations",      "My Escalations",      "⚠", rhEscBadge),
+        N("my-tasks",            "My Tasks",            "✓", rhTaskBadge),
+        N("internal-requests",   "Internal Requests",   "⬆", irBadge),
+        N("rh-my-hr",            "My HR Reports",       "⊘", hrBadge),
+        N("rh-team-report",      "My Team Report",      "◈"),
       ]},
     ];
 
@@ -11531,70 +11536,281 @@ Use the primary calendar. Return the event ID and Meet link if created.`
           {/* ═══ RO MANAGEMENT ═══ */}
 
 
-          {/* ═══ RH TEAM PLAN ═══ */}
-          {view==="rh-team-plan" && isRH && (()=>{
-            const myUserReps = USER_ROLES.filter(u=>u.role==="SALES REP"&&u.region===rhRegion);
-            const myRepIds   = myUserReps.map(u=>u.repId);
-            const tPlans     = (plans||[]).filter(p=>myRepIds.includes(p.repId));
-            const todayTP = tPlans.filter(p=>p.date===TODAY);
-            const tmrwTP  = tPlans.filter(p=>p.date===TOMORROW);
-            const weekPlan= tPlans.filter(p=>p.date>=TODAY);
+          {/* ═══ RH DASHBOARD ═══ */}
+          {view==="rh-dashboard" && isRH && (()=>{
+            const myReps   = USER_ROLES.filter(u=>u.role==="SALES REP"&&u.region===rhRegion);
+            const myRepIds2= myReps.map(u=>u.repId);
+            const regionTarget   = targetSubs.filter(s=>myRepIds2.includes(s.repId)&&s.status==="Approved").reduce((s,t)=>s+t.totalTarget,0);
+            const regionAchieved = revenueEntries.filter(e=>myRepIds2.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+            const regionShortfall= Math.max(0,regionTarget-regionAchieved);
+            const regionPipeline = visibleDeals.filter(d=>myRepIds2.includes(d.repId)&&!["Lost","RO Received"].includes(d.outcome||"")).reduce((s,d)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
+            const notLoggedToday  = myReps.filter(u=>!(meetings||[]).some(m=>m.repId===u.repId&&m.date===TODAY));
+            const notPlannedTmrw  = myReps.filter(u=>!(plans||[]).some(p=>p.repId===u.repId&&p.date===TOMORROW));
+            const pendingApprovals= targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH");
+            const pendingIRs      = internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval");
+            const overdueActions  = tasks.filter(t=>myRepIds2.includes(t.repId)&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY);
+            const stalledDeals    = visibleDeals.filter(d=>myRepIds2.includes(d.repId)&&!["Lost","RO Received"].includes(d.outcome||"")&&daysSince(d.lastContact||d.createdAt||TODAY)>=7);
+            const myEscalations   = internalReqs.filter(r=>r.dept==="Region Head"&&r.status!=="Done"&&r.status!=="Withdrawn"&&USER_ROLES.find(u=>u.id===r.raisedBy)?.region===rhRegion);
+            const flags = [
+              {label:"Reps not logged today",         items:notLoggedToday,    color:C.red,    icon:"⚠",   nav:"rh-team-plan",    detail:(u:any)=>u.name},
+              {label:"Reps not planned for tomorrow", items:notPlannedTmrw,    color:C.orange, icon:"⏰",   nav:"rh-team-plan",    detail:(u:any)=>u.name},
+              {label:"Target approvals pending",      items:pendingApprovals,  color:C.accent, icon:"◎",   nav:"target-approvals", detail:(t:any)=>t.repName},
+              {label:"IR approvals pending",          items:pendingIRs,        color:C.accent, icon:"⬆",   nav:"target-approvals", detail:(r:any)=>r.subject},
+              {label:"Overdue action items",          items:overdueActions,    color:C.red,    icon:"✗",   nav:"rh-team-report",   detail:(t:any)=>t.title},
+              {label:"Stalled deals (7+ days idle)",  items:stalledDeals,      color:C.purple, icon:"⏸",   nav:"rh-team-plan",    detail:(d:any)=>d.clientCompany},
+              {label:"Escalated items to you",        items:myEscalations,     color:C.red,    icon:"⬆",   nav:"rh-escalations",  detail:(r:any)=>r.subject},
+            ].filter(f=>f.items.length>0);
             return (
               <div className="fin">
-                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>TEAM'S PLAN</div>
-                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>{rhRegion} Region · All reps' scheduled meetings</div>
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-                  {[{label:"TODAY",date:TODAY,plans:todayTP},{label:"TOMORROW",date:TOMORROW,plans:tmrwTP}].map(({label,date,plans:dp})=>(
-                    <div key={label} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                      <div style={{background:C.s2,padding:"8px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`}}>
-                        <span style={{fontSize:10,color:C.dim,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>{label} · {dp.length} meeting{dp.length!==1?"s":""}</span>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>DASHBOARD</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · Real-time overview</div>
+                  </div>
+                  <div style={{fontSize:10,color:C.muted}}>{TODAY}</div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20,marginTop:14}}>
+                  {[
+                    {label:"REGION TARGET",   value:fmtR(regionTarget),    color:C.accent,                                       sub:`${filterQ} approved targets`},
+                    {label:"ACHIEVED",        value:fmtR(regionAchieved),  color:C.green,                                        sub:"Revenue logged this quarter"},
+                    {label:"SHORTFALL",       value:fmtR(regionShortfall), color:regionShortfall>0?C.red:C.green,                sub:"Target – Achieved"},
+                    {label:"ACTIVE PIPELINE", value:fmtR(regionPipeline),  color:C.blue,                                        sub:"Weighted by stage probability"},
+                  ].map(card=>(
+                    <div key={card.label} className="card" style={{padding:"14px 16px",borderTop:`2px solid ${card.color}`}}>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:6}}>{card.label}</div>
+                      <div className="sans" style={{fontSize:20,fontWeight:800,color:card.color,marginBottom:3}}>{card.value}</div>
+                      <div style={{fontSize:9,color:C.muted}}>{card.sub}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{marginBottom:8,fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase"}}>
+                  {flags.length===0?"STATUS FLAGS":`STATUS FLAGS · ${flags.length} item${flags.length!==1?"s":""} need attention`}
+                </div>
+                {flags.length===0&&(
+                  <div style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:32,textAlign:"center",marginBottom:20}}>
+                    <div style={{fontSize:22,marginBottom:8}}>✓</div>
+                    <div className="sans" style={{fontWeight:700,color:C.green,marginBottom:4}}>All clear</div>
+                    <div style={{fontSize:11,color:C.dim}}>No alerts in {rhRegion} region right now.</div>
+                  </div>
+                )}
+                <div style={{display:"flex",flexDirection:"column",gap:10,marginBottom:20}}>
+                  {flags.map((flag,fi)=>(
+                    <div key={fi} style={{background:C.surface,border:`1px solid ${flag.color}33`,borderRadius:8,overflow:"hidden"}}>
+                      <div style={{display:"flex",alignItems:"center",gap:8,padding:"10px 14px",background:`${flag.color}10`,borderBottom:`1px solid ${flag.color}22`,cursor:"pointer"}} onClick={()=>setView(flag.nav)}>
+                        <span style={{fontSize:14}}>{flag.icon}</span>
+                        <span style={{fontWeight:700,fontSize:12,color:flag.color}}>{flag.label}</span>
+                        <span style={{marginLeft:"auto",background:`${flag.color}22`,color:flag.color,padding:"1px 8px",borderRadius:10,fontSize:11,fontWeight:700}}>{flag.items.length}</span>
+                        <span style={{fontSize:10,color:flag.color,opacity:.7}}>→</span>
                       </div>
-                      <div style={{padding:"10px 14px",minHeight:60}}>
-                        {dp.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:12}}>Nothing planned</div>}
-                        {dp.map(p=>{
-                          const rep=reps.find(r=>r.id===p.repId)||USER_ROLES.find(u=>u.repId===p.repId);
-                          return (
-                            <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6,padding:"7px 10px",background:C.s2,borderRadius:5}}>
-                              <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent,flexShrink:0}}>{(rep?.name||"?")[0]}</div>
-                              <div style={{flex:1}}>
-                                <div style={{fontSize:12,fontWeight:600}}>{p.clientAgencyName}</div>
-                                <div style={{fontSize:10,color:C.dim}}>{rep?.name} · {p.time}</div>
-                                {p.agenda&&<div style={{fontSize:10,color:C.muted}}>{p.agenda}</div>}
-                              </div>
-                              <span style={{background:`${p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent}18`,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>{p.status}</span>
-                            </div>
-                          );
-                        })}
+                      <div style={{padding:"8px 14px",display:"flex",flexWrap:"wrap",gap:6}}>
+                        {flag.items.slice(0,8).map((item:any,i:number)=>(
+                          <span key={i} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 8px",fontSize:11,color:C.text}}>{flag.detail(item)}</span>
+                        ))}
+                        {flag.items.length>8&&<span style={{fontSize:11,color:C.muted,padding:"3px 8px"}}>+{flag.items.length-8} more</span>}
                       </div>
                     </div>
                   ))}
                 </div>
-                <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                  <div style={{background:C.s2,padding:"8px 14px",borderBottom:`1px solid ${C.border}`}}>
-                    <span style={{fontSize:10,color:C.dim,fontWeight:700,textTransform:"uppercase",letterSpacing:".08em"}}>UPCOMING WEEK · {weekPlan.length} meetings</span>
+                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>REP STATUS TODAY</div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
+                  {myReps.map(rep=>{
+                    const repId=rep.repId;
+                    const loggedT  =(meetings||[]).some(m=>m.repId===repId&&m.date===TODAY);
+                    const plannedT =(plans||[]).some(p=>p.repId===repId&&p.date===TOMORROW);
+                    const openT    =tasks.filter(t=>t.repId===repId&&t.status!=="Done").length;
+                    const achT     =revenueEntries.filter(e=>e.repId===repId&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                    const tgtT     =targetSubs.filter(s=>s.repId===repId&&s.status==="Approved").reduce((s,t)=>s+t.totalTarget,0);
+                    const pctT     =tgtT>0?Math.round(achT/tgtT*100):0;
+                    return (
+                      <div key={rep.id} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 12px"}}>
+                        <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:6}}>
+                          <div style={{width:24,height:24,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.accent}}>{rep.name[0]}</div>
+                          <span style={{fontWeight:600,fontSize:12}}>{rep.name}</span>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:4,fontSize:10}}>
+                          <span style={{color:loggedT?C.green:C.red,fontWeight:600}}>{loggedT?"✓ Logged":"✗ Not logged"}</span>
+                          <span style={{color:plannedT?C.green:C.orange,fontWeight:600}}>{plannedT?"✓ Planned":"⏰ No plan"}</span>
+                          <span style={{color:C.dim}}>Tasks: <strong style={{color:openT>0?C.orange:C.green}}>{openT}</strong></span>
+                          <span style={{color:C.dim}}>Hit: <strong style={{color:pctT>=100?C.green:pctT>=70?C.orange:C.red}}>{pctT}%</strong></span>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ═══ RH TEAM PLAN ═══ */}
+          {view==="rh-team-plan" && isRH && (()=>{
+            const myUserReps = USER_ROLES.filter(u=>u.role==="SALES REP"&&u.region===rhRegion);
+            const myRepIds   = myUserReps.map(u=>u.repId);
+            const tf = rhTeamFilter;
+            // Build filtered plan list
+            const dateRangeStart = tf.dateRange==="today"?TODAY:tf.dateRange==="tomorrow"?TOMORROW:TODAY;
+            const dateRangeEnd   = tf.dateRange==="today"?TODAY:tf.dateRange==="tomorrow"?TOMORROW:tf.dateRange==="week"?SUNDAY:tf.dateRange==="month"?TODAY.slice(0,7)+"-31":"9999-12-31";
+            const allTeamPlans = (plans||[]).filter(p=>myRepIds.includes(p.repId));
+            const filtered = allTeamPlans.filter(p=>{
+              if (tf.rep&&p.repId!==tf.rep) return false;
+              if (tf.dateRange==="today-tomorrow"&&p.date!==TODAY&&p.date!==TOMORROW) return false;
+              else if (tf.dateRange!=="today-tomorrow"&&(p.date<dateRangeStart||p.date>dateRangeEnd)) return false;
+              if (tf.client){const cn=(p.client||p.agency||p.clientAgencyName||"").toLowerCase();if(!cn.includes(tf.client.toLowerCase()))return false;}
+              if (tf.status&&p.status!==tf.status) return false;
+              return true;
+            }).sort((a,b)=>a.date>b.date?1:a.date<b.date?-1:a.time>b.time?1:-1);
+            const todayTP = allTeamPlans.filter(p=>p.date===TODAY);
+            const tmrwTP  = allTeamPlans.filter(p=>p.date===TOMORROW);
+            // Drill detail panel
+            const drill = rhDrillPlan;
+            const drillRep = drill ? (USER_ROLES.find(u=>u.repId===drill.repId)||reps.find(r=>r.id===drill.repId)) : null;
+            const drillMtg = drill ? (meetings||[]).find(m=>m.id===drill.loggedMeetingId) : null;
+            return (
+              <div className="fin">
+                {/* Header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:4}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY TEAM'S MEETINGS</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · {myUserReps.length} reps · visibility only</div>
                   </div>
+                  <div style={{display:"flex",gap:6,alignItems:"center"}}>
+                    <span style={{fontSize:11,color:C.dim}}>{todayTP.length} today · {tmrwTP.length} tomorrow</span>
+                  </div>
+                </div>
+
+                {/* Quick-glance today/tomorrow cards */}
+                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16,marginTop:14}}>
+                  {[{label:"TODAY",date:TODAY,dp:todayTP},{label:"TOMORROW",date:TOMORROW,dp:tmrwTP}].map(({label,dp})=>(
+                    <div key={label} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                      <div style={{background:C.s2,padding:"8px 14px",borderBottom:`1px solid ${C.border}`}}>
+                        <span style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em"}}>{label} · {dp.length} meeting{dp.length!==1?"s":""}</span>
+                      </div>
+                      <div style={{padding:"10px 14px",minHeight:52}}>
+                        {dp.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:10}}>Nothing planned</div>}
+                        {dp.slice(0,5).map(p=>{
+                          const rep=USER_ROLES.find(u=>u.repId===p.repId)||reps.find(r=>r.id===p.repId);
+                          return (
+                            <div key={p.id} onClick={()=>setRhDrillPlan(p)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,padding:"6px 10px",background:C.s2,borderRadius:5,cursor:"pointer"}}
+                              onMouseOver={e=>e.currentTarget.style.background=C.s3} onMouseOut={e=>e.currentTarget.style.background=C.s2}>
+                              <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent,flexShrink:0}}>{(rep?.name||"?")[0]}</div>
+                              <div style={{flex:1,minWidth:0}}>
+                                <div style={{fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.client||p.agency||p.clientAgencyName}</div>
+                                <div style={{fontSize:10,color:C.dim}}>{rep?.name} · {p.time}</div>
+                              </div>
+                              <span style={{background:`${p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent}18`,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,flexShrink:0}}>{p.status}</span>
+                            </div>
+                          );
+                        })}
+                        {dp.length>5&&<div style={{fontSize:10,color:C.muted,textAlign:"center",padding:"4px 0"}}>+{dp.length-5} more below</div>}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Filter bar */}
+                <div style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,padding:"10px 14px",marginBottom:12,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
+                  <span style={{fontSize:10,fontWeight:700,color:C.dim,letterSpacing:".08em"}}>FILTER:</span>
+                  <select value={tf.rep} onChange={e=>setRhTeamFilter(f=>({...f,rep:e.target.value}))} style={{fontSize:11,padding:"4px 8px",borderRadius:4,border:`1px solid ${C.border}`,background:C.surface}}>
+                    <option value="">All Reps</option>
+                    {myUserReps.map(u=><option key={u.id} value={u.repId}>{u.name}</option>)}
+                  </select>
+                  <select value={tf.dateRange} onChange={e=>setRhTeamFilter(f=>({...f,dateRange:e.target.value}))} style={{fontSize:11,padding:"4px 8px",borderRadius:4,border:`1px solid ${C.border}`,background:C.surface}}>
+                    <option value="today-tomorrow">Today + Tomorrow</option>
+                    <option value="today">Today only</option>
+                    <option value="tomorrow">Tomorrow only</option>
+                    <option value="week">This week</option>
+                    <option value="all">All upcoming</option>
+                  </select>
+                  <input placeholder="Search client / agency…" value={tf.client} onChange={e=>setRhTeamFilter(f=>({...f,client:e.target.value}))} style={{fontSize:11,padding:"4px 8px",borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,width:160}}/>
+                  <select value={tf.status} onChange={e=>setRhTeamFilter(f=>({...f,status:e.target.value}))} style={{fontSize:11,padding:"4px 8px",borderRadius:4,border:`1px solid ${C.border}`,background:C.surface}}>
+                    <option value="">All Statuses</option>
+                    {["Planned","Done","Cancelled","Rescheduled"].map(s=><option key={s}>{s}</option>)}
+                  </select>
+                  {(tf.rep||tf.client||tf.status||tf.dateRange!=="today-tomorrow")&&<button onClick={()=>setRhTeamFilter({rep:"",dateRange:"today-tomorrow",client:"",status:""})} style={{fontSize:10,color:C.red,background:"none",border:"none",cursor:"pointer",padding:"2px 6px"}}>✕ Clear</button>}
+                  <span style={{marginLeft:"auto",fontSize:10,color:C.dim}}>{filtered.length} result{filtered.length!==1?"s":""}</span>
+                </div>
+
+                {/* Full meeting table */}
+                <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden",marginBottom:drill?0:0}}>
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                    <thead><tr>{["Rep","Client","Date","Time","Pitch Type","Status"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["Rep","Agency","Client","Brand","Date","Time","Type","Stage","Status"].map(h=>(
+                      <th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}</tr></thead>
                     <tbody>
-                      {weekPlan.length===0&&<tr><td colSpan={6} style={{padding:24,textAlign:"center",color:C.muted}}>No meetings planned this week</td></tr>}
-                      {weekPlan.sort((a,b)=>a.date>b.date?1:a.time>b.time?1:-1).map(p=>{
-                        const rep=reps.find(r=>r.id===p.repId)||USER_ROLES.find(u=>u.repId===p.repId);
+                      {filtered.length===0&&<tr><td colSpan={9} style={{padding:24,textAlign:"center",color:C.muted}}>No meetings match your filter</td></tr>}
+                      {filtered.map(p=>{
+                        const rep=USER_ROLES.find(u=>u.repId===p.repId)||reps.find(r=>r.id===p.repId);
                         const isToday=p.date===TODAY;
+                        const isSel = drill?.id===p.id;
                         return (
-                          <tr key={p.id} style={{borderBottom:`1px solid ${C.s2}`,background:isToday?`${C.accent}06`:"transparent"}}
-                            onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=isToday?`${C.accent}06`:"transparent"}>
-                            <td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{rep?.name}</div><div style={{fontSize:10,color:C.dim}}>{rep?.region}</div></td>
-                            <td style={{padding:"9px 12px",fontWeight:600}}>{p.clientAgencyName}</td>
-                            <td style={{padding:"9px 12px",color:isToday?C.accent:C.dim,fontWeight:isToday?700:400}}>{isToday?"Today":p.date}</td>
-                            <td style={{padding:"9px 12px",color:C.dim}}>{p.time}</td>
-                            <td style={{padding:"9px 12px"}}>{p.pitchType?<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{p.pitchType}</span>:<span style={{color:C.muted}}>—</span>}</td>
-                            <td style={{padding:"9px 12px"}}><span style={{background:p.status==="Done"?`${C.green}22`:p.status==="Cancelled"?`${C.red}22`:`${C.accent}18`,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{p.status}</span></td>
+                          <tr key={p.id} onClick={()=>setRhDrillPlan(isSel?null:p)}
+                            style={{borderBottom:`1px solid ${C.s2}`,background:isSel?`${C.accent}10`:isToday?`${C.accent}06`:"transparent",cursor:"pointer"}}
+                            onMouseOver={e=>e.currentTarget.style.background=isSel?`${C.accent}10`:C.s2}
+                            onMouseOut={e=>e.currentTarget.style.background=isSel?`${C.accent}10`:isToday?`${C.accent}06`:"transparent"}>
+                            <td style={{padding:"8px 12px"}}><div style={{fontWeight:600}}>{rep?.name||"—"}</div></td>
+                            <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{p.agency||"—"}</td>
+                            <td style={{padding:"8px 12px",fontWeight:600}}>{p.client||p.clientAgencyName||"—"}</td>
+                            <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{p.brand||"—"}</td>
+                            <td style={{padding:"8px 12px",color:isToday?C.accent:C.dim,fontWeight:isToday?700:400,whiteSpace:"nowrap"}}>{isToday?"Today":p.date}</td>
+                            <td style={{padding:"8px 12px",color:C.dim}}>{p.time||"—"}</td>
+                            <td style={{padding:"8px 12px"}}>{p.pitchType?<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{p.pitchType}</span>:<span style={{color:C.muted}}>—</span>}</td>
+                            <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{p.stage||"—"}</td>
+                            <td style={{padding:"8px 12px"}}><span style={{background:p.status==="Done"?`${C.green}22`:p.status==="Cancelled"?`${C.red}22`:`${C.accent}18`,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{p.status}</span></td>
                           </tr>
                         );
                       })}
                     </tbody>
                   </table>
                 </div>
+
+                {/* Drill-down detail panel */}
+                {drill&&(
+                  <div style={{background:C.surface,border:`2px solid ${C.accent}`,borderRadius:8,padding:"16px 18px",marginTop:10}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+                      <div className="sans" style={{fontWeight:700,fontSize:13,color:C.accent}}>MEETING DETAIL</div>
+                      <button onClick={()=>setRhDrillPlan(null)} style={{background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:16,padding:0}}>✕</button>
+                    </div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:12,marginBottom:12}}>
+                      {[
+                        {l:"Rep",      v:drillRep?.name||"—"},
+                        {l:"Agency",   v:drill.agency||"—"},
+                        {l:"Client",   v:drill.client||drill.clientAgencyName||"—"},
+                        {l:"Brand",    v:drill.brand||"—"},
+                        {l:"Contact",  v:drill.contactName||"—"},
+                        {l:"Phone",    v:drill.phone||"—"},
+                        {l:"Date",     v:drill.date===TODAY?"Today":drill.date},
+                        {l:"Time",     v:drill.time||"—"},
+                        {l:"Type",     v:`${drill.pitchType||"—"} · ${drill.meetingType||"Physical"}`},
+                      ].map(f=>(
+                        <div key={f.l}>
+                          <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:2}}>{f.l}</div>
+                          <div style={{fontSize:12,fontWeight:600,color:C.text}}>{f.v}</div>
+                        </div>
+                      ))}
+                    </div>
+                    {drill.agenda&&<div style={{marginBottom:10}}><div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:2}}>Agenda</div><div style={{fontSize:12,color:C.text}}>{drill.agenda}</div></div>}
+                    {/* Show logged meeting info if available */}
+                    {drillMtg&&(
+                      <div style={{background:C.s2,borderRadius:6,padding:"10px 14px",marginTop:8}}>
+                        <div style={{fontSize:9,color:C.green,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>✓ Meeting Logged</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
+                          {drillMtg.discussion&&<div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>Discussion</div><div style={{fontSize:11}}>{drillMtg.discussion}</div></div>}
+                          {drillMtg.outcome&&<div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>Stage Update</div><div style={{fontSize:11,fontWeight:700,color:C.blue}}>{drillMtg.outcome}</div></div>}
+                          {drillMtg.nextStep&&<div style={{gridColumn:"1/-1"}}><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>Next Step</div><div style={{fontSize:11}}>{drillMtg.nextStep}</div></div>}
+                          {(drillMtg.actionRequired||[]).length>0&&(
+                            <div style={{gridColumn:"1/-1"}}>
+                              <div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:4}}>Action Required</div>
+                              {drillMtg.actionRequired.map((a:any,i:number)=>(
+                                <div key={i} style={{fontSize:11,color:C.text,marginBottom:4,paddingLeft:8,borderLeft:`2px solid ${C.accent}`}}>
+                                  <strong>{a.what}</strong>{a.from?` → ${a.from}`:""}  {a.byWhen&&<span style={{color:C.red}}> · by {a.byWhen}</span>}
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             );
           })()}
@@ -11874,6 +12090,146 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     </table>
                   </div>
                 )}
+              </div>
+            );
+          })()}
+
+          {/* ═══ RH MY HR ═══ */}
+          {view==="rh-my-hr" && isRH && (()=>{
+            const myRepId     = user_role?.repId;
+            const myAbs       = absenceReports.filter((r:any)=>r.repId===myRepId);
+            const absentDays  = myAbs.filter((r:any)=>r.markedAs==="Absent").length;
+            const exceptions  = myAbs.filter((r:any)=>r.exception==="Overridden").length;
+            const sentToHR    = myAbs.filter((r:any)=>r.status==="Sent to HR").length;
+            const loggedToday = (meetings||[]).some(m=>m.repId===myRepId&&m.date===TODAY);
+            const plannedTmrw = (plans||[]).some(p=>p.repId===myRepId&&p.date===TOMORROW);
+            return (
+              <div className="fin">
+                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>MY HR REPORTS</div>
+                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Your own attendance and compliance record</div>
+                <div className="card" style={{padding:"14px 16px",marginBottom:16,borderLeft:`3px solid ${loggedToday?C.green:C.red}`}}>
+                  <div style={{display:"flex",gap:24,flexWrap:"wrap"}}>
+                    <div>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>TODAY'S LOG</div>
+                      <div style={{fontWeight:700,fontSize:14,color:loggedToday?C.green:C.red}}>{loggedToday?"✓ Meeting logged":"✗ No meeting logged yet"}</div>
+                    </div>
+                    <div>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>TOMORROW'S PLAN</div>
+                      <div style={{fontWeight:700,fontSize:14,color:plannedTmrw?C.green:C.orange}}>{plannedTmrw?"✓ Meeting planned":"⏰ Nothing scheduled"}</div>
+                    </div>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:16}}>
+                  {[
+                    {l:"TOTAL RECORDS", v:myAbs.length,  c:C.dim},
+                    {l:"ABSENT DAYS",   v:absentDays,    c:absentDays>0?C.red:C.green},
+                    {l:"EXCEPTIONS",    v:exceptions,    c:C.orange},
+                    {l:"SENT TO HR",    v:sentToHR,      c:C.accent},
+                  ].map(k=>(
+                    <div key={k.l} className="card" style={{padding:12,borderTop:`2px solid ${k.c}`}}>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{k.l}</div>
+                      <div className="sans" style={{fontSize:22,fontWeight:700,color:k.c}}>{k.v}</div>
+                    </div>
+                  ))}
+                </div>
+                {myAbs.length===0 ? (
+                  <div style={{background:C.surface,border:`1px dashed ${C.border}`,borderRadius:8,padding:32,textAlign:"center",color:C.dim,fontSize:12}}>No attendance records yet.</div>
+                ) : (
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                      <thead><tr>{["Date","Status","Exception","Approved By","Notes"].map(h=>(
+                        <th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                      ))}</tr></thead>
+                      <tbody>{[...myAbs].sort((a:any,b:any)=>b.date>a.date?1:-1).map((r:any)=>(
+                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}}>
+                          <td style={{padding:"9px 12px",fontWeight:600}}>{r.date}</td>
+                          <td style={{padding:"9px 12px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
+                          <td style={{padding:"9px 12px"}}>{r.exception?<span style={{color:C.green,fontSize:11}}>{r.exception}</span>:<span style={{color:C.muted}}>—</span>}</td>
+                          <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{r.exceptionBy||"—"}</td>
+                          <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{r.exceptionReason||"—"}</td>
+                        </tr>
+                      ))}</tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ═══ RH TEAM REPORT ═══ */}
+          {view==="rh-team-report" && isRH && (()=>{
+            const myReps   = USER_ROLES.filter(u=>u.role==="SALES REP"&&u.region===rhRegion);
+            const rows = myReps.map(rep=>{
+              const repId       = rep.repId;
+              const target      = targetSubs.filter(s=>s.repId===repId&&s.status==="Approved").reduce((s:number,t:any)=>s+t.totalTarget,0);
+              const achieved    = revenueEntries.filter(e=>e.repId===repId&&qMatch(e.quarter)).reduce((s:number,e:any)=>s+(e.amount||0),0);
+              const shortfall   = Math.max(0,target-achieved);
+              const pct         = target>0?Math.round(achieved/target*100):0;
+              const pipeline    = visibleDeals.filter(d=>d.repId===repId&&!["Lost","RO Received"].includes(d.outcome||"")).reduce((s:number,d:any)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
+              const mtgsThisWk  = (meetings||[]).filter(m=>m.repId===repId&&m.date>=MONDAY&&m.date<=TODAY).length;
+              const loggedToday = (meetings||[]).some(m=>m.repId===repId&&m.date===TODAY);
+              const plannedTmrw = (plans||[]).some(p=>p.repId===repId&&p.date===TOMORROW);
+              const openTasks   = tasks.filter(t=>t.repId===repId&&t.status!=="Done").length;
+              const overdueTasks= tasks.filter(t=>t.repId===repId&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY).length;
+              return {rep,repId,target,achieved,shortfall,pct,pipeline,mtgsThisWk,loggedToday,plannedTmrw,openTasks,overdueTasks};
+            });
+            const totTarget   = rows.reduce((s,r)=>s+r.target,0);
+            const totAchieved = rows.reduce((s,r)=>s+r.achieved,0);
+            const totPipeline = rows.reduce((s,r)=>s+r.pipeline,0);
+            const totOverdue  = rows.reduce((s,r)=>s+r.overdueTasks,0);
+            return (
+              <div className="fin">
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY TEAM REPORT</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · {filterQ} · {myReps.length} rep{myReps.length!==1?"s":""}</div>
+                  </div>
+                </div>
+                <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:20}}>
+                  {[
+                    {label:"TOTAL TARGET",   value:fmtR(totTarget),   color:C.accent},
+                    {label:"TOTAL ACHIEVED", value:fmtR(totAchieved), color:C.green},
+                    {label:"TOTAL PIPELINE", value:fmtR(totPipeline), color:C.blue},
+                    {label:"OVERDUE TASKS",  value:totOverdue,         color:totOverdue>0?C.red:C.green},
+                  ].map(c=>(
+                    <div key={c.label} className="card" style={{padding:"12px 14px",borderTop:`2px solid ${c.color}`}}>
+                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>{c.label}</div>
+                      <div className="sans" style={{fontSize:20,fontWeight:700,color:c.color}}>{c.value}</div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"auto"}}>
+                  <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                    <thead><tr>{["Rep","Target","Achieved","Hit%","Pipeline","Mtgs (wk)","Today","Tmrw","Tasks","Overdue"].map(h=>(
+                      <th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                    ))}</tr></thead>
+                    <tbody>
+                      {rows.length===0&&<tr><td colSpan={10} style={{padding:24,textAlign:"center",color:C.muted}}>No reps in {rhRegion} region</td></tr>}
+                      {rows.map(row=>(
+                        <tr key={row.repId} style={{borderBottom:`1px solid ${C.s2}`}}
+                          onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=""}>
+                          <td style={{padding:"10px 12px"}}>
+                            <div style={{display:"flex",alignItems:"center",gap:6}}>
+                              <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent}}>{row.rep.name[0]}</div>
+                              <span style={{fontWeight:600}}>{row.rep.name}</span>
+                            </div>
+                          </td>
+                          <td style={{padding:"10px 12px",color:C.dim}}>{row.target>0?fmtR(row.target):"—"}</td>
+                          <td style={{padding:"10px 12px",fontWeight:600,color:row.achieved>0?C.green:C.muted}}>{row.achieved>0?fmtR(row.achieved):"—"}</td>
+                          <td style={{padding:"10px 12px"}}>
+                            <span style={{background:row.pct>=100?`${C.green}22`:row.pct>=70?`${C.orange}18`:`${C.red}18`,color:row.pct>=100?C.green:row.pct>=70?C.orange:C.red,padding:"2px 8px",borderRadius:10,fontSize:11,fontWeight:700}}>{row.target>0?`${row.pct}%`:"—"}</span>
+                          </td>
+                          <td style={{padding:"10px 12px",color:C.blue}}>{row.pipeline>0?fmtR(row.pipeline):"—"}</td>
+                          <td style={{padding:"10px 12px",textAlign:"center",color:C.dim,fontWeight:600}}>{row.mtgsThisWk}</td>
+                          <td style={{padding:"10px 12px",textAlign:"center"}}><span style={{color:row.loggedToday?C.green:C.red,fontSize:16}}>{row.loggedToday?"✓":"✗"}</span></td>
+                          <td style={{padding:"10px 12px",textAlign:"center"}}><span style={{color:row.plannedTmrw?C.green:C.orange,fontSize:16}}>{row.plannedTmrw?"✓":"⏰"}</span></td>
+                          <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:row.openTasks>0?C.orange:C.green}}>{row.openTasks}</td>
+                          <td style={{padding:"10px 12px",textAlign:"center",fontWeight:600,color:row.overdueTasks>0?C.red:C.green}}>{row.overdueTasks||"—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             );
           })()}
