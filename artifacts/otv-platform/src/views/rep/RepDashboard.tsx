@@ -11,9 +11,6 @@ import { C, TODAY, fmtR } from "../../utils/palette";
 import { useMeetings } from "../../hooks/useMeetings";
 import { useTasks } from "../../hooks/useTasks";
 
-const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26", "FY26 Annual"];
-void QUARTERS;
-
 type RepId = number | string | null | undefined;
 interface IR { id: string; status: string; raisedBy: string; }
 
@@ -55,10 +52,12 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
   const todayMeetings = meetings.filter(m => String(m.repId) === String(myRepId) && m.date === TODAY);
   const plannedToday  = todayMeetings.length;
   const myTasks       = tasks.filter(t => {
-    const at = (t as Record<string, unknown>)["assignedTo"];
-    const atUid = (t as Record<string, unknown>)["assignedToUserId"];
-    return (at === myRepId || String(at) === String(myRepId) || atUid === activeUser) &&
-           t.status !== "Closed";
+    const at     = (t as Record<string, unknown>)["assignedTo"];
+    const atUid  = (t as Record<string, unknown>)["assignedToUserId"];
+    const status = t.status as string; // cast to string to handle both API ("Closed") and legacy ("Done") terminal values
+    const isAssignedToMe = at === myRepId || String(at) === String(myRepId) || atUid === activeUser;
+    const isPending      = status !== "Closed" && status !== "Done";
+    return isAssignedToMe && isPending;
   });
   const pendingTasks  = myTasks.length;
   const overdueTasks  = myTasks.filter(t => {
