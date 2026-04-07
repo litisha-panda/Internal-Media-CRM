@@ -118,7 +118,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
   userRole, deals, showToast, onNavigateRevenue,
 }) => {
   const { createTouchpoint } = useTouchpoints();
-  const { patchMeeting, createMeeting } = useMeetings();
+  const { createMeeting } = useMeetings();
   const { createTask } = useTasks();
 
   const [form, setForm] = useState<LogForm>({ ...BLANK_FORM });
@@ -202,12 +202,8 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         lossReason:     form.lossReason    || null,
       });
 
-      /* Patch the source meeting to "logged" */
-      if (form.meetingDbId) {
-        try {
-          await patchMeeting(form.meetingDbId, { status: "logged", touchpointId: tp.id });
-        } catch { /* non-fatal */ }
-      }
+      /* Meeting status patch is handled by the parent view (MyPlan.handleLogSubmit),
+         which owns the meeting state. LogMeeting's responsibility is the touchpoint only. */
 
       /* Auto-create tasks from action items (preserves OTVApp inline behavior) */
       const repIdInt        = parseInt(form.repId) || null;

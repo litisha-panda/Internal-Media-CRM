@@ -113,7 +113,7 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
   void isNSH; void isRH; // received for role context; main plan view handles them naturally
 
   /* Own meetings data via hook */
-  const { meetings, createMeeting, refetch: refetchMeetings } = useMeetings();
+  const { meetings, createMeeting, patchMeeting, refetch: refetchMeetings } = useMeetings();
 
   /* Local UI state */
   const [calWeekOffset, setCalWeekOffset] = useState(0);
@@ -135,12 +135,17 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
     ? deals.filter(d => d.repId == null || String(d.repId) === String(myRepId))
     : deals;
 
-  const isMyMeeting = (m: Meeting) =>
-    m.userId ? m.userId === (userRole?.id ? Number(userRole.id) : undefined) : myRepId ? String(m.repId) === String(myRepId) : false;
+  const isMyMeeting = (m: Meeting) => {
+    if (m.userId != null) {
+      /* Compare as strings to avoid NaN when userRole.id is a non-numeric string */
+      return String(m.userId) === String(userRole?.id ?? "");
+    }
+    return myRepId != null ? String(m.repId) === String(myRepId) : false;
+  };
 
   /* Derive my plans from meetings */
   const myMeetingPlans = meetings.filter(m =>
-    (String(m.repId) === String(myPlanRepId) || (userRole?.id && m.userId === Number(userRole.id))) &&
+    (String(m.repId) === String(myPlanRepId) || (userRole?.id && String(m.userId ?? "") === String(userRole.id))) &&
     m.status !== "cancelled"
   );
 
@@ -336,9 +341,12 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
     }
   };
 
-  const handleLogSubmit = (_tp: Touchpoint) => {
-    /* LogMeeting creates the touchpoint + patches the meeting internally.
-       Refetch meetings so MyPlan's own hook state is up-to-date. */
+  const handleLogSubmit = (tp: Touchpoint) => {
+    /* Patch the source meeting status to "logged" (MyPlan owns meeting state).
+       LogMeeting creates the touchpoint; MyPlan owns the meeting status change. */
+    if (logMeeting) {
+      patchMeeting(logMeeting.id, { status: "logged", touchpointId: tp.id }).catch(() => { /* non-fatal */ });
+    }
     refetchMeetings();
     closeLog();
   };
