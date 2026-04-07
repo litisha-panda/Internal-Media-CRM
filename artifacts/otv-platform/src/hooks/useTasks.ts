@@ -25,7 +25,7 @@ export interface UseTasksReturn {
   refetch: () => void;
 }
 
-export function useTasks(loggedIn: boolean): UseTasksReturn {
+export function useTasks(loggedIn = true): UseTasksReturn {
   const [tasks, rawSetTasks] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);

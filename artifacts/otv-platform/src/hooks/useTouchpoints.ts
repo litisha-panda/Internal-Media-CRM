@@ -23,7 +23,7 @@ export interface UseTouchpointsReturn {
   refetch: () => void;
 }
 
-export function useTouchpoints(loggedIn: boolean): UseTouchpointsReturn {
+export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
   const [touchpoints, rawSetTouchpoints] = useState<Touchpoint[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 

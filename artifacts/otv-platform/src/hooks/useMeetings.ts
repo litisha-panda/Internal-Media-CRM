@@ -19,7 +19,7 @@ export interface UseMeetingsReturn {
   refetch: () => void;
 }
 
-export function useMeetings(loggedIn: boolean): UseMeetingsReturn {
+export function useMeetings(loggedIn = true): UseMeetingsReturn {
   const [meetings, setMeetings] = useState<Meeting[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
