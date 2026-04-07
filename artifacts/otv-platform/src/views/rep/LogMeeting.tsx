@@ -11,6 +11,8 @@ import React, { useState, useEffect } from "react";
 import { C, TODAY } from "../../utils/palette";
 import { useTouchpoints } from "../../hooks/useTouchpoints";
 import { useMeetings } from "../../hooks/useMeetings";
+import { useTasks } from "../../hooks/useTasks";
+import * as irSvc from "../../services/api/internalRequests";
 import type { Meeting } from "../../services/api/meetings";
 import type { Touchpoint } from "../../services/api/touchpoints";
 
@@ -117,6 +119,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
 }) => {
   const { createTouchpoint } = useTouchpoints();
   const { patchMeeting, createMeeting } = useMeetings();
+  const { createTask } = useTasks();
 
   const [form, setForm] = useState<LogForm>({ ...BLANK_FORM });
   const [submitting, setSubmitting] = useState(false);
@@ -206,7 +209,82 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         } catch { /* non-fatal */ }
       }
 
-      showToast("Touchpoint logged ✓");
+      /* Auto-create tasks from action items (preserves OTVApp inline behavior) */
+      const repIdInt        = parseInt(form.repId) || null;
+      const clientCompany   = form.clientAgencyName || form.client || "";
+      const urRaw           = userRole as Record<string, unknown> | null;
+      const loggedByName    = (urRaw?.["name"] as string) || form.repId || "Rep";
+      const loggedByUserNum = parseInt((urRaw?.["id"] as string) || "") || null;
+      const loggedByUserId  = loggedByUserNum;
+      const TOMORROW_DATE   = new Date(new Date().getTime() + 86400000).toISOString().slice(0, 10);
+
+      const taskPromises: Promise<unknown>[] = [];
+
+      (form.actionRequired || [])
+        .filter(i => i.what && i.from)
+        .forEach(i => {
+          const aType   = i.what;
+          const details = i.description || "";
+          const dueDate = i.byWhen || TOMORROW_DATE;
+          const ts      = `t${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+
+          if (i.from === "Self") {
+            /* Self-assigned task */
+            taskPromises.push(
+              createTask({
+                id: ts, assignedToUserId: loggedByUserId, assignedDept: "Self",
+                repId: repIdInt, clientCompany,
+                title: `${aType} — ${clientCompany} — ${details} — by ${dueDate}`.slice(0, 160),
+                description: details, priority: "High", status: "Open",
+                dueDate, createdAt: TODAY, assignedBy: loggedByName,
+                fromMeetingLog: true, touchpointId: tp.id,
+              } as Parameters<typeof createTask>[0]).catch(() => { /* non-fatal */ })
+            );
+          } else if (i.from !== "Client") {
+            /* Cross-department task + internal request */
+            const irSubject = `${aType} — ${clientCompany} — ${details} — by ${dueDate} — from ${loggedByName}`.slice(0, 160);
+            taskPromises.push(
+              createTask({
+                id: `t_${aType.slice(0,4).toLowerCase()}_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+                assignedDept: i.from, repId: repIdInt, clientCompany,
+                title: irSubject,
+                description: details, priority: "High", status: "Open",
+                dueDate, createdAt: TODAY, assignedBy: loggedByName,
+                fromMeetingLog: true, touchpointId: tp.id,
+              } as Parameters<typeof createTask>[0]).catch(() => { /* non-fatal */ })
+            );
+            /* Fire-and-forget IR creation */
+            irSvc.createIR({
+              title: irSubject, description: details, priority: "High",
+              status: "Open", dueDate, assignedDept: i.from,
+              repId: repIdInt ?? undefined, clientCompany,
+              requestedBy: loggedByName,
+            }).catch(() => { /* non-fatal */ });
+          }
+        });
+
+      /* If no action items but nextStep text exists, create a self-task */
+      if (!taskPromises.length && form.nextStep?.trim()) {
+        taskPromises.push(
+          createTask({
+            id: `t_ns_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+            assignedToUserId: loggedByUserId, assignedDept: "Self",
+            repId: repIdInt, clientCompany,
+            title: `${form.nextStep.trim()}${clientCompany ? ` — ${clientCompany}` : ""}`.slice(0, 160),
+            description: form.nextStep.trim(), priority: "High", status: "Open",
+            dueDate: form.followUpDate || TOMORROW_DATE,
+            createdAt: TODAY, assignedBy: loggedByName,
+            fromMeetingLog: true, touchpointId: tp.id,
+          } as Parameters<typeof createTask>[0]).catch(() => { /* non-fatal */ })
+        );
+      }
+
+      /* Wait for all task creates before showing success toast */
+      await Promise.allSettled(taskPromises);
+
+      const taskCount = taskPromises.length;
+      const taskMsg   = taskCount > 0 ? ` · ${taskCount} task${taskCount > 1 ? "s" : ""} assigned` : "";
+      showToast(`Touchpoint logged ✓${taskMsg}`);
       onSubmit(tp);
       onClose();
     } catch {
