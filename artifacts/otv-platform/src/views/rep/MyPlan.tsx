@@ -505,8 +505,8 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
         />
       )}
 
-      {/* Log Meeting Modal — standalone (null meeting) or from plan (Meeting object) */}
-      {logOpen && isRep && (
+      {/* Log Meeting Modal — open for any role that can reach My Plan (rep, NSH, RH) */}
+      {logOpen && (
         <LogMeeting
           open={logOpen}
           meeting={logMeeting}
