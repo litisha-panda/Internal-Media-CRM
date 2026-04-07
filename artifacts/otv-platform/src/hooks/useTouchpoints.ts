@@ -16,9 +16,20 @@ import type { Touchpoint, TouchpointCreate, TouchpointPatch } from "../services/
 const LOCAL_KEY = "otv_touchpoints";
 const POLL_MS   = 30_000;
 
+/** Narrow an unknown catch value to an HTTP status code, or -1 if not available. */
+function httpStatus(err: unknown): number {
+  if (err !== null && typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    const s = e["status"] ?? e["httpStatus"];
+    if (typeof s === "number") return s;
+  }
+  return -1;
+}
+
 export interface UseTouchpointsReturn {
   touchpoints: Touchpoint[];
   isLoading: boolean;
+  syncError: string | null;
   /** API-syncing setter — new items are POST-ed; changed items are PATCH-ed. */
   setTouchpoints: React.Dispatch<React.SetStateAction<Touchpoint[]>>;
   createTouchpoint: (payload: TouchpointCreate) => Promise<Touchpoint>;
@@ -38,6 +49,7 @@ export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
     } catch { return []; }
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [syncError, setSyncError] = useState<string | null>(null);
 
   const fetchAll = useCallback(async (isInitial?: boolean) => {
     try {
@@ -46,11 +58,10 @@ export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
       rawSetTouchpoints(data);
       backendIds.current = new Set(data.map(tp => tp.id));
       try { localStorage.setItem(LOCAL_KEY, JSON.stringify(data)); } catch {}
-    } catch (err: any) {
-      if (err?.status === 401 || err?.httpStatus === 401) {
-        if (hadValidSess.current) {
-          window.dispatchEvent(new CustomEvent("otv:unauthorized"));
-        }
+      setSyncError(null);
+    } catch (err: unknown) {
+      if (httpStatus(err) === 401 && hadValidSess.current) {
+        window.dispatchEvent(new CustomEvent("otv:unauthorized"));
       }
       /* offline / other errors — keep current state */
     } finally {
@@ -90,9 +101,8 @@ export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
             }
           }
           try { localStorage.setItem(LOCAL_KEY, JSON.stringify(next)); } catch {}
-        } catch {
-          // offline / error — local state still reflects optimistic update
-        }
+          setSyncError(null);
+        } catch { setSyncError("Sync failed — changes may not be saved."); }
       })();
       return next;
     });
@@ -126,5 +136,5 @@ export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
     [refetch],
   );
 
-  return { touchpoints, isLoading, setTouchpoints, createTouchpoint, patchTouchpoint, refetch };
+  return { touchpoints, isLoading, syncError, setTouchpoints, createTouchpoint, patchTouchpoint, refetch };
 }

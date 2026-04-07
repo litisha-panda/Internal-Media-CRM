@@ -3,7 +3,8 @@
  *
  * Fetches both records and exceptions in parallel on explicit `refresh()` call
  * (callers decide when to load — e.g. when the HR view is opened).
- * Exposes records, exceptions, isLoading, createException, patchException.
+ * All mutations are optimistic: local state is applied immediately and
+ * reverted via refetch on server error.
  */
 
 import { useState, useCallback } from "react";
@@ -46,17 +47,35 @@ export function useAttendance(): UseAttendanceReturn {
 
   const grantException = useCallback(
     async (recordId: string, reason: string): Promise<void> => {
-      await attendSvc.grantException(recordId, reason);
-      refresh();
+      // Optimistic: mark the record as excused locally
+      setRecords(prev =>
+        prev.map(r => r.id === recordId ? { ...r, excused: true, excuseReason: reason } : r)
+      );
+      try {
+        await attendSvc.grantException(recordId, reason);
+        refresh();
+      } catch (err) {
+        refresh(); // revert via server truth
+        throw err;
+      }
     },
     [refresh],
   );
 
   const createException = useCallback(
     async (payload: ExceptionCreate): Promise<AttendanceException> => {
-      const created = await attendSvc.createException(payload);
-      setExceptions(prev => [...prev, created]);
-      return created;
+      // Optimistic: append a placeholder exception
+      const tempId = `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const optimistic = { ...payload, id: tempId, status: "pending" } as AttendanceException;
+      setExceptions(prev => [...prev, optimistic]);
+      try {
+        const created = await attendSvc.createException(payload);
+        setExceptions(prev => prev.map(e => e.id === tempId ? created : e));
+        return created;
+      } catch (err) {
+        setExceptions(prev => prev.filter(e => e.id !== tempId));
+        throw err;
+      }
     },
     [],
   );
@@ -66,13 +85,22 @@ export function useAttendance(): UseAttendanceReturn {
       exceptionId: string,
       patch: Partial<Pick<AttendanceException, "notes" | "status">>
     ): Promise<AttendanceException> => {
-      const updated = await attendSvc.patchException(exceptionId, patch);
+      // Optimistic: apply patch locally immediately
       setExceptions(prev =>
-        prev.map(e => e.id === exceptionId ? { ...e, ...updated } : e)
+        prev.map(e => e.id === exceptionId ? { ...e, ...patch } : e)
       );
-      return updated;
+      try {
+        const updated = await attendSvc.patchException(exceptionId, patch);
+        setExceptions(prev =>
+          prev.map(e => e.id === exceptionId ? { ...e, ...updated } : e)
+        );
+        return updated;
+      } catch (err) {
+        refresh(); // revert via server truth
+        throw err;
+      }
     },
-    [],
+    [refresh],
   );
 
   const simulateEod = useCallback(async (): Promise<void> => {

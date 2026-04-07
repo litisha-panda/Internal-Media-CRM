@@ -1891,7 +1891,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [revenueEntries, setRevenueEntries, revLoading, revError] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  []);
   // ── Part 1: New data model objects ──────────────────────────────────────
   const [clientAccounts, setClientAccounts, , caError] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
-  const { touchpoints, setTouchpoints } = useTouchpoints(!!user);
+  const { touchpoints, setTouchpoints, syncError: tpError } = useTouchpoints(!!user);
 
   // Part 1: One-time migration — runs when clientAccounts is empty but deals/meetings exist
   useEffect(() => {
@@ -3685,7 +3685,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
   // Global API status — collected from all API-backed entity hooks
   const crmLoading = tasksLoading || targetLoading || revLoading;
-  const syncError  = tasksError || irError || targetError || revError || caError;
+  const syncError  = tasksError || tpError || irError || targetError || revError || caError;
 
   return (
     <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace",background:C.bg,color:C.text,minHeight:"100vh",display:"flex",flexDirection:"column",fontSize:13}}>

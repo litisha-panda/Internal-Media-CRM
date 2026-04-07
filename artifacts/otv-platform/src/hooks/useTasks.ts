@@ -16,6 +16,16 @@ import type { Task, TaskCreate, TaskPatch } from "../services/api/tasks";
 const LOCAL_KEY = "otv_tasks";
 const POLL_MS   = 30_000;
 
+/** Narrow an unknown catch value to an HTTP status code, or -1 if not available. */
+function httpStatus(err: unknown): number {
+  if (err !== null && typeof err === "object") {
+    const e = err as Record<string, unknown>;
+    const s = e["status"] ?? e["httpStatus"];
+    if (typeof s === "number") return s;
+  }
+  return -1;
+}
+
 export interface UseTasksReturn {
   tasks: Task[];
   isLoading: boolean;
@@ -29,8 +39,8 @@ export interface UseTasksReturn {
 }
 
 export function useTasks(loggedIn = true): UseTasksReturn {
-  const backendIds     = useRef<Set<string>>(new Set());
-  const hadValidSess   = useRef(false);
+  const backendIds   = useRef<Set<string>>(new Set());
+  const hadValidSess = useRef(false);
 
   // Seed from localStorage for instant first-paint
   const [tasks, rawSetTasks] = useState<Task[]>(() => {
@@ -50,11 +60,9 @@ export function useTasks(loggedIn = true): UseTasksReturn {
       backendIds.current = new Set(data.map(t => t.id));
       try { localStorage.setItem(LOCAL_KEY, JSON.stringify(data)); } catch {}
       setSyncError(null);
-    } catch (err: any) {
-      if (err?.status === 401 || err?.httpStatus === 401) {
-        if (hadValidSess.current) {
-          window.dispatchEvent(new CustomEvent("otv:unauthorized"));
-        }
+    } catch (err: unknown) {
+      if (httpStatus(err) === 401 && hadValidSess.current) {
+        window.dispatchEvent(new CustomEvent("otv:unauthorized"));
       }
       /* offline / other errors — keep current state */
     } finally {
