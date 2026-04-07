@@ -2134,6 +2134,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
+  const [dashRevOpen, setDashRevOpen]                   = useState(false);
+  const [dashRevForm, setDashRevForm]                   = useState({clientName:"",amount:"",invoiceRef:"",date:TODAY});
   const [editingRevId, setEditingRevId]                 = useState<string|null>(null);
   const [editRevData, setEditRevData]                   = useState<any>({});
   const [importTab, setImportTab]                       = useState("targets");
@@ -4224,6 +4226,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 {/* ── Step 1: Profile ── */}
                 {wStep===1 && (()=>{
                   const canAdvance = !!wRegion && !!wRM.trim();
+                  // RH users for this region — drawn from USER_ROLES (no admin API needed)
+                  const rhForRegion = USER_ROLES.filter(u=>u.role==="REGION HEAD"&&u.region===wRegion);
+                  const doAdvance = () => {
+                    if(!canAdvance) return;
+                    // Persist region to DB (fire-and-forget; wizard still advances)
+                    fetch("/api/users/me",{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({region:wRegion})}).catch(()=>{});
+                    // Persist RM name in app_state so it survives reload
+                    const userId = user_role?.id||"";
+                    if(userId) fetch(`/api/state/rep_rm_${userId}`,{method:"PUT",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({value:wRM})}).catch(()=>{});
+                    setWStep(2);
+                  };
                   return (
                   <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>
                     <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>Your Profile</div>
@@ -4239,19 +4252,28 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     {/* Region selector — required */}
                     <div style={{marginBottom:12}}>
                       <div style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>Region <span style={{color:C.red}}>*</span></div>
-                      <select value={wRegion} onChange={e=>setWizardRegion(e.target.value)}
+                      <select value={wRegion} onChange={e=>{setWizardRegion(e.target.value);setWizardRM("");}}
                         style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${wRegion?C.green:C.border}`,borderRadius:5,color:wRegion?C.text:C.muted,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
                         <option value="">Select your territory…</option>
                         {REGIONS.filter(r=>r!=="National").map(r=><option key={r} value={r}>{r}</option>)}
                       </select>
                       {wRegion && <div style={{fontSize:9,color:C.green,marginTop:3}}>✓ Region set</div>}
                     </div>
-                    {/* Reporting Manager — required */}
+                    {/* Reporting Manager — dropdown of RH users for this region */}
                     <div style={{marginBottom:16}}>
                       <div style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>Reporting Manager <span style={{color:C.red}}>*</span></div>
-                      <input value={wRM} onChange={e=>setWizardRM(e.target.value)}
-                        placeholder="Your Region Head's full name"
-                        style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${wRM.trim()?C.green:C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                      {rhForRegion.length > 0 ? (
+                        <select value={wRM} onChange={e=>setWizardRM(e.target.value)}
+                          style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${wRM.trim()?C.green:C.border}`,borderRadius:5,color:wRM.trim()?C.text:C.muted,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                          <option value="">Select your Region Head…</option>
+                          {rhForRegion.map(rh=><option key={rh.id} value={rh.name}>{rh.name}</option>)}
+                        </select>
+                      ) : (
+                        <input value={wRM} onChange={e=>setWizardRM(e.target.value)}
+                          placeholder={wRegion?"Enter Region Head's name":"Select region first"}
+                          disabled={!wRegion}
+                          style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${wRM.trim()?C.green:C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",opacity:wRegion?1:0.6}}/>
+                      )}
                       <div style={{fontSize:9,color:C.muted,marginTop:3}}>The Region Head who approves your targets and attendance.</div>
                     </div>
                     {!canAdvance && (
@@ -4261,7 +4283,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     )}
                     <div style={{display:"flex",gap:8}}>
                       <button onClick={()=>setWStep(0)} style={{flex:1,padding:"10px 0",border:`1px solid ${C.border}`,background:"transparent",color:C.dim,borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← Back</button>
-                      <button onClick={()=>{if(canAdvance)setWStep(2);}} style={{flex:2,padding:"10px 0",background:canAdvance?C.accent:`${C.dim}44`,color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:700,cursor:canAdvance?"pointer":"default",fontFamily:"'DM Mono',monospace",opacity:canAdvance?1:0.7}}>Looks good →</button>
+                      <button onClick={doAdvance} style={{flex:2,padding:"10px 0",background:canAdvance?C.accent:`${C.dim}44`,color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:700,cursor:canAdvance?"pointer":"default",fontFamily:"'DM Mono',monospace",opacity:canAdvance?1:0.7}}>Looks good →</button>
                     </div>
                   </div>
                   );
@@ -4503,11 +4525,76 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Quick Actions</div>
                   <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
                     <QA icon="◎" label="My Plan"         view="my-plan" />
-                    <QA icon="₹" label="Log Revenue"     view="revenue-log" />
+                    <div onClick={()=>{setDashRevForm({clientName:"",amount:"",invoiceRef:"",date:TODAY});setDashRevOpen(true);}}
+                      style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"14px 10px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,cursor:"pointer",flex:1,minWidth:0,transition:"box-shadow .15s"}}
+                      onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px #1d5db420"}
+                      onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+                      <span style={{fontSize:22}}>₹</span>
+                      <span style={{fontSize:11,fontWeight:600,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.3}}>Log Revenue</span>
+                    </div>
                     <QA icon="⬆" label="Internal Requests" view="internal-requests" />
                     <QA icon="✓" label="Tasks"           view="tasks" />
                   </div>
                 </div>
+
+                {/* ── Dashboard: Log Revenue Modal ── */}
+                {dashRevOpen && (()=>{
+                  const drf = dashRevForm;
+                  const doSubmit = () => {
+                    if(!drf.clientName.trim()){showToast("Client name is required","err");return;}
+                    const amt = parseCurrency(drf.amount);
+                    if(!amt){showToast("Enter a valid amount (e.g. 5L or 50000)","err");return;}
+                    if(!drf.invoiceRef.trim()){showToast("Invoice / RO reference is required","err");return;}
+                    const ikey = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+                    const id   = `re_d${Date.now()}`;
+                    const entry = {id,repId:myRepId,clientCompany:drf.clientName.trim(),zohoAccountId:"",dealType:"Linear TV",amount:amt,invoiceRef:drf.invoiceRef.trim(),date:drf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:""};
+                    setRevenueEntries(p=>[entry,...p]);
+                    setDashRevOpen(false);
+                    fetch("/api/revenue",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({
+                      id, repId:myRepId, clientCompany:drf.clientName.trim(), amount:amt,
+                      invoiceRef:drf.invoiceRef.trim(), date:drf.date||TODAY,
+                      quarter:entryQ, fiscalYear:CURRENT_FY, idempotencyKey:ikey,
+                    })}).then(r=>r.json()).then(d=>{
+                      if(d?.ok){showToast(`₹${(amt/100000).toFixed(1)}L logged for ${drf.clientName.trim()} ✓`);}
+                      else {showToast(d?.error||"Failed to save revenue entry","err");setRevenueEntries(p=>p.filter(e=>e.id!==id));}
+                    }).catch(()=>{showToast("Network error — entry not saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==id));});
+                  };
+                  return (
+                    <>
+                      <div onClick={()=>setDashRevOpen(false)} style={{position:"fixed",inset:0,background:"#0007",zIndex:300}} />
+                      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:24,zIndex:301,width:340,boxShadow:"0 8px 32px #0004"}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
+                          <div style={{fontSize:14,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Log Revenue Entry</div>
+                          <button onClick={()=>setDashRevOpen(false)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16,lineHeight:1}}>✕</button>
+                        </div>
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:3,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.4}}>Client / Advertiser *</div>
+                          <input value={drf.clientName} onChange={e=>setDashRevForm(p=>({...p,clientName:e.target.value}))} placeholder="e.g. Tata Motors"
+                            style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text,boxSizing:"border-box"}} autoFocus/>
+                        </div>
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:3,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.4}}>Amount ₹ *</div>
+                          <input value={drf.amount} onChange={e=>setDashRevForm(p=>({...p,amount:e.target.value}))} placeholder="e.g. 5L or 500000"
+                            style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text,boxSizing:"border-box"}}/>
+                        </div>
+                        <div style={{marginBottom:10}}>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:3,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.4}}>Invoice / RO Reference *</div>
+                          <input value={drf.invoiceRef} onChange={e=>setDashRevForm(p=>({...p,invoiceRef:e.target.value}))} placeholder="e.g. RO-2026-0042"
+                            style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text,boxSizing:"border-box"}}/>
+                        </div>
+                        <div style={{marginBottom:18}}>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:3,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.4}}>Date</div>
+                          <input type="date" min="2020-01-01" max="2099-12-31" value={drf.date} onChange={e=>setDashRevForm(p=>({...p,date:e.target.value}))}
+                            style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text,boxSizing:"border-box"}}/>
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button onClick={()=>setDashRevOpen(false)} style={{flex:1,padding:"9px 0",border:`1px solid ${C.border}`,background:"transparent",color:C.dim,borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
+                          <button onClick={doSubmit} style={{flex:2,padding:"9px 0",background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✓ Log Revenue</button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
             );
           })()}
@@ -11011,8 +11098,17 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           if(!rf.invoiceRef){showToast("Invoice / RO reference is required — cannot submit without it","err");return;}
                           const amt = parseCurrency(rf.amount);
                           if(!amt){showToast("Invalid amount","err");return;}
-                          const entry = {id:`re${Date.now()}`,repId:isRep?myRepId:null,clientCompany:client,zohoAccountId:rf.zohoAccountId||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
+                          const newId  = `re${Date.now()}`;
+                          const ikey   = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+                          const entry = {id:newId,repId:isRep?myRepId:null,clientCompany:client,zohoAccountId:rf.zohoAccountId||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
                           setRevenueEntries(p=>[entry,...p]);
+                          fetch("/api/revenue",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({
+                            id:newId, repId:isRep?myRepId:undefined, clientCompany:client, zohoAccountId:rf.zohoAccountId||undefined,
+                            dealType:rf.dealType, amount:amt, invoiceRef:rf.invoiceRef, date:rf.date||TODAY,
+                            quarter:entryQ, fiscalYear:CURRENT_FY, notes:rf.notes||undefined, idempotencyKey:ikey,
+                          })}).then(r=>r.json()).then(d=>{
+                            if(!d?.ok){showToast(d?.error||"Revenue entry may not have been saved to server","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));}
+                          }).catch(()=>{showToast("Network error — entry may not be saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));});
                           // Fix 6: IP slot committed — notify other reps with pending proposals for the same slot
                           if (rf.dealType==="IPs") {
                             const linkedDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&d.dealType==="IPs"&&d.clientCompany===client&&d.ipId&&d.elemId);

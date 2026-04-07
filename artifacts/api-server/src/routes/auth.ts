@@ -316,4 +316,30 @@ router.post("/auth/seed-demo", async (req, res) => {
   }
 });
 
+// ─── PATCH /api/users/me ─────────────────────────────────────────────────────
+// Self-service profile update. Any authenticated user can update their own region.
+// Intentionally NOT admin-only — used by the rep setup wizard.
+const VALID_REGIONS_SET = new Set(["North","South","East","West","National","Central"]);
+router.patch("/users/me", requireAuth, async (req, res) => {
+  try {
+    const { region } = req.body as { region?: string };
+    if (!region || !VALID_REGIONS_SET.has(region)) {
+      return void res.status(400).json({
+        ok: false,
+        error: `region must be one of: North, South, East, West, National, Central`,
+      });
+    }
+    const [updated] = await db
+      .update(users)
+      .set({ region, updatedAt: new Date() })
+      .where(eq(users.id, req.user!.id))
+      .returning({ id: users.id, region: users.region, role: users.role, name: users.name });
+
+    if (!updated) return void res.status(404).json({ ok: false, error: "User not found" });
+    res.json({ ok: true, user: updated });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 export default router;
