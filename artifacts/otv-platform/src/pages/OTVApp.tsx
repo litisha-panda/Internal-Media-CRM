@@ -2110,10 +2110,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
-  // doAddPlan — extracted from my-plan block so it can be passed as prop to MyPlan component.
-  // Reads planForm from state, creates the meeting via API, and closes the form.
-  // The setAddPlanFor callback is owned by MyPlan but only used to close the modal;
-  // callers pass it inline as `(date) => doAddPlanImpl(date, planForm)`.
+  // doAddPlan — SUPERSEDED: calendar-sync and DB-create are now both inside MyPlan's
+  // own doAddPlan (views/rep/MyPlan.tsx). This copy is retained only as a fallback reference
+  // for any future non-MyPlan caller; it is NOT passed to <MyPlan> as a prop.
   const doAddPlan = (date: string, onSuccess?: () => void) => {
     const pf = planForm;
     const myPlanRepId = user_role?.repId ?? user_role?.id;

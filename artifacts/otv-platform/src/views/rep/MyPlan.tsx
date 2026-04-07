@@ -102,7 +102,7 @@ export interface MyPlanProps {
 export const MyPlan: React.FC<MyPlanProps> = (props) => {
   const {
     userRole, activeUser, loginProvider,
-    isRep, isStrategy, isCRORole,
+    isRep, isNSH, isRH, isStrategy, isCRORole, isAdmin, isDigiOps,
     deals, filterQ,
     reps, countdown,
     setDealForm, setAddDealOpen,
@@ -110,9 +110,10 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
     BLANK_DEAL,
     onNavigate, onNavigateRevenue,
   } = props;
+  void isNSH; void isRH; // received for role context; main plan view handles them naturally
 
   /* Own meetings data via hook */
-  const { meetings, createMeeting } = useMeetings();
+  const { meetings, createMeeting, refetch: refetchMeetings } = useMeetings();
 
   /* Local UI state */
   const [calWeekOffset, setCalWeekOffset] = useState(0);
@@ -128,6 +129,11 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
 
   const myRepId      = userRole?.repId;
   const myPlanRepId  = myRepId ?? userRole?.id;
+
+  /* Rep-scope deal filter: AddPlanModal & LogMeeting see only this rep's deals */
+  const myDeals = myRepId != null
+    ? deals.filter(d => d.repId == null || String(d.repId) === String(myRepId))
+    : deals;
 
   const isMyMeeting = (m: Meeting) =>
     m.userId ? m.userId === (userRole?.id ? Number(userRole.id) : undefined) : myRepId ? String(m.repId) === String(myRepId) : false;
@@ -153,34 +159,86 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
   const weeklyM = Math.floor((weeklyDiffMs % 3600000) / 60000);
   const weeklyLabel = weeklyDiffMs <= 0 ? "Past weekly deadline" : `${weeklyH}h ${weeklyM}m left`;
 
-  /* ── doAddPlan — uses useMeetings().createMeeting ──────────────────── */
+  /* ── doAddPlan — creates meeting + optional calendar sync ─────────── */
   const doAddPlan = async (date: string, onSuccess?: () => void) => {
-    if (!planForm.agency.trim() && !planForm.client.trim()) {
+    const pf = planForm;
+    if (!pf.agency.trim() && !pf.client.trim()) {
       showToast("Enter client or agency name", "err"); return;
     }
+    const planTime = pf.time || "10:00";
+    const clientName = (pf.client || pf.agency || "").trim();
+    const didSyncCalendar = pf.syncToCalendar;
+
+    /* Calendar sync — opens external calendar link / downloads ICS */
+    if (pf.syncToCalendar) {
+      const [hStr, mStr] = planTime.split(":");
+      const h = parseInt(hStr || "10"); const m = parseInt(mStr || "0");
+      const endH = String(h + 1).padStart(2, "0"); const endM = String(m).padStart(2, "0");
+      const startH = String(h).padStart(2, "0");
+      const dateParts = date.replace(/-/g, "");
+      const title   = encodeURIComponent(`[OTV] Meeting: ${clientName}`);
+      const details = encodeURIComponent(`Contact: ${pf.contactName.trim()}${pf.agenda ? "\nAgenda: " + pf.agenda : ""}${pf.brand ? "\nBrand: " + pf.brand : ""}`);
+      if (pf.calPlatform === "google") {
+        const startDT = `${dateParts}T${startH}${endM}00`;
+        const endDT   = `${dateParts}T${endH}${endM}00`;
+        window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}`, "_blank");
+      } else if (pf.calPlatform === "zoho") {
+        const ics = [
+          "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//OTV CRM//EN", "CALSCALE:GREGORIAN", "METHOD:REQUEST",
+          "BEGIN:VEVENT",
+          `DTSTART:${dateParts}T${startH}${endM}00`,
+          `DTEND:${dateParts}T${endH}${endM}00`,
+          `SUMMARY:[OTV] Meeting: ${clientName}`,
+          `DESCRIPTION:Contact: ${pf.contactName.trim()}${pf.agenda ? "\\nAgenda: " + pf.agenda : ""}`,
+          `UID:otv-${Date.now()}@odishatv.com`,
+          "STATUS:CONFIRMED", "END:VEVENT", "END:VCALENDAR",
+        ].join("\r\n");
+        const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `OTV-${clientName.replace(/\s+/g, "-")}.ics`;
+        a.click();
+      } else if (pf.calPlatform === "outlook") {
+        const startISO = `${date}T${startH}:${endM}:00`;
+        const endISO   = `${date}T${endH}:${endM}:00`;
+        window.open(`https://outlook.office.com/calendar/deeplink/compose?subject=${title}&startdt=${encodeURIComponent(startISO)}&enddt=${encodeURIComponent(endISO)}&body=${details}`, "_blank");
+      }
+    }
+
     try {
       await createMeeting({
-        repId:       Number(myPlanRepId) || null,
-        region:      userRole?.region || "",
+        repId:        Number(myPlanRepId) || null,
+        region:       userRole?.region || "",
         date,
-        time:        planForm.time || "10:00",
-        meetingKind: planForm.meetingKind || "ACTIONABLE",
-        agencyName:  planForm.agency || "",
-        clientName:  planForm.client || "",
-        brandName:   planForm.brand  || "",
-        contactName: planForm.contactName || "",
-        contactPhone: planForm.phone || null,
-        mode:        planForm.meetingType || "Physical",
-        agenda:      planForm.agenda || "",
-        status:      "planned",
+        time:         planTime,
+        meetingKind:  pf.meetingKind || "ACTIONABLE",
+        agencyName:   pf.agency || "",
+        clientName,
+        brandName:    pf.brand  || "",
+        contactName:  pf.contactName || "",
+        contactPhone: pf.phone || null,
+        mode:         pf.meetingType || "Physical",
+        agenda:       pf.agenda || "",
+        status:       "planned",
       });
-      showToast("Meeting added to plan ✓");
-      setPlanForm(BLANK_PLAN_FORM);
+      showToast(didSyncCalendar ? "Meeting planned ✓ · Calendar opening…" : "Meeting planned ✓");
+      /* Keep calPlatform/syncToCalendar/meetingKind sticky; clear the rest */
+      setPlanForm(p => ({ ...BLANK_PLAN_FORM, syncToCalendar: p.syncToCalendar, calPlatform: p.calPlatform, meetingKind: p.meetingKind, touchpointType: p.touchpointType }));
       onSuccess?.();
     } catch {
       showToast("Failed to add meeting — please try again", "err");
     }
   };
+
+  /* ── Admin / DigiOps: no personal plan view ───────────────────────── */
+  if (isAdmin || isDigiOps) {
+    return (
+      <div className="fin" style={{ textAlign: "center", padding: 60, color: C.dim }}>
+        <div className="sans" style={{ fontSize: 14, fontWeight: 700, marginBottom: 8 }}>My Plan</div>
+        <div style={{ fontSize: 12 }}>Personal plan view is available for Sales Reps, NSH, and Region Heads.</div>
+      </div>
+    );
+  }
 
   /* ── Strategy/CRO: monthly read-only overview ─────────────────────── */
   if (isStrategy || isCRORole) {
@@ -278,8 +336,11 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
     }
   };
 
-  const handleLogSubmit = (tp: Touchpoint) => {
-    void tp; // parent receives the touchpoint via callback; patchMeeting done inside LogMeeting
+  const handleLogSubmit = (_tp: Touchpoint) => {
+    /* LogMeeting creates the touchpoint + patches the meeting internally.
+       Refetch meetings so MyPlan's own hook state is up-to-date. */
+    refetchMeetings();
+    closeLog();
   };
 
   /* ── Main render ──────────────────────────────────────────────────── */
@@ -436,7 +497,7 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
         <AddPlanModal
           forDate={addPlanFor}
           form={planForm}
-          deals={deals}
+          deals={myDeals}
           loginProvider={loginProvider}
           onFormChange={setPlanForm}
           onSubmit={(date) => doAddPlan(date, () => setAddPlanFor(null))}
@@ -452,7 +513,7 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
           onClose={closeLog}
           onSubmit={handleLogSubmit}
           userRole={userRole}
-          deals={deals}
+          deals={myDeals}
           showToast={showToast}
           onNavigateRevenue={onNavigateRevenue}
         />
