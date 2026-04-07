@@ -4136,7 +4136,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const wClients    = wizardClients;
             const setWClients = setWizardClients;
             const wRegion  = wizardRegion || myRep?.region || "";
-            const wRM      = wizardRM;
+            const wRM      = wizardRM || (myRep as any)?.reportingManager || "";
 
             const parseLakh = (v) => {
               const s = String(v||"").replace(/,/g,"").trim();
@@ -4230,12 +4230,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   const rhForRegion = USER_ROLES.filter(u=>u.role==="REGION HEAD"&&u.region===wRegion);
                   const doAdvance = () => {
                     if(!canAdvance) return;
-                    // Persist region to DB (fire-and-forget; wizard still advances)
-                    fetch("/api/users/me",{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({region:wRegion})}).catch(()=>{});
-                    // Persist RM name in app_state so it survives reload
-                    const userId = user_role?.id||"";
-                    if(userId) fetch(`/api/state/rep_rm_${userId}`,{method:"PUT",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({value:wRM})}).catch(()=>{});
-                    setWStep(2);
+                    const repIdNum = user_role?.repId;
+                    if(!repIdNum){showToast("Cannot identify your rep record — contact Admin","err");return;}
+                    // Persist region + reportingManager on the rep record; gate advancement on success
+                    fetch(`/api/admin/reps/${repIdNum}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({region:wRegion,reportingManager:wRM})})
+                      .then(r=>r.json())
+                      .then(d=>{
+                        if(d?.ok){
+                          // Sync local reps blob so myRep reflects new values immediately
+                          setReps((p:any[])=>p.map((r:any)=>r.id===repIdNum||r.repId===repIdNum?{...r,region:wRegion,reportingManager:wRM}:r));
+                          setWStep(2);
+                        } else {
+                          showToast(d?.error||"Failed to save profile — please try again","err");
+                        }
+                      })
+                      .catch(()=>showToast("Network error — please try again","err"));
                   };
                   return (
                   <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>

@@ -395,4 +395,93 @@ router.post("/admin/reset/dev", requireAuth, requireAdmin, async (req, res) => {
   }
 });
 
+// ─── PATCH /api/admin/reps/:id ───────────────────────────────────────────────
+// Self-service profile update for SALES REPs (own record only).
+// Admins can update any rep. Region Heads can update reps in their region.
+// Updates: region, reportingManager on the rep object in the otv_reps blob.
+// Also syncs region to the users table for consistency.
+router.patch("/admin/reps/:id", requireAuth, async (req, res) => {
+  const repId = parseInt(String(req.params["id"]), 10);
+  if (isNaN(repId)) {
+    res.status(400).json({ ok: false, error: "repId must be a number" });
+    return;
+  }
+
+  const u = req.user!;
+
+  // Authorization: reps can only update their own record
+  if (u.role === "SALES REP") {
+    if (u.repId !== repId) {
+      res.status(403).json({ ok: false, error: "Sales Reps can only update their own profile" });
+      return;
+    }
+  }
+  // REGION HEAD: only reps in their region — enforced after we read the rep record
+
+  const { region, reportingManager } = req.body as { region?: string; reportingManager?: string };
+  if (!region && !reportingManager) {
+    res.status(400).json({ ok: false, error: "Provide at least one of: region, reportingManager" });
+    return;
+  }
+  if (region && !(VALID_REGIONS as readonly string[]).includes(region)) {
+    res.status(400).json({ ok: false, error: `region must be one of: ${VALID_REGIONS.join(", ")}` });
+    return;
+  }
+
+  try {
+    // ── Read the otv_reps blob ──────────────────────────────────────────────
+    const stateRow = await db
+      .select()
+      .from(appStateTable)
+      .where(eq(appStateTable.key, "otv_reps"))
+      .limit(1);
+
+    const repsArray: any[] = Array.isArray(stateRow[0]?.value) ? (stateRow[0].value as any[]) : [];
+
+    // Find the rep
+    const repIdx = repsArray.findIndex((r: any) => r.id === repId || r.repId === repId);
+
+    // REGION HEAD scope check
+    if (u.role === "REGION HEAD" && repIdx >= 0) {
+      const repRegion = repsArray[repIdx].region;
+      if (repRegion && repRegion !== u.region) {
+        res.status(403).json({ ok: false, error: "Region Head can only update reps in their own region" });
+        return;
+      }
+    }
+
+    if (repIdx >= 0) {
+      // Update existing rep object in blob
+      const updated = { ...repsArray[repIdx] };
+      if (region)            updated.region            = region;
+      if (reportingManager)  updated.reportingManager  = reportingManager;
+      repsArray[repIdx] = updated;
+    } else {
+      // Rep not in blob yet — insert a minimal stub so the update is preserved
+      repsArray.push({ id: repId, repId, region: region || null, reportingManager: reportingManager || null });
+    }
+
+    // Write back the blob
+    await db
+      .insert(appStateTable)
+      .values({ key: "otv_reps", value: repsArray as object, updatedAt: new Date() })
+      .onConflictDoUpdate({
+        target: appStateTable.key,
+        set: { value: repsArray as object, updatedAt: new Date() },
+      });
+
+    // Also sync region to the users table if provided
+    if (region) {
+      await db
+        .update(users)
+        .set({ region, updatedAt: new Date() })
+        .where(eq(users.id, u.id)); // only the requesting user's own row in self-service context
+    }
+
+    res.json({ ok: true, data: repsArray[repIdx >= 0 ? repIdx : repsArray.length - 1] });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 export default router;
