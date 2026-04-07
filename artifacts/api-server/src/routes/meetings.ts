@@ -230,7 +230,17 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
     if (mode !== undefined)           updates.mode = mode;
     if (actionableType !== undefined) updates.actionableType = actionableType;
     if (agenda !== undefined)         updates.agenda = agenda;
-    if (status !== undefined)         updates.status = String(status);
+    if (status !== undefined) {
+      const VALID_STATUSES = ["planned", "logged", "missed", "cancelled"];
+      const s = String(status);
+      if (!VALID_STATUSES.includes(s)) {
+        return void res.status(400).json({
+          ok: false,
+          error: `Invalid status "${s}". Must be one of: ${VALID_STATUSES.join(", ")}`,
+        });
+      }
+      updates.status = s;
+    }
     if (touchpointId !== undefined)   updates.touchpointId = touchpointId ? String(touchpointId) : null;
 
     await db.update(meetings).set(updates).where(eq(meetings.id, meetingId));

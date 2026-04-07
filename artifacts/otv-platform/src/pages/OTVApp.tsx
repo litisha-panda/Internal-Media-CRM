@@ -9808,8 +9808,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Date","Touchpoint","Plan","Status","Exception","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                             <tbody>{dbRecs.map(r=>{
-                              const stColor = r.status==="absent"?C.red:r.status==="partial"?C.orange:C.green;
-                              const stLabel = r.status==="absent"?"Absent":r.status==="partial"?"Partial":"Present";
+                              const stColor = r.status==="absent"?C.red:r.status==="partial"?C.orange:r.status==="exception_granted"?C.purple:C.green;
+                              const stLabel = r.status==="absent"?"Absent":r.status==="partial"?"Partial":r.status==="exception_granted"?"Exc. Granted":"Present";
                               const exc = attExcRequests.find(e=>e.userId===myUserId&&e.date===r.date);
                               const canRequest = (r.status==="absent"||r.status==="partial") && !exc && (r.date===TODAY_DATE||r.date===YESTERDAY);
                               return (
@@ -9881,8 +9881,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                               ))}
                             </tr></thead>
                             <tbody>{dbReports.map(r=>{
-                              const stColor = r.status==="absent"?C.red:r.status==="partial"?C.orange:C.green;
-                              const stLabel = r.status==="absent"?"Absent":r.status==="partial"?"Partial":"Present";
+                              const stColor = r.status==="absent"?C.red:r.status==="partial"?C.orange:r.status==="exception_granted"?C.purple:C.green;
+                              const stLabel = r.status==="absent"?"Absent":r.status==="partial"?"Partial":r.status==="exception_granted"?"Exc. Granted":"Present";
                               const exc = attExcRequests.find(e=>e.userId===r.userId&&e.date===r.date);
                               const excGranted = exc?.status==="granted";
                               return (

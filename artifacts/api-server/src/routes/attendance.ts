@@ -107,6 +107,17 @@ router.get("/attendance-exceptions", requireAuth, async (req, res) => {
 // Rep submits an exception request for an absent/partial day.
 // Starts the chain at stage "RH".
 
+// Date window: today and yesterday (IST) are eligible for exception requests.
+function eligibleDates(): string[] {
+  const now = new Date();
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istNow = new Date(now.getTime() + istOffset);
+  const today = istNow.toISOString().slice(0, 10);
+  const yd = new Date(istNow.getTime() - 86400000);
+  const yesterday = yd.toISOString().slice(0, 10);
+  return [today, yesterday];
+}
+
 router.post("/attendance-exceptions", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
@@ -116,10 +127,49 @@ router.post("/attendance-exceptions", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "date and reason are required" });
     }
 
+    const dateStr = String(date);
+
+    // Date window check: only today or yesterday
+    const allowed = eligibleDates();
+    if (!allowed.includes(dateStr)) {
+      return void res.status(400).json({
+        ok: false,
+        error: "Exception requests can only be submitted for today or yesterday",
+      });
+    }
+
+    // If attendanceRecordId provided: verify ownership, date match, and eligible status
+    if (attendanceRecordId) {
+      const recRows = await db
+        .select()
+        .from(attendanceRecords)
+        .where(eq(attendanceRecords.id, String(attendanceRecordId)))
+        .limit(1);
+
+      if (!recRows.length) {
+        return void res.status(400).json({ ok: false, error: "Attendance record not found" });
+      }
+      const rec = recRows[0]!;
+
+      if (rec.userId !== u.id) {
+        return void res.status(403).json({ ok: false, error: "Attendance record does not belong to you" });
+      }
+      if (rec.date !== dateStr) {
+        return void res.status(400).json({ ok: false, error: "Record date does not match requested date" });
+      }
+      if (!["absent", "partial"].includes(rec.status)) {
+        return void res.status(400).json({
+          ok: false,
+          error: `Exceptions can only be requested for absent or partial records (current status: ${rec.status})`,
+        });
+      }
+    }
+
+    // Duplicate check: one exception per user per date
     const existing = await db
       .select({ id: attendanceExceptions.id })
       .from(attendanceExceptions)
-      .where(and(eq(attendanceExceptions.userId, u.id), eq(attendanceExceptions.date, String(date))))
+      .where(and(eq(attendanceExceptions.userId, u.id), eq(attendanceExceptions.date, dateStr)))
       .limit(1);
 
     if (existing.length) {
@@ -136,7 +186,7 @@ router.post("/attendance-exceptions", requireAuth, async (req, res) => {
       userId:      u.id,
       userName:    u.name,
       region:      u.region ?? null,
-      date:        String(date),
+      date:        dateStr,
       reason:      String(reason),
       notes:       notes ? String(notes) : null,
       currentStage: "RH",
@@ -152,7 +202,7 @@ router.post("/attendance-exceptions", requireAuth, async (req, res) => {
       userId: u.id, userName: u.name, userRole: u.role,
       action: "attendance_exception.raised",
       entityType: "attendance_exception", entityId: id,
-      meta: { date, reason },
+      meta: { date: dateStr, reason },
     });
 
     res.status(201).json({ ok: true, data: row });
@@ -165,6 +215,7 @@ router.post("/attendance-exceptions", requireAuth, async (req, res) => {
 // Approve or reject an exception at each stage.
 // Chain: RH → NSH → CRO → Admin
 // Admin can always approve/reject, skipping chain stages.
+// Scope: REGION HEAD is region-bound; can only act on requests from their region.
 
 const CHAIN = ["RH", "NSH", "CRO", "Admin"] as const;
 const STAGE_ROLE: Record<string, string> = {
@@ -199,11 +250,22 @@ router.patch("/attendance-exceptions/:id/action", requireAuth, async (req, res) 
     const currentStage = exc.currentStage!;
     const expectedRole = STAGE_ROLE[currentStage];
 
+    // Role check: must be the expected stage role, or Admin (who can act at any stage)
     if (u.role !== "ADMIN" && u.role !== expectedRole) {
       return void res.status(403).json({
         ok: false,
         error: `Only ${expectedRole} (or Admin) can act at stage ${currentStage}`,
       });
+    }
+
+    // Scope check: REGION HEAD is bound to their own region
+    if (u.role === "REGION HEAD" && currentStage === "RH") {
+      if (!u.region || exc.region !== u.region) {
+        return void res.status(403).json({
+          ok: false,
+          error: "You can only act on exception requests from your own region",
+        });
+      }
     }
 
     const historyEntry = {
@@ -219,10 +281,10 @@ router.patch("/attendance-exceptions/:id/action", requireAuth, async (req, res) 
     let updates: Record<string, any> = { updatedAt: new Date(), stageHistory: history };
 
     if (action === "reject") {
-      updates.status      = "rejected";
+      updates.status       = "rejected";
       updates.currentStage = "Rejected";
-      updates.grantedBy   = u.name;
-      updates.grantedAt   = new Date().toISOString();
+      updates.grantedBy    = u.name;
+      updates.grantedAt    = new Date().toISOString();
     } else {
       const currentIdx = CHAIN.indexOf(currentStage as (typeof CHAIN)[number]);
       const isLast = u.role === "ADMIN" || currentIdx === CHAIN.length - 1;
@@ -233,12 +295,13 @@ router.patch("/attendance-exceptions/:id/action", requireAuth, async (req, res) 
         updates.grantedBy    = u.name;
         updates.grantedAt    = new Date().toISOString();
 
+        // Flip attendance record to "exception_granted" (distinct from genuine "present")
         if (exc.attendanceRecordId) {
           await db
             .update(attendanceRecords)
             .set({
-              status: "present",
-              note:   `Exception granted by ${u.name} (${exc.reason})`,
+              status: "exception_granted",
+              note:   `Exception granted by ${u.name} (${exc.reason}) via approval chain`,
             })
             .where(eq(attendanceRecords.id, exc.attendanceRecordId));
         }
@@ -263,7 +326,8 @@ router.patch("/attendance-exceptions/:id/action", requireAuth, async (req, res) 
 });
 
 // ─── POST /api/attendance-records/:id/grant-exception ─────────────────────────
-// Admin/CXO: direct override — grant exception without chain, marks record present.
+// Admin/CXO: direct override — grant exception without chain.
+// Sets attendance record status to "exception_granted" (distinct from genuine present).
 
 router.post("/attendance-records/:id/grant-exception", requireAuth, async (req, res) => {
   try {
@@ -286,9 +350,20 @@ router.post("/attendance-records/:id/grant-exception", requireAuth, async (req, 
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     const rec = rows[0]!;
 
+    // Only eligible if absent or partial (not already present/exception_granted)
+    if (!["absent", "partial"].includes(rec.status)) {
+      return void res.status(400).json({
+        ok: false,
+        error: `Record is already ${rec.status} — cannot grant exception`,
+      });
+    }
+
     const updated = await db
       .update(attendanceRecords)
-      .set({ status: "present", note: `Exception granted by ${u.name}: ${String(reason).trim()}` })
+      .set({
+        status: "exception_granted",
+        note:   `Exception granted directly by ${u.name} (${u.role}): ${String(reason).trim()}`,
+      })
       .where(eq(attendanceRecords.id, rec.id))
       .returning();
 
@@ -301,7 +376,7 @@ router.post("/attendance-records/:id/grant-exception", requireAuth, async (req, 
       region:              rec.region,
       date:                rec.date,
       reason:              String(reason).trim(),
-      notes:               "Directly granted by Admin/CXO",
+      notes:               `Directly granted by ${u.role}`,
       currentStage:        "Granted",
       stageHistory:        [{
         stage: "Admin", action: "approve",
