@@ -21,12 +21,13 @@ export interface RepProfilePatch {
   reportingManager?: string;
 }
 
-interface UsersResponse { ok: boolean; data: AdminUser[] }
+interface UsersResponse { ok: boolean; users?: AdminUser[]; data?: AdminUser[] }
 
 /** GET /api/admin/users */
 export async function listAdminUsers(): Promise<AdminUser[]> {
   const r = await apiFetch<UsersResponse>("/api/admin/users");
-  return Array.isArray(r.data) ? r.data : [];
+  const list = r.users ?? r.data ?? [];
+  return Array.isArray(list) ? list : [];
 }
 
 /** POST /api/admin/users/:id/approve */
