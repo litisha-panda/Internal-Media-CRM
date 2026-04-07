@@ -10,6 +10,10 @@ import * as tasksSvc      from "../services/api/tasks";
 import * as irSvc         from "../services/api/internalRequests";
 import * as revSvc        from "../services/api/revenue";
 import * as adminSvc      from "../services/api/admin";
+import { useMeetings } from "../hooks/useMeetings";
+import { useTouchpoints } from "../hooks/useTouchpoints";
+import { useTasks } from "../hooks/useTasks";
+import { useAttendance } from "../hooks/useAttendance";
 
 
 // Route all Claude API calls through the API server proxy (key stays server-side)
@@ -1244,11 +1248,10 @@ export default function OTVApp() {
   const [section, setSection]             = useState("home"); // "home" | "ro" | "crm"
   const [sessionChecking, setSessionChecking] = useState(true); // true until /me resolves
   // ── My Plan: DB-first meeting state ──────────────────────────────────────
-  // dbMeetings: fetched from /api/meetings on login. Single source of truth for planned meetings.
+  // dbMeetings: fetched from /api/meetings on login via useMeetings hook.
   // ephemeralPlans: local-only array for auto-created reminders / follow-ups (never persisted).
   // plans: derived combined view used throughout the calendar (read-only derived).
-  const [dbMeetings, setDbMeetings]           = useState<any[]>([]);
-  const [dbMeetingsLoading, setDbMeetingsLoading] = useState(true);
+  const { meetings: dbMeetings, isLoading: dbMeetingsLoading, setMeetings: setDbMeetings } = useMeetings(loggedIn);
   const [ephemeralPlans, setEphemeralPlans]   = useState<any[]>([]);
 
   // Refs so the smart setPlans can read current state without stale closure issues
@@ -1316,70 +1319,43 @@ export default function OTVApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Fetch DB meetings whenever the user logs in ─────────────────────────────
-  // For demo users with no meetings, a one-time bootstrap seeds sample data into
-  // the DB and sets a `bootstrapped_demo_<userId>` flag in app_state to prevent
-  // re-seeding on subsequent logins.
+  // ── Demo bootstrap: seed sample meetings for first-time demo users ───────────
+  // Runs once after useMeetings has loaded (isLoading becomes false) and the user
+  // is a demo provider with no meetings. Uses /api/state flag to prevent re-seeding.
   useEffect(() => {
-    if (!loggedIn) { setDbMeetingsLoading(false); return; }
-    setDbMeetingsLoading(true);
-
+    if (!loggedIn || dbMeetingsLoading) return;
     const u = loginUser as any;
-    const isDemoUser = u?.provider === "demo";
+    if (u?.provider !== "demo" || dbMeetings.length > 0 || !u?.id) return;
 
-    // Inline demo seed factory — dates relative to today at fetch time
-    const makeSeeds = (): any[] => {
-      if (!u?.id) return [];
-      const addDays = (n: number) => {
-        const d = new Date(); d.setDate(d.getDate() + n);
-        return d.toISOString().split("T")[0];
-      };
-      const base = { userId: u.id, repId: u.repId ?? null, region: u.region || "North", mode: "Physical", status: "planned", meetingKind: "ACTIONABLE" };
-      return [
-        { ...base, id: `demo_${u.id}_1`, clientName: "Star Cement Ltd",    contactName: "Rahul Sharma",    agenda: "Q3 sponsorship package pitch",     date: addDays(0), time: "10:00" },
-        { ...base, id: `demo_${u.id}_2`, clientName: "Patanjali Foods",    contactName: "Anita Panigrahi", agenda: "Prime time slot renewal",           date: addDays(1), time: "11:30", mode: "Virtual" },
-        { ...base, id: `demo_${u.id}_3`, clientName: "OdishaMart Digital", contactName: "Priya Das",       agenda: "Digital + OTT package proposal",    date: addDays(2), time: "14:00" },
-        { ...base, id: `demo_${u.id}_4`, clientName: "Utkal Alumina",      contactName: "Biju Nayak",      agenda: "Brand activation follow-up",        date: addDays(4), time: "10:30" },
-        { ...base, id: `demo_${u.id}_5`, clientName: "Heritage Foods",     contactName: "Sandeep Mishra",  agenda: "News ticker campaign pitch",        date: addDays(5), time: "15:00" },
-      ];
+    const addDays = (n: number) => {
+      const d = new Date(); d.setDate(d.getDate() + n);
+      return d.toISOString().split("T")[0];
     };
+    const base = { userId: u.id, repId: u.repId ?? null, region: u.region || "North", mode: "Physical", status: "planned", meetingKind: "ACTIONABLE" };
+    const seeds = [
+      { ...base, id: `demo_${u.id}_1`, clientName: "Star Cement Ltd",    contactName: "Rahul Sharma",    agenda: "Q3 sponsorship package pitch",     date: addDays(0), time: "10:00" },
+      { ...base, id: `demo_${u.id}_2`, clientName: "Patanjali Foods",    contactName: "Anita Panigrahi", agenda: "Prime time slot renewal",           date: addDays(1), time: "11:30", mode: "Virtual" },
+      { ...base, id: `demo_${u.id}_3`, clientName: "OdishaMart Digital", contactName: "Priya Das",       agenda: "Digital + OTT package proposal",    date: addDays(2), time: "14:00" },
+      { ...base, id: `demo_${u.id}_4`, clientName: "Utkal Alumina",      contactName: "Biju Nayak",      agenda: "Brand activation follow-up",        date: addDays(4), time: "10:30" },
+      { ...base, id: `demo_${u.id}_5`, clientName: "Heritage Foods",     contactName: "Sandeep Mishra",  agenda: "News ticker campaign pitch",        date: addDays(5), time: "15:00" },
+    ];
 
-    meetingsSvc.listMeetings()
-      .then(async (loaded) => {
-        if (isDemoUser && loaded.length === 0 && u?.id) {
-          // Check bootstrap flag to avoid re-seeding on subsequent logins
-          const flagKey = `bootstrapped_demo_${u.id}`;
-          const flagRes = await fetch(`/api/state/${flagKey}`, { credentials: "include", headers: authHeaders() }).catch(() => null);
-          const flagData = flagRes?.ok ? await flagRes.json().catch(() => null) : null;
-
-          if (!flagData?.value) {
-            // First-time demo login — seed sample meetings
-            const seeds = makeSeeds();
-            const settled = await Promise.allSettled(
-              seeds.map(m => meetingsSvc.createMeeting(m).catch(() => null))
-            );
-            const seeded = settled
-              .filter(r => r.status === "fulfilled" && (r as any).value)
-              .map((r: any) => r.value)
-              .filter(Boolean);
-            setDbMeetings(seeded);
-            // Store bootstrap flag so we never re-seed
-            fetch(`/api/state/${flagKey}`, {
-              method: "PUT", credentials: "include",
-              headers: authHeaders({ "Content-Type": "application/json" }),
-              body: JSON.stringify({ value: true }),
-            }).catch(() => {});
-          } else {
-            setDbMeetings(loaded);
-          }
-        } else {
-          setDbMeetings(loaded);
-        }
-      })
-      .catch(() => {})
-      .finally(() => setDbMeetingsLoading(false));
+    const flagKey = `bootstrapped_demo_${u.id}`;
+    (async () => {
+      const flagRes = await fetch(`/api/state/${flagKey}`, { credentials: "include", headers: authHeaders() }).catch(() => null);
+      const flagData = flagRes?.ok ? await flagRes.json().catch(() => null) : null;
+      if (flagData?.value) return; // already seeded on a prior login
+      const settled = await Promise.allSettled(seeds.map(m => meetingsSvc.createMeeting(m).catch(() => null)));
+      const seeded = settled.filter(r => r.status === "fulfilled" && r.value).map(r => r.value);
+      if (seeded.length) setDbMeetings(seeded);
+      fetch(`/api/state/${flagKey}`, {
+        method: "PUT", credentials: "include",
+        headers: authHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify({ value: true }),
+      }).catch(() => {});
+    })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loggedIn]);
+  }, [loggedIn, dbMeetingsLoading]);
 
   const handleLogin  = (user) => {
     // Clear entity localStorage caches on every fresh login so API data always wins from first paint
@@ -1672,25 +1648,16 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [absenceReports, setAbsenceReports] = usePersistedState("otv_absence", SEED_ABSENCE_REPORTS);
   const [exceptionModal, setExceptionModal] = useState(null); // { reportId, repName }
   const [exceptionReason, setExceptionReason] = useState("");
-  const [attDbRecords, setAttDbRecords]         = useState<any[]>([]);
-  const [attExcRequests, setAttExcRequests]     = useState<any[]>([]);
-  const [attDbLoading, setAttDbLoading]         = useState(false);
+  const {
+    records: attDbRecords,
+    exceptions: attExcRequests,
+    isLoading: attDbLoading,
+    refresh: fetchAttendanceData,
+  } = useAttendance();
   const [excReqOpen, setExcReqOpen]             = useState(false);
   const [excReqRecord, setExcReqRecord]         = useState<any>(null);
   const [excReqForm, setExcReqForm]             = useState({reason:"", notes:""});
   const [excReqSubmitting, setExcReqSubmitting] = useState(false);
-  // Fetch attendance records + exceptions from DB when HR view is open
-  // CROApp is only rendered when the user is already authenticated, so no loggedIn guard needed
-  const fetchAttendanceData = useCallback(() => {
-    setAttDbLoading(true);
-    attendSvc.listAll()
-      .then(({ records, exceptions }) => {
-        setAttDbRecords(records);
-        setAttExcRequests(exceptions);
-      })
-      .catch(()=>{})
-      .finally(()=>setAttDbLoading(false));
-  }, []);
 
   useEffect(() => {
     if (view === "hr") fetchAttendanceData();
@@ -1732,7 +1699,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [noteModal, setNoteModal] = useState(null);   // {title, placeholder, onSubmit}
   const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
-  const [tasks, setTasks, tasksLoading, tasksError]         = useApiEntityState("/api/tasks", "otv_tasks", []);
+  const { tasks, setTasks, isLoading: tasksLoading, syncError: tasksError } = useTasks(loggedIn);
   const [taskModal, setTaskModal]       = useState(false);
   const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -1924,7 +1891,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [revenueEntries, setRevenueEntries, revLoading, revError] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  []);
   // ── Part 1: New data model objects ──────────────────────────────────────
   const [clientAccounts, setClientAccounts, , caError] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
-  const [touchpoints,    setTouchpoints,    , tpError] = useApiEntityState("/api/touchpoints",     "otv_touchpoints",    []);
+  const { touchpoints, setTouchpoints } = useTouchpoints(loggedIn);
 
   // Part 1: One-time migration — runs when clientAccounts is empty but deals/meetings exist
   useEffect(() => {
@@ -3718,7 +3685,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
   // Global API status — collected from all API-backed entity hooks
   const crmLoading = tasksLoading || targetLoading || revLoading;
-  const syncError  = tasksError || irError || targetError || revError || caError || tpError;
+  const syncError  = tasksError || irError || targetError || revError || caError;
 
   return (
     <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace",background:C.bg,color:C.text,minHeight:"100vh",display:"flex",flexDirection:"column",fontSize:13}}>
