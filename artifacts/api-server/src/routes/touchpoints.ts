@@ -216,13 +216,24 @@ router.patch("/touchpoints/:id", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "No updatable fields provided (allowed: whatHappened, clientFeedback, stageUpdate, actionItems)" });
     }
 
+    // ── Authorization: only allow edits within the user's own scope ──
+    // SALES REP  → own touchpoints only (repId match)
+    // REGION HEAD → touchpoints from reps in their region
+    // Elevated   → all touchpoints
+    // Combining scope with id prevents cross-user mutations without revealing existence.
+    const scopeCond = await buildScopeCondition(req.user!);
+    const whereClause = scopeCond
+      ? and(eq(touchpoints.id, id), scopeCond)
+      : eq(touchpoints.id, id);
+
     const updated = await db
       .update(touchpoints)
       .set(patch)
-      .where(eq(touchpoints.id, id))
+      .where(whereClause)
       .returning();
 
-    if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
+    // Return 404 regardless of reason (not found vs. out of scope) to avoid leaking IDs
+    if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found or access denied" });
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
     res.status(500).json({ ok: false, error: err.message });
