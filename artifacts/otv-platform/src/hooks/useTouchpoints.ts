@@ -1,17 +1,20 @@
 /**
  * useTouchpoints — Fetch and mutate touchpoints via the touchpoints service.
  *
- * The exported `setTouchpoints` setter is API-syncing: new items are POST-ed,
- * changed items are PATCH-ed — matching the semantics of the previous
- * useApiEntityState hook so all existing call sites continue to persist.
- *
- * Typed mutation helpers (createTouchpoint, patchTouchpoint) provide
- * optimistic updates with server-confirmed reconciliation and error rollback.
+ * Behaviorally identical to useApiEntityState (touchpoints domain):
+ *   - localStorage seed for instant first-paint (stale-while-revalidate)
+ *   - Fetches on mount; polls every 30s for multi-user consistency
+ *   - 401 after a valid session fires window "otv:unauthorized" event
+ *   - API-syncing setter: new items POST-ed, changed items PATCH-ed
+ *   - Optimistic typed helpers: createTouchpoint, patchTouchpoint
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as tpSvc from "../services/api/touchpoints";
 import type { Touchpoint, TouchpointCreate, TouchpointPatch } from "../services/api/touchpoints";
+
+const LOCAL_KEY = "otv_touchpoints";
+const POLL_MS   = 30_000;
 
 export interface UseTouchpointsReturn {
   touchpoints: Touchpoint[];
@@ -24,30 +27,45 @@ export interface UseTouchpointsReturn {
 }
 
 export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
-  const [touchpoints, rawSetTouchpoints] = useState<Touchpoint[]>([]);
+  const backendIds   = useRef<Set<string>>(new Set());
+  const hadValidSess = useRef(false);
+
+  // Seed from localStorage for instant first-paint
+  const [touchpoints, rawSetTouchpoints] = useState<Touchpoint[]>(() => {
+    try {
+      const cached = localStorage.getItem(LOCAL_KEY);
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
   const [isLoading, setIsLoading] = useState(true);
 
-  // Tracks IDs confirmed in the backend
-  const backendIds = useRef<Set<string>>(new Set());
-
-  const refetch = useCallback(() => {
-    setIsLoading(true);
-    tpSvc.listTouchpoints()
-      .then(data => {
-        rawSetTouchpoints(data);
-        backendIds.current = new Set(data.map(tp => tp.id));
-      })
-      .catch(() => {})
-      .finally(() => setIsLoading(false));
+  const fetchAll = useCallback(async (isInitial?: boolean) => {
+    try {
+      const data = await tpSvc.listTouchpoints();
+      hadValidSess.current = true;
+      rawSetTouchpoints(data);
+      backendIds.current = new Set(data.map(tp => tp.id));
+      try { localStorage.setItem(LOCAL_KEY, JSON.stringify(data)); } catch {}
+    } catch (err: any) {
+      if (err?.status === 401 || err?.httpStatus === 401) {
+        if (hadValidSess.current) {
+          window.dispatchEvent(new CustomEvent("otv:unauthorized"));
+        }
+      }
+      /* offline / other errors — keep current state */
+    } finally {
+      if (isInitial) setIsLoading(false);
+    }
   }, []);
 
+  const refetch = useCallback(() => { fetchAll(true); }, [fetchAll]);
+
   useEffect(() => {
-    if (!loggedIn) {
-      setIsLoading(false);
-      return;
-    }
-    refetch();
-  }, [loggedIn, refetch]);
+    if (!loggedIn) { setIsLoading(false); return; }
+    fetchAll(true);
+    const t = setInterval(() => fetchAll(false), POLL_MS);
+    return () => clearInterval(t);
+  }, [loggedIn, fetchAll]);
 
   /**
    * API-syncing setter — mirrors useApiEntityState write semantics.
@@ -71,8 +89,9 @@ export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
               }
             }
           }
+          try { localStorage.setItem(LOCAL_KEY, JSON.stringify(next)); } catch {}
         } catch {
-          // Offline / error — local state still reflects the optimistic update
+          // offline / error — local state still reflects optimistic update
         }
       })();
       return next;
@@ -80,7 +99,6 @@ export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
   }, []);
 
   const createTouchpoint = useCallback(async (payload: TouchpointCreate): Promise<Touchpoint> => {
-    // Optimistic append
     const tempId = payload.id ?? `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const optimistic = { ...payload, id: tempId } as Touchpoint;
     rawSetTouchpoints(prev => [...prev, optimistic]);

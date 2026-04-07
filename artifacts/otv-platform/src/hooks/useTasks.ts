@@ -1,17 +1,20 @@
 /**
  * useTasks — Fetch and mutate tasks via the tasks service.
  *
- * The exported `setTasks` setter is API-syncing: new items are POST-ed,
- * changed items are PATCH-ed — matching the semantics of the previous
- * useApiEntityState hook so all existing call sites continue to persist.
- *
- * Typed mutation helpers (createTask, patchTask, deleteTask) provide
- * optimistic updates with server-confirmed reconciliation and error rollback.
+ * Behaviorally identical to useApiEntityState (tasks domain):
+ *   - localStorage seed for instant first-paint (stale-while-revalidate)
+ *   - Fetches on mount; polls every 30s for multi-user consistency
+ *   - 401 after a valid session fires window "otv:unauthorized" event
+ *   - API-syncing setter: new items POST-ed, changed items PATCH-ed
+ *   - Optimistic typed helpers: createTask, patchTask, deleteTask
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import * as tasksSvc from "../services/api/tasks";
 import type { Task, TaskCreate, TaskPatch } from "../services/api/tasks";
+
+const LOCAL_KEY = "otv_tasks";
+const POLL_MS   = 30_000;
 
 export interface UseTasksReturn {
   tasks: Task[];
@@ -26,32 +29,47 @@ export interface UseTasksReturn {
 }
 
 export function useTasks(loggedIn = true): UseTasksReturn {
-  const [tasks, rawSetTasks] = useState<Task[]>([]);
+  const backendIds     = useRef<Set<string>>(new Set());
+  const hadValidSess   = useRef(false);
+
+  // Seed from localStorage for instant first-paint
+  const [tasks, rawSetTasks] = useState<Task[]>(() => {
+    try {
+      const cached = localStorage.getItem(LOCAL_KEY);
+      return cached ? JSON.parse(cached) : [];
+    } catch { return []; }
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [syncError, setSyncError] = useState<string | null>(null);
 
-  // Tracks IDs that are confirmed in the backend
-  const backendIds = useRef<Set<string>>(new Set());
-
-  const refetch = useCallback(() => {
-    setIsLoading(true);
-    tasksSvc.listTasks()
-      .then(data => {
-        rawSetTasks(data);
-        backendIds.current = new Set(data.map(t => t.id));
-        setSyncError(null);
-      })
-      .catch(() => setSyncError("Failed to load tasks"))
-      .finally(() => setIsLoading(false));
+  const fetchAll = useCallback(async (isInitial?: boolean) => {
+    try {
+      const data = await tasksSvc.listTasks();
+      hadValidSess.current = true;
+      rawSetTasks(data);
+      backendIds.current = new Set(data.map(t => t.id));
+      try { localStorage.setItem(LOCAL_KEY, JSON.stringify(data)); } catch {}
+      setSyncError(null);
+    } catch (err: any) {
+      if (err?.status === 401 || err?.httpStatus === 401) {
+        if (hadValidSess.current) {
+          window.dispatchEvent(new CustomEvent("otv:unauthorized"));
+        }
+      }
+      /* offline / other errors — keep current state */
+    } finally {
+      if (isInitial) setIsLoading(false);
+    }
   }, []);
 
+  const refetch = useCallback(() => { fetchAll(true); }, [fetchAll]);
+
   useEffect(() => {
-    if (!loggedIn) {
-      setIsLoading(false);
-      return;
-    }
-    refetch();
-  }, [loggedIn, refetch]);
+    if (!loggedIn) { setIsLoading(false); return; }
+    fetchAll(true);
+    const t = setInterval(() => fetchAll(false), POLL_MS);
+    return () => clearInterval(t);
+  }, [loggedIn, fetchAll]);
 
   /**
    * API-syncing setter — mirrors useApiEntityState write semantics.
@@ -59,7 +77,9 @@ export function useTasks(loggedIn = true): UseTasksReturn {
    */
   const setTasks: React.Dispatch<React.SetStateAction<Task[]>> = useCallback((action) => {
     rawSetTasks(prev => {
-      const next = typeof action === "function" ? (action as (p: Task[]) => Task[])(prev) : action;
+      const next = typeof action === "function"
+        ? (action as (p: Task[]) => Task[])(prev)
+        : action;
       (async () => {
         try {
           for (const item of next) {
@@ -73,20 +93,18 @@ export function useTasks(loggedIn = true): UseTasksReturn {
               }
             }
           }
+          try { localStorage.setItem(LOCAL_KEY, JSON.stringify(next)); } catch {}
           setSyncError(null);
-        } catch {
-          setSyncError("Sync failed — changes may not be saved.");
-        }
+        } catch { setSyncError("Sync failed — changes may not be saved."); }
       })();
       return next;
     });
   }, []);
 
   const createTask = useCallback(async (payload: TaskCreate): Promise<Task> => {
-    // Optimistic prepend — tasks shown newest-first
     const tempId = payload.id ?? `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
     const optimistic = { ...payload, id: tempId } as Task;
-    rawSetTasks(prev => [optimistic, ...prev]);
+    rawSetTasks(prev => [...prev, optimistic]);
     try {
       const created = await tasksSvc.createTask(payload);
       backendIds.current.add(created.id);
@@ -109,17 +127,15 @@ export function useTasks(loggedIn = true): UseTasksReturn {
   }, [refetch]);
 
   const deleteTask = useCallback(async (id: string): Promise<void> => {
-    const snapshot = tasks;
     rawSetTasks(prev => prev.filter(t => t.id !== id));
-    backendIds.current.delete(id);
     try {
       await tasksSvc.deleteTask(id);
+      backendIds.current.delete(id);
     } catch (err) {
-      rawSetTasks(snapshot);
-      backendIds.current.add(id);
+      refetch();
       throw err;
     }
-  }, [tasks]);
+  }, [refetch]);
 
   return { tasks, isLoading, syncError, setTasks, createTask, patchTask, deleteTask, refetch };
 }
