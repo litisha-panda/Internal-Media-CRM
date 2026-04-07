@@ -1597,7 +1597,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [calDayView, setCalDayView]       = useState<string|null>(null); // date string "YYYY-MM-DD"
   const [myPlanTab,  setMyPlanTab]        = useState<"plan"|"log">("plan"); // My Plan sub-tabs
   const [addPlanFor, setAddPlanFor]       = useState(null);
-  const [planForm, setPlanForm]           = useState({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
+  const [planForm, setPlanForm]           = useState({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",touchpointType:"Deal Meeting",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
   const [planEditId, setPlanEditId]       = useState<string|null>(null);
   const [planEditForm, setPlanEditForm]   = useState({time:"",clientAgencyName:"",contactName:"",phone:"",agenda:"",pitchType:""});
   const [loginProvider, setLoginProvider] = useState<"google"|"zoho"|"demo">("demo");
@@ -1663,6 +1663,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const BLANK_ACTION_REQUIRED = {what:"", from:"", description:"", byWhen:""};
   const BLANK_LOG = {
     repId:"",
+    planId:"",
     meetingTime:"", clientOrAgency:"Client",
     dealId:"", clientAgencyName:"",
     agency:"", client:"", brand:"",
@@ -3986,7 +3987,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               const clientName = (pf.client||pf.agency||"").trim();
               if (!clientName) return;
               const planTime = pf.time||"10:00";
-              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myPlanRepId,date,time:planTime,clientAgencyName:clientName,agency:pf.agency.trim(),client:pf.client.trim(),brand:pf.brand.trim(),contactName:pf.contactName.trim(),phone:pf.phone.trim(),agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
+              const rawPhone = pf.phone.replace(/\D/g,"");
+              const storedPhone = rawPhone ? `+91${rawPhone.slice(-10)}` : "";
+              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myPlanRepId,date,time:planTime,clientAgencyName:clientName,agency:pf.agency.trim(),client:pf.client.trim(),brand:pf.brand.trim(),contactName:pf.contactName.trim(),phone:storedPhone,agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",touchpointType:pf.touchpointType||"Deal Meeting",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -4509,14 +4512,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   } else if (isFuture) {
                                     showToast(`This meeting is on ${p.date}. Come back on the day to log it.`);
                                   } else {
-                                    // T007: Open full log modal pre-filled from plan chip (auto-fetch agency/client/brand)
+                                    // Open log modal pre-filled from plan — no duplicate entry needed
                                     setLogForm(f=>({...BLANK_LOG,repId:String(myRepId),
+                                      planId:p.id,
+                                      meetingTime:p.time||"",
+                                      touchpointType:(p as any).touchpointType||"Deal Meeting",
                                       clientAgencyName:p.client||p.agency||p.clientAgencyName||"",
                                       agency:p.agency||"",client:p.client||p.clientAgencyName||"",brand:p.brand||"",
-                                      contactName:p.contactName||"",phone:p.phone||"",
+                                      contactName:p.contactName||"",mobile:p.phone||"",
                                       meetingType:p.meetingType||"Physical",
                                       pitchType:p.pitchType||"",agenda:p.agenda||"",
-                                      planId:p.id,
+                                      // Auto-link deal if client matches
+                                      dealId: deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===(p.client||p.clientAgencyName||"").toLowerCase())?.id || "",
                                     }));
                                     setLogOpen(true);
                                   }
@@ -5063,68 +5070,143 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 })()}
 
                 {/* Plan modal */}
-                {addPlanFor&&(
+                {addPlanFor&&(()=>{
+                  // Derive cascade lists from deals
+                  const myDeals = deals.filter(d=>d.repId===myRepId);
+                  const allAgencies = [...new Set(myDeals.map(d=>(d as any).agencyName||(d as any).agency||"").filter(Boolean))].sort();
+                  const clientsForAgency = pf.agency
+                    ? myDeals.filter(d=>((d as any).agencyName||(d as any).agency||"").toLowerCase()===pf.agency.toLowerCase()).map(d=>d.clientCompany)
+                    : myDeals.map(d=>d.clientCompany);
+                  const clientOptions = [...new Set(clientsForAgency)].sort();
+                  const brandsForClient = myDeals.filter(d=>d.clientCompany.toLowerCase()===(pf.client||"").toLowerCase()).flatMap(d=>[(d as any).brand].filter(Boolean));
+                  const brandOptions = [...new Set(brandsForClient)].sort();
+                  return (
                   <div className="overlay" onClick={()=>setAddPlanFor(null)}>
-                    <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:460}}>
-                      <div className="sans" style={{fontSize:15,fontWeight:700,marginBottom:14}}>
-                        Plan meeting · {new Date(addPlanFor).toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:10}}>
-
-                        {/* Agency / Client / Brand — separate fields */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8}}>
-                          <div>
-                            <label>Agency Name</label>
-                            <input placeholder="e.g. Dentsu, Omnicom…" value={pf.agency} onChange={e=>setPf(p=>({...p,agency:e.target.value}))} />
-                          </div>
-                          <div>
-                            <label>Client Name *</label>
-                            <select value={pf.client} onChange={e=>setPf(p=>({...p,client:e.target.value}))} style={{marginBottom:4}}>
-                              <option value="">Select from pipeline…</option>
-                              {[...new Set(deals.filter(d=>d.repId===myRepId).map(d=>d.clientCompany))].sort().map(c=>(
-                                <option key={c} value={c}>{c}</option>
-                              ))}
-                            </select>
-                            <input placeholder="Or type client name…" value={pf.client} onChange={e=>setPf(p=>({...p,client:e.target.value}))} />
-                          </div>
-                          <div>
-                            <label>Brand / Product</label>
-                            <input placeholder="e.g. Surf Excel…" value={pf.brand} onChange={e=>setPf(p=>({...p,brand:e.target.value}))} />
-                          </div>
+                    <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:500}}>
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
+                        <div>
+                          <div className="sans" style={{fontSize:15,fontWeight:700}}>Plan Touchpoint</div>
+                          <div style={{fontSize:11,color:C.dim,marginTop:2}}>{new Date(addPlanFor).toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}</div>
                         </div>
+                      </div>
+
+                      {/* Deal vs Relationship — set here, not at logging time */}
+                      <div style={{marginBottom:14}}>
+                        <label style={{marginBottom:6,display:"block"}}>Type of touchpoint *</label>
+                        <div style={{display:"flex",gap:8}}>
+                          {([["Deal Meeting","💼","Updates pipeline & stage","#1d5db4"],["Relationship","🤝","Hi-hello · no pipeline impact","#15803d"]] as const).map(([tt,icon,sub,col])=>(
+                            <button key={tt} onClick={()=>setPf(p=>({...p,touchpointType:tt}))}
+                              style={{flex:1,padding:"10px 12px",borderRadius:7,border:`1.5px solid ${pf.touchpointType===tt?col:C.border}`,background:pf.touchpointType===tt?`${col}14`:"transparent",cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
+                              <div style={{fontSize:12,fontWeight:700,color:pf.touchpointType===tt?col:C.text}}>{icon} {tt}</div>
+                              <div style={{fontSize:10,color:C.dim,marginTop:2}}>{sub}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div style={{height:1,background:C.border,marginBottom:14}} />
+
+                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+
+                        {/* Agency → Client → Brand (cascading) */}
+                        <div>
+                          <label>Agency <span style={{color:C.dim,fontWeight:400}}>(optional)</span></label>
+                          {allAgencies.length>0 ? (
+                            <select value={pf.agency} onChange={e=>setPf(p=>({...p,agency:e.target.value,client:"",brand:""}))} style={{marginBottom:4}}>
+                              <option value="">— No agency / direct client —</option>
+                              {allAgencies.map(a=><option key={a} value={a}>{a}</option>)}
+                              <option value="__other__">+ Add new agency…</option>
+                            </select>
+                          ) : null}
+                          {(pf.agency==="__other__"||allAgencies.length===0) && (
+                            <input placeholder="Agency name (e.g. Dentsu, Omnicom…)" value={pf.agency==="__other__"?"":pf.agency} onChange={e=>setPf(p=>({...p,agency:e.target.value,client:"",brand:""}))} autoFocus={allAgencies.length===0} />
+                          )}
+                        </div>
+
+                        <div>
+                          <label>Client / Company *</label>
+                          {clientOptions.length>0 ? (
+                            <select value={pf.client} onChange={e=>{const v=e.target.value;if(v==="__other__"){setPf(p=>({...p,client:"",brand:""}));}else{setPf(p=>({...p,client:v,brand:""}));}}} style={{marginBottom:4}}>
+                              <option value="">Select client…</option>
+                              {clientOptions.map(c=><option key={c} value={c}>{c}</option>)}
+                              <option value="__other__">+ New client (type below)…</option>
+                            </select>
+                          ) : null}
+                          {(pf.client==="__other__"||!clientOptions.includes(pf.client)) && (
+                            <input placeholder="Client name…" value={pf.client==="__other__"?"":pf.client} onChange={e=>setPf(p=>({...p,client:e.target.value,brand:""}))} autoFocus={clientOptions.length===0} />
+                          )}
+                        </div>
+
+                        {pf.client && pf.client!=="__other__" && (
+                          <div>
+                            <label>Brand / Product <span style={{color:C.dim,fontWeight:400}}>(optional)</span></label>
+                            {brandOptions.length>0 ? (
+                              <select value={pf.brand} onChange={e=>{const v=e.target.value;if(v==="__other__"){setPf(p=>({...p,brand:""}));}else{setPf(p=>({...p,brand:v}));}}} style={{marginBottom:4}}>
+                                <option value="">Select brand…</option>
+                                {brandOptions.map(b=><option key={b} value={b}>{b}</option>)}
+                                <option value="__other__">+ Add brand…</option>
+                              </select>
+                            ) : null}
+                            {(pf.brand==="__other__"||brandOptions.length===0) && (
+                              <input placeholder="e.g. Surf Excel, Maggi…" value={pf.brand==="__other__"?"":pf.brand} onChange={e=>setPf(p=>({...p,brand:e.target.value}))} />
+                            )}
+                          </div>
+                        )}
 
                         {/* Contact person */}
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                          <div><label>Contact Person Name *</label><input placeholder="Who are you meeting?" value={pf.contactName} onChange={e=>setPf(p=>({...p,contactName:e.target.value}))} autoFocus /></div>
-                          <div><label>Phone Number</label><input placeholder="Mobile number" value={pf.phone} onChange={e=>setPf(p=>({...p,phone:e.target.value}))} /></div>
-                        </div>
-
-                        {/* Time */}
-                        <div><label>Meeting Time</label><input type="time" value={pf.time} onChange={e=>setPf(p=>({...p,time:e.target.value}))} /></div>
-
-                        {/* Meeting type toggle */}
-                        <div>
-                          <label>Meeting Type</label>
-                          <div style={{display:"flex",gap:6,marginTop:4}}>
-                            {[{id:"Physical",icon:"🤝"},{id:"Online",icon:"💻"},{id:"Phone Call",icon:"📞"}].map(mt=>(
-                              <button key={mt.id} onClick={()=>setPf(p=>({...p,meetingType:mt.id,needsMeet:mt.id!=="Online"?false:p.needsMeet}))}
-                                style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${pf.meetingType===mt.id?C.accent:C.border}`,background:pf.meetingType===mt.id?`${C.accent}18`:"transparent",color:pf.meetingType===mt.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",textAlign:"center"}}>
-                                {mt.icon} {mt.id}
-                              </button>
-                            ))}
+                          <div>
+                            <label>Contact Person *</label>
+                            <input placeholder="Name of person you're meeting" value={pf.contactName} onChange={e=>setPf(p=>({...p,contactName:e.target.value}))} />
                           </div>
-                          {/* Google Meet option — only for Online */}
-                          {pf.meetingType==="Online" && (
-                            <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,padding:"8px 10px",background:"#4285F418",border:"1px solid #4285F444",borderRadius:5}}>
-                              <button onClick={()=>setPf(p=>({...p,needsMeet:!p.needsMeet}))}
-                                style={{width:16,height:16,borderRadius:3,border:`1px solid ${pf.needsMeet?"#4285F4":C.border}`,background:pf.needsMeet?"#4285F4":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10,flexShrink:0,fontFamily:"'DM Mono',monospace"}}>
-                                {pf.needsMeet?"✓":""}
-                              </button>
-                              <span style={{fontSize:12,color:"#4285F4",fontWeight:600}}>Schedule Google Meet link</span>
-                              <span style={{fontSize:10,color:C.dim}}>(will be set up when deployed)</span>
+                          <div>
+                            <label>Phone <span style={{color:C.dim,fontWeight:400}}>(+91 · 10 digits)</span></label>
+                            <div style={{display:"flex",alignItems:"center",gap:0}}>
+                              <span style={{padding:"7px 8px",background:C.s3,border:`1px solid ${C.border}`,borderRight:"none",borderRadius:"5px 0 0 5px",fontSize:12,color:C.dim,whiteSpace:"nowrap",flexShrink:0}}>+91</span>
+                              <input
+                                placeholder="9876543210"
+                                value={pf.phone.replace(/^\+91/,"")}
+                                maxLength={10}
+                                onChange={e=>{
+                                  const digits=e.target.value.replace(/\D/g,"").slice(0,10);
+                                  setPf(p=>({...p,phone:digits}));
+                                }}
+                                style={{borderRadius:"0 5px 5px 0",flex:1,minWidth:0}}
+                              />
                             </div>
-                          )}
+                            {pf.phone&&pf.phone.replace(/\D/g,"").length>0&&pf.phone.replace(/\D/g,"").length<10&&(
+                              <div style={{fontSize:10,color:C.orange,marginTop:2}}>{10-pf.phone.replace(/\D/g,"").length} more digits needed</div>
+                            )}
+                          </div>
                         </div>
+
+                        {/* Time + Meeting type */}
+                        <div style={{display:"grid",gridTemplateColumns:"120px 1fr",gap:8}}>
+                          <div><label>Time</label><input type="time" value={pf.time} onChange={e=>setPf(p=>({...p,time:e.target.value}))} /></div>
+                          <div>
+                            <label>How</label>
+                            <div style={{display:"flex",gap:6,marginTop:4}}>
+                              {[{id:"Physical",icon:"🤝"},{id:"Online",icon:"💻"},{id:"Phone Call",icon:"📞"}].map(mt=>(
+                                <button key={mt.id} onClick={()=>setPf(p=>({...p,meetingType:mt.id,needsMeet:mt.id!=="Online"?false:p.needsMeet}))}
+                                  style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${pf.meetingType===mt.id?C.accent:C.border}`,background:pf.meetingType===mt.id?`${C.accent}18`:"transparent",color:pf.meetingType===mt.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",textAlign:"center"}}>
+                                  {mt.icon} {mt.id}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Google Meet option — only for Online */}
+                        {pf.meetingType==="Online" && (
+                          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,padding:"8px 10px",background:"#4285F418",border:"1px solid #4285F444",borderRadius:5}}>
+                            <button onClick={()=>setPf(p=>({...p,needsMeet:!p.needsMeet}))}
+                              style={{width:16,height:16,borderRadius:3,border:`1px solid ${pf.needsMeet?"#4285F4":C.border}`,background:pf.needsMeet?"#4285F4":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10,flexShrink:0,fontFamily:"'DM Mono',monospace"}}>
+                              {pf.needsMeet?"✓":""}
+                            </button>
+                            <span style={{fontSize:12,color:"#4285F4",fontWeight:600}}>Schedule Google Meet link</span>
+                            <span style={{fontSize:10,color:C.dim}}>(will be set up when deployed)</span>
+                          </div>
+                        )}
 
                         {/* Agenda */}
                         <div><label>Agenda — what are you going in for?</label><input placeholder="e.g. Present Q2 FCT grid" value={pf.agenda} onChange={e=>setPf(p=>({...p,agenda:e.target.value}))} /></div>
@@ -5175,7 +5257,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
                 </>}
               </div>
             );
@@ -13776,21 +13859,37 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
             <div style={{height:1,background:C.border,margin:"12px 0"}} />
 
-            {/* Part 1: Touchpoint Type selector */}
-            <div style={{display:"flex",gap:8,marginBottom:14}}>
-              {(["Deal Meeting","Relationship"] as const).map(tt=>(
-                <button key={tt} onClick={()=>setLogForm(p=>({...p,touchpointType:tt}))}
-                  style={{flex:1,padding:"9px 14px",borderRadius:6,border:`1px solid ${logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.border}`,background:logForm.touchpointType===tt?(tt==="Deal Meeting"?`${C.blue}14`:`${C.green}14`):"transparent",color:logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:12,textAlign:"center"}}>
-                  {tt==="Deal Meeting"?"💼 Deal Meeting":"🤝 Relationship"}
-                  <div style={{fontSize:9,fontWeight:400,marginTop:2,color:"inherit",opacity:.8}}>
-                    {tt==="Deal Meeting"?"Updates stage · Resets escalation clock":"Hi-Hello · No pipeline impact"}
-                  </div>
-                </button>
-              ))}
-            </div>
+            {/* FROM PLAN — summary strip shown instead of all pre-filled fields */}
+            {logForm.planId ? (
+              <div style={{background:`${C.blue}08`,border:`1.5px solid ${C.blue}33`,borderRadius:8,padding:"12px 14px",marginBottom:16}}>
+                <div style={{fontSize:9,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>From Your Plan</div>
+                <div style={{display:"flex",flexWrap:"wrap",gap:16}}>
+                  {logForm.clientAgencyName&&<div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>CLIENT</div><div style={{fontSize:13,fontWeight:700,color:C.text}}>{logForm.clientAgencyName}</div></div>}
+                  {logForm.agency&&<div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>AGENCY</div><div style={{fontSize:12,color:C.dim}}>{logForm.agency}</div></div>}
+                  {logForm.brand&&<div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>BRAND</div><div style={{fontSize:12,color:C.dim}}>{logForm.brand}</div></div>}
+                  {logForm.contactName&&<div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>CONTACT</div><div style={{fontSize:12,color:C.dim}}>{logForm.contactName}{logForm.mobile?` · ${logForm.mobile}`:""}</div></div>}
+                  {logForm.meetingTime&&<div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>TIME</div><div style={{fontSize:12,color:C.dim}}>{logForm.meetingTime}</div></div>}
+                  {logForm.meetingType&&<div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>HOW</div><div style={{fontSize:12,color:C.dim}}>{logForm.meetingType==="Physical"?"🤝":logForm.meetingType==="Online"?"💻":"📞"} {logForm.meetingType}</div></div>}
+                  <div><div style={{fontSize:9,color:C.muted,fontWeight:600,marginBottom:2}}>TYPE</div><div style={{fontSize:12,color:logForm.touchpointType==="Deal Meeting"?C.blue:C.green,fontWeight:600}}>{logForm.touchpointType==="Deal Meeting"?"💼 Deal Meeting":"🤝 Relationship"}</div></div>
+                </div>
+              </div>
+            ) : (
+              /* Standalone: show touchpoint type selector */
+              <div style={{display:"flex",gap:8,marginBottom:14}}>
+                {(["Deal Meeting","Relationship"] as const).map(tt=>(
+                  <button key={tt} onClick={()=>setLogForm(p=>({...p,touchpointType:tt}))}
+                    style={{flex:1,padding:"9px 14px",borderRadius:6,border:`1px solid ${logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.border}`,background:logForm.touchpointType===tt?(tt==="Deal Meeting"?`${C.blue}14`:`${C.green}14`):"transparent",color:logForm.touchpointType===tt?(tt==="Deal Meeting"?C.blue:C.green):C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700,fontSize:12,textAlign:"center"}}>
+                    {tt==="Deal Meeting"?"💼 Deal Meeting":"🤝 Relationship"}
+                    <div style={{fontSize:9,fontWeight:400,marginTop:2,color:"inherit",opacity:.8}}>
+                      {tt==="Deal Meeting"?"Updates stage · Resets escalation clock":"Hi-Hello · No pipeline impact"}
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
 
-            {/* SECTION 1 — When / How */}
-            {isRep ? (
+            {/* SECTION 1 — When / How (hidden when logging from a plan — already captured there) */}
+            {!logForm.planId && (isRep ? (
               <div style={{display:"grid",gridTemplateColumns:"160px 1fr",gap:10,marginBottom:10}}>
                 <div>
                   <label>Time of Touchpoint</label>
@@ -13815,7 +13914,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <input type="time" value={logForm.meetingTime||""} onChange={e=>setLogForm(p=>({...p,meetingTime:e.target.value}))} />
                 </div>
               </div>
-            )}
+            ))}
+            {!logForm.planId && (
             <div style={{marginBottom:14}}>
               <label>Meeting Type</label>
               <div style={{display:"flex",gap:6,marginTop:4}}>
@@ -13827,8 +13927,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 ))}
               </div>
             </div>
+            )}
 
-            {/* SECTION 2 — Client / Agency / Brand */}
+            {/* SECTION 2 — Client / Agency / Brand (hidden when logging from plan — already captured) */}
+            {!logForm.planId && <>
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Client / Agency / Brand</div>
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:10}}>
               <div>
@@ -13911,9 +14013,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <input placeholder="Contact number" value={logForm.mobile||""} onChange={e=>setLogForm(p=>({...p,mobile:e.target.value}))} />
               </div>
             </div>
+            </>}
 
             {/* SECTION 3 — Touchpoint Content */}
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Touchpoint Content</div>
+            {!logForm.planId && (
             <div style={{marginBottom:10}}>
               <label>Pitch Type <span style={{color:C.dim,fontWeight:400}}>(what did you pitch?)</span></label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
@@ -13925,6 +14029,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 ))}
               </div>
             </div>
+            )}
             <div style={{marginBottom:10}}>
               <label>Discussion <span style={{color:C.dim,fontWeight:400}}>(free text — GK: write what happened in the meeting)</span></label>
               <textarea rows={3} placeholder="What did you discuss? Campaign ideas, budget conversations, client objections, brand insights..." value={logForm.discussion||""} onChange={e=>setLogForm(p=>({...p,discussion:e.target.value}))} style={{resize:"vertical"}} />
