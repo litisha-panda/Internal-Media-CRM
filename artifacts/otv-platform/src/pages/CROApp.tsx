@@ -14,6 +14,8 @@ import { useMeetings } from "../hooks/useMeetings";
 import { useTouchpoints } from "../hooks/useTouchpoints";
 import { useTasks } from "../hooks/useTasks";
 import { useAttendance } from "../hooks/useAttendance";
+import { usePersistedState } from "../hooks/usePersistedState";
+import { useApiEntityState } from "../hooks/useApiEntityState";
 import { RepDashboard } from "../views/rep/RepDashboard";
 import { MyPlan } from "../views/rep/MyPlan";
 import { LogMeeting } from "../views/rep/LogMeeting";
@@ -597,94 +599,6 @@ async function hashPwd(password) {
 const GOOGLE_CLIENT_ID = "773380743026-i87vjdrj5n699von60sa3plqqv95mlem.apps.googleusercontent.com";
 const ZOHO_CLIENT_ID   = "1000.TQ0C2M1CLOJC0ES8EPEJJWG5LUJ9ON";
 
-function usePersistedState(key, initial) {
-  // 1. Initialize instantly from localStorage (no flash)
-  const [state, setState] = useState(() => {
-    try {
-      const s = localStorage.getItem(key);
-      return s ? JSON.parse(s) : initial;
-    } catch { return initial; }
-  });
-
-  // Track when we last wrote, to avoid polling overwriting in-progress edits
-  const lastWriteRef    = useRef<number>(0);
-  const pendingTimerRef = useRef<ReturnType<typeof setTimeout>|null>(null);
-  // Skip the very first effect run (mount) so we don't falsely mark as "user write"
-  const isFirstRunRef   = useRef(true);
-
-  // 2. On every state change: mirror to localStorage immediately,
-  //    then debounce-write to server after 1s.
-  //    IMPORTANT: mark lastWriteRef immediately (not inside the 1s timer) so that
-  //    an in-flight initial server load cannot race and overwrite a just-logged entry.
-  useEffect(() => {
-    try { localStorage.setItem(key, JSON.stringify(state)); } catch {}
-    if (!isFirstRunRef.current) {
-      // User-initiated change (or server-load triggered re-render after first mount):
-      // stamp the write time NOW so the load grace-period check sees it immediately.
-      lastWriteRef.current = Date.now();
-    }
-    isFirstRunRef.current = false;
-    if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
-    pendingTimerRef.current = setTimeout(async () => {
-      try {
-        await apiFetch(`/api/state/${key}`, {
-          method: "PUT",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ value: state }),
-        });
-      } catch { /* offline — localStorage still has it */ }
-    }, 1000);
-    return () => { if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current); };
-  }, [key, state]);
-
-  // 3. On mount: load from server (may override localStorage with newer shared data).
-  //    If server has nothing, migrate localStorage/seed to server.
-  // 4. Poll every 20s — only accept server value if it's newer than our last local write.
-  //    The grace-period check now applies to BOTH initial loads AND polls to prevent
-  //    a slow initial fetch from overwriting an entry the user just logged.
-  useEffect(() => {
-    const load = async (isPoll = false) => {
-      try {
-        const data = await apiFetch(`/api/state/${key}`).catch(() => null);
-        if (!data) return;
-        if ((data as any).ok && (data as any).value !== null) {
-          // Skip if we have a pending local write that is newer than the server data
-          const serverTs = (data as any).updatedAt ? new Date((data as any).updatedAt).getTime() : 0;
-          if (lastWriteRef.current > serverTs - 5000) return;
-          setState((data as any).value);
-          try { localStorage.setItem(key, JSON.stringify((data as any).value)); } catch {}
-        } else if (!isPoll) {
-          // Server has no data yet — push local/seed data so other users see it
-          const localVal = state;
-          apiFetch(`/api/state/${key}`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ value: localVal }),
-          }).catch(() => {});
-        }
-      } catch { /* offline */ }
-    };
-
-    load(false); // initial load
-    const interval = setInterval(() => load(true), 20000); // poll every 20s
-    return () => clearInterval(interval);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [key]);
-
-  // 5. Also sync across same-browser tabs (original behaviour)
-  useEffect(() => {
-    const onStorage = (e) => {
-      if (e.key === key && e.newValue !== null) {
-        try { setState(JSON.parse(e.newValue)); } catch {}
-      }
-    };
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [key]);
-
-  return [state, setState];
-}
-
 // ── Session token store ───────────────────────────────────────────────────────
 // Replit's path-based proxy prevents httpOnly cookies from being forwarded reliably.
 // We store the session token in localStorage and send it as X-Session-Token header
@@ -694,100 +608,6 @@ function setSessionTokenStore(t: string | null): void {
   setSessionTokenLib(t);
 }
 
-/**
- * useApiEntityState — API is the single source of truth.
- * Fetches on mount and polls every 30s for multi-user consistency.
- * Writes are immediate: POST for new items, PATCH for changed items (optimistic update).
- * localStorage used only as a stale-while-revalidate cold cache (never as a sync layer).
- * Returns [data, setter, loading, syncError].
- */
-function useApiEntityState<T extends { id: string }>(
-  apiPath: string,
-  localKey: string,
-  initial: T[],
-): [T[], React.Dispatch<React.SetStateAction<T[]>>, boolean, string|null] {
-  const backendIds = useRef<Set<string>>(new Set());
-  // Only dispatch logout event if this hook has previously received a valid 200.
-  // Prevents demo-mode (no API session) from triggering logout on initial mount 401.
-  const hadValidSession = useRef(false);
-
-  // Seed from localStorage cache for instant first paint, overwritten by API on mount
-  const [state, setState] = useState<T[]>(() => {
-    try {
-      const cached = localStorage.getItem(localKey);
-      return cached ? JSON.parse(cached) : initial;
-    } catch { return initial; }
-  });
-  const [loading,   setLoading]   = useState(true);
-  const [syncError, setSyncError] = useState<string|null>(null);
-
-  // Fetch from API — used on mount and by the 30s polling interval
-  const fetchAll = useCallback(async (isInitial?: boolean) => {
-    try {
-      const json = await apiFetch(apiPath);
-      if (json?.ok && Array.isArray(json.data)) {
-        hadValidSession.current = true;
-        setState(json.data);
-        backendIds.current = new Set(json.data.map((i) => i.id));
-        try { localStorage.setItem(localKey, JSON.stringify(json.data)); } catch {}
-      }
-    } catch (err) {
-      // 401 — fire unauthorized event if we previously had a valid session
-      if (err instanceof ApiError && err.status === 401) {
-        if (hadValidSession.current) {
-          window.dispatchEvent(new CustomEvent("otv:unauthorized"));
-        }
-      }
-      /* offline / other errors — keep current state */
-    }
-    finally { if (isInitial) setLoading(false); }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiPath, localKey]);
-
-  useEffect(() => {
-    fetchAll(true);
-    const t = setInterval(() => fetchAll(false), 30_000);
-    return () => clearInterval(t);
-  }, [fetchAll]);
-
-  // Setter: optimistic local update + immediate POST/PATCH to API
-  const setStateAndSync = useCallback((action: React.SetStateAction<T[]>) => {
-    setState(prev => {
-      const next = typeof action === "function" ? (action as (p: T[]) => T[])(prev) : action;
-      (async () => {
-        try {
-          for (const item of next) {
-            if (!backendIds.current.has(item.id)) {
-              // New item — POST
-              await apiFetch(apiPath, {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify(item),
-              });
-              backendIds.current.add(item.id);
-            } else {
-              // Existing item — PATCH only if changed
-              const old = prev.find(i => i.id === item.id);
-              if (old && JSON.stringify(old) !== JSON.stringify(item)) {
-                await apiFetch(`${apiPath}/${item.id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(item),
-                });
-              }
-            }
-          }
-          try { localStorage.setItem(localKey, JSON.stringify(next)); } catch {}
-          setSyncError(null);
-        } catch { setSyncError("Sync failed — changes may not be saved."); }
-      })();
-      return next;
-    });
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiPath, localKey]);
-
-  return [state, setStateAndSync as React.Dispatch<React.SetStateAction<T[]>>, loading, syncError];
-}
 
 // ── DATA VERSION AUTO-CLEAR ────────────────────────────────────────────────
 // Bump this string whenever seed data or schema changes to wipe stale localStorage.

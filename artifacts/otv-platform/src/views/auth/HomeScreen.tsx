@@ -1,10 +1,16 @@
-// @ts-nocheck
 import React from "react";
+import type { ApiUser } from "../../services/api/auth";
 
-export function HomeScreen({ user, onSelect, onLogout }) {
+interface HomeScreenProps {
+  user: ApiUser | null;
+  onSelect: (section: string) => void;
+  onLogout: () => void;
+}
+
+export function HomeScreen({ user, onSelect, onLogout }: HomeScreenProps) {
   const hour = new Date().getHours();
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening";
-  const firstName = (user.name || "").split(" ")[0];
+  const firstName = ((user?.name as string) || "").split(" ")[0];
 
   return (
     <div style={{ fontFamily:"'DM Mono','JetBrains Mono',monospace", background:"#f0f4f9", minHeight:"100vh", display:"flex", flexDirection:"column", color:"#18243a" }}>
@@ -26,12 +32,12 @@ export function HomeScreen({ user, onSelect, onLogout }) {
         </div>
         <div style={{ display:"flex", alignItems:"center", gap:10 }}>
           <div style={{ width:26, height:26, borderRadius:"50%", background:"#7920e820", border:"1px solid #7920e850", display:"flex", alignItems:"center", justifyContent:"center", fontSize:11, fontWeight:700, color:"#7920e8" }}>
-            {(user.name||"?")[0].toUpperCase()}
+            {((user?.name as string)||"?")[0].toUpperCase()}
           </div>
-          <span style={{ fontSize:12, color:"#4d5e78" }}>{user.name}</span>
+          <span style={{ fontSize:12, color:"#4d5e78" }}>{user?.name as string}</span>
           <button onClick={onLogout} style={{ background:"transparent", border:"1px solid #c8d3e5", borderRadius:4, padding:"3px 10px", color:"#4d5e78", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace" }}
-            onMouseOver={e=>{e.currentTarget.style.borderColor="#c92828";e.currentTarget.style.color="#c92828";}}
-            onMouseOut={e=>{e.currentTarget.style.borderColor="#c8d3e5";e.currentTarget.style.color="#4d5e78";}}>
+            onMouseOver={e=>{(e.currentTarget as HTMLButtonElement).style.borderColor="#c92828";(e.currentTarget as HTMLButtonElement).style.color="#c92828";}}
+            onMouseOut={e=>{(e.currentTarget as HTMLButtonElement).style.borderColor="#c8d3e5";(e.currentTarget as HTMLButtonElement).style.color="#4d5e78";}}>
             Sign out
           </button>
         </div>
