@@ -2052,6 +2052,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // S9: Setup Wizard state
   const [wizardStep, setWizardStep]                     = useState(0);
   const [wizardClients, setWizardClients]               = useState<{agency:string,client:string,brand:string,q1:string,q2:string,q3:string,q4:string}[]>([{agency:"",client:"",brand:"",q1:"",q2:"",q3:"",q4:""}]);
+  const [wizardRegion, setWizardRegion]                 = useState("");
+  const [wizardRM, setWizardRM]                         = useState("");
   // Part 6: Client Account Thread modal
   const [accountThreadOpen, setAccountThreadOpen]       = useState(false);
   const [accountThreadClient, setAccountThreadClient]   = useState<string|null>(null);
@@ -4060,6 +4062,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const setWStep = setWizardStep;
             const wClients    = wizardClients;
             const setWClients = setWizardClients;
+            const wRegion  = wizardRegion || myRep?.region || "";
+            const wRM      = wizardRM;
 
             const parseLakh = (v) => {
               const s = String(v||"").replace(/,/g,"").trim();
@@ -4072,9 +4076,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const totalTarget = wClients.reduce((s,c)=>s+parseLakh(c.q1)+parseLakh(c.q2)+parseLakh(c.q3)+parseLakh(c.q4),0);
 
             const doSubmit = () => {
+              if (!wRegion) { showToast("Select your region before submitting","err"); setWStep(1); return; }
+              if (!wRM.trim()) { showToast("Enter your Reporting Manager's name before submitting","err"); setWStep(1); return; }
               const repIdInt = myRepId;
               const repName  = myRep?.name || user?.name || "Sales Rep";
-              const rhRegion = myRep?.region || "";
+              const rhRegion = wRegion;
               const now      = new Date().toISOString();
               const newSubs  = QUARTERS.slice(0,4).map((q,qi)=>{
                 const clients = wClients.map(c=>({
@@ -4145,24 +4151,50 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 )}
 
                 {/* ── Step 1: Profile ── */}
-                {wStep===1 && (
+                {wStep===1 && (()=>{
+                  const canAdvance = !!wRegion && !!wRM.trim();
+                  return (
                   <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>
                     <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>Your Profile</div>
+                    {/* Read-only: Name + Role */}
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
-                      {[["Name",myRep?.name||user?.name||"—"],["Region",myRep?.region||"—"],["Role",user_role?.role||"SALES REP"],["Team",myRep?.region?"Sales · "+myRep.region:"—"]].map(([lbl,val])=>(
+                      {[["Name",myRep?.name||user?.name||"—"],["Role",user_role?.role||"SALES REP"]].map(([lbl,val])=>(
                         <div key={lbl} style={{padding:"10px 14px",background:C.s2,borderRadius:7}}>
                           <div style={{fontSize:10,color:C.muted,fontFamily:"'DM Sans',sans-serif",letterSpacing:.4,textTransform:"uppercase"}}>{lbl}</div>
                           <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{val}</div>
                         </div>
                       ))}
                     </div>
-                    <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>If any of this looks wrong, contact your Region Head or Admin to update it.</div>
+                    {/* Region selector — required */}
+                    <div style={{marginBottom:12}}>
+                      <div style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>Region <span style={{color:C.red}}>*</span></div>
+                      <select value={wRegion} onChange={e=>setWizardRegion(e.target.value)}
+                        style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${wRegion?C.green:C.border}`,borderRadius:5,color:wRegion?C.text:C.muted,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                        <option value="">Select your territory…</option>
+                        {REGIONS.filter(r=>r!=="National").map(r=><option key={r} value={r}>{r}</option>)}
+                      </select>
+                      {wRegion && <div style={{fontSize:9,color:C.green,marginTop:3}}>✓ Region set</div>}
+                    </div>
+                    {/* Reporting Manager — required */}
+                    <div style={{marginBottom:16}}>
+                      <div style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.4,textTransform:"uppercase",marginBottom:4}}>Reporting Manager <span style={{color:C.red}}>*</span></div>
+                      <input value={wRM} onChange={e=>setWizardRM(e.target.value)}
+                        placeholder="Your Region Head's full name"
+                        style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${wRM.trim()?C.green:C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
+                      <div style={{fontSize:9,color:C.muted,marginTop:3}}>The Region Head who approves your targets and attendance.</div>
+                    </div>
+                    {!canAdvance && (
+                      <div style={{padding:"8px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}33`,borderRadius:6,marginBottom:12,fontSize:11,color:C.orange,fontFamily:"'DM Sans',sans-serif"}}>
+                        Region and Reporting Manager are required to continue.
+                      </div>
+                    )}
                     <div style={{display:"flex",gap:8}}>
                       <button onClick={()=>setWStep(0)} style={{flex:1,padding:"10px 0",border:`1px solid ${C.border}`,background:"transparent",color:C.dim,borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← Back</button>
-                      <button onClick={()=>setWStep(2)} style={{flex:2,padding:"10px 0",background:C.accent,color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Looks good →</button>
+                      <button onClick={()=>{if(canAdvance)setWStep(2);}} style={{flex:2,padding:"10px 0",background:canAdvance?C.accent:`${C.dim}44`,color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:700,cursor:canAdvance?"pointer":"default",fontFamily:"'DM Mono',monospace",opacity:canAdvance?1:0.7}}>Looks good →</button>
                     </div>
                   </div>
-                )}
+                  );
+                })()}
 
                 {/* ── Step 2: Set Targets ── */}
                 {wStep===2 && (

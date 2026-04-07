@@ -192,4 +192,41 @@ router.patch("/touchpoints/:id/action-items", requireAuth, async (req, res) => {
   }
 });
 
+// PATCH /api/touchpoints/:id — general mutable-field update
+// Allowed: whatHappened, clientFeedback, stageUpdate, actionItems
+// Immutable fields (repId, clientAccountId, dealId, date, region, loggedByUserId, meetingId)
+// are silently stripped server-side — callers sending a full object will not receive a 400.
+router.patch("/touchpoints/:id", requireAuth, async (req, res) => {
+  try {
+    const id = String(req.params["id"]);
+    const { whatHappened, clientFeedback, stageUpdate, actionItems } = req.body;
+
+    const patch: Record<string, unknown> = {};
+    if (whatHappened  !== undefined) patch.whatHappened  = whatHappened;
+    if (clientFeedback !== undefined) patch.clientFeedback = clientFeedback;
+    if (stageUpdate   !== undefined) patch.stageUpdate   = stageUpdate;
+    if (actionItems   !== undefined) {
+      if (!Array.isArray(actionItems)) {
+        return void res.status(400).json({ ok: false, error: "actionItems must be an array" });
+      }
+      patch.actionItems = actionItems;
+    }
+
+    if (Object.keys(patch).length === 0) {
+      return void res.status(400).json({ ok: false, error: "No updatable fields provided (allowed: whatHappened, clientFeedback, stageUpdate, actionItems)" });
+    }
+
+    const updated = await db
+      .update(touchpoints)
+      .set(patch)
+      .where(eq(touchpoints.id, id))
+      .returning();
+
+    if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
+    res.json({ ok: true, data: updated[0] });
+  } catch (err: any) {
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
 export default router;
