@@ -1,25 +1,24 @@
 /**
  * RepDashboard — KPI strip, alerts, today's meetings, quick actions.
  *
- * Receives all shared data via props (already fetched by hooks in CROApp).
- * Owns only its local UI state (revenue log quick-entry modal).
- * No raw fetch() calls — all data comes from props.
+ * Owns meetings and tasks data via hooks (useMeetings, useTasks).
+ * Accepts only computed KPI props + navigation context from OTVApp.
+ * No raw fetch() calls — data fetched via service layer in hooks.
  */
 
 import React, { useState } from "react";
 import { C, TODAY, fmtR } from "../../utils/palette";
+import { useMeetings } from "../../hooks/useMeetings";
+import { useTasks } from "../../hooks/useTasks";
 
 const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26", "FY26 Annual"];
+void QUARTERS;
 
 type RepId = number | string | null | undefined;
-interface Meeting { id: string; repId: RepId; date: string; time?: string; status?: string; clientName?: string; agencyName?: string; mode?: string; meetingKind?: string; }
-interface Task    { id: string; title: string; assignedTo?: RepId; assignedToUserId?: string; repId?: RepId; status: string; dueDate?: string; clientCompany?: string; }
-interface IR      { id: string; status: string; raisedBy: string; }
-interface TargetSub { repId: RepId; quarter: string; status: string; totalTarget?: number; }
-interface RevEntry  { repId: RepId; quarter: string; amount?: number; isReversed?: boolean; reversalOf?: string; }
+interface IR { id: string; status: string; raisedBy: string; }
 
 export interface RepDashboardProps {
-  userRole: { repId?: RepId; id?: string } | null;
+  userRole: { repId?: RepId; id?: string; region?: string } | null;
   activeUser: string;
   currentQ: string;
   annualTgt: number;
@@ -31,39 +30,41 @@ export interface RepDashboardProps {
   qTarget: number;
   qAch: number;
   targetApprovalStatus: "none" | "pending" | "approved";
-  meetings: Meeting[];
-  tasks: Task[];
   internalReqs: IR[];
-  targetSubs: TargetSub[];
-  revenueEntries: RevEntry[];
   hrBadge: number | null;
   stackedBar: (target: number, ach: number, comm: number, inpl: number, sf: number, mt?: number) => React.ReactNode;
-  parseCurrency: (v: string | number) => number;
   onLogRevenue: (entry: { clientName: string; amount: string; invoiceRef: string; date: string }) => void;
   onNavigate: (view: string) => void;
-  onOpenLogTouchpoint: () => void;
-  onOpenAddDeal: () => void;
 }
 
 export const RepDashboard: React.FC<RepDashboardProps> = ({
   userRole, activeUser, currentQ,
   annualTgt, ach, comm, inpl, sf, pct,
   qTarget, qAch, targetApprovalStatus,
-  meetings, tasks, internalReqs, hrBadge,
+  internalReqs, hrBadge,
   stackedBar,
-  onLogRevenue, onNavigate, onOpenLogTouchpoint, onOpenAddDeal,
+  onLogRevenue, onNavigate,
 }) => {
+  const { meetings } = useMeetings();
+  const { tasks }    = useTasks();
+
   const [dashRevOpen, setDashRevOpen] = useState(false);
   const [drf, setDashRevForm] = useState({ clientName: "", amount: "", invoiceRef: "", date: TODAY });
 
-  const myRepId      = userRole?.repId;
-  const todayMeetings = meetings.filter(m => m.repId === myRepId && m.date === TODAY);
+  const myRepId       = userRole?.repId;
+  const todayMeetings = meetings.filter(m => String(m.repId) === String(myRepId) && m.date === TODAY);
   const plannedToday  = todayMeetings.length;
-  const myTasks       = tasks.filter(t =>
-    (t.assignedTo === myRepId || t.assignedToUserId === activeUser) && t.status !== "Done"
-  );
+  const myTasks       = tasks.filter(t => {
+    const at = (t as Record<string, unknown>)["assignedTo"];
+    const atUid = (t as Record<string, unknown>)["assignedToUserId"];
+    return (at === myRepId || String(at) === String(myRepId) || atUid === activeUser) &&
+           t.status !== "Closed";
+  });
   const pendingTasks  = myTasks.length;
-  const overdueTasks  = myTasks.filter(t => t.dueDate && t.dueDate < TODAY);
+  const overdueTasks  = myTasks.filter(t => {
+    const dd = (t as Record<string, unknown>)["dueDate"] as string | undefined;
+    return dd && dd < TODAY;
+  });
   const pendingIRs    = internalReqs.filter(r => r.status !== "Done" && r.raisedBy === activeUser).length;
 
   const Card = ({ label, value, sub = null, color = C.text }: { label: string; value: string; sub?: string | null; color?: string }) => (
@@ -113,10 +114,10 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
 
       {/* KPI Cards */}
       <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <Card label="Annual Target"     value={fmtR(annualTgt)} sub={targetApprovalStatus === "pending" ? "Pending approval" : targetApprovalStatus === "none" ? "Not set yet" : undefined} color={C.blue} />
+        <Card label="Annual Target"        value={fmtR(annualTgt)} sub={targetApprovalStatus === "pending" ? "Pending approval" : targetApprovalStatus === "none" ? "Not set yet" : undefined} color={C.blue} />
         <Card label={`${currentQ} Target`} value={qTarget > 0 ? fmtR(qTarget) : "—"} sub={qTarget > 0 ? `Achieved ${fmtR(qAch)}` : undefined} color={"#7920e8"} />
-        <Card label="Achieved (FY)"     value={fmtR(ach)} sub={annualTgt > 0 ? `${pct}% of annual target` : undefined} color={C.green} />
-        <Card label="Shortfall"         value={annualTgt > 0 ? fmtR(sf) : "—"} sub={annualTgt > 0 && sf === 0 ? "On track 🎉" : undefined} color={sf > 0 ? C.red : C.green} />
+        <Card label="Achieved (FY)"        value={fmtR(ach)} sub={annualTgt > 0 ? `${pct}% of annual target` : undefined} color={C.green} />
+        <Card label="Shortfall"            value={annualTgt > 0 ? fmtR(sf) : "—"} sub={annualTgt > 0 && sf === 0 ? "On track 🎉" : undefined} color={sf > 0 ? C.red : C.green} />
       </div>
 
       {/* Progress bar */}
@@ -137,36 +138,37 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
       {/* Alerts */}
       <div style={{ marginBottom: 20 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: C.dim, fontFamily: "'DM Sans',sans-serif", letterSpacing: .5, textTransform: "uppercase", marginBottom: 8 }}>Alerts</div>
-        {targetApprovalStatus === "none" && <Alert icon="⚠️" msg="No target set yet. Complete the setup to get started." color={C.red} onClick={() => onNavigate("setup-wizard")} cta="Start Setup →" />}
-        {targetApprovalStatus === "pending" && <Alert icon="⏳" msg="Your target submission is pending approval." color={C.accent} />}
-        {plannedToday === 0 && <Alert icon="📅" msg="No meetings planned for today. Add your plan for the day." color={C.blue} onClick={() => onNavigate("my-plan")} cta="Open My Plan" />}
-        {pendingTasks > 0 && <Alert icon="✓" msg={`${pendingTasks} task${pendingTasks > 1 ? "s" : ""} pending completion.`} color={"#7920e8"} onClick={() => onNavigate("tasks")} cta="View Tasks" />}
-        {pendingIRs > 0 && <Alert icon="⬆" msg={`${pendingIRs} internal request${pendingIRs > 1 ? "s" : ""} awaiting resolution.`} color={C.orange} onClick={() => onNavigate("internal-requests")} cta="View Requests" />}
-        {hrBadge && <Alert icon="⊘" msg={`${hrBadge} HR compliance issue${hrBadge > 1 ? "s" : ""} require attention.`} color={C.red} onClick={() => onNavigate("hr")} cta="View HR" />}
+        {targetApprovalStatus === "none"     && <Alert icon="⚠️" msg="No target set yet. Complete the setup to get started." color={C.red} onClick={() => onNavigate("setup-wizard")} cta="Start Setup →" />}
+        {targetApprovalStatus === "pending"  && <Alert icon="⏳" msg="Your target submission is pending approval." color={C.accent} />}
+        {plannedToday === 0                  && <Alert icon="📅" msg="No meetings planned for today. Add your plan for the day." color={C.blue} onClick={() => onNavigate("my-plan")} cta="Open My Plan" />}
+        {pendingTasks > 0                    && <Alert icon="✓" msg={`${pendingTasks} task${pendingTasks > 1 ? "s" : ""} pending completion.`} color={"#7920e8"} onClick={() => onNavigate("tasks")} cta="View Tasks" />}
+        {pendingIRs > 0                      && <Alert icon="⬆" msg={`${pendingIRs} internal request${pendingIRs > 1 ? "s" : ""} awaiting resolution.`} color={C.orange} onClick={() => onNavigate("internal-requests")} cta="View Requests" />}
+        {hrBadge                             && <Alert icon="⊘" msg={`${hrBadge} HR compliance issue${hrBadge > 1 ? "s" : ""} require attention.`} color={C.red} onClick={() => onNavigate("hr")} cta="View HR" />}
         {!targetApprovalStatus.match(/none|pending/) && plannedToday > 0 && !pendingTasks && !pendingIRs && !hrBadge && (
           <Alert icon="✅" msg="All clear — you're on track for today!" color={C.green} />
         )}
       </div>
 
-      {/* TODAY'S ACTIONS + Overdue Task List */}
+      {/* TODAY'S ACTIONS — Overdue task list */}
       {overdueTasks.length > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.red, fontFamily: "'DM Sans',sans-serif", letterSpacing: .5, textTransform: "uppercase", marginBottom: 8 }}>
             ⚠ Overdue Tasks ({overdueTasks.length})
           </div>
           {overdueTasks.slice(0, 5).map(t => {
-            const daysOver = t.dueDate ? Math.ceil((new Date(TODAY).getTime() - new Date(t.dueDate).getTime()) / 86400000) : 0;
+            const td = (t as Record<string, unknown>)["dueDate"] as string | undefined;
+            const title = (t as Record<string, unknown>)["title"] as string | undefined;
+            const cc = (t as Record<string, unknown>)["clientCompany"] as string | undefined;
+            const daysOver = td ? Math.ceil((new Date(TODAY).getTime() - new Date(td).getTime()) / 86400000) : 0;
             return (
               <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: `${C.red}08`, border: `1px solid ${C.red}33`, borderRadius: 8, marginBottom: 6, cursor: "pointer" }}
                 onClick={() => onNavigate("tasks")}>
                 <span style={{ fontSize: 12, color: C.red }}>✗</span>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                    {t.title || "Untitled task"}
+                    {title || "Untitled task"}
                   </div>
-                  {t.clientCompany && (
-                    <div style={{ fontSize: 10, color: C.dim, fontFamily: "'DM Sans',sans-serif" }}>{t.clientCompany}</div>
-                  )}
+                  {cc && <div style={{ fontSize: 10, color: C.dim, fontFamily: "'DM Sans',sans-serif" }}>{cc}</div>}
                 </div>
                 <span style={{ fontSize: 10, fontWeight: 700, color: C.red, whiteSpace: "nowrap", fontFamily: "'DM Sans',sans-serif" }}>
                   {daysOver > 0 ? `${daysOver}d overdue` : "Due today"}
@@ -186,28 +188,32 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
       {plannedToday > 0 && (
         <div style={{ marginBottom: 20 }}>
           <div style={{ fontSize: 11, fontWeight: 700, color: C.dim, fontFamily: "'DM Sans',sans-serif", letterSpacing: .5, textTransform: "uppercase", marginBottom: 8 }}>Today's Meetings ({plannedToday})</div>
-          {todayMeetings.slice(0, 4).map(m => (
-            <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 6 }}>
-              <div style={{ width: 28, height: 28, borderRadius: 6, background: m.meetingKind === "PR" ? "#e0f2fe" : "#faf5ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>
-                {m.meetingKind === "PR" ? "🤝" : "🎯"}
-              </div>
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
-                  {m.clientName || m.agencyName || "Meeting"}
+          {todayMeetings.slice(0, 4).map(m => {
+            const mk = (m as Record<string, unknown>)["meetingKind"] as string | undefined;
+            const mo = (m as Record<string, unknown>)["mode"] as string | undefined;
+            return (
+              <div key={m.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 8, marginBottom: 6 }}>
+                <div style={{ width: 28, height: 28, borderRadius: 6, background: mk === "PR" ? "#e0f2fe" : "#faf5ff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, flexShrink: 0 }}>
+                  {mk === "PR" ? "🤝" : "🎯"}
                 </div>
-                <div style={{ fontSize: 11, color: C.dim, fontFamily: "'DM Sans',sans-serif" }}>
-                  {m.time || ""} {m.mode || ""} {m.meetingKind === "PR" ? "· PR" : "· Actionable"}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {m.clientName || m.agencyName || "Meeting"}
+                  </div>
+                  <div style={{ fontSize: 11, color: C.dim, fontFamily: "'DM Sans',sans-serif" }}>
+                    {m.time || ""} {mo || ""} {mk === "PR" ? "· PR" : "· Actionable"}
+                  </div>
                 </div>
+                <span style={{
+                  fontSize: 10, padding: "2px 7px", borderRadius: 10, fontFamily: "'DM Sans',sans-serif", fontWeight: 600,
+                  background: m.status === "logged" ? "#dcfce7" : m.status === "missed" ? "#fee2e2" : "#eff6ff",
+                  color: m.status === "logged" ? C.green : m.status === "missed" ? C.red : C.blue,
+                }}>
+                  {m.status || "planned"}
+                </span>
               </div>
-              <span style={{
-                fontSize: 10, padding: "2px 7px", borderRadius: 10, fontFamily: "'DM Sans',sans-serif", fontWeight: 600,
-                background: m.status === "logged" ? "#dcfce7" : m.status === "missed" ? "#fee2e2" : "#eff6ff",
-                color: m.status === "logged" ? C.green : m.status === "missed" ? C.red : C.blue,
-              }}>
-                {m.status || "planned"}
-              </span>
-            </div>
-          ))}
+            );
+          })}
           {plannedToday > 4 && (
             <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Sans',sans-serif", marginTop: 4, textAlign: "center" }}>
               +{plannedToday - 4} more — <span style={{ color: C.blue, cursor: "pointer" }} onClick={() => onNavigate("my-plan")}>Open My Plan</span>
@@ -236,42 +242,40 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
       </div>
 
       {/* Revenue quick-log modal */}
-      {dashRevOpen && (() => {
-        return (
-          <>
-            <div className="overlay" onClick={() => setDashRevOpen(false)} />
-            <div className="modal fin" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 1000, width: 400 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-                <div style={{ fontSize: 14, fontWeight: 700, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>Log Revenue Entry</div>
-                <button onClick={() => setDashRevOpen(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>✕</button>
-              </div>
-              {[
-                { label: "Client / Advertiser *", key: "clientName" as const, placeholder: "e.g. Tata Motors", type: "text", autoFocus: true },
-                { label: "Amount ₹ *", key: "amount" as const, placeholder: "e.g. 5L or 500000", type: "text", autoFocus: false },
-                { label: "Invoice / RO Reference *", key: "invoiceRef" as const, placeholder: "e.g. RO-2026-0042", type: "text", autoFocus: false },
-              ].map(({ label, key, placeholder, type, autoFocus }) => (
-                <div key={key} style={{ marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, color: C.dim, marginBottom: 3, fontFamily: "'DM Sans',sans-serif", textTransform: "uppercase", letterSpacing: .4 }}>{label}</div>
-                  <input
-                    value={drf[key]} onChange={e => setDashRevForm(p => ({ ...p, [key]: e.target.value }))}
-                    placeholder={placeholder} type={type} autoFocus={autoFocus}
-                    style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }}
-                  />
-                </div>
-              ))}
-              <div style={{ marginBottom: 18 }}>
-                <div style={{ fontSize: 10, color: C.dim, marginBottom: 3, fontFamily: "'DM Sans',sans-serif", textTransform: "uppercase", letterSpacing: .4 }}>Date</div>
-                <input type="date" min="2020-01-01" max="2099-12-31" value={drf.date} onChange={e => setDashRevForm(p => ({ ...p, date: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
-              </div>
-              <div style={{ display: "flex", gap: 8 }}>
-                <button onClick={() => setDashRevOpen(false)} style={{ flex: 1, padding: "9px 0", border: `1px solid ${C.border}`, background: "transparent", color: C.dim, borderRadius: 6, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>Cancel</button>
-                <button onClick={doSubmit} style={{ flex: 2, padding: "9px 0", background: "linear-gradient(135deg,#16c784,#0ea570)", border: "none", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>✓ Log Revenue</button>
-              </div>
+      {dashRevOpen && (
+        <>
+          <div className="overlay" onClick={() => setDashRevOpen(false)} />
+          <div className="modal fin" style={{ position: "fixed", top: "50%", left: "50%", transform: "translate(-50%,-50%)", zIndex: 1000, width: 400 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>Log Revenue Entry</div>
+              <button onClick={() => setDashRevOpen(false)} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, lineHeight: 1 }}>✕</button>
             </div>
-          </>
-        );
-      })()}
+            {[
+              { label: "Client / Advertiser *", key: "clientName" as const, placeholder: "e.g. Tata Motors", type: "text", autoFocus: true },
+              { label: "Amount ₹ *",            key: "amount"     as const, placeholder: "e.g. 5L or 500000", type: "text", autoFocus: false },
+              { label: "Invoice / RO Reference *", key: "invoiceRef" as const, placeholder: "e.g. RO-2026-0042", type: "text", autoFocus: false },
+            ].map(({ label, key, placeholder, type, autoFocus }) => (
+              <div key={key} style={{ marginBottom: 10 }}>
+                <div style={{ fontSize: 10, color: C.dim, marginBottom: 3, fontFamily: "'DM Sans',sans-serif", textTransform: "uppercase", letterSpacing: .4 }}>{label}</div>
+                <input
+                  value={drf[key]} onChange={e => setDashRevForm(p => ({ ...p, [key]: e.target.value }))}
+                  placeholder={placeholder} type={type} autoFocus={autoFocus}
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }}
+                />
+              </div>
+            ))}
+            <div style={{ marginBottom: 18 }}>
+              <div style={{ fontSize: 10, color: C.dim, marginBottom: 3, fontFamily: "'DM Sans',sans-serif", textTransform: "uppercase", letterSpacing: .4 }}>Date</div>
+              <input type="date" min="2020-01-01" max="2099-12-31" value={drf.date} onChange={e => setDashRevForm(p => ({ ...p, date: e.target.value }))}
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button onClick={() => setDashRevOpen(false)} style={{ flex: 1, padding: "9px 0", border: `1px solid ${C.border}`, background: "transparent", color: C.dim, borderRadius: 6, fontSize: 12, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>Cancel</button>
+              <button onClick={doSubmit} style={{ flex: 2, padding: "9px 0", background: "linear-gradient(135deg,#16c784,#0ea570)", border: "none", color: "#fff", borderRadius: 6, fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>✓ Log Revenue</button>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };

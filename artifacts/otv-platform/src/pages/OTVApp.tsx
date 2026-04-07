@@ -4428,14 +4428,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 qTarget={qTarget}
                 qAch={qAch}
                 targetApprovalStatus={targetApprovalStatus}
-                meetings={meetings}
-                tasks={tasks}
                 internalReqs={internalReqs}
-                targetSubs={targetSubs}
-                revenueEntries={revenueEntries}
                 hrBadge={hrBadge}
                 stackedBar={stackedBar}
-                parseCurrency={parseCurrency}
                 onLogRevenue={({clientName,amount,invoiceRef,date}) => {
                   const amt  = parseCurrency(amount);
                   if(!amt){showToast("Enter a valid amount (e.g. 5L or 50000)","err");return;}
@@ -4455,8 +4450,6 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   });
                 }}
                 onNavigate={setView}
-                onOpenLogTouchpoint={()=>{setLogForm({...BLANK_LOG,repId:String(user_role?.repId||"")});setLogOpen(true);}}
-                onOpenAddDeal={()=>{setDealForm({...BLANK_DEAL,repId:String(user_role?.repId||""),quarter:entryQ});setAddDealOpen(true);}}
               />
             );
           })()}
@@ -4474,33 +4467,19 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               isCRORole={isCRORole}
               isAdmin={isAdmin}
               isDigiOps={isDigiOps}
-              plans={plans}
-              setPlans={setPlans}
-              meetings={meetings}
-              tasks={tasks}
-              setTasks={setTasks}
               deals={deals}
-              revenueEntries={revenueEntries}
               filterQ={filterQ}
-              planForm={planForm}
-              setPlanForm={setPlanForm}
-              planLoggedMsg={planLoggedMsg}
-              setPlanLoggedMsg={setPlanLoggedMsg}
-              weekSummaryDismissed={weekSummaryDismissed}
-              setWeekSummaryDismissed={setWeekSummaryDismissed}
               adminConfig={adminConfig}
               reps={reps}
               countdown={countdown}
-              doAddPlan={doAddPlan}
-              setLogForm={setLogForm}
-              setLogOpen={setLogOpen}
               setDealForm={setDealForm}
               setAddDealOpen={setAddDealOpen}
               setViewMeetingId={setViewMeetingId}
               showToast={showToast}
               qMatch={qMatch}
-              BLANK_LOG={BLANK_LOG}
               BLANK_DEAL={BLANK_DEAL}
+              onNavigate={setView}
+              onNavigateRevenue={()=>{setView("revenue-log");}}
             />
           )}
 

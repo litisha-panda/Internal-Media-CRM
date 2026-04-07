@@ -1,127 +1,242 @@
 /**
  * LogMeeting — Log Touchpoint modal for Sales Rep.
  *
- * Complete extraction of the inline logOpen block from OTVApp.tsx.
- * All form state lives in OTVApp; this component is stateless and drives
- * mutation purely through typed callback props — no raw fetch() calls.
+ * Accepts a `meeting` prop (the meeting being logged) and an
+ * `onSubmit(touchpoint)` callback. Manages all form state internally.
+ * Uses useTouchpoints to POST on submit; uses useMeetings to patch
+ * meeting status to "logged" after the touchpoint is created.
  */
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { C, TODAY } from "../../utils/palette";
+import { useTouchpoints } from "../../hooks/useTouchpoints";
+import { useMeetings } from "../../hooks/useMeetings";
+import type { Meeting } from "../../services/api/meetings";
+import type { Touchpoint } from "../../services/api/touchpoints";
 
 /* ── Shared narrow ID type ──────────────────────────────────────────────── */
 type RepId = number | string | null | undefined;
 
-/* ── Constants (mirrored from OTVApp module scope) ──────────────────────── */
+/* ── Constants ──────────────────────────────────────────────────────────── */
 const DEAL_STAGES    = ["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"];
 const PITCH_TYPES    = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
 const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "RO Received"];
 const MEETING_TYPES  = ["Physical", "Online", "Phone Call"];
 const ACTION_TYPES   = ["Approval needed", "Document needed", "Attend a meeting", "Introduction needed", "Flag for follow-up"];
 const APPROVAL_TARGETS = ["Region Head", "NSH", "Branding Team", "Content Team", "Sales Strategy", "Digital", "Finance", "Legal", "CXO"];
-const BLANK_ACTION_REQUIRED = { what: "", from: "", description: "", byWhen: "" };
+
+const BLANK_ACTION = { what: "", from: "", description: "", byWhen: "" };
 
 const oColor = (s: string): string => ({
-  "Prospect": "#7d8590",
-  "In Discussion": "#4285F4",
-  "Negotiation": "#f4b400",
+  "Prospect":       "#7d8590",
+  "In Discussion":  "#4285F4",
+  "Negotiation":    "#f4b400",
   "Mail Confirmed": "#9c27b0",
-  "RO Received": "#34a853",
-  "Lost": "#ea4335",
+  "RO Received":    "#34a853",
+  "Lost":           "#ea4335",
 } as Record<string, string>)[s] ?? "#7d8590";
 
-/* ── ActionItem shape ───────────────────────────────────────────────────── */
+/* ── Local form type ────────────────────────────────────────────────────── */
 interface ActionItem { what: string; from: string; description: string; byWhen: string; }
 
-/* ── Entity shapes needed as prop dependencies ──────────────────────────── */
+interface LogForm {
+  repId: string;
+  dealId: string;
+  meetingDbId: string;
+  meetingTime: string;
+  meetingKind: string;
+  touchpointType: string;
+  clientAgencyName: string;
+  agency: string;
+  client: string;
+  brand: string;
+  contactName: string;
+  mobile: string;
+  designation: string;
+  contactLevel: string;
+  meetingType: string;
+  pitchType: string;
+  agenda: string;
+  clientFeedback: string;
+  stageUpdate: string;
+  status: string;
+  lossReason: string;
+  discussion: string;
+  nextStep: string;
+  followUpDate: string;
+  nextMeetingDate: string;
+  nextMeetingTime: string;
+  nextAgenda: string;
+  attendeeEmails: string;
+  scheduleNext: boolean;
+  calendarPlatform: string;
+  meetLink: string;
+  calendarStatus: string;
+  dealAmount: string;
+  actionRequired: ActionItem[];
+}
+
+const BLANK_FORM: LogForm = {
+  repId: "", dealId: "", meetingDbId: "", meetingTime: "", meetingKind: "ACTIONABLE",
+  touchpointType: "Deal Meeting", clientAgencyName: "", agency: "", client: "", brand: "",
+  contactName: "", mobile: "", designation: "", contactLevel: "",
+  meetingType: "Physical", pitchType: "", agenda: "", clientFeedback: "",
+  stageUpdate: "", status: "", lossReason: "", discussion: "", nextStep: "", followUpDate: "",
+  nextMeetingDate: "", nextMeetingTime: "", nextAgenda: "", attendeeEmails: "",
+  scheduleNext: false, calendarPlatform: "none", meetLink: "", calendarStatus: "",
+  dealAmount: "", actionRequired: [{ ...BLANK_ACTION }],
+};
+
+/* ── Deal entity needed for dropdown ───────────────────────────────────── */
 interface Deal {
-  id: string; repId: RepId; clientCompany: string;
+  id: string; repId?: RepId; clientCompany: string;
   contactName?: string; agency?: string; brand?: string; amount?: number;
   contactDesignation?: string; designation?: string; contactLevel?: string;
   phone?: string; mobile?: string;
-}
-interface Rep { id: RepId; name: string; region?: string; }
-interface Plan {
-  id: string; repId: RepId; date: string; time: string; status: string;
-  clientAgencyName: string; contactName?: string; phone?: string; agenda?: string;
-  pitchType?: string; meetingType?: string; meetingKind?: string; touchpointType?: string;
-  autoCreatedFrom?: string; isUnplanned?: boolean; loggedMeetingId?: string | null;
-  meetingDbId?: string; client?: string; agency?: string; brand?: string;
-}
-
-/* ── Typed setter ───────────────────────────────────────────────────────── */
-type Setter<T> = (updater: T | ((prev: T) => T)) => void;
-
-/* ── Full LogMeetingForm interface ──────────────────────────────────────── */
-export interface LogMeetingForm {
-  repId: string;
-  dealId: string;
-  planId?: string;
-  meetingDbId?: string;
-  meetingTime?: string;
-  meetingKind?: string;
-  touchpointType?: string;
-  clientAgencyName?: string;
-  agency?: string;
-  client?: string;
-  brand?: string;
-  contactName?: string;
-  mobile?: string;
-  designation?: string;
-  contactLevel?: string;
-  meetingType?: string;
-  pitchType?: string;
-  agenda?: string;
-  clientFeedback?: string;
-  stageUpdate?: string;
-  status?: string;
-  lossReason?: string;
-  outcome?: string;
-  discussion?: string;
-  nextStep?: string;
-  nextStepDate?: string;
-  followUpDate?: string;
-  nextMeetingDate?: string;
-  nextMeetingTime?: string;
-  nextAgenda?: string;
-  attendeeEmails?: string;
-  scheduleNext?: boolean;
-  calendarPlatform?: string;
-  meetLink?: string;
-  calendarEventId?: string;
-  calendarStatus?: string;
-  dealAmount?: string;
-  actionRequired?: ActionItem[];
 }
 
 /* ── Props ─────────────────────────────────────────────────────────────── */
 export interface LogMeetingProps {
   open: boolean;
-  form: LogMeetingForm;
-  /** Updater-style setter matching React's useState dispatcher. */
-  onFormChange: (updater: (prev: LogMeetingForm) => LogMeetingForm) => void;
-  deals: Deal[];
-  reps: Rep[];
-  isRep: boolean;
-  myRepId: RepId;
-  calendarLoading: boolean;
+  /** The meeting/plan being logged. Null for a standalone (unplanned) touchpoint. */
+  meeting: Meeting | null;
   onClose: () => void;
-  /** Maps to handleLogMeetingWithCalendar in OTVApp. */
-  onSubmit: () => void;
-  /** Called when user clicks "→ Go to Revenue Log" after RO Received. */
-  onNavigateRevenue: () => void;
-  setPlans: Setter<Plan[]>;
-  showToast: (msg: string) => void;
+  /** Called with the created Touchpoint after successful submit. */
+  onSubmit: (tp: Touchpoint) => void;
+  userRole: { repId?: RepId; region?: string } | null;
+  deals: Deal[];
+  showToast: (msg: string, type?: string) => void;
+  /** Optional: navigate to revenue log when user clicks "→ Go to Revenue Log". */
+  onNavigateRevenue?: () => void;
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */
 export const LogMeeting: React.FC<LogMeetingProps> = ({
-  open, form: logForm, onFormChange: setLogForm,
-  deals, reps, isRep, myRepId,
-  calendarLoading, onClose, onSubmit: handleLogMeetingWithCalendar,
-  onNavigateRevenue, setPlans, showToast,
+  open, meeting, onClose, onSubmit,
+  userRole, deals, showToast, onNavigateRevenue,
 }) => {
+  const { createTouchpoint } = useTouchpoints();
+  const { patchMeeting, createMeeting } = useMeetings();
+
+  const [form, setForm] = useState<LogForm>({ ...BLANK_FORM });
+  const [submitting, setSubmitting] = useState(false);
+
+  const setF = (updater: Partial<LogForm> | ((prev: LogForm) => LogForm)) => {
+    setForm(prev =>
+      typeof updater === "function"
+        ? updater(prev)
+        : { ...prev, ...updater }
+    );
+  };
+
+  /* Pre-fill form when meeting changes or modal opens */
+  useEffect(() => {
+    if (!open) return;
+    if (meeting) {
+      setForm({
+        ...BLANK_FORM,
+        repId:           String(meeting.repId ?? userRole?.repId ?? ""),
+        meetingDbId:     meeting.id,
+        meetingTime:     meeting.time || "",
+        meetingKind:     meeting.meetingKind || "ACTIONABLE",
+        touchpointType:  meeting.meetingKind === "PR" ? "Relationship" : "Deal Meeting",
+        clientAgencyName: meeting.clientName || meeting.agencyName || "",
+        agency:          meeting.agencyName || "",
+        client:          meeting.clientName || "",
+        brand:           meeting.brandName  || "",
+        contactName:     meeting.contactName || "",
+        mobile:          (meeting.contactPhone as string) || "",
+        meetingType:     meeting.mode || "Physical",
+        agenda:          meeting.agenda || "",
+      });
+    } else {
+      setForm({ ...BLANK_FORM, repId: String(userRole?.repId ?? "") });
+    }
+  }, [open, meeting?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!open) return null;
+
+  const isFromPlan = !!meeting;
+  const myRepId    = userRole?.repId;
+
+  const handleSubmit = async () => {
+    if (!form.repId) { showToast("Rep ID required", "err"); return; }
+    if (!form.clientAgencyName?.trim() && !form.dealId) {
+      showToast("Select a client deal or enter a client company name", "err"); return;
+    }
+    if (form.touchpointType === "Deal Meeting" && !form.stageUpdate && !form.status) {
+      showToast("Select a stage update for this deal meeting", "err"); return;
+    }
+    if (form.stageUpdate === "Lost" && !form.lossReason?.trim()) {
+      showToast("Select a loss reason before saving", "err"); return;
+    }
+    setSubmitting(true);
+    try {
+      const actionItems = (form.actionRequired || [])
+        .filter(i => i.what && i.from)
+        .map(i => ({ action: i.what, neededFrom: i.from, dueDate: i.byWhen, notes: i.description }));
+
+      const tp = await createTouchpoint({
+        repId:          parseInt(form.repId) || null,
+        region:         userRole?.region || "",
+        date:           TODAY,
+        touchpointType: form.touchpointType || "Deal Meeting",
+        whatHappened:   form.discussion    || null,
+        clientFeedback: form.clientFeedback || null,
+        stageUpdate:    form.stageUpdate   || null,
+        actionItems,
+        notes:          form.nextStep      || null,
+        clientCompany:  form.clientAgencyName || form.client || "",
+        dealId:         form.dealId        || null,
+        contactName:    form.contactName   || null,
+        meetingType:    form.meetingType   || null,
+        meetingKind:    form.meetingKind   || null,
+        pitchType:      form.pitchType     || null,
+        followUpDate:   form.followUpDate  || null,
+        nextMeetingDate: form.nextMeetingDate || null,
+        nextMeetingTime: form.nextMeetingTime || null,
+        nextAgenda:     form.nextAgenda    || null,
+        lossReason:     form.lossReason    || null,
+      });
+
+      /* Patch the source meeting to "logged" */
+      if (form.meetingDbId) {
+        try {
+          await patchMeeting(form.meetingDbId, { status: "logged", touchpointId: tp.id });
+        } catch { /* non-fatal */ }
+      }
+
+      showToast("Touchpoint logged ✓");
+      onSubmit(tp);
+      onClose();
+    } catch {
+      showToast("Failed to save touchpoint — please try again", "err");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleSetROReminder = (days: number) => {
+    const rd = new Date(TODAY);
+    rd.setDate(rd.getDate() + days);
+    const reminderDate = rd.toISOString().slice(0, 10);
+    createMeeting({
+      repId:       parseInt(form.repId) || null,
+      region:      userRole?.region || "",
+      date:        reminderDate,
+      time:        "10:00",
+      meetingKind: "ACTIONABLE",
+      agencyName:  form.agency      || "",
+      clientName:  form.client      || form.clientAgencyName || "",
+      brandName:   form.brand       || "",
+      contactName: form.contactName || "",
+      contactPhone: null,
+      mode:        "Task",
+      agenda:      "[RO Reminder] Follow up — RO not received yet",
+      status:      "planned",
+    }).then(() => showToast(`RO follow-up reminder set for +${days} days ✓`))
+      .catch(() => showToast("Reminder failed to save", "err"));
+  };
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -133,29 +248,30 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
             <div className="sans" style={{ fontSize: 16, fontWeight: 700 }}>LOG TOUCHPOINT</div>
             <div style={{ fontSize: 11, color: C.dim, marginTop: 2 }}>{TODAY} · Today's Touchpoints</div>
           </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, cursor: "pointer", fontSize: 18, lineHeight: 1 }}>✕</button>
         </div>
         <div style={{ height: 1, background: C.border, margin: "12px 0" }} />
 
         {/* FROM PLAN strip (when triggered from a planned touchpoint) */}
-        {logForm.planId ? (
+        {isFromPlan ? (
           <div style={{ background: `${C.blue}08`, border: `1.5px solid ${C.blue}33`, borderRadius: 8, padding: "12px 14px", marginBottom: 16 }}>
             <div style={{ fontSize: 9, color: C.blue, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>From Your Plan</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 16 }}>
-              {logForm.clientAgencyName && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>CLIENT</div><div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{logForm.clientAgencyName}</div></div>}
-              {logForm.agency && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>AGENCY</div><div style={{ fontSize: 12, color: C.dim }}>{logForm.agency}</div></div>}
-              {logForm.brand && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>BRAND</div><div style={{ fontSize: 12, color: C.dim }}>{logForm.brand}</div></div>}
-              {logForm.contactName && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>CONTACT</div><div style={{ fontSize: 12, color: C.dim }}>{logForm.contactName}{logForm.mobile ? ` · ${logForm.mobile}` : ""}</div></div>}
-              {logForm.meetingTime && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>TIME</div><div style={{ fontSize: 12, color: C.dim }}>{logForm.meetingTime}</div></div>}
-              {logForm.meetingType && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>HOW</div><div style={{ fontSize: 12, color: C.dim }}>{logForm.meetingType === "Physical" ? "🤝" : logForm.meetingType === "Online" ? "💻" : "📞"} {logForm.meetingType}</div></div>}
-              <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>TYPE</div><div style={{ fontSize: 12, color: logForm.touchpointType === "Deal Meeting" ? C.blue : C.green, fontWeight: 600 }}>{logForm.touchpointType === "Deal Meeting" ? "💼 Deal Meeting" : "🤝 Relationship"}</div></div>
+              {form.clientAgencyName && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>CLIENT</div><div style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{form.clientAgencyName}</div></div>}
+              {form.agency     && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>AGENCY</div><div style={{ fontSize: 12, color: C.dim }}>{form.agency}</div></div>}
+              {form.brand      && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>BRAND</div><div style={{ fontSize: 12, color: C.dim }}>{form.brand}</div></div>}
+              {form.contactName && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>CONTACT</div><div style={{ fontSize: 12, color: C.dim }}>{form.contactName}{form.mobile ? ` · ${form.mobile}` : ""}</div></div>}
+              {form.meetingTime && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>TIME</div><div style={{ fontSize: 12, color: C.dim }}>{form.meetingTime}</div></div>}
+              {form.meetingType && <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>HOW</div><div style={{ fontSize: 12, color: C.dim }}>{form.meetingType === "Physical" ? "🤝" : form.meetingType === "Online" ? "💻" : "📞"} {form.meetingType}</div></div>}
+              <div><div style={{ fontSize: 9, color: C.muted, fontWeight: 600, marginBottom: 2 }}>TYPE</div><div style={{ fontSize: 12, color: form.touchpointType === "Deal Meeting" ? C.blue : C.green, fontWeight: 600 }}>{form.touchpointType === "Deal Meeting" ? "💼 Deal Meeting" : "🤝 Relationship"}</div></div>
             </div>
           </div>
         ) : (
           /* Standalone: touchpoint type selector */
           <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
             {(["Deal Meeting", "Relationship"] as const).map(tt => (
-              <button key={tt} onClick={() => setLogForm(p => ({ ...p, touchpointType: tt }))}
-                style={{ flex: 1, padding: "9px 14px", borderRadius: 6, border: `1px solid ${logForm.touchpointType === tt ? (tt === "Deal Meeting" ? C.blue : C.green) : C.border}`, background: logForm.touchpointType === tt ? (tt === "Deal Meeting" ? `${C.blue}14` : `${C.green}14`) : "transparent", color: logForm.touchpointType === tt ? (tt === "Deal Meeting" ? C.blue : C.green) : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 12, textAlign: "center" }}>
+              <button key={tt} onClick={() => setF({ touchpointType: tt })}
+                style={{ flex: 1, padding: "9px 14px", borderRadius: 6, border: `1px solid ${form.touchpointType === tt ? (tt === "Deal Meeting" ? C.blue : C.green) : C.border}`, background: form.touchpointType === tt ? (tt === "Deal Meeting" ? `${C.blue}14` : `${C.green}14`) : "transparent", color: form.touchpointType === tt ? (tt === "Deal Meeting" ? C.blue : C.green) : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", fontWeight: 700, fontSize: 12, textAlign: "center" }}>
                 {tt === "Deal Meeting" ? "💼 Deal Meeting" : "🤝 Relationship"}
                 <div style={{ fontSize: 9, fontWeight: 400, marginTop: 2, color: "inherit", opacity: .8 }}>
                   {tt === "Deal Meeting" ? "Updates stage · Resets escalation clock" : "Hi-Hello · No pipeline impact"}
@@ -165,135 +281,106 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
           </div>
         )}
 
-        {/* SECTION 1 — Rep selector / Time */}
-        {!logForm.planId && (
-          isRep ? (
+        {/* Time + Meeting Type (standalone only) */}
+        {!isFromPlan && (
+          <>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
               <div>
                 <label>Time of Touchpoint</label>
-                <input type="time" value={logForm.meetingTime || ""} onChange={e => setLogForm(p => ({ ...p, meetingTime: e.target.value }))} />
+                <input type="time" value={form.meetingTime} onChange={e => setF({ meetingTime: e.target.value })} />
               </div>
             </div>
-          ) : (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
+            <div style={{ marginBottom: 14 }}>
+              <label>Meeting Type</label>
+              <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                {MEETING_TYPES.map(mt => (
+                  <button key={mt} onClick={() => setF({ meetingType: mt })}
+                    style={{ flex: 1, padding: "7px 6px", fontSize: 11, borderRadius: 5, border: `1px solid ${form.meetingType === mt ? (mt === "Physical" ? C.green : mt === "Online" ? "#4285F4" : C.accent) : C.border}`, background: form.meetingType === mt ? (mt === "Physical" ? `${C.green}18` : mt === "Online" ? "#4285F418" : `${C.accent}18`) : "transparent", color: form.meetingType === mt ? (mt === "Physical" ? C.green : mt === "Online" ? "#4285F4" : C.accent) : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all .1s", textAlign: "center" }}>
+                    {mt === "Physical" ? "🤝" : mt === "Online" ? "💻" : "📞"} {mt}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Client / Agency / Brand */}
+            <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>Client / Agency / Brand</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
               <div>
-                <label>Sales Rep *</label>
-                {reps.length === 0 ? (
-                  <div style={{ padding: "9px 12px", background: `${C.orange}12`, border: `1px solid ${C.orange}`, borderRadius: 6, color: C.orange, fontSize: 12 }}>No reps added yet — ask Admin to add reps first.</div>
-                ) : (
-                  <select value={logForm.repId} onChange={e => setLogForm(p => ({ ...p, repId: e.target.value }))}>
-                    <option value="">Select rep</option>
-                    {reps.map(r => <option key={String(r.id)} value={String(r.id)}>{r.name}{r.region ? ` · ${r.region}` : ""}</option>)}
-                  </select>
+                <label>Agency Name</label>
+                <input placeholder="e.g. Dentsu, Omnicom…" value={form.agency} onChange={e => setF({ agency: e.target.value })} />
+              </div>
+              <div>
+                <label>Client Name *</label>
+                <select value={form.dealId} onChange={e => {
+                  const deal = deals.find(d => d.id === e.target.value);
+                  setF({
+                    dealId:          e.target.value,
+                    clientAgencyName: deal?.clientCompany || "",
+                    client:           deal?.clientCompany || "",
+                    agency:           deal?.agency || form.agency,
+                    brand:            deal?.brand  || form.brand,
+                    contactName:      deal?.contactName || form.contactName,
+                    designation:      deal?.contactDesignation || deal?.designation || form.designation,
+                    contactLevel:     deal?.contactLevel || form.contactLevel,
+                    mobile:           deal?.phone || deal?.mobile || form.mobile,
+                  });
+                }}>
+                  <option value="">Select from CRM</option>
+                  {deals
+                    .filter(d => !form.repId || String(d.repId) === form.repId || Number(d.repId) === parseInt(form.repId))
+                    .map(d => <option key={d.id} value={d.id}>{d.clientCompany}</option>)}
+                </select>
+                {!form.dealId && (
+                  <input placeholder="Or type client name…" value={form.client} onChange={e => setF({ client: e.target.value, clientAgencyName: e.target.value })} style={{ marginTop: 4 }} />
                 )}
               </div>
               <div>
-                <label>Meeting Time</label>
-                <input type="time" value={logForm.meetingTime || ""} onChange={e => setLogForm(p => ({ ...p, meetingTime: e.target.value }))} />
+                <label>Brand / Product</label>
+                <input placeholder="e.g. Surf Excel, Maggi…" value={form.brand} onChange={e => setF({ brand: e.target.value })} />
               </div>
             </div>
-          )
-        )}
-
-        {/* Meeting Type (standalone only) */}
-        {!logForm.planId && (
-          <div style={{ marginBottom: 14 }}>
-            <label>Meeting Type</label>
-            <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
-              {MEETING_TYPES.map(mt => (
-                <button key={mt} onClick={() => setLogForm(p => ({ ...p, meetingType: mt }))}
-                  style={{ flex: 1, padding: "7px 6px", fontSize: 11, borderRadius: 5, border: `1px solid ${logForm.meetingType === mt ? (mt === "Physical" ? C.green : mt === "Online" ? "#4285F4" : C.accent) : C.border}`, background: logForm.meetingType === mt ? (mt === "Physical" ? `${C.green}18` : mt === "Online" ? "#4285F418" : `${C.accent}18`) : "transparent", color: logForm.meetingType === mt ? (mt === "Physical" ? C.green : mt === "Online" ? "#4285F4" : C.accent) : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all .1s", textAlign: "center" }}>
-                  {mt === "Physical" ? "🤝" : mt === "Online" ? "💻" : "📞"} {mt}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* SECTION 2 — Client / Agency / Brand (hidden when logging from plan) */}
-        {!logForm.planId && <>
-          <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>Client / Agency / Brand</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-            <div>
-              <label>Agency Name</label>
-              <input placeholder="e.g. Dentsu, Omnicom…" value={logForm.agency || ""} onChange={e => setLogForm(p => ({ ...p, agency: e.target.value }))} />
-            </div>
-            <div>
-              <label>Client Name *</label>
-              <select value={logForm.dealId} onChange={e => {
-                const deal = deals.find(d => d.id === e.target.value);
-                setLogForm(p => ({
-                  ...p,
-                  dealId: e.target.value,
-                  clientAgencyName: deal?.clientCompany || "",
-                  client: deal?.clientCompany || "",
-                  agency: deal?.agency || p.agency,
-                  brand: deal?.brand || p.brand,
-                  contactName: deal?.contactName || p.contactName,
-                  designation: deal?.contactDesignation || deal?.designation || p.designation,
-                  contactLevel: deal?.contactLevel || p.contactLevel,
-                  mobile: deal?.phone || deal?.mobile || p.mobile,
-                }));
-              }}>
-                <option value="">Select from CRM</option>
-                {deals
-                  .filter(d => !logForm.repId || String(d.repId) === logForm.repId || Number(d.repId) === parseInt(logForm.repId))
-                  .map(d => <option key={d.id} value={d.id}>{d.clientCompany}</option>)}
-              </select>
-              {!logForm.dealId && (
-                <input placeholder="Or type client name…" value={logForm.client || ""} onChange={e => setLogForm(p => ({ ...p, client: e.target.value, clientAgencyName: e.target.value }))} style={{ marginTop: 4 }} />
-              )}
-            </div>
-            <div>
-              <label>Brand / Product</label>
-              <input placeholder="e.g. Surf Excel, Maggi…" value={logForm.brand || ""} onChange={e => setLogForm(p => ({ ...p, brand: e.target.value }))} />
-            </div>
-          </div>
-
-          {/* CRM link hint */}
-          {!logForm.dealId && (
-            <div style={{ background: `${C.blue}08`, border: `1px solid ${C.blue}22`, borderRadius: 6, padding: "7px 10px", fontSize: 11, color: C.blue, marginBottom: 10 }}>
-              Tip: Select a client from the CRM dropdown to auto-link this touchpoint to your pipeline deal.
-            </div>
-          )}
-
-          {/* Deal value prompt */}
-          {(() => {
-            const selDeal = logForm.dealId ? deals.find(d => d.id === logForm.dealId) : null;
-            if (!selDeal || (selDeal.amount && selDeal.amount > 0)) return null;
-            return (
-              <div style={{ background: `${C.accent}10`, border: `1px solid ${C.accent}44`, borderRadius: 6, padding: "8px 10px", marginBottom: 10 }}>
-                <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Deal has no value — set it now so it appears in pipeline</div>
-                <input placeholder="e.g. 15,00,000" value={logForm.dealAmount || ""} onChange={e => setLogForm(p => ({ ...p, dealAmount: e.target.value }))} style={{ fontSize: 12, width: "100%" }} />
+            {!form.dealId && (
+              <div style={{ background: `${C.blue}08`, border: `1px solid ${C.blue}22`, borderRadius: 6, padding: "7px 10px", fontSize: 11, color: C.blue, marginBottom: 10 }}>
+                Tip: Select a client from the CRM dropdown to auto-link this touchpoint to your pipeline deal.
               </div>
-            );
-          })()}
-
-          {/* Contact details */}
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
-            <div><label>Name of Person Met *</label><input placeholder="Full name" value={logForm.contactName || ""} onChange={e => setLogForm(p => ({ ...p, contactName: e.target.value }))} /></div>
-            <div><label>Designation</label><input placeholder="e.g. VP Marketing" value={logForm.designation || ""} onChange={e => setLogForm(p => ({ ...p, designation: e.target.value }))} /></div>
-            <div>
-              <label>Contact Level</label>
-              <select value={logForm.contactLevel || ""} onChange={e => setLogForm(p => ({ ...p, contactLevel: e.target.value }))}>
-                <option value="">Select level</option>
-                <option>C-Suite / Owner</option><option>VP / GM</option><option>Marketing Head</option>
-                <option>Brand Manager</option><option>Agency Lead</option><option>Junior/Exec</option>
-              </select>
+            )}
+            {/* Deal value prompt */}
+            {(() => {
+              const selDeal = form.dealId ? deals.find(d => d.id === form.dealId) : null;
+              if (!selDeal || (selDeal.amount && selDeal.amount > 0)) return null;
+              return (
+                <div style={{ background: `${C.accent}10`, border: `1px solid ${C.accent}44`, borderRadius: 6, padding: "8px 10px", marginBottom: 10 }}>
+                  <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Deal has no value — set it now so it appears in pipeline</div>
+                  <input placeholder="e.g. 15,00,000" value={form.dealAmount} onChange={e => setF({ dealAmount: e.target.value })} style={{ fontSize: 12, width: "100%" }} />
+                </div>
+              );
+            })()}
+            {/* Contact details */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
+              <div><label>Name of Person Met *</label><input placeholder="Full name" value={form.contactName} onChange={e => setF({ contactName: e.target.value })} /></div>
+              <div><label>Designation</label><input placeholder="e.g. VP Marketing" value={form.designation} onChange={e => setF({ designation: e.target.value })} /></div>
+              <div>
+                <label>Contact Level</label>
+                <select value={form.contactLevel} onChange={e => setF({ contactLevel: e.target.value })}>
+                  <option value="">Select level</option>
+                  <option>C-Suite / Owner</option><option>VP / GM</option><option>Marketing Head</option>
+                  <option>Brand Manager</option><option>Agency Lead</option><option>Junior/Exec</option>
+                </select>
+              </div>
+              <div><label>Mobile No</label><input placeholder="Contact number" value={form.mobile} onChange={e => setF({ mobile: e.target.value })} /></div>
             </div>
-            <div><label>Mobile No</label><input placeholder="Contact number" value={logForm.mobile || ""} onChange={e => setLogForm(p => ({ ...p, mobile: e.target.value }))} /></div>
-          </div>
-        </>}
+          </>
+        )}
 
         {/* SECTION 3 — Touchpoint Content */}
         <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>Touchpoint Content</div>
-        {!logForm.planId && (
+        {!isFromPlan && (
           <div style={{ marginBottom: 10 }}>
             <label>Pitch Type <span style={{ color: C.dim, fontWeight: 400 }}>(what did you pitch?)</span></label>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
               {PITCH_TYPES.map(pt => (
-                <button key={pt} onClick={() => setLogForm(p => ({ ...p, pitchType: pt }))}
-                  style={{ padding: "5px 12px", fontSize: 11, borderRadius: 4, border: `1px solid ${logForm.pitchType === pt ? C.accent : C.border}`, background: logForm.pitchType === pt ? `${C.accent}22` : C.s2, color: logForm.pitchType === pt ? C.accent : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all .1s" }}>
+                <button key={pt} onClick={() => setF({ pitchType: pt })}
+                  style={{ padding: "5px 12px", fontSize: 11, borderRadius: 4, border: `1px solid ${form.pitchType === pt ? C.accent : C.border}`, background: form.pitchType === pt ? `${C.accent}22` : C.s2, color: form.pitchType === pt ? C.accent : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all .1s" }}>
                   {pt}
                 </button>
               ))}
@@ -302,11 +389,11 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         )}
         <div style={{ marginBottom: 10 }}>
           <label>Discussion <span style={{ color: C.dim, fontWeight: 400 }}>(what happened in the meeting)</span></label>
-          <textarea rows={3} placeholder="What did you discuss? Campaign ideas, budget conversations, client objections, brand insights..." value={logForm.discussion || ""} onChange={e => setLogForm(p => ({ ...p, discussion: e.target.value }))} style={{ resize: "vertical" }} />
+          <textarea rows={3} placeholder="What did you discuss? Campaign ideas, budget conversations, client objections, brand insights..." value={form.discussion} onChange={e => setF({ discussion: e.target.value })} style={{ resize: "vertical" }} />
         </div>
         <div style={{ marginBottom: 14 }}>
           <label>Client Feedback <span style={{ color: C.dim, fontWeight: 400 }}>(what did the client say/react?)</span></label>
-          <textarea rows={2} placeholder="Positive, hesitant, needs approval, competitor mentioned..." value={logForm.clientFeedback || ""} onChange={e => setLogForm(p => ({ ...p, clientFeedback: e.target.value }))} style={{ resize: "vertical" }} />
+          <textarea rows={2} placeholder="Positive, hesitant, needs approval, competitor mentioned..." value={form.clientFeedback} onChange={e => setF({ clientFeedback: e.target.value })} style={{ resize: "vertical" }} />
         </div>
 
         {/* SECTION 4 — Blockers / Help Needed */}
@@ -314,19 +401,19 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         <div style={{ fontSize: 10, color: C.dim, marginBottom: 8 }}>Something you need from another person or team to progress this deal. Each item auto-creates a tracked task + escalation.</div>
         <div style={{ background: `${C.purple}06`, border: `1.5px solid ${C.purple}33`, borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
           <div style={{ fontSize: 11, color: C.purple, fontWeight: 700, marginBottom: 8 }}>Leave blank if no blockers — skip straight to Stage Update below.</div>
-          {(logForm.actionRequired || [{ ...BLANK_ACTION_REQUIRED }]).map((item, idx) => (
+          {(form.actionRequired || [{ ...BLANK_ACTION }]).map((item, idx) => (
             <div key={idx} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: "10px 12px", marginBottom: 8 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
                 <div>
                   <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 3 }}>What do I need? *</div>
-                  <select value={item.what || ""} onChange={e => { const arr = [...(logForm.actionRequired || [])]; arr[idx] = { ...arr[idx], what: e.target.value }; setLogForm(p => ({ ...p, actionRequired: arr })); }}>
+                  <select value={item.what || ""} onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], what: e.target.value }; setF({ actionRequired: arr }); }}>
                     <option value="">Select type…</option>
                     {ACTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </div>
                 <div>
                   <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 3 }}>Needed From *</div>
-                  <select value={item.from || ""} onChange={e => { const arr = [...(logForm.actionRequired || [])]; arr[idx] = { ...arr[idx], from: e.target.value }; setLogForm(p => ({ ...p, actionRequired: arr })); }}>
+                  <select value={item.from || ""} onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], from: e.target.value }; setF({ actionRequired: arr }); }}>
                     <option value="">Department / person…</option>
                     <optgroup label="Internal Departments">{APPROVAL_TARGETS.map(t => <option key={t} value={t}>{t}</option>)}</optgroup>
                     <optgroup label="Self"><option value="Self">Myself</option></optgroup>
@@ -337,13 +424,13 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
               <div style={{ display: "grid", gridTemplateColumns: "1fr 150px 28px", gap: 8, alignItems: "end" }}>
                 <div>
                   <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 3 }}>Description <span style={{ fontWeight: 400, color: C.muted }}>(max 150 chars)</span></div>
-                  <input maxLength={150} placeholder="What exactly is needed…" value={item.description || ""} onChange={e => { const arr = [...(logForm.actionRequired || [])]; arr[idx] = { ...arr[idx], description: e.target.value }; setLogForm(p => ({ ...p, actionRequired: arr })); }} />
+                  <input maxLength={150} placeholder="What exactly is needed…" value={item.description || ""} onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], description: e.target.value }; setF({ actionRequired: arr }); }} />
                 </div>
                 <div>
                   <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 3 }}>By When *</div>
-                  <input type="date" min="2020-01-01" max="2099-12-31" value={item.byWhen || ""} onChange={e => { const arr = [...(logForm.actionRequired || [])]; arr[idx] = { ...arr[idx], byWhen: e.target.value }; setLogForm(p => ({ ...p, actionRequired: arr })); }} />
+                  <input type="date" min="2020-01-01" max="2099-12-31" value={item.byWhen || ""} onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], byWhen: e.target.value }; setF({ actionRequired: arr }); }} />
                 </div>
-                <button onClick={() => { const arr = (logForm.actionRequired || []).filter((_, i) => i !== idx); setLogForm(p => ({ ...p, actionRequired: arr.length ? arr : [{ ...BLANK_ACTION_REQUIRED }] })); }}
+                <button onClick={() => { const arr = (form.actionRequired || []).filter((_, i) => i !== idx); setF({ actionRequired: arr.length ? arr : [{ ...BLANK_ACTION }] }); }}
                   style={{ background: "transparent", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1, textAlign: "center", height: 34 }}>✕</button>
               </div>
               {item.what && item.from && (
@@ -353,7 +440,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
               )}
             </div>
           ))}
-          <button onClick={() => setLogForm(p => ({ ...p, actionRequired: [...(p.actionRequired || []), { ...BLANK_ACTION_REQUIRED }] }))}
+          <button onClick={() => setF({ actionRequired: [...(form.actionRequired || []), { ...BLANK_ACTION }] })}
             style={{ background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 5, padding: "5px 14px", color: C.dim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginTop: 4, width: "100%" }}>
             + Add another action item
           </button>
@@ -363,12 +450,12 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
           <div>
             <label>Follow-Up Date <span style={{ color: C.dim, fontWeight: 400, fontSize: 10 }}>(when will YOU call/ping next?)</span></label>
-            <input type="date" min="2020-01-01" max="2099-12-31" value={logForm.followUpDate || ""} onChange={e => setLogForm(p => ({ ...p, followUpDate: e.target.value }))} />
+            <input type="date" min="2020-01-01" max="2099-12-31" value={form.followUpDate} onChange={e => setF({ followUpDate: e.target.value })} />
             <div style={{ fontSize: 9, color: C.muted, marginTop: 2 }}>Sets a reminder in your plan — no calendar invite sent</div>
           </div>
           <div>
             <label>Meeting Status</label>
-            <select value={logForm.status || ""} onChange={e => { const s = e.target.value; setLogForm(p => ({ ...p, status: s, scheduleNext: s === "Rescheduled" ? true : p.scheduleNext })); }}>
+            <select value={form.status} onChange={e => { const s = e.target.value; setF({ status: s, scheduleNext: s === "Rescheduled" ? true : form.scheduleNext }); }}>
               <option value="">Select</option>
               {MEETING_STATUS.map(s => <option key={s}>{s}</option>)}
             </select>
@@ -378,22 +465,22 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         {/* Schedule Next Meeting */}
         <div style={{ background: `${C.green}08`, border: `1px solid ${C.green}22`, borderRadius: 6, padding: "10px 14px", marginBottom: 14 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <button onClick={() => setLogForm(p => ({ ...p, scheduleNext: !p.scheduleNext }))}
-              style={{ width: 18, height: 18, borderRadius: 3, border: `1px solid ${logForm.scheduleNext ? C.green : C.border}`, background: logForm.scheduleNext ? C.green : "transparent", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12 }}>
-              {logForm.scheduleNext ? "✓" : ""}
+            <button onClick={() => setF({ scheduleNext: !form.scheduleNext })}
+              style={{ width: 18, height: 18, borderRadius: 3, border: `1px solid ${form.scheduleNext ? C.green : C.border}`, background: form.scheduleNext ? C.green : "transparent", cursor: "pointer", flexShrink: 0, display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 12 }}>
+              {form.scheduleNext ? "✓" : ""}
             </button>
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Schedule Next Meeting <span style={{ fontWeight: 400, color: C.dim, fontSize: 11 }}>— formal calendar invite</span></div>
               <div style={{ fontSize: 10, color: C.dim }}>Pick a date + time → creates Google/Zoho calendar event with a Meet link</div>
             </div>
           </div>
-          {logForm.scheduleNext && (
+          {form.scheduleNext && (
             <div style={{ marginTop: 12 }}>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginBottom: 10 }}>
-                <div><label>Meeting Date *</label><input type="date" min="2020-01-01" max="2099-12-31" value={logForm.nextMeetingDate || ""} onChange={e => setLogForm(p => ({ ...p, nextMeetingDate: e.target.value }))} /></div>
-                <div><label>Meeting Time</label><input type="time" value={logForm.nextMeetingTime || ""} onChange={e => setLogForm(p => ({ ...p, nextMeetingTime: e.target.value }))} /></div>
-                <div style={{ gridColumn: "1/-1" }}><label>Agenda for next meeting</label><textarea rows={2} placeholder="What will you go in with? e.g. Present revised FCT grid for Q2..." value={logForm.nextAgenda || ""} onChange={e => setLogForm(p => ({ ...p, nextAgenda: e.target.value }))} style={{ resize: "none" }} /></div>
-                <div style={{ gridColumn: "1/-1" }}><label>Invite attendees (comma-separated emails)</label><input placeholder="e.g. client@brand.com, rh@odishatv.com" value={logForm.attendeeEmails || ""} onChange={e => setLogForm(p => ({ ...p, attendeeEmails: e.target.value }))} /></div>
+                <div><label>Meeting Date *</label><input type="date" min="2020-01-01" max="2099-12-31" value={form.nextMeetingDate} onChange={e => setF({ nextMeetingDate: e.target.value })} /></div>
+                <div><label>Meeting Time</label><input type="time" value={form.nextMeetingTime} onChange={e => setF({ nextMeetingTime: e.target.value })} /></div>
+                <div style={{ gridColumn: "1/-1" }}><label>Agenda for next meeting</label><textarea rows={2} placeholder="What will you go in with? e.g. Present revised FCT grid for Q2..." value={form.nextAgenda} onChange={e => setF({ nextAgenda: e.target.value })} style={{ resize: "none" }} /></div>
+                <div style={{ gridColumn: "1/-1" }}><label>Invite attendees (comma-separated emails)</label><input placeholder="e.g. client@brand.com, rh@odishatv.com" value={form.attendeeEmails} onChange={e => setF({ attendeeEmails: e.target.value })} /></div>
               </div>
               <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10 }}>
                 <div style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".08em", textTransform: "uppercase", marginBottom: 8 }}>Calendar Platform</div>
@@ -403,19 +490,19 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                     { id: "zoho",   label: "Zoho Calendar",   icon: "📆", color: "#e42527", desc: "Downloads .ics file — open to add to Zoho Calendar" },
                     { id: "none",   label: "No Calendar",     icon: "⊘",  color: "#7d8590", desc: "Schedule internally only, no calendar invite" },
                   ].map(cp => (
-                    <button key={cp.id} onClick={() => setLogForm(p => ({ ...p, calendarPlatform: cp.id }))}
-                      style={{ flex: 1, padding: "9px 10px", borderRadius: 6, border: `1px solid ${logForm.calendarPlatform === cp.id ? cp.color : C.border}`, background: logForm.calendarPlatform === cp.id ? `${cp.color}12` : "transparent", cursor: "pointer", textAlign: "left" }}>
+                    <button key={cp.id} onClick={() => setF({ calendarPlatform: cp.id })}
+                      style={{ flex: 1, padding: "9px 10px", borderRadius: 6, border: `1px solid ${form.calendarPlatform === cp.id ? cp.color : C.border}`, background: form.calendarPlatform === cp.id ? `${cp.color}12` : "transparent", cursor: "pointer", textAlign: "left" }}>
                       <div style={{ fontSize: 14, marginBottom: 2 }}>{cp.icon}</div>
-                      <div style={{ fontSize: 11, fontWeight: 700, color: logForm.calendarPlatform === cp.id ? cp.color : C.text, fontFamily: "'DM Mono',monospace" }}>{cp.label}</div>
+                      <div style={{ fontSize: 11, fontWeight: 700, color: form.calendarPlatform === cp.id ? cp.color : C.text, fontFamily: "'DM Mono',monospace" }}>{cp.label}</div>
                       <div style={{ fontSize: 9, color: C.dim, marginTop: 2 }}>{cp.desc}</div>
                     </button>
                   ))}
                 </div>
-                {logForm.calendarStatus === "done" && (
+                {form.calendarStatus === "done" && (
                   <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 10px", background: `${C.green}10`, borderRadius: 6 }}>
                     <div>
                       <div style={{ fontSize: 12, color: C.green, fontWeight: 600 }}>Calendar event created</div>
-                      {logForm.meetLink && <a href={logForm.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#4285F4", textDecoration: "none" }}>🎥 {logForm.meetLink}</a>}
+                      {form.meetLink && <a href={form.meetLink} target="_blank" rel="noreferrer" style={{ fontSize: 11, color: "#4285F4", textDecoration: "none" }}>🎥 {form.meetLink}</a>}
                     </div>
                   </div>
                 )}
@@ -425,22 +512,22 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         </div>
 
         {/* STAGE UPDATE (Deal Meeting only) */}
-        {logForm.touchpointType === "Deal Meeting" && (
+        {form.touchpointType === "Deal Meeting" && (
           <div style={{ marginBottom: 14, background: `${C.blue}08`, border: `1px solid ${C.blue}55`, borderRadius: 6, padding: "12px 14px" }}>
             <div style={{ fontSize: 10, color: C.blue, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>Stage Update *</div>
             <div style={{ fontSize: 10, color: C.dim, marginBottom: 8 }}>Where is this deal now? Select one — updates pipeline and resets the escalation clock.</div>
             <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 6 }}>
               {DEAL_STAGES.map(s => (
-                <button key={s} onClick={() => setLogForm(p => ({ ...p, stageUpdate: s, status: s }))}
-                  style={{ padding: "6px 14px", fontSize: 11, borderRadius: 4, border: `1px solid ${logForm.stageUpdate === s ? oColor(s) : C.border}`, background: logForm.stageUpdate === s ? `${oColor(s)}18` : C.s2, color: logForm.stageUpdate === s ? oColor(s) : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", fontWeight: logForm.stageUpdate === s ? 700 : 400, transition: "all .1s" }}>
+                <button key={s} onClick={() => setF({ stageUpdate: s, status: s })}
+                  style={{ padding: "6px 14px", fontSize: 11, borderRadius: 4, border: `1px solid ${form.stageUpdate === s ? oColor(s) : C.border}`, background: form.stageUpdate === s ? `${oColor(s)}18` : C.s2, color: form.stageUpdate === s ? oColor(s) : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", fontWeight: form.stageUpdate === s ? 700 : 400, transition: "all .1s" }}>
                   {s}
                 </button>
               ))}
             </div>
-            {logForm.stageUpdate === "Lost" && (
+            {form.stageUpdate === "Lost" && (
               <div style={{ marginTop: 10 }}>
                 <label style={{ color: C.red, fontWeight: 700 }}>Loss Reason * <span style={{ fontWeight: 400, color: C.dim, fontSize: 10 }}>(required)</span></label>
-                <select value={logForm.lossReason || ""} onChange={e => setLogForm(p => ({ ...p, lossReason: e.target.value }))} style={{ marginTop: 4, borderColor: !logForm.lossReason ? C.red : C.border }}>
+                <select value={form.lossReason} onChange={e => setF({ lossReason: e.target.value })} style={{ marginTop: 4, borderColor: !form.lossReason ? C.red : C.border }}>
                   <option value="">Select reason...</option>
                   <option>Budget cut / Budget not available</option><option>Went to competitor</option><option>Client postponed</option>
                   <option>No response / Client went silent</option><option>Decision not made</option><option>Price too high</option>
@@ -448,15 +535,17 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 </select>
               </div>
             )}
-            {logForm.stageUpdate === "RO Received" && (
+            {form.stageUpdate === "RO Received" && (
               <div style={{ marginTop: 10, background: `${C.green}10`, border: `1px solid ${C.green}44`, borderRadius: 6, padding: "10px 12px" }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 4 }}>🎉 RO Received — great work!</div>
                 <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>Log your revenue entry so it reflects in your pipeline right away.</div>
-                <button onClick={onNavigateRevenue} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 5, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>→ Go to Revenue Log</button>
+                {onNavigateRevenue && (
+                  <button onClick={onNavigateRevenue} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 5, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>→ Go to Revenue Log</button>
+                )}
                 <span style={{ fontSize: 10, color: C.dim, marginLeft: 8 }}>or finish logging touchpoint first, then add revenue after</span>
               </div>
             )}
-            {logForm.stageUpdate === "Mail Confirmed" && (
+            {form.stageUpdate === "Mail Confirmed" && (
               <div style={{ marginTop: 10, background: `${C.accent}10`, border: `1px solid ${C.accent}44`, borderRadius: 6, padding: "10px 12px" }}>
                 <div style={{ fontSize: 11, fontWeight: 700, color: C.accent, marginBottom: 4 }}>Mail Confirmed — awaiting RO</div>
                 <div style={{ fontSize: 11, color: C.text, marginBottom: 6, lineHeight: 1.5 }}>
@@ -464,34 +553,12 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 </div>
                 <div style={{ fontSize: 10, color: C.dim, marginBottom: 6 }}>Set a follow-up reminder so the RO doesn't slip:</div>
                 <div style={{ display: "flex", gap: 6 }}>
-                  {[3, 5, 7].map(days => {
-                    const rd = new Date(TODAY);
-                    rd.setDate(rd.getDate() + days);
-                    const reminderDate = rd.toISOString().slice(0, 10);
-                    return (
-                      <button key={days} onClick={() => {
-                        setPlans((prev: Plan[]) => [...prev, {
-                          id: `p_ro_${Date.now()}_${days}`,
-                          repId: myRepId,
-                          date: reminderDate,
-                          time: "10:00",
-                          clientAgencyName: logForm.clientAgencyName || logForm.client || "",
-                          contactName: "",
-                          phone: "",
-                          agenda: `[RO Reminder] Follow up — RO not received yet`,
-                          pitchType: "",
-                          meetingType: "Task",
-                          status: "Planned",
-                          loggedMeetingId: null,
-                          isUnplanned: false,
-                          autoCreatedFrom: "ro-reminder",
-                        }]);
-                        showToast(`RO follow-up reminder set for +${days} days ✓`);
-                      }} style={{ padding: "5px 14px", background: C.accent, color: "#fff", border: "none", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600 }}>
-                        +{days}d
-                      </button>
-                    );
-                  })}
+                  {[3, 5, 7].map(days => (
+                    <button key={days} onClick={() => handleSetROReminder(days)}
+                      style={{ padding: "5px 14px", background: C.accent, color: "#fff", border: "none", borderRadius: 5, cursor: "pointer", fontSize: 11, fontFamily: "'DM Mono',monospace", fontWeight: 600 }}>
+                      +{days}d
+                    </button>
+                  ))}
                 </div>
               </div>
             )}
@@ -500,11 +567,11 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
 
         {/* Footer */}
         <div style={{ display: "flex", gap: 8, justifyContent: "flex-end", alignItems: "center" }}>
-          {calendarLoading && <span style={{ fontSize: 11, color: C.dim }}>Creating calendar event...</span>}
-          <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
-          <button className="btn btn-primary" onClick={handleLogMeetingWithCalendar} disabled={calendarLoading}
-            style={{ opacity: calendarLoading ? .6 : 1 }}>
-            {calendarLoading ? "Creating..." : (logForm.scheduleNext && logForm.calendarPlatform !== "none") ? "LOG + CREATE CALENDAR EVENT" : "LOG TOUCHPOINT"}
+          {submitting && <span style={{ fontSize: 11, color: C.dim }}>Saving...</span>}
+          <button className="btn btn-ghost" onClick={onClose} disabled={submitting}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSubmit} disabled={submitting}
+            style={{ opacity: submitting ? .6 : 1 }}>
+            {submitting ? "Saving..." : (form.scheduleNext && form.calendarPlatform !== "none") ? "LOG + CREATE CALENDAR EVENT" : "LOG TOUCHPOINT"}
           </button>
         </div>
       </div>
