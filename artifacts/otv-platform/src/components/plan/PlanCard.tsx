@@ -47,16 +47,19 @@ interface PlanCardProps {
 }
 
 export const PlanCard: React.FC<PlanCardProps> = ({ plan: p, isOpen = false, onTap, children }) => {
-  const nowHHMM   = new Date().toTimeString().slice(0, 5);
-  const isFuture  = p.date > TODAY && p.status !== "Done";
-  const timePassed = p.date === TODAY && p.status !== "Done" && !isFuture && p.time && p.time < nowHHMM;
-  const isDone    = p.status === "Done";
-  const blocked   = p.blocked && !isDone;
+  const nowHHMM    = new Date().toTimeString().slice(0, 5);
+  const isFuture   = p.date > TODAY && p.status !== "Done";
+  const isDone     = p.status === "Done";
+  /* Past-date, not logged = Missed (computed upstream or derived here) */
+  const isMissed   = !isDone && !isFuture && (p.status === "Missed" || (p.date < TODAY));
+  /* Time has passed today but meeting not yet logged */
+  const timePassed = !isDone && !isMissed && p.date === TODAY && !!p.time && p.time < nowHHMM;
+  const blocked    = p.blocked && !isDone;
 
-  const cardBg  = isDone ? `${C.green}10` : blocked ? `${C.orange}06` : timePassed ? `${C.red}08` : isOpen ? `${C.accent}10` : C.s2;
-  const cardBrd = isDone ? `2px solid ${C.green}55` : timePassed ? `2px solid ${C.red}55` : blocked ? `1px solid ${C.orange}44` : isOpen ? `1px solid ${C.accent}55` : `1px solid ${C.border}`;
+  const cardBg  = isDone ? `${C.green}10` : isMissed ? `${C.red}06` : blocked ? `${C.orange}06` : timePassed ? `${C.red}08` : isOpen ? `${C.accent}10` : C.s2;
+  const cardBrd = isDone ? `2px solid ${C.green}55` : isMissed ? `2px solid ${C.red}33` : timePassed ? `2px solid ${C.red}55` : blocked ? `1px solid ${C.orange}44` : isOpen ? `1px solid ${C.accent}55` : `1px solid ${C.border}`;
 
-  const circleColor = isDone ? C.green : timePassed ? C.red : C.muted;
+  const circleColor = isDone ? C.green : isMissed ? C.red : timePassed ? C.red : C.muted;
   const circleFill  = isDone ? "filled" : "hollow";
 
   const typeTag =
@@ -106,7 +109,7 @@ export const PlanCard: React.FC<PlanCardProps> = ({ plan: p, isOpen = false, onT
             </span>
           )}
           <span style={{ background: `${circleColor}22`, color: circleColor, padding: "1px 6px", borderRadius: 3, fontSize: 9, fontWeight: 700 }}>
-            {isDone ? "Done" : p.status === "Cancelled" ? "Cancelled" : isFuture ? "📅 Upcoming" : "Tap to log"}
+            {isDone ? "Done" : p.status === "Cancelled" ? "Cancelled" : isFuture ? "📅 Upcoming" : isMissed ? "⚠ Missed" : "Tap to log"}
           </span>
         </div>
       </div>
