@@ -13151,22 +13151,19 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         );
       })()}
 
-      {/* LOG TOUCHPOINT MODAL — replaced by extracted LogMeeting component */}
-      <LogMeeting
-        open={logOpen}
-        form={logForm}
-        onFormChange={setLogForm}
-        deals={deals}
-        reps={reps}
-        isRep={isRep}
-        myRepId={user_role?.repId}
-        calendarLoading={calendarLoading}
-        onClose={() => { setLogOpen(false); setLogForm(BLANK_LOG); }}
-        onSubmit={handleLogMeetingWithCalendar}
-        onNavigateRevenue={() => { setLogOpen(false); setLogForm(BLANK_LOG); setView('revenue-log'); }}
-        setPlans={setPlans}
-        showToast={showToast}
-      />
+      {/* LOG TOUCHPOINT MODAL — global standalone entry point (no parent meeting) */}
+      {logOpen && (
+        <LogMeeting
+          open={logOpen}
+          meeting={null}
+          onClose={() => { setLogOpen(false); }}
+          onSubmit={(_tp) => { setLogOpen(false); showToast("Touchpoint logged ✓"); }}
+          userRole={user_role}
+          deals={deals}
+          showToast={showToast}
+          onNavigateRevenue={() => { setLogOpen(false); setView('revenue-log'); }}
+        />
+      )}
 
       {/* MEETING DETAIL MODAL — view logged meeting */}
       {viewMeetingId && (()=>{
