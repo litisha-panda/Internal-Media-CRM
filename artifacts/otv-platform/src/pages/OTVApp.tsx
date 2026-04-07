@@ -1,7 +1,7 @@
 // @ts-nocheck
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import ZohoSearchInput from "../components/ZohoSearchInput";
-import { getSessionToken, setSessionToken as setSessionTokenLib, authHeaders } from "../services/api/_client";
+import { getSessionToken, setSessionToken as setSessionTokenLib, authHeaders, apiFetch, ApiError } from "../services/api/_client";
 import * as authSvc       from "../services/api/auth";
 import * as attendSvc     from "../services/api/attendance";
 import * as meetingsSvc   from "../services/api/meetings";
@@ -1158,24 +1158,22 @@ function useApiEntityState<T extends { id: string }>(
   // Fetch from API — used on mount and by the 30s polling interval
   const fetchAll = useCallback(async (isInitial?: boolean) => {
     try {
-      const r = await fetch(apiPath, { credentials: "include", headers: authHeaders() });
-      if (r.status === 401) {
-        if (isInitial) setLoading(false);
-        // Only force logout if we previously had a valid session (not demo mode)
-        if (hadValidSession.current) {
-          window.dispatchEvent(new CustomEvent("otv:unauthorized"));
-        }
-        return;
-      }
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const json = await r.json();
+      const json = await apiFetch(apiPath);
       if (json?.ok && Array.isArray(json.data)) {
         hadValidSession.current = true;
         setState(json.data);
-        backendIds.current = new Set(json.data.map((i: T) => i.id));
+        backendIds.current = new Set(json.data.map((i) => i.id));
         try { localStorage.setItem(localKey, JSON.stringify(json.data)); } catch {}
       }
-    } catch {/* offline — keep current state */}
+    } catch (err) {
+      // 401 — fire unauthorized event if we previously had a valid session
+      if (err instanceof ApiError && err.status === 401) {
+        if (hadValidSession.current) {
+          window.dispatchEvent(new CustomEvent("otv:unauthorized"));
+        }
+      }
+      /* offline / other errors — keep current state */
+    }
     finally { if (isInitial) setLoading(false); }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiPath, localKey]);
@@ -1195,19 +1193,19 @@ function useApiEntityState<T extends { id: string }>(
           for (const item of next) {
             if (!backendIds.current.has(item.id)) {
               // New item — POST
-              const r = await fetch(apiPath, {
-                method: "POST", credentials: "include",
-                headers: authHeaders({"Content-Type":"application/json"}),
+              await apiFetch(apiPath, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(item),
               });
-              if (r.ok) { const d = await r.json(); if (d.ok) backendIds.current.add(item.id); }
+              backendIds.current.add(item.id);
             } else {
               // Existing item — PATCH only if changed
               const old = prev.find(i => i.id === item.id);
               if (old && JSON.stringify(old) !== JSON.stringify(item)) {
-                await fetch(`${apiPath}/${item.id}`, {
-                  method: "PATCH", credentials: "include",
-                  headers: authHeaders({"Content-Type":"application/json"}),
+                await apiFetch(`${apiPath}/${item.id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
                   body: JSON.stringify(item),
                 });
               }

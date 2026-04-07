@@ -52,9 +52,9 @@ export async function apiFetch<T = unknown>(
   };
   const r = await fetch(path, merged);
   if (!r.ok) {
-    const body = await r.json().catch(() => ({}));
+    const body = await r.json().catch(() => ({})) as { error?: string };
     throw new ApiError(
-      (body as any).error ?? `HTTP ${r.status}`,
+      body.error ?? `HTTP ${r.status}`,
       r.status,
       body,
     );
