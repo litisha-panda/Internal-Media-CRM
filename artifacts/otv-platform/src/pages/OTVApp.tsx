@@ -13789,28 +13789,33 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               ))}
             </div>
 
-            {/* SECTION 1 — Who */}
-            <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Who</div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <div>
-                <label>Sales Rep *</label>
-                {isRep ? (
-                  // Rep sees their own name — no dropdown; region auto-derived from profile
-                  <input readOnly value={reps.find(r=>r.id===parseInt(logForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />
-                ) : reps.length===0 ? (
-                  <div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>
-                ) : (
-                  <select value={logForm.repId} onChange={e=>setLogForm(p=>({...p,repId:e.target.value}))}>
-                    <option value="">Select rep</option>
-                    {reps.map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
-                  </select>
-                )}
+            {/* SECTION 1 — When / How */}
+            {isRep ? (
+              <div style={{display:"grid",gridTemplateColumns:"160px 1fr",gap:10,marginBottom:10}}>
+                <div>
+                  <label>Time of Touchpoint</label>
+                  <input type="time" value={logForm.meetingTime||""} onChange={e=>setLogForm(p=>({...p,meetingTime:e.target.value}))} />
+                </div>
               </div>
-              <div>
-                <label>Meeting Time</label>
-                <input type="time" value={logForm.meetingTime||""} onChange={e=>setLogForm(p=>({...p,meetingTime:e.target.value}))} />
+            ) : (
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+                <div>
+                  <label>Sales Rep *</label>
+                  {reps.length===0 ? (
+                    <div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>
+                  ) : (
+                    <select value={logForm.repId} onChange={e=>setLogForm(p=>({...p,repId:e.target.value}))}>
+                      <option value="">Select rep</option>
+                      {reps.map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
+                    </select>
+                  )}
+                </div>
+                <div>
+                  <label>Meeting Time</label>
+                  <input type="time" value={logForm.meetingTime||""} onChange={e=>setLogForm(p=>({...p,meetingTime:e.target.value}))} />
+                </div>
               </div>
-            </div>
+            )}
             <div style={{marginBottom:14}}>
               <label>Meeting Type</label>
               <div style={{display:"flex",gap:6,marginTop:4}}>
@@ -13834,7 +13839,18 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 <label>Client Name *</label>
                 <select value={logForm.dealId} onChange={e=>{
                   const deal=deals.find(d=>d.id===e.target.value);
-                  setLogForm(p=>({...p,dealId:e.target.value,clientAgencyName:deal?.clientCompany||"",client:deal?.clientCompany||""}));
+                  setLogForm(p=>({
+                    ...p,
+                    dealId:e.target.value,
+                    clientAgencyName:deal?.clientCompany||"",
+                    client:deal?.clientCompany||"",
+                    agency:deal?.agency||p.agency,
+                    brand:deal?.brand||p.brand,
+                    contactName:deal?.contactName||p.contactName,
+                    designation:(deal as any)?.contactDesignation||(deal as any)?.designation||p.designation,
+                    contactLevel:(deal as any)?.contactLevel||p.contactLevel,
+                    mobile:(deal as any)?.phone||(deal as any)?.mobile||p.mobile,
+                  }));
                 }}>
                   <option value="">Select from CRM</option>
                   {deals.filter(d=>!logForm.repId||d.repId===parseInt(logForm.repId)).map(d=><option key={d.id} value={d.id}>{d.clientCompany}</option>)}
@@ -13899,7 +13915,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             {/* SECTION 3 — Touchpoint Content */}
             <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Touchpoint Content</div>
             <div style={{marginBottom:10}}>
-              <label>Pitch Type (Darpan's dropdown — only structured field)</label>
+              <label>Pitch Type <span style={{color:C.dim,fontWeight:400}}>(what did you pitch?)</span></label>
               <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
                 {PITCH_TYPES.map(pt=>(
                   <button key={pt} onClick={()=>setLogForm(p=>({...p,pitchType:pt}))}
@@ -13919,10 +13935,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
 
             {/* SECTION 4 — Action Required (unified: what/from/description/byWhen) */}
-              <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>Action Required</div>
+              <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4}}>Blockers / Help Needed <span style={{fontWeight:400,color:C.dim,textTransform:"none",letterSpacing:0,fontSize:10}}>(optional)</span></div>
+              <div style={{fontSize:10,color:C.dim,marginBottom:8}}>Something you need from another person or team to progress this deal. Each item auto-creates a tracked task + escalation.</div>
               <div style={{background:`${C.purple}06`,border:`1.5px solid ${C.purple}33`,borderRadius:8,padding:"12px 14px",marginBottom:14}}>
                 <div style={{fontSize:11,color:C.purple,fontWeight:700,marginBottom:8}}>
-                  What do you need to move this forward? Each item auto-creates a task + IR for the receiving dept, with an escalation clock.
+                  Leave blank if no blockers — skip straight to Stage Update below.
                 </div>
 
                 {(logForm.actionRequired||[{...BLANK_ACTION_REQUIRED}]).map((item,idx)=>(
@@ -13936,7 +13953,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </select>
                       </div>
                       <div>
-                        <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>From who? *</div>
+                        <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Needed From *</div>
                         <select value={item.from||""} onChange={e=>{const arr=[...(logForm.actionRequired||[])];arr[idx]={...arr[idx],from:e.target.value};setLogForm(p=>({...p,actionRequired:arr}));}}>
                           <option value="">Department / person…</option>
                           <optgroup label="Internal Departments">
@@ -13982,8 +13999,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           {/* Follow-up date + meeting status side by side */}
             <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
               <div>
-                <label>Follow-Up Date</label>
+                <label>Follow-Up Date <span style={{color:C.dim,fontWeight:400,fontSize:10}}>(when will YOU call/ping next?)</span></label>
                 <input type="date" min="2020-01-01" max="2099-12-31" value={logForm.followUpDate||""} onChange={e=>setLogForm(p=>({...p,followUpDate:e.target.value}))} />
+                <div style={{fontSize:9,color:C.muted,marginTop:2}}>Sets a reminder in your plan — no calendar invite sent</div>
               </div>
               <div>
                 <label>Meeting Status</label>
@@ -14002,8 +14020,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   {logForm.scheduleNext?"✓":""}
                 </button>
                 <div>
-                  <div style={{fontSize:12,fontWeight:600,color:C.text}}>Schedule next meeting</div>
-                  <div style={{fontSize:10,color:C.dim}}>Creates calendar event + optional Google Meet / Zoho Meeting link</div>
+                  <div style={{fontSize:12,fontWeight:600,color:C.text}}>Schedule Next Meeting <span style={{fontWeight:400,color:C.dim,fontSize:11}}>— formal calendar invite</span></div>
+                  <div style={{fontSize:10,color:C.dim}}>Pick a date + time → creates Google/Zoho calendar event with a Meet link</div>
                 </div>
               </div>
 
@@ -14133,8 +14151,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   )}
                   {logForm.stageUpdate==="Mail Confirmed"&&(
                     <div style={{marginTop:10,background:`${C.accent}10`,border:`1px solid ${C.accent}44`,borderRadius:6,padding:"10px 12px"}}>
-                      <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:4}}>Mail Confirmed — waiting for RO?</div>
-                      <div style={{fontSize:10,color:C.dim,marginBottom:6}}>Set a follow-up reminder so nothing slips:</div>
+                      <div style={{fontSize:11,fontWeight:700,color:C.accent,marginBottom:4}}>Mail Confirmed — awaiting RO</div>
+                      <div style={{fontSize:11,color:C.text,marginBottom:6,lineHeight:1.5}}>
+                        This commits the deal in pipeline but <strong>does NOT count as achieved revenue</strong>. Revenue is only booked once the RO is received and logged separately.
+                      </div>
+                      <div style={{fontSize:10,color:C.dim,marginBottom:6}}>Set a follow-up reminder so the RO doesn't slip:</div>
                       <div style={{display:"flex",gap:6}}>
                         {[3,5,7].map(days=>{
                           const rd=new Date(TODAY);rd.setDate(rd.getDate()+days);
@@ -14159,7 +14180,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <button className="btn btn-ghost" onClick={()=>{setLogOpen(false);setLogForm(BLANK_LOG);}}>Cancel</button>
               <button className="btn btn-primary" onClick={handleLogMeetingWithCalendar} disabled={calendarLoading}
                 style={{opacity:calendarLoading?.6:1}}>
-                {calendarLoading ? "Creating..." : logForm.scheduleNext && logForm.calendarPlatform!=="none" ? "LOG + CREATE CALENDAR EVENT" : "LOG MEETING"}
+                {calendarLoading ? "Creating..." : logForm.scheduleNext && logForm.calendarPlatform!=="none" ? "LOG + CREATE CALENDAR EVENT" : "LOG TOUCHPOINT"}
               </button>
             </div>
           </div>
