@@ -66,6 +66,10 @@ export async function getMe(): Promise<MeResponse> {
  * httpStatus is injected by this function (not from the server body) for 403 pending-approval detection.
  * Intentionally does NOT call setSessionToken — the caller decides when to persist.
  */
+export async function loginWithEmail(email: string, password: string): Promise<LoginResponse> {
+  return login(email, password);
+}
+
 export async function login(email: string, password: string): Promise<LoginResponse> {
   const r = await fetch("/api/auth/login", {
     method: "POST",

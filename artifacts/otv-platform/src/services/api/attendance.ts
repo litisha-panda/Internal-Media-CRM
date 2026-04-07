@@ -78,6 +78,22 @@ export async function grantException(recordId: string, reason: string): Promise<
   });
 }
 
+/** PATCH /api/attendance-exceptions/:id — update notes or status on an exception request. */
+export async function patchException(
+  exceptionId: string,
+  patch: Partial<Pick<AttendanceException, "notes" | "status">>
+): Promise<AttendanceException> {
+  const r = await apiFetch<{ ok: boolean; data: AttendanceException }>(
+    `/api/attendance-exceptions/${exceptionId}`,
+    {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
+    }
+  );
+  return r.data;
+}
+
 /** POST /api/attendance/simulate-eod — HR dev tool to trigger end-of-day check. */
 export async function simulateEod(): Promise<void> {
   await apiFetch("/api/attendance/simulate-eod", { method: "POST" });

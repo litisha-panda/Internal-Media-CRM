@@ -4,6 +4,12 @@ import ZohoSearchInput from "../components/ZohoSearchInput";
 import { getSessionToken, setSessionToken as setSessionTokenLib, authHeaders } from "../services/api/_client";
 import * as authSvc       from "../services/api/auth";
 import * as attendSvc     from "../services/api/attendance";
+import * as meetingsSvc   from "../services/api/meetings";
+import * as tpSvc         from "../services/api/touchpoints";
+import * as tasksSvc      from "../services/api/tasks";
+import * as irSvc         from "../services/api/internalRequests";
+import * as revSvc        from "../services/api/revenue";
+import * as adminSvc      from "../services/api/admin";
 
 
 // Route all Claude API calls through the API server proxy (key stays server-side)
@@ -1340,12 +1346,8 @@ export default function OTVApp() {
       ];
     };
 
-    fetch("/api/meetings", { credentials: "include", headers: authHeaders() })
-      .then(r => r.ok ? r.json() : null)
-      .then(async (data) => {
-        if (!data?.ok) return;
-        const loaded: any[] = Array.isArray(data.data) ? data.data : [];
-
+    meetingsSvc.listMeetings()
+      .then(async (loaded) => {
         if (isDemoUser && loaded.length === 0 && u?.id) {
           // Check bootstrap flag to avoid re-seeding on subsequent logins
           const flagKey = `bootstrapped_demo_${u.id}`;
@@ -1356,17 +1358,11 @@ export default function OTVApp() {
             // First-time demo login — seed sample meetings
             const seeds = makeSeeds();
             const settled = await Promise.allSettled(
-              seeds.map(m =>
-                fetch("/api/meetings", {
-                  method: "POST", credentials: "include",
-                  headers: authHeaders({ "Content-Type": "application/json" }),
-                  body: JSON.stringify(m),
-                }).then(r => r.ok ? r.json() : null)
-              )
+              seeds.map(m => meetingsSvc.createMeeting(m).catch(() => null))
             );
             const seeded = settled
-              .filter(r => r.status === "fulfilled" && (r as any).value?.ok)
-              .map((r: any) => r.value.data)
+              .filter(r => r.status === "fulfilled" && (r as any).value)
+              .map((r: any) => r.value)
               .filter(Boolean);
             setDbMeetings(seeded);
             // Store bootstrap flag so we never re-seed
@@ -2066,11 +2062,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const refreshAdminUsers = useCallback(async () => {
     setAdminUsersLoading(true);
     try {
-      const r = await fetch("/api/admin/users");
-      if (!r.ok) { setAdminUsersError("Failed to load user list"); return; }
-      const data = await r.json();
-      const apiUsers: any[] = data?.users ?? data?.data ?? [];
-      if (!data?.ok || !Array.isArray(apiUsers)) return;
+      const apiUsers = await adminSvc.listAdminUsers();
+      if (!Array.isArray(apiUsers)) return;
       setPendingUsers(apiUsers.filter(u => u.status === "pending").map(u => ({
         id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email,
         requestedAt: u.requestedAt ?? u.createdAt, intendedRole: u.role,
@@ -2776,11 +2769,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
 
     // Flow 5: If this meeting was planned via doAddPlan (has a DB meeting ID), update the DB row
     if (logForm.meetingDbId) {
-      fetch(`/api/meetings/${logForm.meetingDbId}`, {
-        method: "PATCH", credentials: "include",
-        headers: authHeaders({"Content-Type":"application/json"}),
-        body: JSON.stringify({ status: "logged", touchpointId }),
-      }).catch(()=>{});
+      meetingsSvc.patchMeeting(logForm.meetingDbId, { status: "logged", touchpointId }).catch(()=>{});
     }
 
     // Part 2: Auto-route action items by their type (5 types from spec)
@@ -2876,12 +2865,12 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       const irIds   = new Set(newIRsFromLog.map(r => r.id));
       setTimeout(async () => {
         try {
-          const [tRes, irRes] = await Promise.all([
-            taskIds.size  ? fetch("/api/tasks",            { credentials:"include", headers:authHeaders() }).then(r=>r.ok?r.json():null) : null,
-            irIds.size    ? fetch("/api/internal-requests",{ credentials:"include", headers:authHeaders() }).then(r=>r.ok?r.json():null) : null,
+          const [tList, irList] = await Promise.all([
+            taskIds.size  ? tasksSvc.listTasks().catch(()=>null) : null,
+            irIds.size    ? irSvc.listIRs().catch(()=>null) : null,
           ]);
-          const dbTaskIds = new Set((tRes?.data||[]).map((t:any)=>t.id));
-          const dbIrIds   = new Set((irRes?.data||[]).map((r:any)=>r.id));
+          const dbTaskIds = new Set((tList||[]).map((t:any)=>t.id));
+          const dbIrIds   = new Set((irList||[]).map((r:any)=>r.id));
           const tasksOk = [...taskIds].every(id=>dbTaskIds.has(id));
           const irsOk   = [...irIds].every(id=>dbIrIds.has(id));
           if (tasksOk && irsOk) {
@@ -4224,18 +4213,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     const repIdNum = user_role?.repId;
                     if(!repIdNum){showToast("Cannot identify your rep record — contact Admin","err");return;}
                     // Persist region + reportingManager on the rep record; gate advancement on success
-                    fetch(`/api/admin/reps/${repIdNum}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({region:wRegion,reportingManager:wRM})})
-                      .then(r=>r.json())
-                      .then(d=>{
-                        if(d?.ok){
-                          // Sync local reps blob so myRep reflects new values immediately
-                          setReps((p:any[])=>p.map((r:any)=>r.id===repIdNum||r.repId===repIdNum?{...r,region:wRegion,reportingManager:wRM}:r));
-                          setWStep(2);
-                        } else {
-                          showToast(d?.error||"Failed to save profile — please try again","err");
-                        }
+                    adminSvc.patchRepProfile(repIdNum, {region:wRegion,reportingManager:wRM})
+                      .then(()=>{
+                        // Sync local reps blob so myRep reflects new values immediately
+                        setReps((p:any[])=>p.map((r:any)=>r.id===repIdNum||r.repId===repIdNum?{...r,region:wRegion,reportingManager:wRM}:r));
+                        setWStep(2);
                       })
-                      .catch(()=>showToast("Network error — please try again","err"));
+                      .catch((err:any)=>showToast(err?.body?.error||"Network error — please try again","err"));
                   };
                   return (
                   <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>
@@ -4550,14 +4534,16 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     const entry = {id,repId:myRepId,clientCompany:drf.clientName.trim(),zohoAccountId:"",dealType:"Linear TV",amount:amt,invoiceRef:drf.invoiceRef.trim(),date:drf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:""};
                     setRevenueEntries(p=>[entry,...p]);
                     setDashRevOpen(false);
-                    fetch("/api/revenue",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({
+                    revSvc.createRevenueEntry({
                       id, repId:myRepId, clientCompany:drf.clientName.trim(), amount:amt,
                       invoiceRef:drf.invoiceRef.trim(), date:drf.date||TODAY,
                       quarter:entryQ, fiscalYear:CURRENT_FY, idempotencyKey:ikey,
-                    })}).then(r=>r.json()).then(d=>{
-                      if(d?.ok){showToast(`₹${(amt/100000).toFixed(1)}L logged for ${drf.clientName.trim()} ✓`);}
-                      else {showToast(d?.error||"Failed to save revenue entry","err");setRevenueEntries(p=>p.filter(e=>e.id!==id));}
-                    }).catch(()=>{showToast("Network error — entry not saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==id));});
+                    }).then(()=>{
+                      showToast(`₹${(amt/100000).toFixed(1)}L logged for ${drf.clientName.trim()} ✓`);
+                    }).catch((err:any)=>{
+                      showToast(err?.body?.error||"Failed to save revenue entry","err");
+                      setRevenueEntries(p=>p.filter(e=>e.id!==id));
+                    });
                   };
                   return (
                     <>
@@ -4729,11 +4715,10 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
               // DB-first: POST to meetings table — only close form and show success on API response
               const resetPf = {agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",meetingKind:pf.meetingKind,touchpointType:pf.touchpointType,needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform};
-              fetch("/api/meetings",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName,brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})})
-                .then(r=>r.ok?r.json():null)
+              meetingsSvc.createMeeting({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName,brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})
                 .then(data=>{
-                  if(data?.ok&&data.data?.id){
-                    setDbMeetings(p=>[...p,data.data]);
+                  if(data?.id){
+                    setDbMeetings(p=>[...p,data]);
                     setPf(resetPf);
                     setAddPlanFor(null);
                     showToast(didSyncCalendar?"Meeting planned ✓ · Calendar opening…":"Meeting planned ✓");
@@ -5267,7 +5252,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {p.status!=="Done"&&!isFuture&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
                                   {isFuture&&p.status!=="Done"&&<button onClick={e=>{e.stopPropagation();if(planEditId===p.id){setPlanEditId(null);}else{setPlanEditId(p.id);setPlanEditForm({time:p.time||"10:00",clientAgencyName:p.clientAgencyName||"",contactName:p.contactName||"",phone:p.phone||"",agenda:p.agenda||"",pitchType:p.pitchType||""});}}} style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,borderRadius:4,padding:"1px 7px",color:C.blue,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✎ Edit</button>}
                                   {isFuture&&p.status!=="Done"&&p.date===TOMORROW&&(
-                                    <button onClick={e=>{e.stopPropagation();if(confirm(`Did "${p.clientAgencyName}" actually happen today?`)){setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,date:TODAY,status:"Done"}:pl));if(p.meetingDbId){fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({date:TODAY,status:"logged"})}).catch(()=>{});}showToast("Moved to today and marked Done ✓");}}} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"1px 7px",color:C.green,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4}}>✓ Happened today</button>
+                                    <button onClick={e=>{e.stopPropagation();if(confirm(`Did "${p.clientAgencyName}" actually happen today?`)){setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,date:TODAY,status:"Done"}:pl));if(p.meetingDbId){meetingsSvc.patchMeeting(p.meetingDbId,{date:TODAY,status:"logged"}).catch(()=>{});}showToast("Moved to today and marked Done ✓");}}} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"1px 7px",color:C.green,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4}}>✓ Happened today</button>
                                   )}
                                 </div>
                               </div>
@@ -5285,7 +5270,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   </div>
                                   <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
                                     <button onClick={()=>setPlanEditId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));if(p.meetingDbId){fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({time:planEditForm.time||"10:00",contactName:planEditForm.contactName||undefined,agenda:planEditForm.agenda||undefined})}).catch(()=>{});}setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
+                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));if(p.meetingDbId){meetingsSvc.patchMeeting(p.meetingDbId,{time:planEditForm.time||"10:00",contactName:planEditForm.contactName||undefined,agenda:planEditForm.agenda||undefined}).catch(()=>{});}setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
                                   </div>
                                 </div>
                               )}
@@ -5476,7 +5461,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done",loggedMeetingId:newMeetId}:pl));
                                       // DB-first: create touchpoint then atomically link to meeting (status+touchpointId)
                                       const tpIdInline = `tp${Date.now()}`;
-                                      fetch("/api/touchpoints",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({id:tpIdInline,repId:myRepId,region:reps.find(r=>r.id===myRepId)?.region||"",date:TODAY,touchpointType:p.touchpointType||"Deal Meeting",whatHappened:disc,clientFeedback:fb,stageUpdate:st,actionItems:act&&frm?[{action:act,neededFrom:frm,dueDate:bywhen||fu||TOMORROW,notes:rmk}]:[]})}).then(r=>r.ok?r.json():null).then(tpR=>{const resolvedTpId=tpR?.ok&&tpR.data?.id?tpR.data.id:tpIdInline;if(p.meetingDbId){fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({status:"logged",touchpointId:resolvedTpId})}).catch(()=>{});}}).catch(()=>{if(p.meetingDbId){fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({status:"logged"})}).catch(()=>{});}});
+                                      tpSvc.createTouchpoint({id:tpIdInline,repId:myRepId,region:reps.find(r=>r.id===myRepId)?.region||"",date:TODAY,touchpointType:p.touchpointType||"Deal Meeting",whatHappened:disc,clientFeedback:fb,stageUpdate:st,actionItems:act&&frm?[{action:act,neededFrom:frm,dueDate:bywhen||fu||TOMORROW,notes:rmk}]:[]}).then(tpData=>{const resolvedTpId=tpData?.id||tpIdInline;if(p.meetingDbId){meetingsSvc.patchMeeting(p.meetingDbId,{status:"logged",touchpointId:resolvedTpId}).catch(()=>{});}}).catch(()=>{if(p.meetingDbId){meetingsSvc.patchMeeting(p.meetingDbId,{status:"logged"}).catch(()=>{});}});
                                       setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,nextMeetingTime:nm_time||"",meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Mail Confirmed":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
@@ -8615,26 +8600,24 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                 const role     = roleEl?.value || "SALES REP";
                                 const region   = regionEl?.value || "North";
                                 try {
-                                  const r = await fetch(`/api/admin/users/${pu._apiId}/approve`, { method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify({role,region}) });
-                                  if (r.ok) {
-                                    if (role === "SALES REP") {
-                                      setReps(prev => {
-                                        const nextId = prev.length > 0 ? Math.max(...prev.map(r=>r.id)) + 1 : 1;
-                                        return [...prev, {id:nextId, name:pu.name, region, role:"Sales Executive", target:0}];
-                                      });
-                                    }
-                                    await refreshAdminUsers();
-                                    showToast(`${pu.name} approved as ${role} ✓`);
-                                  } else { showToast("Approval failed","err"); }
+                                  await adminSvc.approveUser(pu._apiId, role, region);
+                                  if (role === "SALES REP") {
+                                    setReps(prev => {
+                                      const nextId = prev.length > 0 ? Math.max(...prev.map(r=>r.id)) + 1 : 1;
+                                      return [...prev, {id:nextId, name:pu.name, region, role:"Sales Executive", target:0}];
+                                    });
+                                  }
+                                  await refreshAdminUsers();
+                                  showToast(`${pu.name} approved as ${role} ✓`);
                                 } catch { showToast("Network error — approval failed","err"); }
                               }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                                 ✓ Approve
                               </button>
                               <button onClick={async ()=>{
                                 try {
-                                  const r = await fetch(`/api/admin/users/${pu._apiId}/reject`, { method:"POST" });
-                                  if (r.ok) { await refreshAdminUsers(); showToast(`${pu.name} rejected`,"err"); }
-                                  else { showToast("Rejection failed","err"); }
+                                  await adminSvc.rejectUser(pu._apiId);
+                                  await refreshAdminUsers();
+                                  showToast(`${pu.name} rejected`,"err");
                                 } catch { showToast("Network error","err"); }
                               }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
                                 Reject
@@ -8661,9 +8644,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <select value={u.role} onChange={async e=>{
                             const newRole = e.target.value;
                             try {
-                              const r = await fetch(`/api/admin/users/${u._apiId}/role`, { method:"PATCH", headers:{"Content-Type":"application/json"}, body:JSON.stringify({role:newRole,region:u.region}) });
-                              if (r.ok) { await refreshAdminUsers(); showToast(`${u.name} role updated to ${newRole}`); }
-                              else { showToast("Role update failed","err"); }
+                              await adminSvc.patchUserRole(u._apiId, newRole, u.region);
+                              await refreshAdminUsers();
+                              showToast(`${u.name} role updated to ${newRole}`);
                             } catch { showToast("Network error","err"); }
                           }} style={{padding:"4px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
                             {ALL_ROLES.map(r=><option key={r}>{r}</option>)}
@@ -8671,9 +8654,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           <button onClick={async ()=>{
                             if(!window.confirm(`Revoke access for ${u.name}?`)) return;
                             try {
-                              const r = await fetch(`/api/admin/users/${u._apiId}`, { method:"DELETE" });
-                              if (r.ok) { await refreshAdminUsers(); showToast(`${u.name}'s access revoked`,"err"); }
-                              else { showToast("Revoke failed","err"); }
+                              await adminSvc.deleteUser(u._apiId);
+                              await refreshAdminUsers();
+                              showToast(`${u.name}'s access revoked`,"err");
                             } catch { showToast("Network error","err"); }
                           }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"4px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Revoke</button>
                         </div>
@@ -10063,8 +10046,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <button className="btn" style={{fontSize:11,padding:"5px 10px"}} onClick={fetchAttendanceData}>↻ Refresh</button>
                   {canGrantException&&<button className="btn btn-primary" onClick={()=>{
                     runEODCheck();
-                    fetch("/api/attendance/simulate-eod",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"})})
-                      .then(()=>fetchAttendanceData()).catch(()=>{});
+                    attendSvc.simulateEod().then(()=>fetchAttendanceData()).catch(()=>{});
                   }}>▶ Simulate EOD Run</button>}
                 </div>
               </div>
@@ -10192,7 +10174,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     {(r.status==="absent"||r.status==="partial")&&!excGranted&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{
                                       const reason=prompt("Grant exception reason:");
                                       if(!reason?.trim()) return;
-                                      fetch(`/api/attendance-records/${r.id}/grant-exception`,{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({reason})})
+                                      attendSvc.grantException(r.id, reason)
                                         .then(()=>fetchAttendanceData()).catch(()=>{});
                                     }}>Grant Exception</button>}
                                     {exc&&exc.status==="pending"&&<span style={{fontSize:10,color:C.muted,marginLeft:4}}>Chain: {exc.currentStage}</span>}
@@ -11102,13 +11084,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           const ikey   = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
                           const entry = {id:newId,repId:isRep?myRepId:null,clientCompany:client,zohoAccountId:rf.zohoAccountId||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
                           setRevenueEntries(p=>[entry,...p]);
-                          fetch("/api/revenue",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({
+                          revSvc.createRevenueEntry({
                             id:newId, repId:isRep?myRepId:undefined, clientCompany:client, zohoAccountId:rf.zohoAccountId||undefined,
                             dealType:rf.dealType, amount:amt, invoiceRef:rf.invoiceRef, date:rf.date||TODAY,
                             quarter:entryQ, fiscalYear:CURRENT_FY, notes:rf.notes||undefined, idempotencyKey:ikey,
-                          })}).then(r=>r.json()).then(d=>{
-                            if(!d?.ok){showToast(d?.error||"Revenue entry may not have been saved to server","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));}
-                          }).catch(()=>{showToast("Network error — entry may not be saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));});
+                          }).catch((err:any)=>{showToast(err?.body?.error||"Network error — entry may not be saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));});
                           // Fix 6: IP slot committed — notify other reps with pending proposals for the same slot
                           if (rf.dealType==="IPs") {
                             const linkedDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&d.dealType==="IPs"&&d.clientCompany===client&&d.ipId&&d.elemId);
@@ -15474,9 +15454,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               <button className="btn btn-primary" disabled={!excReqForm.reason||excReqSubmitting} onClick={()=>{
                 if(!excReqForm.reason){showToast("Select a reason","err");return;}
                 setExcReqSubmitting(true);
-                fetch("/api/attendance-exceptions",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({date:excReqRecord.date,reason:excReqForm.reason,notes:excReqForm.notes,attendanceRecordId:excReqRecord.id})})
-                  .then(async r=>{const d=await r.json();if(d.ok){showToast("Exception request submitted — pending RH approval ✓");setExcReqOpen(false);fetchAttendanceData();}else{showToast(d.error||"Failed to submit","err");}})
-                  .catch(()=>showToast("Network error — try again","err"))
+                attendSvc.createException({date:excReqRecord.date,reason:excReqForm.reason,notes:excReqForm.notes,attendanceRecordId:excReqRecord.id})
+                  .then(()=>{showToast("Exception request submitted — pending RH approval ✓");setExcReqOpen(false);fetchAttendanceData();})
+                  .catch((err:any)=>showToast(err?.body?.error||"Failed to submit","err"))
                   .finally(()=>setExcReqSubmitting(false));
               }}>{excReqSubmitting?"Submitting…":"Submit to RH →"}</button>
             </div>
