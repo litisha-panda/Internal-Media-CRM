@@ -317,11 +317,20 @@ router.post("/auth/seed-demo", async (req, res) => {
 });
 
 // ─── PATCH /api/users/me ─────────────────────────────────────────────────────
-// Self-service profile update. Any authenticated user can update their own region.
-// Intentionally NOT admin-only — used by the rep setup wizard.
+// Self-service region update. SALES REP only — region is not an auth boundary for reps.
+// Region Heads and above must have their region changed by an Admin (region is their
+// authorization scope and self-reassignment would widen cross-region data access).
 const VALID_REGIONS_SET = new Set(["North","South","East","West","National","Central"]);
 router.patch("/users/me", requireAuth, async (req, res) => {
   try {
+    const u = req.user!;
+    // Only SALES REP may self-update their region. All other roles are denied.
+    if (u.role !== "SALES REP") {
+      return void res.status(403).json({
+        ok:    false,
+        error: "Only Sales Reps may use this endpoint. Other roles require an Admin to update their region.",
+      });
+    }
     const { region } = req.body as { region?: string };
     if (!region || !VALID_REGIONS_SET.has(region)) {
       return void res.status(400).json({
@@ -332,7 +341,7 @@ router.patch("/users/me", requireAuth, async (req, res) => {
     const [updated] = await db
       .update(users)
       .set({ region, updatedAt: new Date() })
-      .where(eq(users.id, req.user!.id))
+      .where(eq(users.id, u.id))
       .returning({ id: users.id, region: users.region, role: users.role, name: users.name });
 
     if (!updated) return void res.status(404).json({ ok: false, error: "User not found" });
