@@ -380,7 +380,7 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
         {([
           { label: "TODAY",    date: TODAY,    dayList: todayPlans, logged: todayLogged },
-          { label: "TOMORROW", date: TOMORROW, dayList: tmrwPlans,  logged: false },
+          { label: "TOMORROW", date: TOMORROW, dayList: tmrwPlans,  logged: tmrwPlans.length > 0 },
         ] as const).map(({ label, date, dayList, logged }) => (
           <div key={label} style={{ flex: 1, minWidth: 200, background: C.surface, border: `1px solid ${logged ? C.green : C.border}`, borderRadius: 8, padding: "10px 14px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
