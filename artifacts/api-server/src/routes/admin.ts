@@ -438,6 +438,29 @@ router.patch("/admin/reps/:id", requireAuth, async (req, res) => {
   }
 
   try {
+    // ── For REGION HEAD: resolve target rep from authoritative users table ──
+    // blob state can be incomplete/stale — always use DB for authz decisions
+    if (u.role === "REGION HEAD") {
+      const targetUsers = await db
+        .select({ region: users.region })
+        .from(users)
+        .where(eq(users.repId, repId))
+        .limit(1);
+
+      if (targetUsers.length === 0) {
+        // Rep has no user account — REGION HEAD cannot claim scope over unknown reps
+        res.status(403).json({ ok: false, error: "Target rep has no user account — contact Admin" });
+        return;
+      }
+      const targetRegion = targetUsers[0].region;
+      // If rep has a region assigned, enforce it matches requester's region
+      if (targetRegion !== null && targetRegion !== u.region) {
+        res.status(403).json({ ok: false, error: "Region Head can only update reps in their own region" });
+        return;
+      }
+      // null region = unassigned rep: allow RH to set it
+    }
+
     // ── Read the otv_reps blob ──────────────────────────────────────────────
     const stateRow = await db
       .select()
@@ -447,18 +470,8 @@ router.patch("/admin/reps/:id", requireAuth, async (req, res) => {
 
     const repsArray: any[] = Array.isArray(stateRow[0]?.value) ? (stateRow[0].value as any[]) : [];
 
-    // Find the rep
+    // Find the rep in the blob
     const repIdx = repsArray.findIndex((r: any) => r.id === repId || r.repId === repId);
-
-    // REGION HEAD scope check — rep's current region must match requester's region
-    if (u.role === "REGION HEAD") {
-      const repRegion = repIdx >= 0 ? repsArray[repIdx].region : null;
-      // If rep has a region assigned, enforce it matches. If no region yet, allow RH to set it.
-      if (repRegion && repRegion !== u.region) {
-        res.status(403).json({ ok: false, error: "Region Head can only update reps in their own region" });
-        return;
-      }
-    }
 
     if (repIdx >= 0) {
       // Update existing rep object in blob
