@@ -1,6 +1,9 @@
 // @ts-nocheck
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import ZohoSearchInput from "../components/ZohoSearchInput";
+import { getSessionToken, setSessionToken as setSessionTokenLib, authHeaders } from "../services/api/_client";
+import * as authSvc       from "../services/api/auth";
+import * as attendSvc     from "../services/api/attendance";
 
 
 // Route all Claude API calls through the API server proxy (key stays server-side)
@@ -754,17 +757,11 @@ function LoginScreen({ onLogin }) {
     try {
       if (isNew) {
         // Signup: POST to API signup endpoint
-        const r = await fetch("/api/auth/signup", {
-          method: "POST",
-          credentials: "include",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            name: name.trim(), email: email.toLowerCase().trim(), password,
-            phone: phone.trim(), designation: designation.trim(),
-            intendedRole, preferredRegion,
-          }),
+        const data = await authSvc.signup({
+          name: name.trim(), email: email.toLowerCase().trim(), password,
+          phone: phone.trim(), designation: designation.trim(),
+          intendedRole, preferredRegion,
         });
-        const data = await r.json();
         if (data.ok) {
           setPendingApproval({ name: name.trim(), email: email.toLowerCase().trim() });
         } else {
@@ -775,17 +772,11 @@ function LoginScreen({ onLogin }) {
       }
 
       // Login: always call the API — creates a real server session
-      const r = await fetch("/api/auth/login", {
-        method: "POST",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: email.toLowerCase().trim(), password }),
-      });
-      const data = await r.json();
-      if (r.ok && data.ok) {
+      const data = await authSvc.login(email.toLowerCase().trim(), password);
+      if (data.ok) {
         if (data.token) setSessionTokenStore(data.token); // persist for session restore
         onLogin(data.user);
-      } else if (r.status === 403) {
+      } else if (data.httpStatus === 403) {
         // Account exists but pending admin approval
         setPendingApproval({ name: data.user?.name || email, email: email.toLowerCase().trim() });
         setLoading(false);
@@ -800,13 +791,7 @@ function LoginScreen({ onLogin }) {
 
   const handleDemo = (account) => {
     setLoading(true);
-    fetch("/api/auth/login", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email: account.email, password: "demo123" }),
-    })
-      .then(r => r.json())
+    authSvc.login(account.email, "demo123")
       .then(data => {
         if (data.ok) {
           if (data.token) setSessionTokenStore(data.token); // persist for session restore
@@ -1132,16 +1117,9 @@ function usePersistedState(key, initial) {
 // Replit's path-based proxy prevents httpOnly cookies from being forwarded reliably.
 // We store the session token in localStorage and send it as X-Session-Token header
 // on all API requests. The server accepts either cookie OR this header.
-const SESSION_TOKEN_KEY = "otv_session_token";
-function getSessionToken(): string | null {
-  try { return localStorage.getItem(SESSION_TOKEN_KEY); } catch { return null; }
-}
+// getSessionToken, setSessionTokenLib, authHeaders are imported from services/api/_client.
 function setSessionTokenStore(t: string | null): void {
-  try { t ? localStorage.setItem(SESSION_TOKEN_KEY, t) : localStorage.removeItem(SESSION_TOKEN_KEY); } catch {}
-}
-function authHeaders(extra?: Record<string, string>): Record<string, string> {
-  const t = getSessionToken();
-  return { ...(t ? { "X-Session-Token": t } : {}), ...extra };
+  setSessionTokenLib(t);
 }
 
 /**
@@ -1248,7 +1226,7 @@ const DATA_VERSION = "v3-clean";
   try {
     if (localStorage.getItem("otv_data_version") !== DATA_VERSION) {
       const keysToRemove = Object.keys(localStorage).filter(k =>
-        k.startsWith("otv_") && k !== "otv_data_version" && k !== SESSION_TOKEN_KEY
+        k.startsWith("otv_") && k !== "otv_data_version" && k !== "otv_session_token"
       );
       keysToRemove.forEach(k => localStorage.removeItem(k));
       localStorage.setItem("otv_data_version", DATA_VERSION);
@@ -1319,8 +1297,7 @@ export default function OTVApp() {
 
   // On mount: restore session from stored token (localStorage) or cookie
   useEffect(() => {
-    fetch("/api/auth/me", { credentials: "include", headers: authHeaders() })
-      .then(r => r.ok ? r.json() : null)
+    authSvc.getMe()
       .then(data => {
         if (data?.ok && data.user) {
           setLoginUser(data.user);
@@ -1420,10 +1397,7 @@ export default function OTVApp() {
     if (user?.provider) setLoginProvider(user.provider);
   };
   const handleLogout = () => {
-    fetch("/api/auth/logout", {
-      method: "POST", credentials: "include",
-      headers: authHeaders(),
-    }).catch(() => {});
+    authSvc.logout().catch(() => {});
     setSessionTokenStore(null); // clear stored token
     setLoggedIn(false); setLoginUser(null); setSection("home");
   };
@@ -1715,13 +1689,13 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // CROApp is only rendered when the user is already authenticated, so no loggedIn guard needed
   const fetchAttendanceData = useCallback(() => {
     setAttDbLoading(true);
-    Promise.all([
-      fetch("/api/attendance-records", {credentials:"include", headers:authHeaders()}),
-      fetch("/api/attendance-exceptions", {credentials:"include", headers:authHeaders()}),
-    ]).then(async ([recRes, excRes]) => {
-      if (recRes.ok) { const d = await recRes.json(); if (d.ok) setAttDbRecords(d.data||[]); }
-      if (excRes.ok) { const d = await excRes.json(); if (d.ok) setAttExcRequests(d.data||[]); }
-    }).catch(()=>{}).finally(()=>setAttDbLoading(false));
+    attendSvc.listAll()
+      .then(({ records, exceptions }) => {
+        setAttDbRecords(records);
+        setAttExcRequests(exceptions);
+      })
+      .catch(()=>{})
+      .finally(()=>setAttDbLoading(false));
   }, []);
 
   useEffect(() => {
