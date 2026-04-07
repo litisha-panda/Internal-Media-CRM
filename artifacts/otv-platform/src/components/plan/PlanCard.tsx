@@ -11,6 +11,9 @@
 import React from "react";
 import { C, TODAY } from "../../utils/palette";
 
+/** DB columns return integers; form fields use strings. Both are valid rep IDs. */
+type RepId = number | string | null | undefined;
+
 export interface PlanCardPlan {
   id: string;
   date: string;
@@ -32,7 +35,7 @@ export interface PlanCardPlan {
   brand?: string;
   contactName?: string;
   phone?: string;
-  repId?: any;
+  repId?: RepId;
   isUnplanned?: boolean;
 }
 

@@ -9,7 +9,9 @@ import React from "react";
 import { C } from "../../utils/palette";
 import type { PlanForm } from "../../views/rep/MyPlan";
 
-interface Deal { id: string; clientCompany: string; repId?: any; agencyName?: string; agency?: string; brand?: string; }
+/** DB columns return integers; form fields use strings. Both are valid rep IDs. */
+type RepId = number | string | null | undefined;
+interface Deal { id: string; clientCompany: string; repId?: RepId; agencyName?: string; agency?: string; brand?: string; }
 
 export interface AddPlanModalProps {
   forDate: string;

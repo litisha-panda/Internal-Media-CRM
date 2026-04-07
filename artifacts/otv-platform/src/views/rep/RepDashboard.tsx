@@ -11,14 +11,15 @@ import { C, TODAY, fmtR } from "../../utils/palette";
 
 const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26", "FY26 Annual"];
 
-interface Meeting { id: string; repId: any; date: string; time?: string; status?: string; clientName?: string; agencyName?: string; mode?: string; meetingKind?: string; }
-interface Task    { id: string; assignedTo?: any; assignedToUserId?: string; repId?: any; status: string; dueDate?: string; }
+type RepId = number | string | null | undefined;
+interface Meeting { id: string; repId: RepId; date: string; time?: string; status?: string; clientName?: string; agencyName?: string; mode?: string; meetingKind?: string; }
+interface Task    { id: string; title: string; assignedTo?: RepId; assignedToUserId?: string; repId?: RepId; status: string; dueDate?: string; clientCompany?: string; }
 interface IR      { id: string; status: string; raisedBy: string; }
-interface TargetSub { repId: any; quarter: string; status: string; totalTarget?: number; }
-interface RevEntry  { repId: any; quarter: string; amount?: number; isReversed?: boolean; reversalOf?: string; }
+interface TargetSub { repId: RepId; quarter: string; status: string; totalTarget?: number; }
+interface RevEntry  { repId: RepId; quarter: string; amount?: number; isReversed?: boolean; reversalOf?: string; }
 
 export interface RepDashboardProps {
-  userRole: { repId?: any; id?: string } | null;
+  userRole: { repId?: RepId; id?: string } | null;
   activeUser: string;
   currentQ: string;
   annualTgt: number;
@@ -58,9 +59,11 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
   const myRepId      = userRole?.repId;
   const todayMeetings = meetings.filter(m => m.repId === myRepId && m.date === TODAY);
   const plannedToday  = todayMeetings.length;
-  const pendingTasks  = tasks.filter(t =>
+  const myTasks       = tasks.filter(t =>
     (t.assignedTo === myRepId || t.assignedToUserId === activeUser) && t.status !== "Done"
-  ).length;
+  );
+  const pendingTasks  = myTasks.length;
+  const overdueTasks  = myTasks.filter(t => t.dueDate && t.dueDate < TODAY);
   const pendingIRs    = internalReqs.filter(r => r.status !== "Done" && r.raisedBy === activeUser).length;
 
   const Card = ({ label, value, sub = null, color = C.text }: { label: string; value: string; sub?: string | null; color?: string }) => (
@@ -145,6 +148,40 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
         )}
       </div>
 
+      {/* TODAY'S ACTIONS + Overdue Task List */}
+      {overdueTasks.length > 0 && (
+        <div style={{ marginBottom: 20 }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: C.red, fontFamily: "'DM Sans',sans-serif", letterSpacing: .5, textTransform: "uppercase", marginBottom: 8 }}>
+            ⚠ Overdue Tasks ({overdueTasks.length})
+          </div>
+          {overdueTasks.slice(0, 5).map(t => {
+            const daysOver = t.dueDate ? Math.ceil((new Date(TODAY).getTime() - new Date(t.dueDate).getTime()) / 86400000) : 0;
+            return (
+              <div key={t.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "8px 12px", background: `${C.red}08`, border: `1px solid ${C.red}33`, borderRadius: 8, marginBottom: 6, cursor: "pointer" }}
+                onClick={() => onNavigate("tasks")}>
+                <span style={{ fontSize: 12, color: C.red }}>✗</span>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 12, fontWeight: 600, color: C.text, fontFamily: "'DM Sans',sans-serif", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                    {t.title || "Untitled task"}
+                  </div>
+                  {t.clientCompany && (
+                    <div style={{ fontSize: 10, color: C.dim, fontFamily: "'DM Sans',sans-serif" }}>{t.clientCompany}</div>
+                  )}
+                </div>
+                <span style={{ fontSize: 10, fontWeight: 700, color: C.red, whiteSpace: "nowrap", fontFamily: "'DM Sans',sans-serif" }}>
+                  {daysOver > 0 ? `${daysOver}d overdue` : "Due today"}
+                </span>
+              </div>
+            );
+          })}
+          {overdueTasks.length > 5 && (
+            <div style={{ fontSize: 11, color: C.muted, fontFamily: "'DM Sans',sans-serif", marginTop: 4, textAlign: "center" }}>
+              +{overdueTasks.length - 5} more — <span style={{ color: C.red, cursor: "pointer" }} onClick={() => onNavigate("tasks")}>View all tasks</span>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Today's meetings summary */}
       {plannedToday > 0 && (
         <div style={{ marginBottom: 20 }}>
@@ -183,18 +220,18 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: C.dim, fontFamily: "'DM Sans',sans-serif", letterSpacing: .5, textTransform: "uppercase", marginBottom: 8 }}>Quick Actions</div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          <QA icon="◎" label="My Plan"          view="my-plan" />
+          <QA icon="◎" label="My Plan" view="my-plan" />
           <div
             onClick={() => { setDashRevForm({ clientName: "", amount: "", invoiceRef: "", date: TODAY }); setDashRevOpen(true); }}
             style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 6, padding: "14px 10px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 10, cursor: "pointer", flex: 1, minWidth: 0, transition: "box-shadow .15s" }}
             onMouseEnter={e => (e.currentTarget as HTMLDivElement).style.boxShadow = "0 2px 8px #1d5db420"}
             onMouseLeave={e => (e.currentTarget as HTMLDivElement).style.boxShadow = "none"}
           >
-            <span style={{ fontSize: 22 }}>💰</span>
+            <span style={{ fontSize: 22 }}>₹</span>
             <span style={{ fontSize: 11, fontWeight: 600, color: C.text, fontFamily: "'DM Sans',sans-serif", textAlign: "center", lineHeight: 1.3 }}>Log Revenue</span>
           </div>
-          <QA icon="⬡" label="My Tasks"        view="tasks" />
-          <QA icon="🏆" label="Leaderboard"    view="leaderboard" />
+          <QA icon="⬆" label="Internal Requests" view="internal-requests" />
+          <QA icon="✓" label="Tasks" view="tasks" />
         </div>
       </div>
 
