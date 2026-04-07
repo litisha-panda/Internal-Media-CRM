@@ -40,9 +40,20 @@ export function useMeetings(loggedIn: boolean): UseMeetingsReturn {
   }, [loggedIn, refetch]);
 
   const createMeeting = useCallback(async (payload: MeetingCreate): Promise<Meeting> => {
-    const created = await meetingsSvc.createMeeting(payload);
-    setMeetings(prev => [...prev, created]);
-    return created;
+    // Optimistic append — build a temporary item with the payload shape
+    const tempId = payload.id ?? `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const optimistic = { ...payload, id: tempId } as Meeting;
+    setMeetings(prev => [...prev, optimistic]);
+    try {
+      const created = await meetingsSvc.createMeeting(payload);
+      // Replace the optimistic item with the confirmed server record
+      setMeetings(prev => prev.map(m => m.id === tempId ? created : m));
+      return created;
+    } catch (err) {
+      // Revert optimistic item on error
+      setMeetings(prev => prev.filter(m => m.id !== tempId));
+      throw err;
+    }
   }, []);
 
   const patchMeeting = useCallback(async (id: string, patch: MeetingPatch): Promise<void> => {

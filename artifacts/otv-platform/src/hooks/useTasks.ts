@@ -43,9 +43,18 @@ export function useTasks(loggedIn: boolean): UseTasksReturn {
   }, [loggedIn, refetch]);
 
   const createTask = useCallback(async (payload: TaskCreate): Promise<Task> => {
-    const created = await tasksSvc.createTask(payload);
-    setTasks(prev => [created, ...prev]);
-    return created;
+    // Optimistic append (prepend — tasks are shown newest-first)
+    const tempId = payload.id ?? `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const optimistic = { ...payload, id: tempId } as Task;
+    setTasks(prev => [optimistic, ...prev]);
+    try {
+      const created = await tasksSvc.createTask(payload);
+      setTasks(prev => prev.map(t => t.id === tempId ? created : t));
+      return created;
+    } catch (err) {
+      setTasks(prev => prev.filter(t => t.id !== tempId));
+      throw err;
+    }
   }, []);
 
   const patchTask = useCallback(async (id: string, patch: TaskPatch): Promise<void> => {

@@ -40,9 +40,18 @@ export function useTouchpoints(loggedIn: boolean): UseTouchpointsReturn {
   }, [loggedIn, refetch]);
 
   const createTouchpoint = useCallback(async (payload: TouchpointCreate): Promise<Touchpoint> => {
-    const created = await tpSvc.createTouchpoint(payload);
-    setTouchpoints(prev => [...prev, created]);
-    return created;
+    // Optimistic append
+    const tempId = payload.id ?? `tmp_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+    const optimistic = { ...payload, id: tempId } as Touchpoint;
+    setTouchpoints(prev => [...prev, optimistic]);
+    try {
+      const created = await tpSvc.createTouchpoint(payload);
+      setTouchpoints(prev => prev.map(tp => tp.id === tempId ? created : tp));
+      return created;
+    } catch (err) {
+      setTouchpoints(prev => prev.filter(tp => tp.id !== tempId));
+      throw err;
+    }
   }, []);
 
   const patchTouchpoint = useCallback(
