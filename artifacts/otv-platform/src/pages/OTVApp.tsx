@@ -14,6 +14,8 @@ import { useMeetings } from "../hooks/useMeetings";
 import { useTouchpoints } from "../hooks/useTouchpoints";
 import { useTasks } from "../hooks/useTasks";
 import { useAttendance } from "../hooks/useAttendance";
+import { RepDashboard } from "../views/rep/RepDashboard";
+import { MyPlan } from "../views/rep/MyPlan";
 
 
 // Route all Claude API calls through the API server proxy (key stays server-side)
@@ -2068,8 +2070,6 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
-  const [dashRevOpen, setDashRevOpen]                   = useState(false);
-  const [dashRevForm, setDashRevForm]                   = useState({clientName:"",amount:"",invoiceRef:"",date:TODAY});
   const [editingRevId, setEditingRevId]                 = useState<string|null>(null);
   const [editRevData, setEditRevData]                   = useState<any>({});
   const [importTab, setImportTab]                       = useState("targets");
@@ -2108,6 +2108,73 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   };
 
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
+
+  // doAddPlan — extracted from my-plan block so it can be passed as prop to MyPlan component.
+  // Reads planForm from state, creates the meeting via API, and closes the form.
+  // The setAddPlanFor callback is owned by MyPlan but only used to close the modal;
+  // callers pass it inline as `(date) => doAddPlanImpl(date, planForm)`.
+  const doAddPlan = (date: string, onSuccess?: () => void) => {
+    const pf = planForm;
+    const myPlanRepId = user_role?.repId ?? user_role?.id;
+    const clientName = (pf.client||pf.agency||"").trim();
+    if (!clientName) return;
+    const planTime = pf.time||"10:00";
+    const rawPhone = pf.phone.replace(/\D/g,"");
+    const storedPhone = rawPhone ? `+91${rawPhone.slice(-10)}` : "";
+    const mkind = (pf.meetingKind||"ACTIONABLE") as "PR"|"ACTIONABLE";
+    const didSyncCalendar = pf.syncToCalendar;
+
+    if (pf.syncToCalendar) {
+      const [hStr,mStr] = planTime.split(":");
+      const h = parseInt(hStr||"10"); const m = parseInt(mStr||"0");
+      const endH = String(h+1).padStart(2,"0"); const endM = String(m).padStart(2,"0");
+      const startH = String(h).padStart(2,"0");
+      const dateParts = date.replace(/-/g,"");
+      const cName = clientName;
+      const title = encodeURIComponent(`[OTV] Meeting: ${cName}`);
+      const details = encodeURIComponent(`Contact: ${pf.contactName.trim()}${pf.agenda?"\nAgenda: "+pf.agenda:""}${pf.brand?"\nBrand: "+pf.brand:""}`);
+      if (pf.calPlatform==="google") {
+        const startDT = `${dateParts}T${startH}${endM}00`;
+        const endDT   = `${dateParts}T${endH}${endM}00`;
+        window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}`,"_blank");
+      } else if (pf.calPlatform==="zoho") {
+        const ics = [
+          "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//OTV CRM//EN","CALSCALE:GREGORIAN","METHOD:REQUEST",
+          "BEGIN:VEVENT",
+          `DTSTART:${dateParts}T${startH}${endM}00`,
+          `DTEND:${dateParts}T${endH}${endM}00`,
+          `SUMMARY:[OTV] Meeting: ${cName}`,
+          `DESCRIPTION:Contact: ${pf.contactName.trim()}${pf.agenda?"\\nAgenda: "+pf.agenda:""}`,
+          `UID:otv-${Date.now()}@odishatv.com`,
+          "STATUS:CONFIRMED","END:VEVENT","END:VCALENDAR"
+        ].join("\r\n");
+        const blob = new Blob([ics],{type:"text/calendar;charset=utf-8"});
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = `OTV-${cName.replace(/\s+/g,"-")}.ics`;
+        a.click();
+      } else if (pf.calPlatform==="outlook") {
+        const startISO = `${date}T${startH}:${endM}:00`;
+        const endISO   = `${date}T${endH}:${endM}:00`;
+        window.open(`https://outlook.office.com/calendar/deeplink/compose?subject=${title}&startdt=${encodeURIComponent(startISO)}&enddt=${encodeURIComponent(endISO)}&body=${details}`,"_blank");
+      }
+    }
+
+    const resetPf = {agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",meetingKind:pf.meetingKind,touchpointType:pf.touchpointType,needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform};
+    meetingsSvc.createMeeting({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName,brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})
+      .then(data=>{
+        if(data?.id){
+          setDbMeetings(p=>[...p,data]);
+          setPlanForm(resetPf);
+          if(onSuccess) onSuccess();
+          showToast(didSyncCalendar?"Meeting planned ✓ · Calendar opening…":"Meeting planned ✓");
+        } else {
+          showToast("Could not save meeting — please try again","err");
+        }
+      })
+      .catch(()=>showToast("Network error — meeting not saved","err"));
+  };
+
   const openNoteModal = (title, placeholder, onSubmit) => {
     setNoteModalVal(placeholder || "");
     setNoteModal({ title, placeholder: placeholder || "", onSubmit });
@@ -4338,1631 +4405,103 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const inpl      = getInPlay(myRepId);
             const sf        = getShortfall(annualTgt, myRepId);
             const pct       = annualTgt > 0 ? Math.min(100, Math.round((ach / annualTgt) * 100)) : 0;
-
-            // Current quarter (Indian FY: Apr=Q1, Jul=Q2, Oct=Q3, Jan=Q4)
-            const todayM    = new Date().getMonth() + 1; // 1-12
+            const todayM    = new Date().getMonth() + 1;
             const qIdx      = todayM >= 4 && todayM <= 6 ? 0 : todayM >= 7 && todayM <= 9 ? 1 : todayM >= 10 && todayM <= 12 ? 2 : 3;
-            const currentQ  = QUARTERS[qIdx]; // "Q1 FY26" etc
+            const currentQ  = QUARTERS[qIdx];
             const qSubs     = targetSubs.filter(s => s.repId === myRepId && s.quarter === currentQ && s.status === "Approved");
             const qTarget   = qSubs.reduce((s,x) => s + (x.totalTarget||0), 0);
             const qAch      = revenueEntries.filter(e => e.repId === myRepId && e.quarter === currentQ).reduce((s,e) => s + (parseCurrency(e.amount||"0")||0), 0);
-
-            // Alerts
-            const pendingTasks = tasks.filter(t => (t.assignedTo === myRepId || t.assignedToUserId === activeUser) && t.status !== "Done").length;
-            const pendingIRs   = internalReqs.filter(r => r.status !== "Done" && r.raisedBy === activeUser).length;
             const myTargetSub  = targetSubs.find(s => s.repId === myRepId);
             const targetApprovalStatus = !myTargetSub ? "none" : myTargetSub.status === "Approved" ? "approved" : "pending";
-            const todayMeetings = meetings.filter(m => m.repId === myRepId && m.date === TODAY);
-            const plannedToday  = todayMeetings.length;
-
-            const Card = ({label,value,sub=null,color=C.text}) => (
-              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 18px",flex:1,minWidth:0}}>
-                <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>{label}</div>
-                <div style={{fontSize:22,fontWeight:700,color,fontFamily:"'DM Sans',sans-serif",lineHeight:1.1}}>{value}</div>
-                {sub && <div style={{fontSize:11,color:C.muted,marginTop:4,fontFamily:"'DM Sans',sans-serif"}}>{sub}</div>}
-              </div>
-            );
-
-            const Alert = ({icon,msg,color=C.accent,onClick=null,cta=null}) => (
-              <div onClick={onClick} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:color+"12",border:`1px solid ${color}33`,borderRadius:8,cursor:onClick?"pointer":"default",marginBottom:8}}>
-                <span style={{fontSize:16}}>{icon}</span>
-                <span style={{flex:1,fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{msg}</span>
-                {cta && <span style={{fontSize:11,color,fontWeight:600,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{cta} →</span>}
-              </div>
-            );
-
-            const QA = ({icon,label,view:v}) => (
-              <div onClick={()=>setView(v)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"14px 10px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,cursor:"pointer",flex:1,minWidth:0,transition:"box-shadow .15s"}}
-                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px #1d5db420"}
-                onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
-                <span style={{fontSize:22}}>{icon}</span>
-                <span style={{fontSize:11,fontWeight:600,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.3}}>{label}</span>
-              </div>
-            );
-
             return (
-              <div className="fin">
-                {/* Header */}
-                <div style={{marginBottom:20}}>
-                  <h2 style={{fontSize:20,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",margin:0}}>
-                    My Dashboard
-                  </h2>
-                  <p style={{fontSize:12,color:C.dim,fontFamily:"'DM Sans',sans-serif",margin:"4px 0 0"}}>
-                    {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
-                  </p>
-                </div>
-
-                {/* KPI Cards */}
-                <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
-                  <Card label="Annual Target"   value={fmtR(annualTgt)} sub={targetApprovalStatus==="pending"?"Pending approval":targetApprovalStatus==="none"?"Not set yet":undefined} color={C.blue} />
-                  <Card label={`${currentQ} Target`} value={qTarget>0?fmtR(qTarget):"—"} sub={qTarget>0?`Achieved ${fmtR(qAch)}`:undefined} color={C.purple} />
-                  <Card label="Achieved (FY)"   value={fmtR(ach)}  sub={annualTgt>0?`${pct}% of annual target`:undefined} color={C.green} />
-                  <Card label="Shortfall"        value={annualTgt>0?fmtR(sf):"—"} sub={annualTgt>0&&sf===0?"On track 🎉":undefined} color={sf>0?C.red:C.green} />
-                </div>
-
-                {/* Progress bar */}
-                {annualTgt > 0 && (
-                  <div style={{marginBottom:20}}>
-                    {stackedBar(annualTgt, ach, comm, inpl, sf, 0)}
-                    <div style={{display:"flex",gap:16,marginTop:6,flexWrap:"wrap"}}>
-                      {[["Achieved",C.green,ach],["Committed",C.blue,comm],["In Play","#d97706",inpl],["Shortfall",C.red+"99",sf]].map(([lbl,col,val])=>(
-                        <div key={lbl as string} style={{display:"flex",alignItems:"center",gap:4}}>
-                          <div style={{width:8,height:8,borderRadius:2,background:col as string,flexShrink:0}} />
-                          <span style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>{lbl as string} {fmtR(val as number)}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                {/* Alerts */}
-                <div style={{marginBottom:20}}>
-                  <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Alerts</div>
-                  {targetApprovalStatus==="none" && (
-                    <Alert icon="⚠️" msg="No target set yet. Complete the setup to get started." color={C.red} onClick={()=>setView("setup-wizard")} cta="Start Setup →" />
-                  )}
-                  {targetApprovalStatus==="pending" && (
-                    <Alert icon="⏳" msg="Your target submission is pending approval." color={C.accent} />
-                  )}
-                  {plannedToday === 0 && (
-                    <Alert icon="📅" msg="No meetings planned for today. Add your plan for the day." color={C.blue} onClick={()=>setView("my-plan")} cta="Open My Plan" />
-                  )}
-                  {pendingTasks > 0 && (
-                    <Alert icon="✓" msg={`${pendingTasks} task${pendingTasks>1?"s":""} pending completion.`} color={C.purple} onClick={()=>setView("tasks")} cta="View Tasks" />
-                  )}
-                  {pendingIRs > 0 && (
-                    <Alert icon="⬆" msg={`${pendingIRs} internal request${pendingIRs>1?"s":""} awaiting resolution.`} color={C.orange} onClick={()=>setView("internal-requests")} cta="View Requests" />
-                  )}
-                  {hrBadge && (
-                    <Alert icon="⊘" msg={`${hrBadge} HR compliance issue${hrBadge>1?"s":""} require attention.`} color={C.red} onClick={()=>setView("hr")} cta="View HR" />
-                  )}
-                  {!targetApprovalStatus.match(/none|pending/) && plannedToday>0 && !pendingTasks && !pendingIRs && !hrBadge && (
-                    <Alert icon="✅" msg="All clear — you're on track for today!" color={C.green} />
-                  )}
-                </div>
-
-                {/* Today's meetings summary */}
-                {plannedToday > 0 && (
-                  <div style={{marginBottom:20}}>
-                    <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Today's Meetings ({plannedToday})</div>
-                    {todayMeetings.slice(0,4).map(m => (
-                      <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,marginBottom:6}}>
-                        <div style={{width:28,height:28,borderRadius:6,background:m.meetingKind==="PR"?"#e0f2fe":"#faf5ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>
-                          {m.meetingKind==="PR"?"🤝":"🎯"}
-                        </div>
-                        <div style={{flex:1,minWidth:0}}>
-                          <div style={{fontSize:12,fontWeight:600,color:C.text,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                            {m.clientName||m.agencyName||"Meeting"}
-                          </div>
-                          <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>
-                            {m.time||""} {m.mode||""} {m.meetingKind==="PR"?"· PR":"· Actionable"}
-                          </div>
-                        </div>
-                        <span style={{fontSize:10,padding:"2px 7px",borderRadius:10,fontFamily:"'DM Sans',sans-serif",fontWeight:600,
-                          background:m.status==="logged"?"#dcfce7":m.status==="missed"?"#fee2e2":"#eff6ff",
-                          color:m.status==="logged"?C.green:m.status==="missed"?C.red:C.blue}}>
-                          {m.status||"planned"}
-                        </span>
-                      </div>
-                    ))}
-                    {plannedToday > 4 && <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>+{plannedToday-4} more — <span style={{color:C.blue,cursor:"pointer"}} onClick={()=>setView("my-plan")}>Open My Plan</span></div>}
-                  </div>
-                )}
-
-                {/* Quick Actions */}
-                <div>
-                  <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Quick Actions</div>
-                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                    <QA icon="◎" label="My Plan"         view="my-plan" />
-                    <div onClick={()=>{setDashRevForm({clientName:"",amount:"",invoiceRef:"",date:TODAY});setDashRevOpen(true);}}
-                      style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"14px 10px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,cursor:"pointer",flex:1,minWidth:0,transition:"box-shadow .15s"}}
-                      onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px #1d5db420"}
-                      onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
-                      <span style={{fontSize:22}}>₹</span>
-                      <span style={{fontSize:11,fontWeight:600,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.3}}>Log Revenue</span>
-                    </div>
-                    <QA icon="⬆" label="Internal Requests" view="internal-requests" />
-                    <QA icon="✓" label="Tasks"           view="tasks" />
-                  </div>
-                </div>
-
-                {/* ── Dashboard: Log Revenue Modal ── */}
-                {dashRevOpen && (()=>{
-                  const drf = dashRevForm;
-                  const doSubmit = () => {
-                    if(!drf.clientName.trim()){showToast("Client name is required","err");return;}
-                    const amt = parseCurrency(drf.amount);
-                    if(!amt){showToast("Enter a valid amount (e.g. 5L or 50000)","err");return;}
-                    if(!drf.invoiceRef.trim()){showToast("Invoice / RO reference is required","err");return;}
-                    const ikey = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-                    const id   = `re_d${Date.now()}`;
-                    const entry = {id,repId:myRepId,clientCompany:drf.clientName.trim(),zohoAccountId:"",dealType:"Linear TV",amount:amt,invoiceRef:drf.invoiceRef.trim(),date:drf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:""};
-                    setRevenueEntries(p=>[entry,...p]);
-                    setDashRevOpen(false);
-                    revSvc.createRevenueEntry({
-                      id, repId:myRepId, clientCompany:drf.clientName.trim(), amount:amt,
-                      invoiceRef:drf.invoiceRef.trim(), date:drf.date||TODAY,
-                      quarter:entryQ, fiscalYear:CURRENT_FY, idempotencyKey:ikey,
-                    }).then(()=>{
-                      showToast(`₹${(amt/100000).toFixed(1)}L logged for ${drf.clientName.trim()} ✓`);
-                    }).catch((err:any)=>{
-                      showToast(err?.body?.error||"Failed to save revenue entry","err");
-                      setRevenueEntries(p=>p.filter(e=>e.id!==id));
-                    });
-                  };
-                  return (
-                    <>
-                      <div onClick={()=>setDashRevOpen(false)} style={{position:"fixed",inset:0,background:"#0007",zIndex:300}} />
-                      <div style={{position:"fixed",top:"50%",left:"50%",transform:"translate(-50%,-50%)",background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:24,zIndex:301,width:340,boxShadow:"0 8px 32px #0004"}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-                          <div style={{fontSize:14,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>Log Revenue Entry</div>
-                          <button onClick={()=>setDashRevOpen(false)} style={{background:"none",border:"none",color:C.muted,cursor:"pointer",fontSize:16,lineHeight:1}}>✕</button>
-                        </div>
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.dim,marginBottom:3,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.4}}>Client / Advertiser *</div>
-                          <input value={drf.clientName} onChange={e=>setDashRevForm(p=>({...p,clientName:e.target.value}))} placeholder="e.g. Tata Motors"
-                            style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text,boxSizing:"border-box"}} autoFocus/>
-                        </div>
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.dim,marginBottom:3,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.4}}>Amount ₹ *</div>
-                          <input value={drf.amount} onChange={e=>setDashRevForm(p=>({...p,amount:e.target.value}))} placeholder="e.g. 5L or 500000"
-                            style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text,boxSizing:"border-box"}}/>
-                        </div>
-                        <div style={{marginBottom:10}}>
-                          <div style={{fontSize:10,color:C.dim,marginBottom:3,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.4}}>Invoice / RO Reference *</div>
-                          <input value={drf.invoiceRef} onChange={e=>setDashRevForm(p=>({...p,invoiceRef:e.target.value}))} placeholder="e.g. RO-2026-0042"
-                            style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text,boxSizing:"border-box"}}/>
-                        </div>
-                        <div style={{marginBottom:18}}>
-                          <div style={{fontSize:10,color:C.dim,marginBottom:3,fontFamily:"'DM Sans',sans-serif",textTransform:"uppercase",letterSpacing:.4}}>Date</div>
-                          <input type="date" min="2020-01-01" max="2099-12-31" value={drf.date} onChange={e=>setDashRevForm(p=>({...p,date:e.target.value}))}
-                            style={{width:"100%",padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,fontSize:12,fontFamily:"'DM Mono',monospace",color:C.text,boxSizing:"border-box"}}/>
-                        </div>
-                        <div style={{display:"flex",gap:8}}>
-                          <button onClick={()=>setDashRevOpen(false)} style={{flex:1,padding:"9px 0",border:`1px solid ${C.border}`,background:"transparent",color:C.dim,borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                          <button onClick={doSubmit} style={{flex:2,padding:"9px 0",background:"linear-gradient(135deg,#16c784,#0ea570)",border:"none",color:"#fff",borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✓ Log Revenue</button>
-                        </div>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
+              <RepDashboard
+                userRole={user_role}
+                activeUser={activeUser}
+                currentQ={currentQ}
+                annualTgt={annualTgt}
+                ach={ach}
+                comm={comm}
+                inpl={inpl}
+                sf={sf}
+                pct={pct}
+                qTarget={qTarget}
+                qAch={qAch}
+                targetApprovalStatus={targetApprovalStatus}
+                meetings={meetings}
+                tasks={tasks}
+                internalReqs={internalReqs}
+                targetSubs={targetSubs}
+                revenueEntries={revenueEntries}
+                hrBadge={hrBadge}
+                stackedBar={stackedBar}
+                parseCurrency={parseCurrency}
+                onLogRevenue={({clientName,amount,invoiceRef,date}) => {
+                  const amt  = parseCurrency(amount);
+                  if(!amt){showToast("Enter a valid amount (e.g. 5L or 50000)","err");return;}
+                  const ikey = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+                  const id   = `re_d${Date.now()}`;
+                  const entry = {id,repId:myRepId,clientCompany:clientName.trim(),zohoAccountId:"",dealType:"Linear TV",amount:amt,invoiceRef:invoiceRef.trim(),date:date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:""};
+                  setRevenueEntries(p=>[entry,...p]);
+                  revSvc.createRevenueEntry({
+                    id, repId:myRepId, clientCompany:clientName.trim(), amount:amt,
+                    invoiceRef:invoiceRef.trim(), date:date||TODAY,
+                    quarter:entryQ, fiscalYear:CURRENT_FY, idempotencyKey:ikey,
+                  }).then(()=>{
+                    showToast(`₹${(amt/100000).toFixed(1)}L logged for ${clientName.trim()} ✓`);
+                  }).catch((err:any)=>{
+                    showToast(err?.body?.error||"Failed to save revenue entry","err");
+                    setRevenueEntries(p=>p.filter(e=>e.id!==id));
+                  });
+                }}
+                onNavigate={setView}
+                onOpenLogTouchpoint={()=>{setLogForm({...BLANK_LOG,repId:String(user_role?.repId||"")});setLogOpen(true);}}
+                onOpenAddDeal={()=>{setDealForm({...BLANK_DEAL,repId:String(user_role?.repId||""),quarter:entryQ});setAddDealOpen(true);}}
+              />
             );
           })()}
 
           {/* ═══ MY PLAN ═══ */}
-          {view==="my-plan" && (()=>{
-            // ── SALES STRATEGY / CRO: monthly overview (read-only, no daily limits) ──
-            if (isStrategy || isCRORole) {
-              const allMeetings = meetings;
-              const months = [...new Set(allMeetings.map(m=>m.date?.slice(0,7)))].sort().reverse().slice(0,6);
-              return (
-                <div className="fin">
-                  <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>
-                    {isStrategy?"Team Meeting Overview":"CRO Meeting Overview"}
-                  </div>
-                  <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Monthly meeting summary across all reps and region heads. Read-only.</div>
-                  {months.map(ym=>{
-                    const monthMeetings = allMeetings.filter(m=>m.date?.startsWith(ym));
-                    const byRep = {};
-                    monthMeetings.forEach(m=>{
-                      const key = m.repId;
-                      if(!byRep[key]) byRep[key]={repId:m.repId,repName:m.repName||"Rep "+m.repId,count:0,clients:new Set()};
-                      byRep[key].count++;
-                      if(m.clientCompany) byRep[key].clients.add(m.clientCompany);
-                    });
-                    const repRows = Object.values(byRep).sort((a,b)=>b.count-a.count);
-                    const [yr,mo] = ym.split("-");
-                    const label   = new Date(parseInt(yr),parseInt(mo)-1,1).toLocaleDateString("en-IN",{month:"long",year:"numeric"});
-                    return (
-                      <div key={ym} className="card" style={{padding:"14px 18px",marginBottom:12}}>
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                          <div className="sans" style={{fontWeight:700,fontSize:14}}>{label}</div>
-                          <div style={{display:"flex",gap:12}}>
-                            <div style={{textAlign:"right"}}><div className="sans" style={{fontSize:20,fontWeight:800,color:C.blue}}>{monthMeetings.length}</div><div style={{fontSize:9,color:C.dim}}>TOTAL MEETINGS</div></div>
-                            <div style={{textAlign:"right"}}><div className="sans" style={{fontSize:20,fontWeight:800,color:C.accent}}>{Object.keys(byRep).length}</div><div style={{fontSize:9,color:C.dim}}>REPS ACTIVE</div></div>
-                          </div>
-                        </div>
-                        {repRows.map(r=>(
-                          <div key={r.repId} style={{display:"flex",alignItems:"center",gap:10,padding:"6px 10px",background:C.s2,borderRadius:5,marginBottom:4}}>
-                            <span className="sans" style={{flex:1,fontWeight:600,fontSize:12}}>{r.repName}</span>
-                            <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 8px",borderRadius:6,fontSize:11,fontWeight:700}}>{r.count} meetings</span>
-                            <span style={{fontSize:10,color:C.dim}}>{r.clients.size} clients</span>
-                          </div>
-                        ))}
-                        {repRows.length===0&&<div style={{textAlign:"center",padding:12,color:C.muted,fontSize:11}}>No meetings logged this month</div>}
-                      </div>
-                    );
-                  })}
-                  {months.length===0&&<div style={{textAlign:"center",padding:60,color:C.muted}}>No meeting history yet.</div>}
-                </div>
-              );
-            }
-
-            const myRepId = user_role?.repId || null;
-            // isMyMeeting: prefer the explicit loggedByUserId field (set on all new meetings);
-            // fall back to repId match for older records logged by reps before this field existed.
-            // Without this fix, RH (no repId) would see every rep's meetings.
-            const isMyMeeting = (m) =>
-              m.loggedByUserId
-                ? m.loggedByUserId === activeUser
-                : myRepId ? m.repId === myRepId : false;
-            const allPlans = plans || [];
-            // For reps: match by numeric repId. For non-rep roles (RH, NSH, etc.): match by role id string.
-            // The old `(myRepId ? ... : true)` caused ALL plans to show for non-rep roles.
-            const myPlanRepId = myRepId ?? user_role?.id;
-            const todayPlans  = allPlans.filter(p => p.repId===myPlanRepId && p.autoCreatedFrom!=="action-item" && p.date===TODAY);
-            const tmrwPlans   = allPlans.filter(p => p.repId===myPlanRepId && p.autoCreatedFrom!=="action-item" && p.date===TOMORROW);
-            const todayLogged = meetings.some(m=>isMyMeeting(m)&&m.date===TODAY) || todayPlans.some(p=>p.status==="Done");
-            const tmrwPlanned = tmrwPlans.length > 0;
-
-            // Weekly timer — due Saturday 11:30 PM
-            const now = new Date();
-            const daysUntilSat = (6 - now.getDay() + 7) % 7;
-            const satDeadline = new Date(now);
-            satDeadline.setDate(now.getDate() + daysUntilSat);
-            satDeadline.setHours(23, 30, 0, 0);
-            const weeklyDiffMs = satDeadline - now;
-            const weeklyH = Math.floor(weeklyDiffMs / 3600000);
-            const weeklyM = Math.floor((weeklyDiffMs % 3600000) / 60000);
-            const weeklyLabel = weeklyDiffMs <= 0 ? "Past weekly deadline" : `${weeklyH}h ${weeklyM}m left`;
-
-            // Calendar — month view
-            const pf = planForm; const setPf = setPlanForm;
-
-            const doAddPlan = (date) => {
-              const clientName = (pf.client||pf.agency||"").trim();
-              if (!clientName) return;
-              const planTime = pf.time||"10:00";
-              const rawPhone = pf.phone.replace(/\D/g,"");
-              const storedPhone = rawPhone ? `+91${rawPhone.slice(-10)}` : "";
-              const mkind = (pf.meetingKind||"ACTIONABLE") as "PR"|"ACTIONABLE";
-              // Capture sync preference before async — avoids stale closure in fetch callback
-              const didSyncCalendar = pf.syncToCalendar;
-
-              // Calendar sync — open calendar in new tab
-              if (pf.syncToCalendar) {
-                const [hStr,mStr] = planTime.split(":");
-                const h = parseInt(hStr||"10"); const m = parseInt(mStr||"0");
-                const endH = String(h+1).padStart(2,"0"); const endM = String(m).padStart(2,"0");
-                const startH = String(h).padStart(2,"0");
-                const dateParts = date.replace(/-/g,""); // YYYYMMDD
-                const cName = (pf.client||pf.agency||"").trim();
-                const title = encodeURIComponent(`[OTV] Meeting: ${cName}`);
-                const details = encodeURIComponent(`Contact: ${pf.contactName.trim()}${pf.agenda?"\nAgenda: "+pf.agenda:""}${pf.brand?"\nBrand: "+pf.brand:""}`);
-                if (pf.calPlatform==="google") {
-                  const startDT = `${dateParts}T${startH}${endM}00`;
-                  const endDT   = `${dateParts}T${endH}${endM}00`;
-                  window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}`,"_blank");
-                } else if (pf.calPlatform==="zoho") {
-                  // Zoho Calendar has no public pre-fill URL — generate an .ics file instead
-                  const ics = [
-                    "BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//OTV CRM//EN","CALSCALE:GREGORIAN","METHOD:REQUEST",
-                    "BEGIN:VEVENT",
-                    `DTSTART:${dateParts}T${startH}${endM}00`,
-                    `DTEND:${dateParts}T${endH}${endM}00`,
-                    `SUMMARY:[OTV] Meeting: ${cName}`,
-                    `DESCRIPTION:Contact: ${pf.contactName.trim()}${pf.agenda?"\\nAgenda: "+pf.agenda:""}`,
-                    `UID:otv-${Date.now()}@odishatv.com`,
-                    "STATUS:CONFIRMED","END:VEVENT","END:VCALENDAR"
-                  ].join("\r\n");
-                  const blob = new Blob([ics],{type:"text/calendar;charset=utf-8"});
-                  const a = document.createElement("a");
-                  a.href = URL.createObjectURL(blob);
-                  a.download = `OTV-${cName.replace(/\s+/g,"-")}.ics`;
-                  a.click();
-                } else if (pf.calPlatform==="outlook") {
-                  const startISO = `${date}T${startH}:${endM}:00`;
-                  const endISO   = `${date}T${endH}:${endM}:00`;
-                  window.open(`https://outlook.office.com/calendar/deeplink/compose?subject=${title}&startdt=${encodeURIComponent(startISO)}&enddt=${encodeURIComponent(endISO)}&body=${details}`,"_blank");
-                }
-              }
-
-              // DB-first: POST to meetings table — only close form and show success on API response
-              const resetPf = {agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",meetingKind:pf.meetingKind,touchpointType:pf.touchpointType,needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform};
-              meetingsSvc.createMeeting({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName,brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})
-                .then(data=>{
-                  if(data?.id){
-                    setDbMeetings(p=>[...p,data]);
-                    setPf(resetPf);
-                    setAddPlanFor(null);
-                    showToast(didSyncCalendar?"Meeting planned ✓ · Calendar opening…":"Meeting planned ✓");
-                  } else {
-                    showToast("Could not save meeting — please try again","err");
-                  }
-                })
-                .catch(()=>showToast("Network error — meeting not saved","err"));
-            };
-
-            // Inline log state — which plan is being logged right now
-            const [inlineLogPlan, setInlineLogPlan] = planInlineState;
-            const [inlineLogStatus, setInlineLogStatus] = planInlineStatusState;
-
-            // ── Part 4: At-risk deal detection (escalation clock = lastDealMeetingDate) ──
-            const riskThreshold = adminConfig?.inactivityDaysRisk ?? 7;
-            const atRiskDeals = deals.filter(d => {
-              const ds = dealStage(d);
-              if (d.repId !== myRepId) return false;
-              if (["RO Received","Mail Confirmed","Lost"].includes(ds)) return false;
-              const idleClock = d.lastDealMeetingDate || d.lastContact;
-              return daysSince(idleClock) >= riskThreshold;
-            }).sort((a,b) => daysSince(b.lastDealMeetingDate||b.lastContact) - daysSince(a.lastDealMeetingDate||a.lastContact));
-
-            return (
-              <div className="fin">
-                {/* Header */}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:isRep?10:14}}>
-                  <div>
-                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>MY PLAN</div>
-                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>Click any planned touchpoint to log it · Add new ones via + on calendar</div>
-                  </div>
-                  <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                    {/* Daily timer */}
-                    <div style={{background:countdown.includes("passed")?`${C.red}12`:`${C.green}10`,border:`1px solid ${countdown.includes("passed")?C.red:C.green}33`,borderRadius:5,padding:"4px 10px",fontSize:11,fontWeight:700,color:countdown.includes("passed")?C.red:C.green}}>
-                      Daily: {countdown.includes("passed")?"Passed":countdown}
-                    </div>
-                    {/* Weekly timer */}
-                    <div style={{background:weeklyDiffMs<=0?`${C.red}12`:`${C.blue}10`,border:`1px solid ${weeklyDiffMs<=0?C.red:C.blue}33`,borderRadius:5,padding:"4px 10px",fontSize:11,fontWeight:700,color:weeklyDiffMs<=0?C.red:C.blue}}>
-                      Weekly: {weeklyLabel}
-                    </div>
-                  </div>
-                </div>
-                {/* ── Quick-action CTA row (Sales Rep only) ── */}
-                {isRep && (
-                  <div style={{display:"flex",gap:8,marginBottom:14}}>
-                    <button
-                      onClick={()=>{setLogForm(f=>({...BLANK_LOG,repId:String(user_role?.repId||"")}));setLogOpen(true);}}
-                      style={{flex:1,background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"9px 0",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                      + Log Touchpoint
-                    </button>
-                    <button
-                      onClick={()=>{setDealForm({...BLANK_DEAL,repId:String(user_role?.repId||""),quarter:filterQ});setAddDealOpen(true);}}
-                      style={{flex:1,background:C.blue,color:"#fff",border:"none",borderRadius:6,padding:"9px 0",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                      + Add Deal
-                    </button>
-                  </div>
-                )}
-
-                {/* ── TODAY'S ACTIONS (first thing after CTAs) ── */}
-                {isRep && (()=>{
-                  const _repTgt = targetSubs.filter(s=>s.repId===myRepId&&s.status==="Approved"&&qMatch(s.quarter||filterQ)).reduce((sum,s)=>sum+(s.totalTarget||(s.clients||[]).reduce((ss:number,c:any)=>ss+(c.targetAmount||0),0)||0),0);
-                  const _repAch = revenueEntries.filter(e=>e.repId===myRepId&&!e.isReversed&&!e.reversalOf&&qMatch(e.quarter)).reduce((sum,e)=>sum+(e.amount||0),0);
-                  const _actPipe= deals.filter(d=>d.repId===myRepId&&["In Discussion","Negotiation"].includes(dealStage(d))&&qMatch(d.quarter||filterQ)).reduce((sum,d)=>sum+(d.amount||d.targetAmount||0),0);
-                  const _gap    = Math.max(0,_repTgt-_repAch-_actPipe);
-                  const coldDeals = atRiskDeals;
-                  const overdueTasks = tasks.filter(t=>
-                    !["Done","Closed"].includes(t.status) &&
-                    t.dueDate && t.dueDate <= TODAY &&
-                    (t.assignedToUserId === activeUser || t.repId === myRepId)
-                  );
-                  const followUpsToday = (meetings||[]).filter(m=>m.repId===myRepId&&m.followUpDate===TODAY);
-                  const openSRs = internalReqs.filter(r=>r.repId===myRepId&&r.type==="Support Request"&&!["Done","Withdrawn"].includes(r.status||""));
-                  const hasGapAlert = _gap > 0 && _repTgt > 0;
-                  const totalItems = coldDeals.length + overdueTasks.length + followUpsToday.length + openSRs.length + (hasGapAlert?1:0);
-
-                  if (totalItems === 0) return (
-                    <div style={{background:`${C.green}08`,border:`1px solid ${C.green}33`,borderRadius:8,padding:"10px 16px",marginBottom:16,display:"flex",alignItems:"center",gap:8}}>
-                      <span style={{fontSize:16}}>✓</span>
-                      <span className="sans" style={{fontWeight:700,fontSize:12,color:C.green}}>All clear — nothing urgent today</span>
-                    </div>
-                  );
-
-                  return (
-                    <div style={{background:C.surface,border:`1.5px solid ${C.border}`,borderRadius:8,marginBottom:16,overflow:"hidden"}}>
-                      <div style={{background:`${C.red}10`,borderBottom:`1px solid ${C.border}`,padding:"10px 16px",display:"flex",alignItems:"center",gap:8}}>
-                        <span style={{fontSize:14}}>⚡</span>
-                        <span className="sans" style={{fontWeight:700,fontSize:13,color:C.text}}>TODAY'S ACTIONS</span>
-                        <span style={{marginLeft:"auto",background:`${C.red}22`,color:C.red,padding:"1px 8px",borderRadius:10,fontSize:11,fontWeight:700}}>{totalItems}</span>
-                      </div>
-                      <div style={{padding:"10px 14px",display:"flex",flexDirection:"column",gap:8}}>
-
-                        {/* At-risk deals */}
-                        {coldDeals.length > 0 && (
-                          <div>
-                            <div onClick={()=>setView("pipeline")} style={{fontSize:9,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
-                              ⚠ {coldDeals.length} deal{coldDeals.length!==1?"s":""} going cold →
-                            </div>
-                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                              {coldDeals.map(d=>{
-                                const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
-                                const ds=dealStage(d);
-                                return (
-                                  <div key={d.id} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}}
-                                    style={{display:"flex",alignItems:"center",gap:8,background:`${C.red}06`,borderRadius:5,padding:"5px 10px",cursor:"pointer"}}>
-                                    <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{d.clientCompany}</span>
-                                    <span style={{background:`${oColor(ds)}18`,color:oColor(ds),padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{ds}</span>
-                                    <span style={{color:C.red,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{idle}d idle</span>
-                                    <button onClick={e=>{e.stopPropagation();setLogForm(f=>({...BLANK_LOG,repId:String(myRepId||""),dealId:d.id,clientAgencyName:d.clientCompany}));setLogOpen(true);}}
-                                      style={{background:C.red,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                                      Log Touchpoint →
-                                    </button>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Overdue tasks (dueDate ≤ today) */}
-                        {overdueTasks.length > 0 && (
-                          <div>
-                            <div onClick={()=>setView("tasks")} style={{fontSize:9,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
-                              ✗ {overdueTasks.length} overdue task{overdueTasks.length!==1?"s":""} →
-                            </div>
-                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                              {overdueTasks.map(t=>{
-                                const isOver=t.dueDate<TODAY;
-                                const pColor=t.priority==="High"?C.red:t.priority==="Medium"?C.orange:C.dim;
-                                return (
-                                  <div key={t.id} onClick={()=>setView("tasks")} style={{display:"flex",alignItems:"center",gap:8,background:`${C.orange}05`,borderRadius:5,padding:"5px 10px",cursor:"pointer"}}>
-                                    <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{t.title}</span>
-                                    {t.clientCompany&&<span style={{fontSize:10,color:C.dim}}>{t.clientCompany}</span>}
-                                    {isOver&&<span style={{color:C.red,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>Due {t.dueDate}</span>}
-                                    <span style={{background:`${pColor}18`,color:pColor,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{t.priority||"Normal"}</span>
-                                    <select value={t.status} onClick={e=>e.stopPropagation()} onChange={e=>{e.stopPropagation();setTasks(p=>p.map(x=>x.id===t.id?{...x,status:e.target.value}:x));}}
-                                      style={{fontSize:10,padding:"2px 6px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontFamily:"'DM Mono',monospace"}}>
-                                      {TASK_STATUSES.map(s=><option key={s}>{s}</option>)}
-                                    </select>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Follow-ups due today */}
-                        {followUpsToday.length > 0 && (
-                          <div>
-                            <div onClick={()=>{setLogForm(f=>({...BLANK_LOG,repId:String(myRepId||"")}));setLogOpen(true);}} style={{fontSize:9,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
-                              📅 {followUpsToday.length} follow-up{followUpsToday.length!==1?"s":""} due today →
-                            </div>
-                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                              {followUpsToday.map(m=>(
-                                <div key={m.id} style={{display:"flex",alignItems:"center",gap:8,background:`${C.blue}06`,borderRadius:5,padding:"5px 10px"}}>
-                                  <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{m.clientCompany||m.clientAgencyName||"Client"}</span>
-                                  {m.nextSteps&&<span style={{fontSize:10,color:C.dim,flex:1}}>{m.nextSteps}</span>}
-                                  <button onClick={()=>{setLogForm(f=>({...BLANK_LOG,repId:String(myRepId||""),clientAgencyName:m.clientCompany||m.clientAgencyName||""}));setLogOpen(true);}}
-                                    style={{background:C.blue,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                                    Log Meeting →
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Open support requests */}
-                        {openSRs.length > 0 && (
-                          <div>
-                            <div onClick={()=>setView("internal-requests")} style={{fontSize:9,color:C.purple,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
-                              🆘 {openSRs.length} open support request{openSRs.length!==1?"s":""} →
-                            </div>
-                            <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                              {openSRs.map(r=>(
-                                <div key={r.id} onClick={()=>setView("internal-requests")}
-                                  style={{display:"flex",alignItems:"center",gap:8,background:`${C.purple}06`,borderRadius:5,padding:"5px 10px",cursor:"pointer"}}>
-                                  <span style={{flex:1,fontSize:12,color:C.text,fontWeight:600}}>{r.subject.replace(/^\[Support\]\s*/,"")}</span>
-                                  <span style={{background:`${C.purple}18`,color:C.purple,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{r.status||"Open"}</span>
-                                  <span style={{color:C.purple,fontSize:11,fontWeight:700,whiteSpace:"nowrap"}}>View →</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Pipeline gap alert */}
-                        {hasGapAlert && (
-                          <div>
-                            <div onClick={()=>setView("pipeline")} style={{fontSize:9,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:4,cursor:"pointer",textDecoration:"underline dotted"}}>
-                              ◈ Pipeline gap needs filling →
-                            </div>
-                            <div style={{display:"flex",alignItems:"center",gap:8,background:`${C.red}05`,borderRadius:5,padding:"5px 10px"}}>
-                              <span style={{flex:1,fontSize:12,color:C.dim}}>
-                                Gap: <strong style={{color:C.red}}>{fmtR(_gap)}</strong> not covered by active pipeline — add deals to close this.
-                              </span>
-                              <button onClick={()=>{setDealForm({...BLANK_DEAL,repId:String(myRepId||""),quarter:filterQ});setAddDealOpen(true);}}
-                                style={{background:C.blue,color:"#fff",border:"none",borderRadius:4,padding:"3px 10px",fontSize:10,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                                + Add Deal
-                              </button>
-                            </div>
-                          </div>
-                        )}
-
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ── Target Summary + Pipeline Gap (Sales Rep only) ── */}
-                {isRep && (()=>{
-                  const repTarget = targetSubs
-                    .filter(s => s.repId === myRepId && s.status === "Approved")
-                    .reduce((sum, s) => sum + (s.totalTarget || (s.clients||[]).reduce((ss, c) => ss + (c.targetAmount||0), 0) || 0), 0);
-                  const repAchieved = revenueEntries
-                    .filter(e => e.repId === myRepId && !e.isReversed && !e.reversalOf)
-                    .reduce((sum, e) => sum + (e.amount||0), 0);
-                  const activePipeline = deals
-                    .filter(d => d.repId === myRepId && ["In Discussion","Negotiation"].includes(dealStage(d)))
-                    .reduce((sum, d) => sum + (d.amount||d.targetAmount||0), 0);
-                  const pipelineGap = Math.max(0, repTarget - repAchieved - activePipeline);
-                  const pendingTaskCount = tasks.filter(t =>
-                    (t.repId === myRepId || t.assignedToUserId === activeUser) &&
-                    !["Done","Closed"].includes(t.status)
-                  ).length;
-                  const achPct  = repTarget > 0 ? Math.min(100, Math.round((repAchieved    / repTarget) * 100)) : 0;
-                  const pipePct = repTarget > 0 ? Math.min(100 - achPct, Math.round((activePipeline / repTarget) * 100)) : 0;
-
-                  if (repTarget === 0) return (
-                    <div style={{background:`${C.accent}08`,border:`1px solid ${C.accent}33`,borderRadius:8,padding:"12px 16px",marginBottom:16,fontSize:12,color:C.dim}}>
-                      No approved targets yet — your Region Head will assign your annual target once approved.
-                    </div>
-                  );
-
-                  return (
-                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 18px",marginBottom:16}}>
-                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:12,marginBottom:10}}>
-                        <div>
-                          <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>Annual Target</div>
-                          <div className="sans" style={{fontSize:17,fontWeight:800,color:C.text}}>{fmtR(repTarget)}</div>
-                        </div>
-                        <div>
-                          <div style={{fontSize:9,color:C.green,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>Achieved</div>
-                          <div className="sans" style={{fontSize:17,fontWeight:800,color:C.green}}>
-                            {fmtR(repAchieved)} <span style={{fontSize:11,fontWeight:600,color:C.dim}}>{achPct}%</span>
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{fontSize:9,color:C.accent,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>Active Pipeline</div>
-                          <div className="sans" style={{fontSize:17,fontWeight:800,color:C.accent}}>
-                            {fmtR(activePipeline)} <span style={{fontSize:11,fontWeight:600,color:C.dim}}>{pipePct}%</span>
-                          </div>
-                        </div>
-                        <div>
-                          <div style={{fontSize:9,color:pipelineGap===0?C.green:C.red,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>Pipeline Gap</div>
-                          <div className="sans" style={{fontSize:17,fontWeight:800,color:pipelineGap===0?C.green:C.red}}>
-                            {pipelineGap===0?"✓ On track":fmtR(pipelineGap)}
-                          </div>
-                        </div>
-                      </div>
-                      {/* Progress bar: Achieved (green) + Pipeline (amber) */}
-                      <div style={{height:6,background:C.s3,borderRadius:3,overflow:"hidden",marginBottom:8}}>
-                        <div style={{display:"flex",height:"100%"}}>
-                          <div style={{width:`${achPct}%`,background:C.green,transition:"width .4s"}} />
-                          <div style={{width:`${pipePct}%`,background:`${C.accent}99`,transition:"width .4s"}} />
-                        </div>
-                      </div>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
-                        <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
-                          <span style={{fontSize:10,color:C.dim}}>🟢 Achieved &nbsp;🟡 Pipeline</span>
-                          {pendingTaskCount > 0 && <span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>⬡ {pendingTaskCount} task{pendingTaskCount!==1?"s":""} pending</span>}
-                          {atRiskDeals.length > 0 && <span style={{background:`${C.red}18`,color:C.red,padding:"1px 8px",borderRadius:5,fontSize:10,fontWeight:700}}>⚠ {atRiskDeals.length} at risk</span>}
-                        </div>
-                        <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,repId:String(myRepId||"")}));setLogOpen(true);}}
-                          style={{background:C.accent,color:"#fff",border:"none",borderRadius:6,padding:"6px 18px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
-                          + Add Touchpoint
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-
-                {/* ── Revenue Confirmation Prompt ── */}
-                {(()=>{
-                  const pendingRevenue = revenueEntries.filter(e=>
-                    e.repId===myRepId && e.invoiceRef==="PO Pending" && qMatch(e.quarter)
-                  );
-                  if (!pendingRevenue.length) return null;
-                  return (
-                    <div style={{background:`${C.accent}10`,border:`1.5px solid ${C.accent}55`,borderRadius:8,padding:"12px 16px",marginBottom:16}}>
-                      <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-                        <div style={{display:"flex",alignItems:"center",gap:8}}>
-                          <span style={{fontSize:14}}>💰</span>
-                          <span className="sans" style={{fontWeight:700,fontSize:13,color:C.accent}}>
-                            {pendingRevenue.length} deal{pendingRevenue.length!==1?"s":""} won — confirm PO amount in Revenue Log
-                          </span>
-                        </div>
-                        <button
-                          onClick={()=>setView("revenue-log")}
-                          style={{background:C.accent,color:"#fff",border:"none",borderRadius:5,padding:"4px 12px",fontSize:12,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>
-                          Open Revenue Log →
-                        </button>
-                      </div>
-                      <div style={{display:"flex",flexDirection:"column",gap:4}}>
-                        {pendingRevenue.map(e=>(
-                          <div key={e.id} style={{display:"flex",alignItems:"center",gap:10,background:`${C.accent}08`,borderRadius:5,padding:"5px 10px"}}>
-                            <span style={{flex:1,fontWeight:600,fontSize:12,color:C.text}}>{e.clientCompany}</span>
-                            <span style={{fontSize:11,color:C.dim}}>{e.dealType}</span>
-                            <span style={{background:`${C.accent}22`,color:C.accent,padding:"2px 8px",borderRadius:4,fontSize:11,fontWeight:700}}>
-                              ₹{e.amount>0?fmtR(e.amount):"—"} · PO Pending confirmation
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ── Sub-tabs ── */}
-                <div style={{display:"flex",gap:4,marginBottom:16,borderBottom:`1px solid ${C.border}`,paddingBottom:0}}>
-                  {([["plan","📅 Plan"],["log","📋 Meeting Log"]] as [string,string][]).map(([id,label])=>(
-                    <button key={id} onClick={()=>setMyPlanTab(id as "plan"|"log")}
-                      style={{background:"none",border:"none",borderBottom:`2px solid ${myPlanTab===id?C.accent:"transparent"}`,padding:"6px 14px",fontSize:12,fontWeight:myPlanTab===id?700:400,color:myPlanTab===id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginBottom:-1,transition:"color .15s"}}>
-                      {label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* ── MEETING LOG TAB ── */}
-                {myPlanTab==="log" && (()=>{
-                  const myMeetings = meetings
-                    .filter(m=>isMyMeeting(m))
-                    .sort((a,b)=>b.date>a.date?1:-1);
-                  const outcomeColor = (o) => o?.includes("Accepted")?C.green:o?.includes("Interested")?C.blue:o?.includes("Concern")||o?.includes("Objection")?C.orange:o?.includes("Not")||o?.includes("Lost")?C.red:C.dim;
-                  if (!myMeetings.length) return (
-                    <div style={{textAlign:"center",padding:60,color:C.muted,fontSize:12}}>No meetings logged yet. Use the Plan tab to log your first meeting.</div>
-                  );
-                  return (
-                    <div>
-                      <div style={{marginBottom:10,fontSize:11,color:C.dim}}>{myMeetings.length} meetings logged</div>
-                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                          <thead>
-                            <tr>
-                              {["Date","Client","Contact","Outcome","Discussion / Notes","Next Step"].map(h=>(
-                                <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",letterSpacing:".06em",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                              ))}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {myMeetings.map(m=>(
-                              <tr key={m.id}
-                                style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}
-                                onClick={()=>setViewMeetingId(m.id)}
-                                onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                                onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                                <td style={{padding:"10px 14px",whiteSpace:"nowrap"}}>
-                                  <div style={{fontSize:12,fontWeight:600,color:m.date===TODAY?C.accent:C.text}}>{m.date===TODAY?"Today":m.date}</div>
-                                  {m.loggedAt&&<div style={{fontSize:10,color:C.dim}}>logged {m.loggedAt}</div>}
-                                  {m.late&&<div style={{fontSize:9,color:C.orange,fontWeight:700}}>LATE</div>}
-                                </td>
-                                <td style={{padding:"10px 14px"}}>
-                                  <div style={{fontWeight:600,fontSize:12}}>{m.clientCompany||"—"}</div>
-                                </td>
-                                <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>
-                                  <div>{m.contactName||"—"}</div>
-                                  {m.contactLevel&&<div style={{fontSize:9,color:C.muted}}>{m.contactLevel}</div>}
-                                </td>
-                                <td style={{padding:"10px 14px"}}>
-                                  <span style={{background:`${outcomeColor(m.outcome)}18`,color:outcomeColor(m.outcome),padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600,whiteSpace:"nowrap"}}>{m.outcome||"—"}</span>
-                                </td>
-                                <td style={{padding:"10px 14px",maxWidth:260,fontSize:11,color:C.dim,lineHeight:1.4}}>
-                                  {(m.discussion||"").slice(0,100)}{m.discussion?.length>100?"…":""}
-                                </td>
-                                <td style={{padding:"10px 14px",fontSize:11,color:C.text,maxWidth:200,lineHeight:1.4}}>
-                                  {m.nextStep||"—"}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* ── PLAN TAB content ── */}
-                {myPlanTab==="plan" && <>
-
-                {/* Compliance strip */}
-                <div style={{background:todayLogged&&tmrwPlanned?`${C.green}08`:`${C.red}06`,border:`1px solid ${todayLogged&&tmrwPlanned?C.green:C.red}44`,borderRadius:7,padding:"8px 14px",marginBottom:16,display:"flex",gap:20,alignItems:"center",flexWrap:"wrap"}}>
-                  <span style={{fontSize:12,color:todayLogged?C.green:C.red,fontWeight:700}}>{todayLogged?"✓":"✗"} Today logged</span>
-                  <span style={{fontSize:12,color:tmrwPlanned?C.green:C.red,fontWeight:700}}>{tmrwPlanned?"✓":"✗"} Tomorrow planned</span>
-                  <span style={{fontSize:11,color:C.dim,marginLeft:"auto"}}>{todayLogged&&tmrwPlanned?"All done ✓":"Complete both before 11:30 PM"}</span>
-                  {!tmrwPlanned&&(
-                    <button onClick={()=>setAddPlanFor(TOMORROW)}
-                      style={{background:C.accent,color:"#fff",border:"none",borderRadius:4,padding:"3px 11px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
-                      + Plan tomorrow
-                    </button>
-                  )}
-                </div>
-
-                {/* Part 8: Time-based deadline countdown banner (6PM / 9PM / 11PM levels) */}
-                {(()=>{
-                  const unlogged = todayPlans.filter(p=>p.status==="Planned").length;
-                  const hr = new Date().getHours();
-                  if (unlogged === 0) return null;
-                  if (hr >= 23) {
-                    return (
-                      <div style={{width:"100%",background:C.red,borderRadius:7,padding:"14px 20px",marginBottom:16,display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-                        <div>
-                          <div style={{fontSize:14,fontWeight:800,color:"#fff",letterSpacing:.5}}>🔴 FINAL DEADLINE — LOG NOW</div>
-                          <div style={{fontSize:12,color:"#ffd7d7",marginTop:3}}>{unlogged} meeting{unlogged!==1?"s":""} not logged. You must log or confirm nothing more to log before midnight.</div>
-                        </div>
-                        <button onClick={()=>{
-                          const note = {id:`eod${Date.now()}`,repId:myRepId,type:"EOD Confirm",note:"Rep confirmed: nothing more to log today",date:TODAY,createdAt:TODAY};
-                          setTouchpoints(p=>[...p,note as any]);
-                          showToast("Confirmed — no more meetings today. Record saved.");
-                        }} style={{background:"#fff",color:C.red,border:"none",borderRadius:5,padding:"7px 16px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
-                          Nothing more to log today
-                        </button>
-                      </div>
-                    );
-                  }
-                  if (hr >= 21) {
-                    return (
-                      <div style={{background:C.red,borderRadius:7,padding:"10px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
-                        <span style={{fontSize:16,color:"#fff"}}>🔴</span>
-                        <span style={{fontSize:13,color:"#fff",fontWeight:700}}>After 9 PM — {unlogged} meeting{unlogged!==1?"s":""} not logged. Log before 11:30 PM.</span>
-                      </div>
-                    );
-                  }
-                  if (hr >= 18) {
-                    return (
-                      <div style={{background:`${C.orange}12`,border:`1px solid ${C.orange}44`,borderRadius:7,padding:"10px 18px",marginBottom:14,display:"flex",alignItems:"center",gap:10}}>
-                        <span style={{fontSize:16}}>⚠</span>
-                        <span style={{fontSize:13,color:C.orange,fontWeight:700}}>{unlogged} meeting{unlogged!==1?"s":""} not logged yet — deadline is 11:30 PM tonight</span>
-                      </div>
-                    );
-                  }
-                  return null;
-                })()}
-
-                {/* TODAY + TOMORROW cards */}
-
-                <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:20}}>
-                  {[{label:"TODAY",date:TODAY,planList:todayPlans,done:todayLogged},{label:"TOMORROW",date:TOMORROW,planList:tmrwPlans,done:tmrwPlanned}].map(({label,date,planList,done})=>(
-                    <div key={label} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                      <div style={{background:C.s2,padding:"8px 14px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${C.border}`}}>
-                        <div>
-                          <span style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{label}</span>
-                          <span style={{fontSize:10,color:C.dim}}> · {planList.length} meeting{planList.length!==1?"s":""}</span>
-                        </div>
-                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                          <span style={{fontSize:12,color:done?C.green:C.red,fontWeight:700}}>{done?"✓":"✗"}</span>
-                          <button onClick={()=>setAddPlanFor(date)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 8px",color:C.dim,fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Add</button>
-                        </div>
-                      </div>
-                      <div style={{padding:"10px 14px",minHeight:60}}>
-                        {planList.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:"12px 0"}}>Nothing planned yet</div>}
-                        {planList.map(p=>{
-                          const isOpen = inlineLogPlan===p.id;
-                          const isFuture = p.date > TODAY && p.status !== "Done";
-                          // Part 8: Meeting card visual states
-                          const nowHHMM = new Date().toTimeString().slice(0,5); // "HH:MM"
-                          const timePassed = p.date===TODAY && p.status!=="Done" && !isFuture && p.time && p.time < nowHHMM;
-                          const isDone = p.status==="Done";
-                          // Find linked deal for this plan — shows blocking info
-                          const linkedDeal = deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===(p.clientAgencyName||"").toLowerCase());
-                          const blocked = linkedDeal?.awaitingApproval && p.status!=="Done";
-                          const dealNextStep = linkedDeal?.nextStep && linkedDeal.nextStep !== p.agenda ? linkedDeal.nextStep : null;
-                          // Card border/bg based on visual state
-                          const cardBg   = isDone?`${C.green}10`:blocked?`${C.orange}06`:timePassed?`${C.red}08`:isOpen?`${C.accent}10`:C.s2;
-                          const cardBrd  = isDone?`2px solid ${C.green}55`:timePassed?`2px solid ${C.red}55`:blocked?`1px solid ${C.orange}44`:isOpen?`1px solid ${C.accent}55`:`1px solid ${C.border}`;
-                          // Circle indicator
-                          const circleColor = isDone?C.green:timePassed?C.red:C.muted;
-                          const circleFill  = isDone?"filled":"hollow";
-                          return (
-                            <div key={p.id} style={{marginBottom:8}}>
-                              {/* Meeting chip — click to expand */}
-                              <div onClick={()=>{
-                                  if (p.status==="Done") {
-                                    const m = meetings.find(m=>m.id===p.loggedMeetingId) || meetings.find(m=>m.repId===myRepId && (m.clientCompany||"").toLowerCase()===(p.clientAgencyName||"").toLowerCase() && m.date===p.date);
-                                    if (m) setViewMeetingId(m.id);
-                                  } else if (isFuture) {
-                                    showToast(`This meeting is on ${p.date}. Come back on the day to log it.`);
-                                  } else {
-                                    // Open log modal pre-filled from plan — no duplicate entry needed
-                                    setLogForm(f=>({...BLANK_LOG,repId:String(myRepId),
-                                      planId:p.id,
-                                      meetingDbId:(p as any).meetingDbId||"",
-                                      meetingTime:p.time||"",
-                                      meetingKind:(p as any).meetingKind||"ACTIONABLE",
-                                      touchpointType:(p as any).touchpointType||(((p as any).meetingKind==="PR")?"Relationship":"Deal Meeting"),
-                                      clientAgencyName:p.client||p.agency||p.clientAgencyName||"",
-                                      agency:p.agency||"",client:p.client||p.clientAgencyName||"",brand:p.brand||"",
-                                      contactName:p.contactName||"",mobile:p.phone||"",
-                                      meetingType:p.meetingType||"Physical",
-                                      pitchType:p.pitchType||"",agenda:p.agenda||"",
-                                      // Auto-link deal if client matches
-                                      dealId: (p as any).meetingKind==="PR" ? "" : deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===(p.client||p.clientAgencyName||"").toLowerCase())?.id || "",
-                                    }));
-                                    setLogOpen(true);
-                                  }
-                                }}
-                                style={{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 10px",background:cardBg,borderRadius:6,border:cardBrd,cursor:isFuture?"default":"pointer",transition:"all .1s",opacity:isFuture?0.8:1}}>
-                                {/* Circle indicator */}
-                                <div style={{width:14,height:14,borderRadius:"50%",border:`2px solid ${circleColor}`,background:circleFill==="filled"?circleColor:"transparent",flexShrink:0,marginTop:2,animation:timePassed?"planPulse 1.5s ease-in-out infinite":undefined}}/>
-                                <span style={{fontSize:10,color:C.dim,whiteSpace:"nowrap",marginTop:1}}>🕐 {p.time}</span>
-                                <div style={{flex:1,minWidth:0}}>
-                                  <div style={{fontSize:12,fontWeight:600,color:C.text}}>{p.clientAgencyName}</div>
-                                  {p.agenda&&<div style={{fontSize:10,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.agenda}</div>}
-                                  {/* Blocker — what you need from whom */}
-                                  {blocked&&<div style={{fontSize:10,color:C.orange,fontWeight:600,marginTop:3,display:"flex",alignItems:"center",gap:4}}>
-                                    <span>⏳</span>
-                                    <span>Waiting on <strong>{linkedDeal.awaitingApproval}</strong>{dealNextStep?` · ${dealNextStep}`:""}</span>
-                                  </div>}
-                                  {/* Show deal nextStep even if not blocked — so rep knows what to do */}
-                                  {!blocked&&dealNextStep&&p.status!=="Done"&&<div style={{fontSize:10,color:C.blue,marginTop:2}}>
-                                    → {dealNextStep}
-                                  </div>}
-                                </div>
-                                <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"flex-end",flexShrink:0}}>
-                                  {p.pitchType&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>{p.pitchType}</span>}
-                                  {p.autoCreatedFrom==="follow-up"&&<span style={{background:`${C.blue}22`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>📞 Follow-up</span>}
-                                  {p.autoCreatedFrom==="next-meeting"&&<span style={{background:`${C.green}22`,color:C.green,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:700,whiteSpace:"nowrap"}}>📅 Next Mtg</span>}
-                                  <span style={{background:p.status==="Done"?`${C.green}22`:p.status==="Cancelled"?`${C.red}22`:blocked?`${C.orange}22`:isFuture?`${C.blue}18`:C.s3,color:p.status==="Done"?C.green:p.status==="Cancelled"?C.red:blocked?C.orange:isFuture?C.blue:C.dim,padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:600,whiteSpace:"nowrap"}}>
-                                    {p.status==="Done"?"Done":p.status==="Cancelled"?"Cancelled":blocked?"⏳ Blocked":isFuture?"📅 Upcoming":"Tap to log"}
-                                  </span>
-                                  {p.status!=="Done"&&!isFuture&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
-                                  {isFuture&&p.status!=="Done"&&<button onClick={e=>{e.stopPropagation();if(planEditId===p.id){setPlanEditId(null);}else{setPlanEditId(p.id);setPlanEditForm({time:p.time||"10:00",clientAgencyName:p.clientAgencyName||"",contactName:p.contactName||"",phone:p.phone||"",agenda:p.agenda||"",pitchType:p.pitchType||""});}}} style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,borderRadius:4,padding:"1px 7px",color:C.blue,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✎ Edit</button>}
-                                  {isFuture&&p.status!=="Done"&&p.date===TOMORROW&&(
-                                    <button onClick={e=>{e.stopPropagation();if(confirm(`Did "${p.clientAgencyName}" actually happen today?`)){setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,date:TODAY,status:"Done"}:pl));if(p.meetingDbId){meetingsSvc.patchMeeting(p.meetingDbId,{date:TODAY,status:"logged"}).catch(()=>{});}showToast("Moved to today and marked Done ✓");}}} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"1px 7px",color:C.green,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4}}>✓ Happened today</button>
-                                  )}
-                                </div>
-                              </div>
-
-                              {/* Inline EDIT form for future plans */}
-                              {isFuture&&planEditId===p.id&&(
-                                <div style={{background:`${C.blue}06`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"12px 14px",marginTop:4}}>
-                                  <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>Edit Planned Meeting</div>
-                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                                    <div><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Time</label><input type="time" value={planEditForm.time} onChange={e=>setPlanEditForm(f=>({...f,time:e.target.value}))} style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
-                                    <div><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Client / Agency</label><input value={planEditForm.clientAgencyName} onChange={e=>setPlanEditForm(f=>({...f,clientAgencyName:e.target.value}))} style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
-                                    <div><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Contact Name</label><input value={planEditForm.contactName} onChange={e=>setPlanEditForm(f=>({...f,contactName:e.target.value}))} style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
-                                    <div><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Phone</label><input value={planEditForm.phone} onChange={e=>setPlanEditForm(f=>({...f,phone:e.target.value}))} style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
-                                    <div style={{gridColumn:"1/-1"}}><label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3}}>Agenda</label><input value={planEditForm.agenda} onChange={e=>setPlanEditForm(f=>({...f,agenda:e.target.value}))} placeholder="What are you going in with?" style={{width:"100%",fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"5px 8px",color:C.text,boxSizing:"border-box"}} /></div>
-                                  </div>
-                                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                                    <button onClick={()=>setPlanEditId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));if(p.meetingDbId){meetingsSvc.patchMeeting(p.meetingDbId,{time:planEditForm.time||"10:00",contactName:planEditForm.contactName||undefined,agenda:planEditForm.agenda||undefined}).catch(()=>{});}setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Fix 12: Attend a meeting confirmation for action-item-created plans */}
-                              {isFuture && p.autoCreatedFrom==="action-item" && p.requestedBy && !["Done","Confirmed","Declined"].includes(p.status) && (
-                                <div style={{background:`${C.accent}08`,border:`1px solid ${C.accent}44`,borderRadius:6,padding:"10px 12px",marginTop:4}}>
-                                  <div style={{fontSize:11,color:C.accent,fontWeight:700,marginBottom:6}}>
-                                    📩 Meeting requested by {p.requestedByName||"a colleague"}
-                                  </div>
-                                  <div style={{fontSize:10,color:C.dim,marginBottom:8}}>Confirm or decline this meeting request. Confirming adds it to both your plan and theirs.</div>
-                                  <div style={{display:"flex",gap:8}}>
-                                    <button onClick={()=>{
-                                      setPlans(q=>{
-                                        const confirmed = q.map(pl=>pl.id===p.id?{...pl,status:"Confirmed"}:pl);
-                                        // Create matching plan entry for the requester
-                                        const requesterPlan = {id:`p_conf_${Date.now()}`,repId:p.requestedBy,date:p.date,time:p.time||"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",agenda:`[Confirmed] ${p.agenda||`Meeting with ${p.clientAgencyName}`}`,pitchType:"",meetingType:p.meetingType||"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"confirm-from-"+myRepId};
-                                        return [...confirmed, requesterPlan];
-                                      });
-                                      showToast("Meeting confirmed — added to both plans ✓");
-                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"4px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                      ✓ Confirm date
-                                    </button>
-                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Declined"}:pl));showToast("Meeting request declined");}} style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,borderRadius:5,padding:"4px 14px",color:C.red,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                      ✗ Decline
-                                    </button>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Info note for future meetings (no edit) */}
-                              {isFuture&&planEditId!==p.id&&!p.autoCreatedFrom&&(
-                                <div style={{background:`${C.blue}06`,border:`1px solid ${C.blue}18`,borderRadius:5,padding:"6px 10px",marginTop:4,fontSize:10,color:C.blue}}>
-                                  📅 Scheduled for <strong>{p.date}</strong>. Come back on the day to log the outcome. Use ✎ Edit to change details.
-                                </div>
-                              )}
-
-                              {/* Part 8: Post-log inline message */}
-                              {planLoggedMsg[p.id]&&(()=>{
-                                const msg = planLoggedMsg[p.id];
-                                if (msg==="mail-confirmed") {
-                                  return (
-                                    <div style={{background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"12px 14px",marginTop:4}}>
-                                      <div style={{fontSize:12,fontWeight:700,color:C.green,marginBottom:8}}>Mail Confirmed. Waiting for RO?</div>
-                                      <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Set a reminder to follow up:</div>
-                                      <div style={{display:"flex",gap:8}}>
-                                        {[3,5,7].map(days=>{
-                                          const rDate = new Date(); rDate.setDate(rDate.getDate()+days);
-                                          const rStr = rDate.toISOString().slice(0,10);
-                                          return (
-                                            <button key={days} onClick={()=>{
-                                              setPlans(q=>[...q,{id:`rem${Date.now()}_${days}`,repId:myRepId,date:rStr,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow up on RO — ${p.clientAgencyName}`,pitchType:"",meetingType:"Call",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"}]);
-                                              setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;});
-                                              showToast(`Reminder set for ${rStr} ✓`);
-                                            }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,borderRadius:5,padding:"5px 14px",color:C.green,fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                              {days}d
-                                            </button>
-                                          );
-                                        })}
-                                        <button onClick={()=>setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;})} style={{background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 14px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                          Skip
-                                        </button>
-                                      </div>
-                                    </div>
-                                  );
-                                }
-                                return (
-                                  <div style={{background:msg.startsWith("All logged")?`${C.green}10`:`${C.blue}08`,border:`1px solid ${msg.startsWith("All logged")?C.green:C.blue}33`,borderRadius:6,padding:"10px 14px",marginTop:4,fontSize:12,color:msg.startsWith("All logged")?C.green:C.blue,fontWeight:600}}>
-                                    {msg}
-                                    <button onClick={()=>setPlanLoggedMsg(prev=>{const n={...prev};delete n[p.id];return n;})} style={{marginLeft:12,background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:11}}>✕</button>
-                                  </div>
-                                );
-                              })()}
-
-                              {/* Inline log form */}
-                              {!isFuture&&isOpen&&(()=>{
-                                // Auto-detect if deal is closed
-                                const matchDealInline=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
-                                const isClosed = ["Mail Confirmed","Lost","RO Received","Closed"].includes(inlineLogStatus) || matchDealInline?.outcome==="Mail Confirmed";
-                                return (
-                                <div style={{background:`${C.accent}06`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"14px 14px",marginTop:4}}>
-                                  <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:12}}>Log This Meeting</div>
-
-                                  {/* Autofilled from plan — shown read-only */}
-                                  <div style={{background:C.s2,borderRadius:5,padding:"8px 10px",marginBottom:10,display:"flex",gap:16,flexWrap:"wrap",fontSize:11,color:C.dim}}>
-                                    <span>🧑 {p.contactName||"—"}</span>
-                                    {p.phone&&<span>📱 {p.phone}</span>}
-                                    <span>{p.meetingType==="Online"?"💻":p.meetingType==="Phone Call"?"📞":"🤝"} {p.meetingType||"Physical"}</span>
-                                    {p.needsMeet&&<span style={{color:"#4285F4",fontWeight:600}}>Google Meet scheduled</span>}
-                                  </div>
-
-                                  {/* What happened — mandatory */}
-                                  <div style={{marginBottom:8}}>
-                                    <label>What happened? * <span style={{color:C.red,fontWeight:400}}>(required)</span></label>
-                                    <textarea rows={2} placeholder="What was discussed, how the client reacted..." id={`disc_${p.id}`} style={{fontSize:11,resize:"none"}} />
-                                  </div>
-
-                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                                    <div><label>Client Feedback</label><textarea rows={2} placeholder="Positive, hesitant, needs approval..." id={`fb_${p.id}`} style={{fontSize:11,resize:"none"}} /></div>
-                                    <div>
-                                      <label>Meeting Status *</label>
-                                      <select value={inlineLogStatus} onChange={e=>setInlineLogStatus(e.target.value)} style={{fontSize:11}}>
-                                        <option value="">Select…</option>
-                                        {MEETING_STATUS.map(s=><option key={s}>{s}</option>)}
-                                      </select>
-                                    </div>
-                                  </div>
-
-                                  {/* RO Received → Revenue Log prompt */}
-                                  {inlineLogStatus==="RO Received" && (
-                                    <div style={{marginBottom:8,background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"10px 12px"}}>
-                                      <div style={{fontSize:12,fontWeight:700,color:C.green,marginBottom:4}}>🎉 RO Received — great work!</div>
-                                      <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Log your revenue entry so it reflects in your achieved total right away.</div>
-                                      <button onClick={()=>{setInlineLogPlan(null);setView("revenue-log");}}
-                                        style={{background:C.green,color:"#fff",border:"none",borderRadius:5,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                                        → Go to Revenue Log
-                                      </button>
-                                      <span style={{fontSize:10,color:C.dim,marginLeft:8}}>or finish logging this touchpoint first</span>
-                                    </div>
-                                  )}
-
-                                  {/* Next Steps — hidden when Closed */}
-                                  {!isClosed && (
-                                  <div style={{marginBottom:8}}>
-                                    <label>Next Steps * <span style={{color:C.red,fontWeight:400}}>(required)</span></label>
-                                    <input placeholder="What is the clear next action from this meeting?" id={`ns_${p.id}`} style={{fontSize:11}} />
-                                  </div>
-                                  )}
-
-                                  {/* Follow-up + next meeting — hidden if deal is closed */}
-                                  {!isClosed && (
-                                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:10}}>
-                                      <div><label>Follow-up Date</label><input type="date" min="2020-01-01" max="2099-12-31" id={`fu_${p.id}`} style={{fontSize:11}} /></div>
-                                      <div><label>Next Meeting Date</label><input type="date" min="2020-01-01" max="2099-12-31" id={`nm_${p.id}`} style={{fontSize:11}} /></div>
-                                      <div><label>Next Meeting Time <span style={{color:C.dim,fontWeight:400}}>(if rescheduled)</span></label><input type="time" id={`nm_time_${p.id}`} style={{fontSize:11}} /></div>
-                                    </div>
-                                  )}
-
-                                  {/* What do you need section */}
-                                  {!isClosed && (
-                                    <div style={{background:C.s2,borderRadius:6,padding:"10px 12px",marginBottom:10}}>
-                                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:8}}>What do you need?</div>
-                                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:6}}>
-                                        <div>
-                                          <label>Action needed</label>
-                                          <select id={`action_${p.id}`} style={{fontSize:11}}>
-                                            <option value="">Select…</option>
-                                            <option>Send Proposal</option><option>Send FCT Grid</option><option>Get Rate Approval</option>
-                                            <option>Get Budget Approval</option><option>Arrange Senior Meeting</option>
-                                            <option>Share Digital Plan</option><option>Content Required</option>
-                                            <option>Legal / Contract Review</option><option>Follow Up with Client</option><option>Other</option>
-                                          </select>
-                                        </div>
-                                        <div>
-                                          <label>Who do you need it from?</label>
-                                          <select id={`from_${p.id}`} style={{fontSize:11}}>
-                                            <option value="">Needed from…</option>
-                                            {APPROVAL_TARGETS.map(t=><option key={t}>{t}</option>)}
-                                            <option value="Self">Myself</option><option value="Client">Client</option>
-                                          </select>
-                                        </div>
-                                      </div>
-                                      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                                        <div><label>By when do you need it?</label><input type="date" min="2020-01-01" max="2099-12-31" id={`bywhen_${p.id}`} style={{fontSize:11}} /></div>
-                                        <div><label>Remarks</label><input placeholder="Any context..." id={`rmk_${p.id}`} style={{fontSize:11}} /></div>
-                                      </div>
-                                    </div>
-                                  )}
-
-                                  <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                                    <button onClick={()=>setInlineLogPlan(null)} className="btn btn-ghost" style={{fontSize:11}}>Cancel</button>
-                                    <button className="btn btn-primary" style={{fontSize:11}} onClick={()=>{
-                                      const disc = document.getElementById(`disc_${p.id}`)?.value||"";
-                                      const fb   = document.getElementById(`fb_${p.id}`)?.value||"";
-                                      const st   = inlineLogStatus||"Meeting Done";
-                                      const ns   = isClosed?"Deal Closed":document.getElementById(`ns_${p.id}`)?.value||"";
-                                      const fu   = document.getElementById(`fu_${p.id}`)?.value||"";
-                                      const nm   = document.getElementById(`nm_${p.id}`)?.value||"";
-                                      const nm_time = document.getElementById(`nm_time_${p.id}`)?.value||"";
-                                      const act  = document.getElementById(`action_${p.id}`)?.value||"";
-                                      const frm  = document.getElementById(`from_${p.id}`)?.value||"";
-                                      const bywhen = document.getElementById(`bywhen_${p.id}`)?.value||"";
-                                      const rmk  = document.getElementById(`rmk_${p.id}`)?.value||"";
-                                      if (!disc.trim()) { alert("Please fill in what happened"); return; }
-                                      if (!ns.trim())  { alert("Next steps are required"); return; }
-                                      const loggedAt = `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}`;
-                                      const newMeetId = `ml${Date.now()}`;
-                                      setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done",loggedMeetingId:newMeetId}:pl));
-                                      // DB-first: create touchpoint then atomically link to meeting (status+touchpointId)
-                                      const tpIdInline = `tp${Date.now()}`;
-                                      tpSvc.createTouchpoint({id:tpIdInline,repId:myRepId,region:reps.find(r=>r.id===myRepId)?.region||"",date:TODAY,touchpointType:p.touchpointType||"Deal Meeting",whatHappened:disc,clientFeedback:fb,stageUpdate:st,actionItems:act&&frm?[{action:act,neededFrom:frm,dueDate:bywhen||fu||TOMORROW,notes:rmk}]:[]}).then(tpData=>{const resolvedTpId=tpData?.id||tpIdInline;if(p.meetingDbId){meetingsSvc.patchMeeting(p.meetingDbId,{status:"logged",touchpointId:resolvedTpId}).catch(()=>{});}}).catch(()=>{if(p.meetingDbId){meetingsSvc.patchMeeting(p.meetingDbId,{status:"logged"}).catch(()=>{});}});
-                                      setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,nextMeetingTime:nm_time||"",meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Mail Confirmed":"Needs Callback",isUnplanned:false},...q]);
-                                      if (act && frm && frm!=="Self"&&frm!=="Client") {
-                                        const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
-                                        const _rhMap: Record<string,string>={North:"rh_north",South:"rh_south",East:"rh_east",West:"rh_west",National:"rh_national",Central:"rh_central"};
-                                        const _frmUid = frm==="Region Head"?(_rhMap[user_role?.region||""]||null):frm==="NSH"?"sales_head":frm==="CXO"?"admin":frm==="Sales Strategy"?"sales_strategy":frm==="CRO"?"sales_analysis":null;
-                                        const _repNm = user_role?.name||"Rep";
-                                        setTasks(q=>[{id:`t${Date.now()}`,title:act,description:rmk,clientCompany:p.clientAgencyName,dealId:md?.id||null,assignedTo:null,assignedToUserId:_frmUid,repId:myRepId,dept:frm,priority:"High",status:"Open",dueDate:bywhen||fu||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:_repNm,fromMeetingLog:true},...q]);
-                                        setInternalReqs(q=>[{id:`ir${Date.now()}`,type:act,dept:frm,subject:`${act} — ${p.clientAgencyName}${rmk?` — ${rmk}`:""} — by ${bywhen||fu||TOMORROW} — from ${_repNm}`.slice(0,160),details:rmk,raisedBy:activeUser,raisedByName:_repNm,repId:myRepId,dealId:md?.id||null,clientCompany:p.clientAgencyName,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""},...q]);
-                                        if(md) {
-                                          // Route approval based on deal amount thresholds
-                                          const amt = md.amount || 0;
-                                          const routedTo = (frm === "NSH" || frm === "CXO")
-                                            ? getRequiredApprover(amt)
-                                            : frm;
-                                          setDeals(q=>q.map(d=>d.id===md.id?{...d,
-                                            awaitingApproval:routedTo,
-                                            awaitingApprovalSince:TODAY,
-                                            nextStep:ns,nextStepDate:bywhen||fu||TOMORROW,
-                                            atRisk: daysSince(d.lastContact)>=7,
-                                            auditLog:[...(d.auditLog||[]),{at:TODAY,by:"Rep",role:"SALES REP",action:"Flagged",from:null,to:routedTo,note:act}]
-                                          }:d));
-                                        }
-                                      }
-                                      // Auto-create calendar plans from follow-up / next-meeting / action due date
-                                      const repIdForPlan = myRepId || (reps[0]?.id);
-                                      const ts = Date.now();
-                                      const newAutoPlans: any[] = [];
-                                      if (act && bywhen) {
-                                        newAutoPlans.push({id:`p_ns_${ts}`,repId:repIdForPlan,date:bywhen,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`${act}${frm?" → "+frm:""}`,pitchType:"",meetingType:"Task",needsMeet:false,status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"next-step",assignedDept:frm||""});
-                                      }
-                                      if (nm) {
-                                        newAutoPlans.push({id:`p_nxt_${ts+1}`,repId:repIdForPlan,date:nm,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Next meeting with ${p.clientAgencyName}`,pitchType:p.pitchType||"",meetingType:p.meetingType||"Physical",needsMeet:false,status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"next-meeting"});
-                                      }
-                                      if (fu) {
-                                        newAutoPlans.push({id:`p_fu_${ts+2}`,repId:repIdForPlan,date:fu,time:"10:00",clientAgencyName:p.clientAgencyName,contactName:p.contactName||"",phone:"",agenda:`Follow-up: ${ns||"Check in with client"}`,pitchType:p.pitchType||"",meetingType:"Call",needsMeet:false,status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"follow-up"});
-                                      }
-                                      if (newAutoPlans.length > 0) setPlans(q=>[...q,...newAutoPlans]);
-                                      setAtt(q=>({...q,[TODAY]:{...(q[TODAY]||{}),[(myRepId||reps[0]?.id)]:true}}));
-                                      setInlineLogPlan(null);
-                                      // Part 8: Post-log inline messages
-                                      const remaining = todayPlans.filter(pl=>pl.id!==p.id&&pl.status==="Planned");
-                                      const tmrwCount = tmrwPlans.length;
-                                      let logMsg = "";
-                                      if (st==="Closed"||st==="Mail Confirmed") {
-                                        logMsg = "mail-confirmed";
-                                      } else if (st==="Lost") {
-                                        logMsg = `Logged as Lost. Reason recorded.`;
-                                      } else if (remaining.length>0) {
-                                        const nxt = remaining.sort((a,b)=>(a.time||"").localeCompare(b.time||""))[0];
-                                        logMsg = `${p.clientAgencyName} logged. ${remaining.length} remaining. Next: ${nxt.clientAgencyName}${nxt.time?` at ${nxt.time}`:""}`;
-                                      } else {
-                                        logMsg = `All logged today. Tomorrow: ${tmrwCount} meeting${tmrwCount!==1?"s":""} planned.`;
-                                      }
-                                      setPlanLoggedMsg(prev=>({...prev,[p.id]:logMsg}));
-                                      const planCount = (act&&bywhen?1:0)+(nm?1:0)+(fu?1:0);
-                                      showToast((act&&frm?"Touchpoint logged + task created ✓":"Touchpoint logged ✓")+(planCount>0?` · ${planCount} calendar entry added`:""));
-                                    }}>Log Touchpoint ✓</button>
-                                  </div>
-                                </div>
-                                );
-                              })()}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* MONTHLY CALENDAR — full month, 3 meeting chips per day */}
-                <div style={{marginBottom:8}}>
-                  <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-                    <div>
-                      <div className="sans" style={{fontSize:14,fontWeight:700}}>
-                        {new Date(Date.now() + calWeekOffset * 28 * 86400000).toLocaleDateString("en-IN",{month:"long",year:"numeric"})}
-                      </div>
-                      <div style={{fontSize:10,color:weeklyDiffMs<=0?C.red:C.blue,fontWeight:600,marginTop:2}}>Weekly plan: {weeklyLabel}</div>
-                    </div>
-                    <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                      <button onClick={()=>setCalWeekOffset(p=>p-1)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:C.dim,cursor:"pointer",fontSize:13,fontFamily:"'DM Mono',monospace"}}>←</button>
-                      <button onClick={()=>setCalWeekOffset(0)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:calWeekOffset===0?C.accent:C.dim,cursor:"pointer",fontSize:11,fontFamily:"'DM Mono',monospace"}}>Today</button>
-                      <button onClick={()=>setCalWeekOffset(p=>p+1)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,padding:"3px 10px",color:C.dim,cursor:"pointer",fontSize:13,fontFamily:"'DM Mono',monospace"}}>→</button>
-                    </div>
-                  </div>
-
-                  {/* Build month grid */}
-                  {(() => {
-                    // Find the month to show based on calWeekOffset (in units of 4 weeks)
-                    const ref = new Date(Date.now() + calWeekOffset * 28 * 86400000);
-                    const monthYear = new Date(ref.getFullYear(), ref.getMonth(), 1);
-                    const daysInMonth = new Date(ref.getFullYear(), ref.getMonth()+1, 0).getDate();
-
-                    // Monday-first grid: pad start
-                    const firstDow = (monthYear.getDay() + 6) % 7; // 0=Mon
-                    const totalCells = Math.ceil((firstDow + daysInMonth) / 7) * 7;
-                    const cells = Array.from({length: totalCells}, (_, i) => {
-                      const dayNum = i - firstDow + 1;
-                      if (dayNum < 1 || dayNum > daysInMonth) return null;
-                      const y = ref.getFullYear();
-                      const m = String(ref.getMonth() + 1).padStart(2, "0");
-                      const dd = String(dayNum).padStart(2, "0");
-                      return `${y}-${m}-${dd}`;
-                    });
-                    const weeks = [];
-                    for (let w = 0; w < cells.length / 7; w++) weeks.push(cells.slice(w*7, w*7+7));
-                    const dayNames = ["Mon","Tue","Wed","Thu","Fri","Sat","Sun"];
-
-                    return (
-                      <div>
-                        {/* Day headers */}
-                        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
-                          {dayNames.map(d=>(
-                            <div key={d} style={{textAlign:"center",fontSize:9,fontWeight:700,color:C.muted,textTransform:"uppercase",letterSpacing:".08em",padding:"3px 0"}}>{d}</div>
-                          ))}
-                        </div>
-                        {/* Week rows */}
-                        {weeks.map((week, wi) => (
-                          <div key={wi} style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,marginBottom:4}}>
-                            {week.map((date, di) => {
-                              if (!date) return <div key={di} style={{background:C.s2,borderRadius:6,opacity:.3,minHeight:120}} />;
-                              const dayPlans = allPlans.filter(p=>p.repId===myPlanRepId&&p.autoCreatedFrom!=="action-item"&&p.date===date);
-                              const isToday = date===TODAY;
-                              const isTmrw  = date===TOMORROW;
-                              const isPast  = date<TODAY;
-                              return (
-                                <div key={date} onClick={()=>setCalDayView(date)}
-                                  style={{background:isToday?`${C.accent}08`:C.surface,border:`1px solid ${isToday?C.accent:isTmrw?C.blue:C.border}`,borderRadius:6,minHeight:140,display:"flex",flexDirection:"column",cursor:"pointer",transition:"border-color .1s"}}
-                                  onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;}}
-                                  onMouseOut={e=>{e.currentTarget.style.borderColor=isToday?C.accent:isTmrw?C.blue:C.border;}}>
-                                  {/* Day number row */}
-                                  <div style={{padding:"3px 6px",display:"flex",justifyContent:"space-between",alignItems:"center",borderBottom:`1px solid ${isToday?C.accent+"33":C.s2}`}}>
-                                    <span style={{fontSize:11,fontWeight:isToday?700:400,color:isToday?C.accent:isPast?C.muted:C.text}}>{new Date(date).getDate()}</span>
-                                    {!isPast&&dayPlans.length===0&&<span style={{fontSize:10,color:C.muted,lineHeight:1}}>+</span>}
-                                    {dayPlans.length>0&&<span style={{fontSize:8,color:C.dim}}>{dayPlans.length}</span>}
-                                  </div>
-                                  {/* Up to 3 meeting chips */}
-                                  <div style={{flex:1,padding:"3px 4px",overflow:"hidden"}}>
-                                    {dayPlans.slice(0,4).map(p=>{
-                                      const chipColor = p.status==="Done"?C.green:p.status==="Cancelled"?C.red:p.autoCreatedFrom==="follow-up"?C.blue:p.autoCreatedFrom==="next-meeting"?C.green:p.autoCreatedFrom==="next-step"?C.orange:C.accent;
-                                      const typeLabel = p.autoCreatedFrom==="follow-up"?"Call":p.autoCreatedFrom==="next-meeting"?"Mtg":p.autoCreatedFrom==="next-step"?"Action":p.meetingType==="Phone Call"?"Call":p.meetingType==="Online"?"Online":"Visit";
-                                      return (
-                                      <div key={p.id}
-                                        onClick={e=>{e.stopPropagation();if(p.status!=="Done"){planInlineState[1](p.id);}}}
-                                        style={{background:p.status==="Done"?`${C.green}18`:p.status==="Cancelled"?`${C.red}10`:`${chipColor}14`,borderRadius:3,padding:"2px 4px",marginBottom:2,cursor:"pointer"}}
-                                        title={`${p.time} · ${p.clientAgencyName}${p.agenda?" · "+p.agenda:""}`}>
-                                        {/* Time + type */}
-                                        <div style={{fontSize:7,color:C.dim,lineHeight:1,display:"flex",gap:2,alignItems:"center"}}>
-                                          {p.time}
-                                          {p.autoCreatedFrom==="follow-up"&&<span style={{color:C.blue,fontWeight:700}}>📞</span>}
-                                          {p.autoCreatedFrom==="next-meeting"&&<span style={{color:C.green,fontWeight:700}}>📅</span>}
-                                          {p.autoCreatedFrom==="next-step"&&<span style={{color:C.orange,fontWeight:700}}>⚡</span>}
-                                          <span style={{color:chipColor,opacity:.8}}>{typeLabel}</span>
-                                        </div>
-                                        {/* Client name */}
-                                        <div style={{fontSize:8,color:chipColor,fontWeight:600,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.2}}>
-                                          {p.clientAgencyName}
-                                        </div>
-                                        {/* Agenda — the key context line */}
-                                        {p.agenda&&<div style={{fontSize:7,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",lineHeight:1.2,marginTop:1}}>
-                                          {p.agenda}
-                                        </div>}
-                                      </div>
-                                      );
-                                    })}
-                                    {dayPlans.length>4&&<div style={{fontSize:7,color:C.dim,textAlign:"center"}}>+{dayPlans.length-4} more</div>}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ))}
-                      </div>
-                    );
-                  })()}
-                </div>
-
-                {/* DAY VIEW MODAL */}
-                {calDayView&&(()=>{
-                  const dvDate = calDayView;
-                  const dvPlans = allPlans.filter(p=>p.repId===myPlanRepId&&p.autoCreatedFrom!=="action-item"&&p.date===dvDate).sort((a,b)=>a.time.localeCompare(b.time));
-                  const dvIsPast = dvDate < TODAY;
-                  const dvLabel = new Date(dvDate+"T12:00:00").toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"long",year:"numeric"});
-                  const hours = Array.from({length:24},(_,i)=>i);
-                  const planAtHour = (h) => dvPlans.filter(p=>{const ph=parseInt((p.time||"00:00").split(":")[0]);return ph===h;});
-                  const usedHours = new Set(dvPlans.map(p=>parseInt((p.time||"00:00").split(":")[0])));
-                  return (
-                    <div className="overlay" onClick={()=>setCalDayView(null)}>
-                      <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:580,maxHeight:"85vh",display:"flex",flexDirection:"column"}}>
-                        {/* Header */}
-                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16,flexShrink:0}}>
-                          <div>
-                            <div className="sans" style={{fontSize:16,fontWeight:700,color:C.text}}>{dvLabel}</div>
-                            <div style={{fontSize:11,color:C.dim,marginTop:2}}>
-                              {dvPlans.length===0?"No meetings — day is open":dvPlans.length===1?"1 meeting planned":`${dvPlans.length} meetings planned`}
-                            </div>
-                          </div>
-                          <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                            {!dvIsPast&&<button className="btn btn-primary" style={{fontSize:11,padding:"5px 12px"}} onClick={()=>{setCalDayView(null);setAddPlanFor(dvDate);}}>+ Add Touchpoint</button>}
-                            <button onClick={()=>setCalDayView(null)} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
-                          </div>
-                        </div>
-
-                        {/* Time slot grid */}
-                        <div style={{overflowY:"auto",flex:1}}>
-                          {hours.map(h=>{
-                            const slotPlans = planAtHour(h);
-                            const isOccupied = usedHours.has(h);
-                            const timeLabel = `${String(h).padStart(2,"0")}:00`;
-                            return (
-                              <div key={h} style={{display:"flex",gap:0,minHeight:48,borderBottom:`1px solid ${C.s2}`}}>
-                                {/* Hour label */}
-                                <div style={{width:48,flexShrink:0,padding:"6px 8px 0",fontSize:10,color:C.muted,fontFamily:"'DM Mono',monospace",textAlign:"right"}}>{timeLabel}</div>
-                                {/* Slot content */}
-                                <div style={{flex:1,padding:"4px 8px",background:isOccupied?`${C.accent}05`:"transparent",cursor:!dvIsPast?"pointer":"default",transition:"background .1s"}}
-                                  onMouseEnter={e=>{if(!dvIsPast)(e.currentTarget as HTMLDivElement).style.background=`${C.accent}0a`;}}
-                                  onMouseLeave={e=>{(e.currentTarget as HTMLDivElement).style.background=isOccupied?`${C.accent}05`:"transparent";}}
-                                  onClick={()=>{
-                                    if(!dvIsPast){
-                                      const preTime=`${String(h).padStart(2,"0")}:00`;
-                                      setPf(p=>({...p,time:preTime}));
-                                      setCalDayView(null);
-                                      setAddPlanFor(dvDate);
-                                    }
-                                  }}>
-                                  {slotPlans.length===0&&!dvIsPast&&(
-                                    <div style={{fontSize:10,color:C.s3,lineHeight:"38px",paddingLeft:4,userSelect:"none"}}>+ click to add</div>
-                                  )}
-                                  {slotPlans.map(p=>{
-                                    const statusClr = p.status==="Done"?C.green:p.status==="Cancelled"?C.red:C.accent;
-                                    const typeTag = p.autoCreatedFrom==="follow-up"?"📞 Follow-up":p.autoCreatedFrom==="next-meeting"?"📅 Next Mtg":p.autoCreatedFrom==="next-step"?"⚡ Action":null;
-                                    return (
-                                      <div key={p.id}
-                                        onClick={e=>{
-                                          e.stopPropagation();
-                                          if(p.status==="Done"){
-                                            const m=meetings.find(m=>m.id===p.loggedMeetingId)||meetings.find(m=>m.repId===myRepId&&(m.clientCompany||"").toLowerCase()===(p.clientAgencyName||"").toLowerCase()&&m.date===p.date);
-                                            if(m){setCalDayView(null);setViewMeetingId(m.id);}
-                                          } else {
-                                            setCalDayView(null);setInlineLogPlan(p.id);
-                                          }
-                                        }}
-                                        style={{background:p.status==="Done"?`${C.green}14`:`${C.accent}14`,border:`1px solid ${statusClr}44`,borderLeft:`3px solid ${statusClr}`,borderRadius:4,padding:"5px 10px",marginBottom:4,cursor:"pointer"}}>
-                                        <div style={{display:"flex",alignItems:"center",gap:6,justifyContent:"space-between"}}>
-                                          <div style={{flex:1,minWidth:0}}>
-                                            <div style={{fontSize:12,fontWeight:600,color:C.text,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.clientAgencyName}</div>
-                                            {p.agenda&&<div style={{fontSize:10,color:C.dim,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{p.agenda}</div>}
-                                          </div>
-                                          <div style={{display:"flex",gap:4,alignItems:"center",flexShrink:0}}>
-                                            {typeTag&&<span style={{fontSize:9,color:statusClr,fontWeight:700}}>{typeTag}</span>}
-                                            {p.pitchType&&<span style={{background:`${C.accent}18`,color:C.accent,padding:"1px 5px",borderRadius:3,fontSize:9,fontWeight:600}}>{p.pitchType}</span>}
-                                            <span style={{background:`${statusClr}22`,color:statusClr,padding:"1px 6px",borderRadius:3,fontSize:9,fontWeight:700}}>
-                                              {p.status==="Done"?"Done":p.status==="Cancelled"?"Cancelled":(p.date>TODAY?"📅 Upcoming":"Tap to log")}
-                                            </span>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-
-                        {!dvIsPast&&(
-                          <div style={{marginTop:12,paddingTop:12,borderTop:`1px solid ${C.border}`,flexShrink:0,textAlign:"center"}}>
-                            <button className="btn btn-ghost" style={{fontSize:11}} onClick={()=>{setCalDayView(null);setAddPlanFor(dvDate);}}>+ Add a meeting for this day</button>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Part 8: Monday Weekly Summary */}
-                {(()=>{
-                  const dayOfWeek = new Date().getDay(); // 1 = Monday
-                  if (dayOfWeek !== 1) return null;
-                  // Last week = Mon–Sun of previous week
-                  const now = new Date();
-                  const thisMonday = new Date(now); thisMonday.setDate(now.getDate());
-                  const thisMondayStr = thisMonday.toISOString().slice(0,10);
-                  if (weekSummaryDismissed === thisMondayStr) return null;
-                  const lastMonday = new Date(now); lastMonday.setDate(now.getDate()-7);
-                  const lastSunday = new Date(now); lastSunday.setDate(now.getDate()-1);
-                  const lmStr = lastMonday.toISOString().slice(0,10);
-                  const lsStr = lastSunday.toISOString().slice(0,10);
-                  const inRange = (d) => d && d >= lmStr && d <= lsStr;
-                  const lastWeekTPs = touchpoints.filter(t=>t.repId===myRepId&&inRange(t.date||t.createdAt));
-                  const lastWeekMtgs = meetings.filter(m=>m.repId===myRepId&&inRange(m.date));
-                  const lastWeekClients = new Set([...lastWeekTPs.map(t=>t.clientCompany||t.dealId), ...lastWeekMtgs.map(m=>m.clientCompany)].filter(Boolean)).size;
-                  const lastWeekDealsForward = deals.filter(d=>d.repId===myRepId&&inRange(d.updatedAt||d.lastContact)&&!["Lost","RO Received"].includes(dealStage(d))).length;
-                  const lastWeekRevenue = revenueEntries.filter(e=>e.repId===myRepId&&inRange(e.date)).reduce((s,e)=>s+(e.amount||0),0);
-                  const lastWeekAtRisk = atRisk.filter(d=>d.repId===myRepId).length;
-                  return (
-                    <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}33`,borderRadius:8,padding:"14px 18px",marginBottom:16}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                        <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".12em",textTransform:"uppercase"}}>
-                          📊 LAST WEEK SUMMARY · {lmStr} – {lsStr}
-                        </div>
-                        <button onClick={()=>setWeekSummaryDismissed(thisMondayStr)} style={{background:"transparent",border:"none",color:C.muted,cursor:"pointer",fontSize:14,lineHeight:1,padding:"0 2px"}} title="Dismiss for this week">✕</button>
-                      </div>
-                      <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8}}>
-                        {[
-                          {label:"Touchpoints",value:lastWeekTPs.length,color:C.blue},
-                          {label:"Clients",    value:lastWeekClients,   color:C.green},
-                          {label:"Deals Moved",value:lastWeekDealsForward,color:C.accent},
-                          {label:"Revenue",    value:lastWeekRevenue>0?`₹${(lastWeekRevenue/100000).toFixed(1)}L`:"—",color:C.green},
-                          {label:"At Risk",    value:lastWeekAtRisk,    color:lastWeekAtRisk>0?C.red:C.green},
-                        ].map(({label,value,color})=>(
-                          <div key={label} style={{textAlign:"center",background:C.surface,borderRadius:6,padding:"10px 4px",border:`1px solid ${C.border}`}}>
-                            <div style={{fontSize:18,fontWeight:800,color}}>{value}</div>
-                            <div style={{fontSize:9,color:C.dim,marginTop:2,letterSpacing:".05em",textTransform:"uppercase"}}>{label}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })()}
-
-                {/* Plan modal */}
-                {addPlanFor&&(()=>{
-                  // Derive cascade lists from deals
-                  const myDeals = deals.filter(d=>d.repId===myRepId);
-                  const allAgencies = [...new Set(myDeals.map(d=>(d as any).agencyName||(d as any).agency||"").filter(Boolean))].sort();
-                  const clientsForAgency = pf.agency
-                    ? myDeals.filter(d=>((d as any).agencyName||(d as any).agency||"").toLowerCase()===pf.agency.toLowerCase()).map(d=>d.clientCompany)
-                    : myDeals.map(d=>d.clientCompany);
-                  const clientOptions = [...new Set(clientsForAgency)].sort();
-                  const brandsForClient = myDeals.filter(d=>d.clientCompany.toLowerCase()===(pf.client||"").toLowerCase()).flatMap(d=>[(d as any).brand].filter(Boolean));
-                  const brandOptions = [...new Set(brandsForClient)].sort();
-                  return (
-                  <div className="overlay" onClick={()=>setAddPlanFor(null)}>
-                    <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:500}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:14}}>
-                        <div>
-                          <div className="sans" style={{fontSize:15,fontWeight:700}}>Plan Touchpoint</div>
-                          <div style={{fontSize:11,color:C.dim,marginTop:2}}>{new Date(addPlanFor).toLocaleDateString("en-IN",{weekday:"long",day:"2-digit",month:"short"})}</div>
-                        </div>
-                      </div>
-
-                      {/* PR vs Actionable — top-level meeting category */}
-                      <div style={{marginBottom:10}}>
-                        <label style={{marginBottom:5,display:"block"}}>Meeting kind *</label>
-                        <div style={{display:"flex",gap:8}}>
-                          {([["ACTIONABLE","🎯","Sales call · full details","#1d5db4"],["PR","🤝","Relationship · quick visit","#15803d"]] as [string,string,string,string][]).map(([mk,icon,sub,col])=>(
-                            <button key={mk} onClick={()=>setPf(p=>({...p,meetingKind:mk,touchpointType:mk==="PR"?"Relationship":p.touchpointType}))}
-                              style={{flex:1,padding:"7px 10px",borderRadius:7,border:`1.5px solid ${pf.meetingKind===mk?col:C.border}`,background:pf.meetingKind===mk?`${col}14`:"transparent",cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
-                              <div style={{fontSize:12,fontWeight:700,color:pf.meetingKind===mk?col:C.text}}>{icon} {mk==="ACTIONABLE"?"Actionable":"PR"}</div>
-                              <div style={{fontSize:10,color:C.dim,marginTop:1}}>{sub}</div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-
-                      {/* Deal vs Relationship — only for ACTIONABLE meetings */}
-                      {pf.meetingKind!=="PR" && (
-                      <div style={{marginBottom:10}}>
-                        <label style={{marginBottom:5,display:"block"}}>Touchpoint type *</label>
-                        <div style={{display:"flex",gap:8}}>
-                          {([["Deal Meeting","💼","Updates pipeline & stage","#1d5db4"],["Relationship","🤝","Hi-hello · no pipeline impact","#15803d"]] as const).map(([tt,icon,sub,col])=>(
-                            <button key={tt} onClick={()=>setPf(p=>({...p,touchpointType:tt}))}
-                              style={{flex:1,padding:"7px 10px",borderRadius:7,border:`1.5px solid ${pf.touchpointType===tt?col:C.border}`,background:pf.touchpointType===tt?`${col}14`:"transparent",cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
-                              <div style={{fontSize:12,fontWeight:700,color:pf.touchpointType===tt?col:C.text}}>{icon} {tt}</div>
-                              <div style={{fontSize:10,color:C.dim,marginTop:1}}>{sub}</div>
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                      )}
-
-                      <div style={{height:1,background:C.border,marginBottom:10}} />
-
-                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
-
-                        {/* Agency → Client (side by side to save vertical space) */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                        <div>
-                          <label>Agency <span style={{color:C.dim,fontWeight:400}}>(opt.)</span></label>
-                          {allAgencies.length>0 ? (
-                            <select value={pf.agency} onChange={e=>setPf(p=>({...p,agency:e.target.value,client:"",brand:""}))} style={{marginBottom:4}}>
-                              <option value="">— No agency / direct client —</option>
-                              {allAgencies.map(a=><option key={a} value={a}>{a}</option>)}
-                              <option value="__other__">+ Add new agency…</option>
-                            </select>
-                          ) : null}
-                          {(pf.agency==="__other__"||allAgencies.length===0) && (
-                            <input placeholder="Agency name (e.g. Dentsu, Omnicom…)" value={pf.agency==="__other__"?"":pf.agency} onChange={e=>setPf(p=>({...p,agency:e.target.value,client:"",brand:""}))} autoFocus={allAgencies.length===0} />
-                          )}
-                        </div>
-
-                        <div>
-                          <label>Client / Company *</label>
-                          {clientOptions.length>0 ? (
-                            <select value={pf.client} onChange={e=>{const v=e.target.value;if(v==="__other__"){setPf(p=>({...p,client:"",brand:""}));}else{setPf(p=>({...p,client:v,brand:""}));}}} style={{marginBottom:4}}>
-                              <option value="">Select client…</option>
-                              {clientOptions.map(c=><option key={c} value={c}>{c}</option>)}
-                              <option value="__other__">+ New client (type below)…</option>
-                            </select>
-                          ) : null}
-                          {(pf.client==="__other__"||!clientOptions.includes(pf.client)) && (
-                            <input placeholder="Client name…" value={pf.client==="__other__"?"":pf.client} onChange={e=>setPf(p=>({...p,client:e.target.value,brand:""}))} autoFocus={clientOptions.length===0} />
-                          )}
-                        </div>
-                        </div>{/* /agency+client 2-col grid */}
-
-                        {pf.meetingKind!=="PR" && pf.client && pf.client!=="__other__" && (
-                          <div>
-                            <label>Brand / Product <span style={{color:C.dim,fontWeight:400}}>(optional)</span></label>
-                            {brandOptions.length>0 ? (
-                              <select value={pf.brand} onChange={e=>{const v=e.target.value;if(v==="__other__"){setPf(p=>({...p,brand:""}));}else{setPf(p=>({...p,brand:v}));}}} style={{marginBottom:4}}>
-                                <option value="">Select brand…</option>
-                                {brandOptions.map(b=><option key={b} value={b}>{b}</option>)}
-                                <option value="__other__">+ Add brand…</option>
-                              </select>
-                            ) : null}
-                            {(pf.brand==="__other__"||brandOptions.length===0) && (
-                              <input placeholder="e.g. Surf Excel, Maggi…" value={pf.brand==="__other__"?"":pf.brand} onChange={e=>setPf(p=>({...p,brand:e.target.value}))} />
-                            )}
-                          </div>
-                        )}
-
-                        {/* Contact person */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
-                          <div>
-                            <label>Contact Person *</label>
-                            <input placeholder="Name of person you're meeting" value={pf.contactName} onChange={e=>setPf(p=>({...p,contactName:e.target.value}))} />
-                          </div>
-                          <div>
-                            <label>Phone <span style={{color:C.dim,fontWeight:400}}>(+91 · 10 digits)</span></label>
-                            <div style={{display:"flex",alignItems:"center",gap:0}}>
-                              <span style={{padding:"7px 8px",background:C.s3,border:`1px solid ${C.border}`,borderRight:"none",borderRadius:"5px 0 0 5px",fontSize:12,color:C.dim,whiteSpace:"nowrap",flexShrink:0}}>+91</span>
-                              <input
-                                placeholder="9876543210"
-                                value={pf.phone.replace(/^\+91/,"")}
-                                maxLength={10}
-                                onChange={e=>{
-                                  const digits=e.target.value.replace(/\D/g,"").slice(0,10);
-                                  setPf(p=>({...p,phone:digits}));
-                                }}
-                                style={{borderRadius:"0 5px 5px 0",flex:1,minWidth:0}}
-                              />
-                            </div>
-                            {pf.phone&&pf.phone.replace(/\D/g,"").length>0&&pf.phone.replace(/\D/g,"").length<10&&(
-                              <div style={{fontSize:10,color:C.orange,marginTop:2}}>{10-pf.phone.replace(/\D/g,"").length} more digits needed</div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Time + Meeting type */}
-                        <div style={{display:"grid",gridTemplateColumns:"120px 1fr",gap:8}}>
-                          <div><label>Time</label><input type="time" value={pf.time} onChange={e=>setPf(p=>({...p,time:e.target.value}))} /></div>
-                          <div>
-                            <label>How</label>
-                            <div style={{display:"flex",gap:6,marginTop:4}}>
-                              {[{id:"Physical",icon:"🤝"},{id:"Online",icon:"💻"},{id:"Phone Call",icon:"📞"}].map(mt=>(
-                                <button key={mt.id} onClick={()=>setPf(p=>({...p,meetingType:mt.id,needsMeet:mt.id!=="Online"?false:p.needsMeet}))}
-                                  style={{flex:1,padding:"7px 6px",fontSize:11,borderRadius:5,border:`1px solid ${pf.meetingType===mt.id?C.accent:C.border}`,background:pf.meetingType===mt.id?`${C.accent}18`:"transparent",color:pf.meetingType===mt.id?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace",textAlign:"center"}}>
-                                  {mt.icon} {mt.id}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Google Meet option — only for Online */}
-                        {pf.meetingType==="Online" && (
-                          <div style={{display:"flex",alignItems:"center",gap:8,marginTop:8,padding:"8px 10px",background:"#4285F418",border:"1px solid #4285F444",borderRadius:5}}>
-                            <button onClick={()=>setPf(p=>({...p,needsMeet:!p.needsMeet}))}
-                              style={{width:16,height:16,borderRadius:3,border:`1px solid ${pf.needsMeet?"#4285F4":C.border}`,background:pf.needsMeet?"#4285F4":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10,flexShrink:0,fontFamily:"'DM Mono',monospace"}}>
-                              {pf.needsMeet?"✓":""}
-                            </button>
-                            <span style={{fontSize:12,color:"#4285F4",fontWeight:600}}>Schedule Google Meet link</span>
-                            <span style={{fontSize:10,color:C.dim}}>(will be set up when deployed)</span>
-                          </div>
-                        )}
-
-                        {/* Agenda — hidden for PR */}
-                        {pf.meetingKind!=="PR" && (
-                          <div><label>Agenda — what are you going in for?</label><input placeholder="e.g. Present Q2 FCT grid" value={pf.agenda} onChange={e=>setPf(p=>({...p,agenda:e.target.value}))} /></div>
-                        )}
-
-                        {/* Pitch Type — hidden for PR */}
-                        {pf.meetingKind!=="PR" && (
-                        <div>
-                          <label>Pitch Type</label>
-                          <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:4}}>
-                            {PITCH_TYPES.map(pt=>(
-                              <button key={pt} onClick={()=>setPf(p=>({...p,pitchType:pt}))} style={{padding:"3px 9px",fontSize:10,borderRadius:4,border:`1px solid ${pf.pitchType===pt?C.accent:C.border}`,background:pf.pitchType===pt?`${C.accent}18`:"transparent",color:pf.pitchType===pt?C.accent:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>{pt}</button>
-                            ))}
-                          </div>
-                        </div>
-                        )}
-
-                        {/* Calendar sync */}
-                        <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,marginTop:2}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10}}>
-                            <button onClick={()=>setPf(p=>({...p,syncToCalendar:!p.syncToCalendar,calPlatform:p.calPlatform||(loginProvider==="zoho"?"zoho":loginProvider==="google"?"google":"google")}))}
-                              style={{width:16,height:16,borderRadius:3,border:`1px solid ${pf.syncToCalendar?"#4285F4":C.border}`,background:pf.syncToCalendar?"#4285F4":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",color:"#fff",fontSize:10,flexShrink:0}}>
-                              {pf.syncToCalendar?"✓":""}
-                            </button>
-                            <span style={{fontSize:12,color:pf.syncToCalendar?C.text:C.dim,fontWeight:600}}>Also add to my calendar</span>
-                            {loginProvider==="google"&&!pf.syncToCalendar&&<span style={{fontSize:10,color:C.dim}}>(Google Calendar recommended)</span>}
-                            {loginProvider==="zoho"&&!pf.syncToCalendar&&<span style={{fontSize:10,color:C.dim}}>(Zoho Calendar recommended)</span>}
-                          </div>
-                          {pf.syncToCalendar&&(
-                            <div style={{marginTop:8,display:"flex",gap:6,flexWrap:"wrap"}}>
-                              {[
-                                {id:"google",  label:"Google Calendar", icon:"📅", color:"#4285F4"},
-                                {id:"zoho",    label:"Zoho Calendar",   icon:"📆", color:"#e42527"},
-                                {id:"outlook", label:"Outlook",          icon:"📧", color:"#0078D4"},
-                              ].map(cp=>(
-                                <button key={cp.id}
-                                  onClick={()=>setPf(p=>({...p,calPlatform:cp.id}))}
-                                  style={{padding:"5px 12px",fontSize:11,borderRadius:5,border:`1px solid ${pf.calPlatform===cp.id?cp.color:C.border}`,background:pf.calPlatform===cp.id?`${cp.color}18`:"transparent",color:pf.calPlatform===cp.id?cp.color:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:5}}>
-                                  {cp.icon} {cp.label}
-                                </button>
-                              ))}
-                              <span style={{fontSize:10,color:C.muted,lineHeight:"28px",paddingLeft:4}}>{pf.calPlatform==="zoho"?"Downloads .ics file":"Opens in new tab"}</span>
-                            </div>
-                          )}
-                        </div>
-
-                      </div>
-                      <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
-                        <button className="btn btn-ghost" onClick={()=>setAddPlanFor(null)}>Cancel</button>
-                        <button className="btn btn-primary" onClick={()=>doAddPlan(addPlanFor)} disabled={!(pf.client||pf.agency).trim()||!pf.contactName.trim()}>Plan This Meeting</button>
-                      </div>
-                    </div>
-                  </div>
-                  );
-                })()}
-                </>}
-              </div>
-            );
-          })()}
+          {view==="my-plan" && (
+            <MyPlan
+              userRole={user_role}
+              activeUser={activeUser}
+              loginProvider={loginProvider}
+              isRep={isRep}
+              isNSH={isNSHDashboard}
+              isRH={isRH}
+              isStrategy={isStrategy}
+              isCRORole={isCRORole}
+              isAdmin={isAdmin}
+              isDigiOps={isDigiOps}
+              plans={plans}
+              setPlans={setPlans}
+              meetings={meetings}
+              tasks={tasks}
+              setTasks={setTasks}
+              deals={deals}
+              revenueEntries={revenueEntries}
+              filterQ={filterQ}
+              planForm={planForm}
+              setPlanForm={setPlanForm}
+              planLoggedMsg={planLoggedMsg}
+              setPlanLoggedMsg={setPlanLoggedMsg}
+              weekSummaryDismissed={weekSummaryDismissed}
+              setWeekSummaryDismissed={setWeekSummaryDismissed}
+              adminConfig={adminConfig}
+              reps={reps}
+              countdown={countdown}
+              doAddPlan={doAddPlan}
+              setLogForm={setLogForm}
+              setLogOpen={setLogOpen}
+              setDealForm={setDealForm}
+              setAddDealOpen={setAddDealOpen}
+              setViewMeetingId={setViewMeetingId}
+              showToast={showToast}
+              qMatch={qMatch}
+              BLANK_LOG={BLANK_LOG}
+              BLANK_DEAL={BLANK_DEAL}
+            />
+          )}
 
           {/* ═══ RH WAR ROOM (Region Head) ═══ */}
           {view==="warroom" && isRH && (()=>{
