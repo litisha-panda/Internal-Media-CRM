@@ -17,6 +17,7 @@ import activityLogRouter from "./activity-log";
 import dailyPlansRouter from "./daily-plans";
 import rhTeamFeedRouter from "./rh-team-feed";
 import meetingsRouter from "./meetings";
+import attendanceRouter from "./attendance";
 
 const router: IRouter = Router();
 
@@ -60,5 +61,8 @@ router.use(rhTeamFeedRouter);
 
 // Phase 10 — Meetings (DB-backed scheduling + logging)
 router.use(meetingsRouter);
+
+// Phase 11 — Attendance records + exception chain
+router.use(attendanceRouter);
 
 export default router;

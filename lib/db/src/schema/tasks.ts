@@ -74,9 +74,32 @@ export const attendanceRecords = pgTable("attendance_records", {
   createdAt:    timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
-export type Task                = typeof tasks.$inferSelect;
-export type NewTask             = typeof tasks.$inferInsert;
-export type InternalRequest     = typeof internalRequests.$inferSelect;
-export type NewInternalRequest  = typeof internalRequests.$inferInsert;
-export type AttendanceRecord    = typeof attendanceRecords.$inferSelect;
-export type NewAttendanceRecord = typeof attendanceRecords.$inferInsert;
+/** Attendance exception requests — follow an explicit RH → NSH → CRO → Admin chain. */
+export const attendanceExceptions = pgTable("attendance_exceptions", {
+  id:                 text("id").primaryKey(),
+  attendanceRecordId: text("attendance_record_id"),
+  userId:             text("user_id").notNull(),
+  userName:           text("user_name"),
+  region:             text("region"),
+  date:               text("date").notNull(),
+  reason:             text("reason").notNull(),
+  notes:              text("notes"),
+  /** Current stage in chain: "RH" | "NSH" | "CRO" | "Admin" | "Granted" | "Rejected" */
+  currentStage:       text("current_stage").notNull().default("RH"),
+  stageHistory:       jsonb("stage_history").$type<any[]>().default([]),
+  /** "pending" | "granted" | "rejected" */
+  status:             text("status").notNull().default("pending"),
+  grantedBy:          text("granted_by"),
+  grantedAt:          text("granted_at"),
+  createdAt:          timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:          timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export type Task                    = typeof tasks.$inferSelect;
+export type NewTask                 = typeof tasks.$inferInsert;
+export type InternalRequest         = typeof internalRequests.$inferSelect;
+export type NewInternalRequest      = typeof internalRequests.$inferInsert;
+export type AttendanceRecord        = typeof attendanceRecords.$inferSelect;
+export type NewAttendanceRecord     = typeof attendanceRecords.$inferInsert;
+export type AttendanceException     = typeof attendanceExceptions.$inferSelect;
+export type NewAttendanceException  = typeof attendanceExceptions.$inferInsert;

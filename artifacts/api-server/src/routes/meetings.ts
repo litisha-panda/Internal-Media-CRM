@@ -215,7 +215,7 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
 
     const {
       date, time, meetingKind, agencyName, clientName, brandName,
-      contactName, contactPhone, mode, actionableType, agenda, status,
+      contactName, contactPhone, mode, actionableType, agenda, status, touchpointId,
     } = req.body;
 
     const updates: Partial<typeof mtg> = { updatedAt: new Date() };
@@ -231,6 +231,7 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
     if (actionableType !== undefined) updates.actionableType = actionableType;
     if (agenda !== undefined)         updates.agenda = agenda;
     if (status !== undefined)         updates.status = String(status);
+    if (touchpointId !== undefined)   updates.touchpointId = touchpointId ? String(touchpointId) : null;
 
     await db.update(meetings).set(updates).where(eq(meetings.id, meetingId));
 

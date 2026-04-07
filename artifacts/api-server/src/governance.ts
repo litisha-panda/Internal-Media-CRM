@@ -167,7 +167,7 @@ async function runStalledDeals(): Promise<void> {
 //   "partial" — touchpoint logged but no plan (or plan but no touchpoint)
 //   "absent"  — neither requirement met
 
-async function runAttendanceCheck(): Promise<void> {
+export async function runAttendanceCheck(): Promise<void> {
   const d = todayIST(); // IST wall-clock date, e.g. "2026-04-06"
 
   // "tomorrow" in IST — this is the planDate we check exists

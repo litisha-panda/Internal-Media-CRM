@@ -1550,6 +1550,30 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [absenceReports, setAbsenceReports] = usePersistedState("otv_absence", SEED_ABSENCE_REPORTS);
   const [exceptionModal, setExceptionModal] = useState(null); // { reportId, repName }
   const [exceptionReason, setExceptionReason] = useState("");
+  const [attDbRecords, setAttDbRecords]         = useState<any[]>([]);
+  const [attExcRequests, setAttExcRequests]     = useState<any[]>([]);
+  const [attDbLoading, setAttDbLoading]         = useState(false);
+  const [excReqOpen, setExcReqOpen]             = useState(false);
+  const [excReqRecord, setExcReqRecord]         = useState<any>(null);
+  const [excReqForm, setExcReqForm]             = useState({reason:"", notes:""});
+  const [excReqSubmitting, setExcReqSubmitting] = useState(false);
+  // Fetch attendance records + exceptions from DB when HR view is open
+  const fetchAttendanceData = useCallback(() => {
+    if (!loggedIn) return;
+    setAttDbLoading(true);
+    Promise.all([
+      fetch("/api/attendance-records", {credentials:"include", headers:authHeaders()}),
+      fetch("/api/attendance-exceptions", {credentials:"include", headers:authHeaders()}),
+    ]).then(async ([recRes, excRes]) => {
+      if (recRes.ok) { const d = await recRes.json(); if (d.ok) setAttDbRecords(d.data||[]); }
+      if (excRes.ok) { const d = await excRes.json(); if (d.ok) setAttExcRequests(d.data||[]); }
+    }).catch(()=>{}).finally(()=>setAttDbLoading(false));
+  }, [loggedIn]);
+
+  useEffect(() => {
+    if (view === "hr") fetchAttendanceData();
+  }, [view, fetchAttendanceData]);
+
   // Derive activeUser from login email — prevents role spoofing via DevTools
   const derivedUserId = useMemo(() => {
     if (!user?.email) return "admin";
@@ -1664,6 +1688,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const BLANK_LOG = {
     repId:"",
     planId:"",
+    meetingDbId:"",
     meetingTime:"", clientOrAgency:"Client",
     dealId:"", clientAgencyName:"",
     agency:"", client:"", brand:"",
@@ -2599,6 +2624,15 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       actionItems: (logForm.actionRequired||[]).filter(i=>i.what),
       loggedAt, loggedLate: late, loggedByUserId: activeUser,
     }, ...p]);
+
+    // Flow 5: If this meeting was planned via doAddPlan (has a DB meeting ID), update the DB row
+    if (logForm.meetingDbId) {
+      fetch(`/api/meetings/${logForm.meetingDbId}`, {
+        method: "PATCH", credentials: "include",
+        headers: authHeaders({"Content-Type":"application/json"}),
+        body: JSON.stringify({ status: "logged", touchpointId }),
+      }).catch(()=>{});
+    }
 
     // Part 2: Auto-route action items by their type (5 types from spec)
     const repIdInt = parseInt(logForm.repId);
@@ -4355,8 +4389,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               const mkind = (pf.meetingKind||"ACTIONABLE") as "PR"|"ACTIONABLE";
               const localId = `p${Date.now()}`;
               setPlans(p=>[...p,{id:localId,repId:myPlanRepId,date,time:planTime,clientAgencyName:clientName,agency:pf.agency.trim(),client:pf.client.trim(),brand:pf.brand.trim(),contactName:pf.contactName.trim(),phone:storedPhone,agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",touchpointType:pf.touchpointType||"Deal Meeting",meetingKind:mkind,needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
-              // S4: dual-write to meetings DB
-              fetch("/api/meetings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName:pf.client.trim(),brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})}).catch(()=>{});
+              // S4: dual-write to meetings DB — store returned ID so logging can PATCH status later
+              fetch("/api/meetings",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName:pf.client.trim(),brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})})
+                .then(r=>r.ok?r.json():null).then(data=>{if(data?.ok&&data.data?.id){const dbId=data.data.id;setPlans(p=>p.map(pl=>pl.id===localId?{...pl,meetingDbId:dbId}:pl));}}).catch(()=>{});
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -4882,6 +4917,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     // Open log modal pre-filled from plan — no duplicate entry needed
                                     setLogForm(f=>({...BLANK_LOG,repId:String(myRepId),
                                       planId:p.id,
+                                      meetingDbId:(p as any).meetingDbId||"",
                                       meetingTime:p.time||"",
                                       meetingKind:(p as any).meetingKind||"ACTIONABLE",
                                       touchpointType:(p as any).touchpointType||(((p as any).meetingKind==="PR")?"Relationship":"Deal Meeting"),
@@ -9711,7 +9747,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>HR ABSENCE REPORTS</div>
                   <div style={{fontSize:11,color:C.dim,marginTop:2}}>Auto-generated 23:30 · Sent to <span style={{color:C.accent}}>{HR_EMAIL}</span></div>
                 </div>
-                {canGrantException&&<button className="btn btn-primary" onClick={runEODCheck}>▶ Simulate EOD Run</button>}
+                <div style={{display:"flex",gap:8,alignItems:"center"}}>
+                  {attDbLoading&&<span style={{fontSize:11,color:C.muted}}>Loading…</span>}
+                  <button className="btn" style={{fontSize:11,padding:"5px 10px"}} onClick={fetchAttendanceData}>↻ Refresh</button>
+                  {canGrantException&&<button className="btn btn-primary" onClick={()=>{
+                    runEODCheck();
+                    fetch("/api/attendance/simulate-eod",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"})})
+                      .then(()=>fetchAttendanceData()).catch(()=>{});
+                  }}>▶ Simulate EOD Run</button>}
+                </div>
               </div>
 
               {/* Rules — compact strip */}
@@ -9731,32 +9775,79 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
               {/* ── PERSONAL: Own absence records (all non-admin roles) ── */}
               {!isAdmin && (()=>{
+                // DB records take precedence; blob is fallback for legacy data
+                const myUserId = user?.id || "";
                 const myRepId  = user_role?.repId ?? null;
-                const visReports = myRepId != null
-                  ? absenceReports.filter(r=>r.repId===myRepId)
-                  : [];
+                const dbRecs   = attDbRecords.filter(r=>r.userId===myUserId);
+                const blobRecs = myRepId!=null ? absenceReports.filter(r=>r.repId===myRepId) : [];
+                const useDb    = dbRecs.length > 0;
+                const TODAY_DATE = TODAY;
+                const YESTERDAY  = new Date(Date.now()-86400000).toISOString().slice(0,10);
                 return (
                   <div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
-                      {[
-                        {label:"MY ABSENCES", value:visReports.filter(r=>r.markedAs==="Absent").length,      color:C.red},
-                        {label:"EXCEPTIONS",  value:visReports.filter(r=>r.exception==="Overridden").length, color:C.green},
-                      ].map(k=>(
+                      {(useDb ? [
+                        {label:"MY ABSENCES", value:dbRecs.filter(r=>r.status==="absent").length,  color:C.red},
+                        {label:"EXCEPTIONS",  value:attExcRequests.filter(r=>r.userId===myUserId&&r.status==="granted").length, color:C.green},
+                      ] : [
+                        {label:"MY ABSENCES", value:blobRecs.filter(r=>r.markedAs==="Absent").length,      color:C.red},
+                        {label:"EXCEPTIONS",  value:blobRecs.filter(r=>r.exception==="Overridden").length, color:C.green},
+                      ]).map(k=>(
                         <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
                           <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:4,textTransform:"uppercase"}}>{k.label}</div>
                           <div className="sans" style={{fontSize:22,fontWeight:700,color:k.color}}>{k.value}</div>
                         </div>
                       ))}
                     </div>
-                    {visReports.length===0
-                      ? <div style={{textAlign:"center",padding:40,color:C.muted,border:`1px dashed ${C.border}`,borderRadius:8,fontSize:12}}>No absence records on file.</div>
-                      : (
+                    {useDb ? (
+                      dbRecs.length===0 ? (
+                        <div style={{textAlign:"center",padding:40,color:C.muted,border:`1px dashed ${C.border}`,borderRadius:8,fontSize:12}}>No compliance records yet. Records are written at 11:30 PM IST each day.</div>
+                      ) : (
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",padding:"8px 14px",background:C.s2,borderBottom:`1px solid ${C.border}`}}>MY ATTENDANCE LOG (from compliance engine)</div>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>{["Date","Touchpoint","Plan","Status","Exception","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                            <tbody>{dbRecs.map(r=>{
+                              const stColor = r.status==="absent"?C.red:r.status==="partial"?C.orange:C.green;
+                              const stLabel = r.status==="absent"?"Absent":r.status==="partial"?"Partial":"Present";
+                              const exc = attExcRequests.find(e=>e.userId===myUserId&&e.date===r.date);
+                              const canRequest = (r.status==="absent"||r.status==="partial") && !exc && (r.date===TODAY_DATE||r.date===YESTERDAY);
+                              return (
+                                <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                  <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
+                                  <td style={{padding:"9px 14px"}}><span style={{color:r.touchpointLogged==="yes"?C.green:C.red,fontWeight:700}}>{r.touchpointLogged==="yes"?"✓":"✗"}</span></td>
+                                  <td style={{padding:"9px 14px"}}><span style={{color:r.planLogged==="yes"?C.green:C.red,fontWeight:700}}>{r.planLogged==="yes"?"✓":"✗"}</span></td>
+                                  <td style={{padding:"9px 14px"}}><span style={{background:`${stColor}22`,color:stColor,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{stLabel}</span></td>
+                                  <td style={{padding:"9px 14px"}}>
+                                    {exc ? (
+                                      <div>
+                                        <span style={{background:exc.status==="granted"?`${C.green}22`:exc.status==="rejected"?`${C.red}22`:`${C.orange}22`,color:exc.status==="granted"?C.green:exc.status==="rejected"?C.red:C.orange,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>
+                                          {exc.status==="granted"?"Granted":exc.status==="rejected"?"Rejected":`Pending (${exc.currentStage})`}
+                                        </span>
+                                        {exc.grantedBy&&<div style={{fontSize:10,color:C.dim,marginTop:2}}>by {exc.grantedBy}</div>}
+                                      </div>
+                                    ) : <span style={{color:C.muted,fontSize:11}}>—</span>}
+                                  </td>
+                                  <td style={{padding:"9px 14px"}}>
+                                    {canRequest&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.blue}18`,color:C.blue,border:`1px solid ${C.blue}44`}} onClick={()=>{setExcReqRecord(r);setExcReqForm({reason:"",notes:""});setExcReqOpen(true);}}>Request Exception</button>}
+                                    {exc&&exc.status==="pending"&&<span style={{fontSize:10,color:C.muted}}>Awaiting {exc.currentStage}</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}</tbody>
+                          </table>
+                        </div>
+                      )
+                    ) : (
+                      blobRecs.length===0 ? (
+                        <div style={{textAlign:"center",padding:40,color:C.muted,border:`1px dashed ${C.border}`,borderRadius:8,fontSize:12}}>No absence records on file.</div>
+                      ) : (
                         <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                           <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",padding:"8px 14px",background:C.s2,borderBottom:`1px solid ${C.border}`}}>MY ABSENCE LOG</div>
                           <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                             <thead><tr>{["Date","Generated","Status","Exception"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                            <tbody>{visReports.map(r=>(
-                              <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                            <tbody>{blobRecs.map(r=>(
+                              <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                 <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
                                 <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.generatedAt}</td>
                                 <td style={{padding:"9px 14px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
@@ -9765,49 +9856,100 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             ))}</tbody>
                           </table>
                         </div>
-                      )}
+                      )
+                    )}
                   </div>
                 );
               })()}
 
               {/* ── ADMIN absence log table (full org view) ── */}
               {isAdmin && (()=>{
-                const visReports = absenceReports;
-                if (!visReports.length) return <div style={{textAlign:"center",padding:40,color:C.muted}}>No absence records.</div>;
+                const useDb = attDbRecords.length > 0;
+                const dbReports = attDbRecords;
+                const blobReports = absenceReports;
                 return (
                   <div>
-                    <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:8,textTransform:"uppercase"}}>All Absence Reports — Admin View</div>
-                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                        <thead><tr>
-                          {["Rep","Region","Date","Generated","Status","Exception","Action"].map(h=>(
-                            <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
-                          ))}
-                        </tr></thead>
-                        <tbody>
-                          {visReports.map(r=>(
-                            <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}}
-                              onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                              onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                              <td style={{padding:"9px 14px"}}><div style={{fontWeight:600}}>{r.repName}</div></td>
-                              <td style={{padding:"9px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.region}</span></td>
-                              <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
-                              <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.generatedAt}</td>
-                              <td style={{padding:"9px 14px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
-                              <td style={{padding:"9px 14px"}}>
-                                {r.exception
-                                  ?<div><span style={{background:`${C.green}22`,color:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>by {r.exceptionBy}</span><div style={{fontSize:10,color:C.dim,marginTop:2,maxWidth:180,whiteSpace:"normal"}}>{r.exceptionReason}</div></div>
-                                  :<span style={{color:C.muted,fontSize:11}}>—</span>}
-                              </td>
-                              <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
-                                {r.markedAs==="Absent"&&!r.exception&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{setExceptionModal({reportId:r.id,repName:r.repName});setExceptionReason("");}}>Grant Exception</button>}
-                                {r.exception==="Overridden"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,marginLeft:4}} onClick={()=>revokeException(r.id)}>Revoke</button>}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
-                    </div>
+                    {/* DB Records Table */}
+                    {useDb && (
+                      <div style={{marginBottom:24}}>
+                        <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:8,textTransform:"uppercase"}}>Attendance Records — DB (Compliance Engine)</div>
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>
+                              {["Rep","Region","Date","Touchpoint","Plan","Status","Exception","Action"].map(h=>(
+                                <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                              ))}
+                            </tr></thead>
+                            <tbody>{dbReports.map(r=>{
+                              const stColor = r.status==="absent"?C.red:r.status==="partial"?C.orange:C.green;
+                              const stLabel = r.status==="absent"?"Absent":r.status==="partial"?"Partial":"Present";
+                              const exc = attExcRequests.find(e=>e.userId===r.userId&&e.date===r.date);
+                              const excGranted = exc?.status==="granted";
+                              return (
+                                <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                  <td style={{padding:"9px 14px"}}><div style={{fontWeight:600}}>{r.userName||r.userId}</div></td>
+                                  <td style={{padding:"9px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.region||"—"}</span></td>
+                                  <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
+                                  <td style={{padding:"9px 14px"}}><span style={{color:r.touchpointLogged==="yes"?C.green:C.red,fontWeight:700}}>{r.touchpointLogged==="yes"?"✓":"✗"}</span></td>
+                                  <td style={{padding:"9px 14px"}}><span style={{color:r.planLogged==="yes"?C.green:C.red,fontWeight:700}}>{r.planLogged==="yes"?"✓":"✗"}</span></td>
+                                  <td style={{padding:"9px 14px"}}><span style={{background:`${stColor}22`,color:stColor,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{stLabel}</span></td>
+                                  <td style={{padding:"9px 14px"}}>
+                                    {exc ? (
+                                      <span style={{background:excGranted?`${C.green}22`:exc.status==="rejected"?`${C.red}22`:`${C.orange}22`,color:excGranted?C.green:exc.status==="rejected"?C.red:C.orange,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>
+                                        {excGranted?"Granted":exc.status==="rejected"?"Rejected":`Pending: ${exc.currentStage}`}
+                                      </span>
+                                    ) : <span style={{color:C.muted,fontSize:11}}>—</span>}
+                                  </td>
+                                  <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
+                                    {(r.status==="absent"||r.status==="partial")&&!excGranted&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{
+                                      const reason=prompt("Grant exception reason:");
+                                      if(!reason?.trim()) return;
+                                      fetch(`/api/attendance-records/${r.id}/grant-exception`,{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({reason})})
+                                        .then(()=>fetchAttendanceData()).catch(()=>{});
+                                    }}>Grant Exception</button>}
+                                    {exc&&exc.status==="pending"&&<span style={{fontSize:10,color:C.muted,marginLeft:4}}>Chain: {exc.currentStage}</span>}
+                                  </td>
+                                </tr>
+                              );
+                            })}</tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    {/* Legacy blob table */}
+                    {blobReports.length>0 && (
+                      <div>
+                        <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:8,textTransform:"uppercase"}}>Legacy Absence Reports (Blob)</div>
+                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                            <thead><tr>
+                              {["Rep","Region","Date","Generated","Status","Exception","Action"].map(h=>(
+                                <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                              ))}
+                            </tr></thead>
+                            <tbody>
+                              {blobReports.map(r=>(
+                                <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                  <td style={{padding:"9px 14px"}}><div style={{fontWeight:600}}>{r.repName}</div></td>
+                                  <td style={{padding:"9px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.region}</span></td>
+                                  <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
+                                  <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.generatedAt}</td>
+                                  <td style={{padding:"9px 14px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
+                                  <td style={{padding:"9px 14px"}}>
+                                    {r.exception?<div><span style={{background:`${C.green}22`,color:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>by {r.exceptionBy}</span></div>:<span style={{color:C.muted,fontSize:11}}>—</span>}
+                                  </td>
+                                  <td style={{padding:"9px 14px",whiteSpace:"nowrap"}}>
+                                    {r.markedAs==="Absent"&&!r.exception&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.green}22`,color:C.green,border:`1px solid ${C.green}44`}} onClick={()=>{setExceptionModal({reportId:r.id,repName:r.repName});setExceptionReason("");}}>Grant Exception</button>}
+                                    {r.exception==="Overridden"&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.red}22`,color:C.red,border:`1px solid ${C.red}44`,marginLeft:4}} onClick={()=>revokeException(r.id)}>Revoke</button>}
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                    {!useDb&&!blobReports.length&&<div style={{textAlign:"center",padding:40,color:C.muted}}>No absence records. Run Simulate EOD or wait for the 23:30 compliance engine.</div>}
                   </div>
                 );
               })()}
@@ -15003,6 +15145,43 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                 Save Changes
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+          {/* EXCEPTION REQUEST MODAL — Rep submits chain request */}
+      {excReqOpen && excReqRecord && (
+        <div className="overlay" onClick={()=>setExcReqOpen(false)}>
+          <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:480}}>
+            <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:4}}>
+              <div className="sans" style={{fontSize:16,fontWeight:700}}>Request Attendance Exception</div>
+            </div>
+            <div style={{fontSize:12,color:C.dim,marginBottom:16}}>Date: <strong style={{color:C.text}}>{excReqRecord.date}</strong> · Status: <span style={{color:excReqRecord.status==="absent"?C.red:C.orange,fontWeight:600,textTransform:"capitalize"}}>{excReqRecord.status}</span></div>
+            <div style={{padding:"10px 14px",background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:5,marginBottom:16,fontSize:12,color:C.blue}}>
+              Your request will be routed through: <strong>RH → NSH → CRO → Admin</strong>. Provide a clear reason so approvers can act quickly.
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:C.dim,marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Reason *</label>
+              <select value={excReqForm.reason} onChange={e=>setExcReqForm(f=>({...f,reason:e.target.value}))} style={{width:"100%",padding:"7px 10px",borderRadius:5,border:`1px solid ${C.border}`,fontSize:12,background:C.surface,color:C.text}}>
+                <option value="">— Select reason —</option>
+                {["Client Visit / Field Work","WFH (Work From Home)","Approved Leave","Travel / No Network","Medical Emergency","System / App Issue","Other"].map(r=><option key={r} value={r}>{r}</option>)}
+              </select>
+            </div>
+            <div style={{marginBottom:12}}>
+              <label style={{display:"block",fontSize:11,fontWeight:600,color:C.dim,marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Additional Notes</label>
+              <textarea rows={3} value={excReqForm.notes} onChange={e=>setExcReqForm(f=>({...f,notes:e.target.value}))} placeholder="e.g. Was at site visit with XYZ client from 9am–7pm. Mentioned to RH via WhatsApp." style={{resize:"vertical",width:"100%",boxSizing:"border-box"}} />
+            </div>
+            <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
+              <button className="btn btn-ghost" onClick={()=>setExcReqOpen(false)} disabled={excReqSubmitting}>Cancel</button>
+              <button className="btn btn-primary" disabled={!excReqForm.reason||excReqSubmitting} onClick={()=>{
+                if(!excReqForm.reason){showToast("Select a reason","err");return;}
+                setExcReqSubmitting(true);
+                fetch("/api/attendance-exceptions",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({date:excReqRecord.date,reason:excReqForm.reason,notes:excReqForm.notes,attendanceRecordId:excReqRecord.id})})
+                  .then(async r=>{const d=await r.json();if(d.ok){showToast("Exception request submitted — pending RH approval ✓");setExcReqOpen(false);fetchAttendanceData();}else{showToast(d.error||"Failed to submit","err");}})
+                  .catch(()=>showToast("Network error — try again","err"))
+                  .finally(()=>setExcReqSubmitting(false));
+              }}>{excReqSubmitting?"Submitting…":"Submit to RH →"}</button>
             </div>
           </div>
         </div>
