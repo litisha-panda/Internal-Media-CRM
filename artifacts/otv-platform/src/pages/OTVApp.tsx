@@ -1699,7 +1699,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [noteModal, setNoteModal] = useState(null);   // {title, placeholder, onSubmit}
   const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
-  const { tasks, setTasks, isLoading: tasksLoading, syncError: tasksError } = useTasks(loggedIn);
+  const { tasks, setTasks, isLoading: tasksLoading, syncError: tasksError } = useTasks(!!user);
   const [taskModal, setTaskModal]       = useState(false);
   const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
@@ -1891,7 +1891,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [revenueEntries, setRevenueEntries, revLoading, revError] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  []);
   // ── Part 1: New data model objects ──────────────────────────────────────
   const [clientAccounts, setClientAccounts, , caError] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
-  const { touchpoints, setTouchpoints } = useTouchpoints(loggedIn);
+  const { touchpoints, setTouchpoints } = useTouchpoints(!!user);
 
   // Part 1: One-time migration — runs when clientAccounts is empty but deals/meetings exist
   useEffect(() => {
