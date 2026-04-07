@@ -2718,6 +2718,32 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (newTasks.length) setTasks(p => [...newTasks, ...p]);
     if (newIRsFromLog.length) setInternalReqs(p => [...newIRsFromLog, ...p]);
     if (attendPlans.length) setPlans(p => [...p, ...attendPlans]);
+    // Flow 6: Explicit DB persistence verification.
+    // useApiEntityState immediately POSTs each new item to /api/tasks and
+    // /api/internal-requests on setState. We verify persistence by re-fetching
+    // both endpoints ~1.2s later and confirming the new IDs appear in the DB response.
+    if (newTasks.length || newIRsFromLog.length) {
+      const taskIds = new Set(newTasks.map(t => t.id));
+      const irIds   = new Set(newIRsFromLog.map(r => r.id));
+      setTimeout(async () => {
+        try {
+          const [tRes, irRes] = await Promise.all([
+            taskIds.size  ? fetch("/api/tasks",            { credentials:"include", headers:authHeaders() }).then(r=>r.ok?r.json():null) : null,
+            irIds.size    ? fetch("/api/internal-requests",{ credentials:"include", headers:authHeaders() }).then(r=>r.ok?r.json():null) : null,
+          ]);
+          const dbTaskIds = new Set((tRes?.data||[]).map((t:any)=>t.id));
+          const dbIrIds   = new Set((irRes?.data||[]).map((r:any)=>r.id));
+          const tasksOk = [...taskIds].every(id=>dbTaskIds.has(id));
+          const irsOk   = [...irIds].every(id=>dbIrIds.has(id));
+          if (tasksOk && irsOk) {
+            console.debug("[Flow6✓] Tasks and IRs confirmed persisted in DB:", [...taskIds,...irIds].join(","));
+          } else {
+            if (!tasksOk) console.warn("[Flow6] Some tasks not yet in DB (no API session in demo mode?):", [...taskIds].filter(id=>!dbTaskIds.has(id)));
+            if (!irsOk)   console.warn("[Flow6] Some IRs not yet in DB:", [...irIds].filter(id=>!dbIrIds.has(id)));
+          }
+        } catch { /* offline / demo mode — verification skipped */ }
+      }, 1200);
+    }
     // Auto-create plan reminders for each Action Required item:
     // 1. Self-reminder for the rep on byWhen date
     // 2. Calendar reminder for the receiver on byWhen date
@@ -9773,90 +9799,67 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 ))}
               </div>
 
-              {/* ── PERSONAL: Own absence records (all non-admin roles) ── */}
+              {/* ── PERSONAL: Own attendance records — DB is sole source of truth ── */}
               {!isAdmin && (()=>{
-                // DB records take precedence; blob is fallback for legacy data
-                const myUserId = user?.id || "";
-                const myRepId  = user_role?.repId ?? null;
-                const dbRecs   = attDbRecords.filter(r=>r.userId===myUserId);
-                const blobRecs = myRepId!=null ? absenceReports.filter(r=>r.repId===myRepId) : [];
-                const useDb    = dbRecs.length > 0;
+                const myUserId   = user?.id || "";
+                const dbRecs     = attDbRecords.filter(r=>r.userId===myUserId);
                 const TODAY_DATE = TODAY;
                 const YESTERDAY  = new Date(Date.now()-86400000).toISOString().slice(0,10);
                 return (
                   <div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:10,marginBottom:16}}>
-                      {(useDb ? [
+                      {[
                         {label:"MY ABSENCES", value:dbRecs.filter(r=>r.status==="absent").length,  color:C.red},
                         {label:"EXCEPTIONS",  value:attExcRequests.filter(r=>r.userId===myUserId&&r.status==="granted").length, color:C.green},
-                      ] : [
-                        {label:"MY ABSENCES", value:blobRecs.filter(r=>r.markedAs==="Absent").length,      color:C.red},
-                        {label:"EXCEPTIONS",  value:blobRecs.filter(r=>r.exception==="Overridden").length, color:C.green},
-                      ]).map(k=>(
+                      ].map(k=>(
                         <div key={k.label} className="card" style={{padding:12,borderTop:`2px solid ${k.color}`}}>
                           <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:4,textTransform:"uppercase"}}>{k.label}</div>
                           <div className="sans" style={{fontSize:22,fontWeight:700,color:k.color}}>{k.value}</div>
                         </div>
                       ))}
                     </div>
-                    {useDb ? (
-                      dbRecs.length===0 ? (
-                        <div style={{textAlign:"center",padding:40,color:C.muted,border:`1px dashed ${C.border}`,borderRadius:8,fontSize:12}}>No compliance records yet. Records are written at 11:30 PM IST each day.</div>
-                      ) : (
-                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",padding:"8px 14px",background:C.s2,borderBottom:`1px solid ${C.border}`}}>MY ATTENDANCE LOG (from compliance engine)</div>
-                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                            <thead><tr>{["Date","Touchpoint","Plan","Status","Exception","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                            <tbody>{dbRecs.map(r=>{
-                              const stColor = r.status==="absent"?C.red:r.status==="partial"?C.orange:r.status==="exception_granted"?C.purple:C.green;
-                              const stLabel = r.status==="absent"?"Absent":r.status==="partial"?"Partial":r.status==="exception_granted"?"Exc. Granted":"Present";
-                              const exc = attExcRequests.find(e=>e.userId===myUserId&&e.date===r.date);
-                              const canRequest = (r.status==="absent"||r.status==="partial") && !exc && (r.date===TODAY_DATE||r.date===YESTERDAY);
-                              return (
-                                <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                                  <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
-                                  <td style={{padding:"9px 14px"}}><span style={{color:r.touchpointLogged==="yes"?C.green:C.red,fontWeight:700}}>{r.touchpointLogged==="yes"?"✓":"✗"}</span></td>
-                                  <td style={{padding:"9px 14px"}}><span style={{color:r.planLogged==="yes"?C.green:C.red,fontWeight:700}}>{r.planLogged==="yes"?"✓":"✗"}</span></td>
-                                  <td style={{padding:"9px 14px"}}><span style={{background:`${stColor}22`,color:stColor,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{stLabel}</span></td>
-                                  <td style={{padding:"9px 14px"}}>
-                                    {exc ? (
-                                      <div>
-                                        <span style={{background:exc.status==="granted"?`${C.green}22`:exc.status==="rejected"?`${C.red}22`:`${C.orange}22`,color:exc.status==="granted"?C.green:exc.status==="rejected"?C.red:C.orange,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>
-                                          {exc.status==="granted"?"Granted":exc.status==="rejected"?"Rejected":`Pending (${exc.currentStage})`}
-                                        </span>
-                                        {exc.grantedBy&&<div style={{fontSize:10,color:C.dim,marginTop:2}}>by {exc.grantedBy}</div>}
-                                      </div>
-                                    ) : <span style={{color:C.muted,fontSize:11}}>—</span>}
-                                  </td>
-                                  <td style={{padding:"9px 14px"}}>
-                                    {canRequest&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.blue}18`,color:C.blue,border:`1px solid ${C.blue}44`}} onClick={()=>{setExcReqRecord(r);setExcReqForm({reason:"",notes:""});setExcReqOpen(true);}}>Request Exception</button>}
-                                    {exc&&exc.status==="pending"&&<span style={{fontSize:10,color:C.muted}}>Awaiting {exc.currentStage}</span>}
-                                  </td>
-                                </tr>
-                              );
-                            })}</tbody>
-                          </table>
-                        </div>
-                      )
+                    {attDbLoading ? (
+                      <div style={{textAlign:"center",padding:32,color:C.muted,fontSize:12}}>Loading attendance records…</div>
+                    ) : dbRecs.length===0 ? (
+                      <div style={{textAlign:"center",padding:40,color:C.muted,border:`1px dashed ${C.border}`,borderRadius:8,fontSize:12}}>
+                        No compliance records yet. Records are written by the compliance engine at 11:30 PM IST each day.
+                        <br/><span style={{fontSize:11,color:C.dim,marginTop:4,display:"block"}}>Ask your Region Head or Admin to run the EOD simulation.</span>
+                      </div>
                     ) : (
-                      blobRecs.length===0 ? (
-                        <div style={{textAlign:"center",padding:40,color:C.muted,border:`1px dashed ${C.border}`,borderRadius:8,fontSize:12}}>No absence records on file.</div>
-                      ) : (
-                        <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
-                          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",padding:"8px 14px",background:C.s2,borderBottom:`1px solid ${C.border}`}}>MY ABSENCE LOG</div>
-                          <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
-                            <thead><tr>{["Date","Generated","Status","Exception"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                            <tbody>{blobRecs.map(r=>(
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                        <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",padding:"8px 14px",background:C.s2,borderBottom:`1px solid ${C.border}`}}>MY ATTENDANCE LOG (compliance engine)</div>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead><tr>{["Date","Touchpoint","Plan","Status","Exception","Action"].map(h=><th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                          <tbody>{dbRecs.map(r=>{
+                            const stColor = r.status==="absent"?C.red:r.status==="partial"?C.orange:r.status==="exception_granted"?C.purple:C.green;
+                            const stLabel = r.status==="absent"?"Absent":r.status==="partial"?"Partial":r.status==="exception_granted"?"Exc. Granted":"Present";
+                            const exc = attExcRequests.find(e=>e.userId===myUserId&&e.date===r.date);
+                            const canRequest = (r.status==="absent"||r.status==="partial") && !exc && (r.date===TODAY_DATE||r.date===YESTERDAY);
+                            return (
                               <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                                 <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.date}</td>
-                                <td style={{padding:"9px 14px",color:C.dim,fontSize:11}}>{r.generatedAt}</td>
-                                <td style={{padding:"9px 14px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
-                                <td style={{padding:"9px 14px"}}>{r.exception?<div><span style={{background:`${C.green}22`,color:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>Overridden by {r.exceptionBy}</span><div style={{fontSize:10,color:C.dim,marginTop:2}}>{r.exceptionReason}</div></div>:<span style={{color:C.muted,fontSize:11}}>—</span>}</td>
+                                <td style={{padding:"9px 14px"}}><span style={{color:r.touchpointLogged==="yes"?C.green:C.red,fontWeight:700}}>{r.touchpointLogged==="yes"?"✓":"✗"}</span></td>
+                                <td style={{padding:"9px 14px"}}><span style={{color:r.planLogged==="yes"?C.green:C.red,fontWeight:700}}>{r.planLogged==="yes"?"✓":"✗"}</span></td>
+                                <td style={{padding:"9px 14px"}}><span style={{background:`${stColor}22`,color:stColor,padding:"2px 8px",borderRadius:4,fontSize:10,fontWeight:600}}>{stLabel}</span></td>
+                                <td style={{padding:"9px 14px"}}>
+                                  {exc ? (
+                                    <div>
+                                      <span style={{background:exc.status==="granted"?`${C.green}22`:exc.status==="rejected"?`${C.red}22`:`${C.orange}22`,color:exc.status==="granted"?C.green:exc.status==="rejected"?C.red:C.orange,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>
+                                        {exc.status==="granted"?"Granted":exc.status==="rejected"?"Rejected":`Pending (${exc.currentStage})`}
+                                      </span>
+                                      {exc.grantedBy&&<div style={{fontSize:10,color:C.dim,marginTop:2}}>by {exc.grantedBy}</div>}
+                                    </div>
+                                  ) : <span style={{color:C.muted,fontSize:11}}>—</span>}
+                                </td>
+                                <td style={{padding:"9px 14px"}}>
+                                  {canRequest&&<button className="btn" style={{fontSize:10,padding:"3px 9px",background:`${C.blue}18`,color:C.blue,border:`1px solid ${C.blue}44`}} onClick={()=>{setExcReqRecord(r);setExcReqForm({reason:"",notes:""});setExcReqOpen(true);}}>Request Exception</button>}
+                                  {exc&&exc.status==="pending"&&<span style={{fontSize:10,color:C.muted}}>Awaiting {exc.currentStage}</span>}
+                                </td>
                               </tr>
-                            ))}</tbody>
-                          </table>
-                        </div>
-                      )
+                            );
+                          })}</tbody>
+                        </table>
+                      </div>
                     )}
                   </div>
                 );

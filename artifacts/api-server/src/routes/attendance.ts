@@ -12,16 +12,39 @@ const router = Router();
 // ?dateTo=YYYY-MM-DD    (optional)
 // Scope: SALES REP = own records, REGION HEAD = own region, elevated = all
 
+// Roles allowed to read attendance records and their scope
+const ELEVATED_ROLES = new Set(["ADMIN", "SALES HEAD", "CRO", "CEO", "CXO", "NSH"]);
+
+function attendanceScopeCondition(
+  u: any,
+  table: typeof attendanceRecords | typeof attendanceExceptions,
+  userCol: any,
+  regionCol: any,
+): { conditions: any[]; deny: boolean } {
+  if (u.role === "SALES REP") {
+    return { conditions: [eq(userCol, u.id)], deny: false };
+  }
+  if (u.role === "REGION HEAD") {
+    if (!u.region) return { conditions: [], deny: true }; // RH without region → deny
+    return { conditions: [eq(regionCol, u.region)], deny: false };
+  }
+  if (ELEVATED_ROLES.has(u.role)) {
+    return { conditions: [], deny: false }; // elevated → all records
+  }
+  // All other roles → deny
+  return { conditions: [], deny: true };
+}
+
 router.get("/attendance-records", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
     const { dateFrom, dateTo } = req.query as Record<string, string>;
-    const conditions: any[] = [];
 
-    if (u.role === "SALES REP") {
-      conditions.push(eq(attendanceRecords.userId, u.id));
-    } else if (u.role === "REGION HEAD" && u.region) {
-      conditions.push(eq(attendanceRecords.region, u.region));
+    const { conditions, deny } = attendanceScopeCondition(
+      u, attendanceRecords, attendanceRecords.userId, attendanceRecords.region,
+    );
+    if (deny) {
+      return void res.status(403).json({ ok: false, error: "Not authorized to view attendance records" });
     }
 
     if (dateFrom) conditions.push(gte(attendanceRecords.date, dateFrom));
@@ -77,12 +100,12 @@ router.post("/attendance/simulate-eod", requireAuth, async (req, res) => {
 router.get("/attendance-exceptions", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    const conditions: any[] = [];
 
-    if (u.role === "SALES REP") {
-      conditions.push(eq(attendanceExceptions.userId, u.id));
-    } else if (u.role === "REGION HEAD" && u.region) {
-      conditions.push(eq(attendanceExceptions.region, u.region));
+    const { conditions, deny } = attendanceScopeCondition(
+      u, attendanceExceptions, attendanceExceptions.userId, attendanceExceptions.region,
+    );
+    if (deny) {
+      return void res.status(403).json({ ok: false, error: "Not authorized to view attendance exceptions" });
     }
 
     const rows = conditions.length
