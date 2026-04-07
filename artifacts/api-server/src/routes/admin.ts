@@ -409,14 +409,23 @@ router.patch("/admin/reps/:id", requireAuth, async (req, res) => {
 
   const u = req.user!;
 
-  // Authorization: reps can only update their own record
+  // ── Explicit role authorization ─────────────────────────────────────────
+  // Allowed: ADMIN (any rep), REGION HEAD (own region only), SALES REP (own record only).
+  // All other roles (SALES HEAD, CRO, SALES STRATEGY, DIGI OPS) are denied.
   if (u.role === "SALES REP") {
     if (u.repId !== repId) {
       res.status(403).json({ ok: false, error: "Sales Reps can only update their own profile" });
       return;
     }
+  } else if (u.role === "REGION HEAD") {
+    // Region scope enforced after blob read (below)
+  } else if (u.role === "ADMIN") {
+    // Full access — no extra gate
+  } else {
+    // SALES HEAD, CRO, SALES STRATEGY, DIGI OPS — not authorised for rep profile edits
+    res.status(403).json({ ok: false, error: "Your role does not have permission to update rep profiles" });
+    return;
   }
-  // REGION HEAD: only reps in their region — enforced after we read the rep record
 
   const { region, reportingManager } = req.body as { region?: string; reportingManager?: string };
   if (!region && !reportingManager) {
@@ -441,9 +450,10 @@ router.patch("/admin/reps/:id", requireAuth, async (req, res) => {
     // Find the rep
     const repIdx = repsArray.findIndex((r: any) => r.id === repId || r.repId === repId);
 
-    // REGION HEAD scope check
-    if (u.role === "REGION HEAD" && repIdx >= 0) {
-      const repRegion = repsArray[repIdx].region;
+    // REGION HEAD scope check — rep's current region must match requester's region
+    if (u.role === "REGION HEAD") {
+      const repRegion = repIdx >= 0 ? repsArray[repIdx].region : null;
+      // If rep has a region assigned, enforce it matches. If no region yet, allow RH to set it.
       if (repRegion && repRegion !== u.region) {
         res.status(403).json({ ok: false, error: "Region Head can only update reps in their own region" });
         return;
@@ -470,12 +480,13 @@ router.patch("/admin/reps/:id", requireAuth, async (req, res) => {
         set: { value: repsArray as object, updatedAt: new Date() },
       });
 
-    // Also sync region to the users table if provided
+    // Sync region to the users table for the TARGET rep's user record (not the requester)
+    // Look up the user by repId to find the correct row to update
     if (region) {
       await db
         .update(users)
         .set({ region, updatedAt: new Date() })
-        .where(eq(users.id, u.id)); // only the requesting user's own row in self-service context
+        .where(eq(users.repId, repId));
     }
 
     res.json({ ok: true, data: repsArray[repIdx >= 0 ? repIdx : repsArray.length - 1] });
