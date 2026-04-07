@@ -1,0 +1,738 @@
+Build the Sales Rep workflow first as one integrated system.
+
+Do not treat UI, backend, database, and triggers as separate tasks.
+Build them as one connected workflow.
+
+==================================================
+PRODUCT GOAL
+==================================================
+
+This is not a generic CRM.
+
+This is a Sales Discipline + Execution + Revenue Control System.
+
+For Sales Rep, the journey must be:
+
+FIRST LOGIN:
+Setup Wizard → Submit for approval
+
+NORMAL LOGIN:
+Dashboard → My Plan → Revenue Log / Internal Requests / Tasks / HR Reports
+
+The system must be strict, structured, and audit-friendly.
+
+==================================================
+1. SALES REP SIDEBAR
+==================================================
+
+Sales Rep should see only these tabs, in this exact order:
+
+1. Dashboard
+2. My Plan
+3. Revenue Log
+4. Internal Requests
+5. Tasks
+6. HR Reports
+
+Hide / disable for Sales Rep:
+- Revenue Tracker
+- Pipeline tab (if it is actually revenue tracker)
+- War Room
+- By Region
+- All Sales Reps
+- Access Management
+- Platform Config
+- leadership dashboards
+
+==================================================
+2. FIRST-TIME SETUP WIZARD
+==================================================
+
+On first login only, before normal usage, show a mandatory Setup Wizard.
+
+Before the wizard starts, show a short guided tour:
+- Dashboard = target, achieved, shortfall, alerts
+- My Plan = where meetings are planned and logged
+- Revenue Log = where revenue is entered when RO comes
+- Internal Requests = what I have asked from others
+- Tasks = what I need to do
+- HR Reports = attendance / absence / exceptions
+
+Wizard steps:
+
+STEP 1 — PROFILE
+Fields:
+- Region (dropdown)
+- Reporting Manager (dropdown, filtered appropriately)
+
+STEP 2 — TARGET SETUP
+Rep enters target in this exact format:
+
+Agency > Client > Brand > Q1 > Q2 > Q3 > Q4 > Annual
+
+Rules:
+- Annual = auto-sum of Q1+Q2+Q3+Q4
+- Agency can be dropdown or manually added
+- Client can be dropdown or manually added
+- Brand can be dropdown or manually added
+
+STEP 3 — IMPORT / SYNC
+Allow:
+- sync / import clients
+- bulk import target allocations
+- bulk import achieved so far
+
+STEP 4 — REVIEW & SUBMIT
+Show:
+- Region
+- Manager
+- all Agency/Client/Brand rows
+- quarterly totals
+- annual total
+- achieved imported so far
+
+SUBMISSION RULES:
+- Once submitted → goes into approval workflow
+- If approved → locked
+- If rejected → editable and resubmittable
+
+==================================================
+3. TARGET APPROVAL WORKFLOW
+==================================================
+
+Approval chain must be:
+
+RH → NSH → Strategy → CRO
+
+After CRO approval:
+- target becomes locked
+- rep cannot edit
+
+If rejected at any stage:
+- rep can edit and resubmit
+
+==================================================
+4. DASHBOARD
+==================================================
+
+After setup is complete, Sales Rep must always land on Dashboard.
+
+Dashboard should show:
+
+A. PERFORMANCE SUMMARY
+- Annual Target
+- Quarter Target
+- Achieved
+- Shortfall
+
+B. ALERTS / STATUS
+- Pending Tasks
+- Pending Internal Requests
+- Missed HR compliance
+- target approval status if pending/rejected
+
+C. QUICK ACTIONS
+- Go to My Plan
+- Log Revenue
+- View Tasks
+- View Internal Requests
+
+Important:
+- Do not show planning forms here
+- Do not show target entry forms here
+- Dashboard is summary + alerts + quick actions only
+
+==================================================
+5. MY PLAN
+==================================================
+
+My Plan is ONLY for planning and logging meetings.
+Do not show target summary here.
+
+My Plan should contain:
+
+A. TODAY
+List today’s meetings with:
+- Type: PR / Actionable
+- Agency
+- Client
+- Brand
+- Person
+- Time
+- Mode
+- Status: Planned / Logged / Missed
+
+Actions:
+- Log Touchpoint
+- Edit
+- Cancel
+
+B. TOMORROW
+List tomorrow’s meetings with:
+- Add Meeting
+- Edit
+- Delete
+
+C. COMPLIANCE INDICATOR
+Show clearly:
+- Logged today? Yes / No
+- Planned tomorrow? Yes / No
+- Compliance status
+
+==================================================
+6. DAILY COMPLIANCE RULE
+==================================================
+
+This is mandatory.
+
+FIRST DAY OF USE:
+Rep must:
+- schedule meetings for today
+- schedule meetings for tomorrow
+- log today
+
+SECOND DAY ONWARDS:
+Rep must:
+- log today
+- schedule tomorrow
+
+If the rep misses even one required action by 11:30 PM IST:
+- mark absent / non-compliant
+
+This must reflect in HR Reports.
+
+==================================================
+7. SCHEDULE MEETING FLOW
+==================================================
+
+When rep clicks Add Meeting, first ask:
+
+- PR Meeting
+- Actionable Meeting
+
+------------------------------------------
+7A. PR MEETING
+------------------------------------------
+
+If PR Meeting, only ask:
+- Agency
+- Client
+- Who are you meeting?
+- Time
+- Contact number
+
+Then save.
+No downstream action logic.
+
+------------------------------------------
+7B. ACTIONABLE MEETING
+------------------------------------------
+
+If Actionable Meeting, ask in this order:
+
+1. Agency
+- dropdown first
+- if not available, allow manual entry
+- if client has no agency, allow Agency = NA
+
+2. Client
+- if agency selected from dropdown, show clients mapped to that agency
+- if client is not mapped to that agency or has no agency, allow manual entry
+
+3. Brand / Product
+- if client exists in dropdown, show brands mapped to that client
+- if not available, allow manual entry
+
+4. Who is the representative being met?
+
+5. Contact number
+Rules:
+- validate properly
+- support country code
+- do not allow invalid unlimited digits
+
+6. Mode
+- Physical
+- Online
+- Phone Call
+
+7. Actionable Type
+Use this exact dropdown:
+- Pitch / Introduction
+- Proposal discussion
+- Negotiation / Pricing
+- Closure / Conversion
+- Follow-up
+- Relationship + business discussion
+- Collection / payment follow-up
+- Renewal / repeat business
+
+8. Agenda
+Free text
+
+9. Date and Time
+
+==================================================
+8. LOG TOUCHPOINT FLOW
+==================================================
+
+Logging should begin from a scheduled meeting wherever possible.
+
+When user clicks Log Touchpoint from Today, auto-fill:
+- Agency
+- Client
+- Brand
+- Person
+- Time
+- Mode
+- Meeting type
+- PR / Actionable type
+
+Do not ask the rep to re-enter these.
+
+Log Touchpoint should ask only:
+
+1. Discussion
+Free text
+
+2. Feedback
+Use this exact dropdown:
+- Interested – proceed
+- Needs proposal
+- Price concern
+- Budget not available
+- Decision pending
+- Follow up later
+- Not interested
+- Converted (mail confirmed)
+- Closed – no opportunity
+
+3. Stage
+Use:
+- Prospect
+- In Discussion
+- Negotiation
+- Mail Confirmed
+- RO Received
+- Lost
+
+4. Do I need anything from any other department?
+If Yes, show:
+- What is needed? (fixed dropdown)
+- Who is it needed from? (fixed dropdown)
+- By when? (calendar)
+
+5. Is there a follow-up?
+If Yes:
+- next meeting date
+
+CONDITIONAL RULES:
+- If stage = Mail Confirmed or RO Received, do not show “what do you need / who do you need from”
+- If stage = RO Received, prompt rep to log revenue
+- If status is closed / no opportunity, no follow-up required
+
+Rep must also be allowed to schedule and log an impromptu meeting for today even if it was not pre-planned.
+
+==================================================
+9. ACTION REQUIRED / SUPPORT TRIGGERS
+==================================================
+
+If rep enters:
+- what is needed
+- who it is needed from
+- by when
+
+then on submit system must automatically create:
+
+1. A Task for the assignee
+2. An Internal Request for the raiser
+3. A calendar reminder / schedule for the raiser
+4. A calendar reminder / schedule for the assignee
+
+If “What is needed” = Approval,
+also create a trigger in the Approval tab of the person it is assigned to.
+
+Multiple action items per touchpoint are allowed.
+
+==================================================
+10. TASK ESCALATION
+==================================================
+
+If task is not completed by due date:
+- escalate to RH
+- after 12 hours, escalate to NSH
+- after 12 more hours, escalate to CRO
+
+Exact chain:
+RH → NSH → CRO
+
+==================================================
+11. REVENUE LOG
+==================================================
+
+There is no separate Revenue Tracker for now.
+Disable that module for Sales Rep.
+
+Revenue Log must remain.
+
+Whenever stage = RO Received:
+- prompt rep to log revenue
+
+Revenue Log fields:
+- agency
+- client
+- brand
+- RO reference / number
+- revenue amount
+- date
+- quarter if needed
+- notes
+
+Rule:
+- Achieved on Dashboard must update from Revenue Log
+- Achieved must come only from revenue entries, not from meeting stage
+
+==================================================
+12. INTERNAL REQUESTS TAB
+==================================================
+
+Show all requests the rep has raised:
+- from Log Touchpoint
+- from Internal Requests page directly
+
+Statuses:
+- Pending
+- Accepted
+- Done
+- Rejected
+- Escalated
+
+==================================================
+13. TASKS TAB
+==================================================
+
+Show:
+- tasks assigned to the rep
+- tasks the rep created for themselves
+
+==================================================
+14. HR REPORTS TAB
+==================================================
+
+Show:
+- missed logs
+- missed planning
+- absent markings
+- compliance status
+
+Each absence / non-compliance record should have:
+- Request Exception button
+
+Exception approval flow must always be:
+
+RH → NSH → CRO → Admin
+
+==================================================
+15. MASTER DATABASE ARCHITECTURE
+==================================================
+
+Use one master PostgreSQL database.
+Do not use disconnected stores.
+Do not keep frontend-only truth for core workflows.
+
+Use normalized tables.
+
+------------------------------------------
+15A. MASTER / REFERENCE TABLES
+------------------------------------------
+
+users
+- id
+- name
+- email
+- role
+- region
+- manager_id
+- rep_id
+- status
+- created_at
+- updated_at
+
+agencies
+- id
+- name
+- status
+
+clients
+- id
+- name
+- agency_id (nullable for NA)
+- status
+
+brands
+- id
+- name
+- client_id
+- status
+
+These tables power dropdowns:
+Agency → Client → Brand
+
+------------------------------------------
+15B. TARGET TABLES
+------------------------------------------
+
+target_submissions
+- id
+- user_id
+- region
+- q1_target
+- q2_target
+- q3_target
+- q4_target
+- total_target
+- status
+- frozen_target
+- submitted_at
+- approved_at
+- rejected_at
+
+target_allocations
+- id
+- submission_id
+- user_id
+- agency_id / agency_name
+- client_id / client_name
+- brand_id / brand_name
+- q1
+- q2
+- q3
+- q4
+- annual_allocated
+- region
+
+Rule:
+- Sum of target_allocations must equal total_target
+- This is the accounting source of truth
+
+------------------------------------------
+15C. PLANNING / EXECUTION TABLES
+------------------------------------------
+
+meetings
+- id
+- user_id
+- region
+- date
+- time
+- meeting_kind (PR, ACTIONABLE)
+- agency_id / agency_name
+- client_id / client_name
+- brand_id / brand_name
+- contact_name
+- contact_phone
+- mode
+- actionable_type
+- agenda
+- status (planned, logged, missed, cancelled)
+- created_at
+- updated_at
+
+touchpoints
+- id
+- meeting_id (nullable for impromptu)
+- user_id
+- region
+- discussion
+- feedback
+- stage
+- follow_up_required
+- next_meeting_date
+- created_at
+
+Rule:
+- Do not duplicate the full meeting record in touchpoints
+- touchpoints should link back to meetings wherever possible
+
+------------------------------------------
+15D. ACTION / SUPPORT TABLES
+------------------------------------------
+
+action_items
+- id
+- touchpoint_id
+- raised_by_user_id
+- assigned_to_user_id
+- action_type
+- description
+- due_date
+- status
+- escalation_level
+- created_at
+- completed_at
+
+tasks
+- id
+- action_item_id
+- assigned_to_user_id
+- created_by_user_id
+- title
+- due_date
+- status
+- notes
+- created_at
+- updated_at
+
+internal_requests
+- id
+- action_item_id
+- raised_by_user_id
+- assigned_to_user_id / role
+- request_type
+- status
+- created_at
+- updated_at
+
+approvals
+- id
+- source_type
+- source_id
+- triggered_by_user_id
+- assigned_to_user_id
+- status
+- created_at
+- resolved_at
+
+------------------------------------------
+15E. REVENUE TABLE
+------------------------------------------
+
+revenue_entries
+- id
+- user_id
+- region
+- agency_id / agency_name
+- client_id / client_name
+- brand_id / brand_name
+- ro_number
+- amount
+- date
+- quarter
+- is_reversed
+- reversal_of
+- notes
+- created_at
+
+Rule:
+- Achieved must come only from this table
+
+------------------------------------------
+15F. HR / COMPLIANCE TABLES
+------------------------------------------
+
+hr_compliance
+- id
+- user_id
+- date
+- logged_today
+- planned_tomorrow
+- status (compliant, partial, absent)
+- created_at
+
+hr_exceptions
+- id
+- compliance_id
+- user_id
+- reason
+- status (pending_rh, pending_nsh, pending_cro, pending_admin, approved, rejected)
+- created_at
+- resolved_at
+
+escalation_logs
+- id
+- action_item_id
+- escalated_to_role
+- escalated_at
+
+------------------------------------------
+15G. SUPPORT TABLES
+------------------------------------------
+
+notifications
+- id
+- user_id
+- type
+- title
+- body
+- status
+- entity_type
+- entity_id
+- created_at
+
+activity_log
+- id
+- user_id
+- action
+- entity_type
+- entity_id
+- metadata
+- created_at
+
+==================================================
+16. BACKEND RULES
+==================================================
+
+1. All dropdowns fetch from master tables
+2. All user actions write into transaction tables
+3. Dashboard numbers come from backend KPI calculations
+4. No frontend-only truth for core workflows
+5. No generic JSON blobs for core accounting/workflow entities
+6. All approvals and escalations must be stored as status transitions
+7. Revenue is immutable except for reversal handling
+8. My Plan, Tasks, Internal Requests, HR must all read from backend data
+
+==================================================
+17. REQUIRED APIs
+==================================================
+
+Build / keep APIs for:
+- setup/profile
+- targets submit / approve / reject / read allocations
+- meetings create / update / list
+- touchpoints log
+- action items create / escalate
+- tasks create / status / reschedule / reassign / note
+- internal requests create / accept / resolve / reject / withdraw / note
+- approvals create / resolve
+- revenue create / list / aggregate
+- HR compliance daily job / read
+- HR exception create / approve / reject
+- dashboard KPI endpoints
+
+==================================================
+18. DELIVERY EXPECTATION
+==================================================
+
+Do not treat UI and DB separately.
+
+Build and show the Sales Rep workflow end-to-end as one connected system:
+
+First Login:
+Setup Wizard → Submit → Approval
+
+Normal Use:
+Dashboard → My Plan → Log Touchpoint → Action Required trigger → Revenue Log → HR compliance
+
+Before moving to Region Head or other roles, complete and show:
+
+1. Setup Wizard
+2. Dashboard
+3. My Plan
+4. PR Meeting scheduling flow
+5. Actionable Meeting scheduling flow
+6. Log Touchpoint flow
+7. Action Required trigger flow
+8. Revenue Log trigger from RO Received
+9. HR absence / exception flow
+10. Database schema used for this flow
+11. APIs used for this flow
