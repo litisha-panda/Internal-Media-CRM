@@ -4642,7 +4642,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
               // DB-first: POST to meetings table — only close form and show success on API response
               const resetPf = {agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",meetingKind:pf.meetingKind,touchpointType:pf.touchpointType,needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform};
-              fetch("/api/meetings",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName:pf.client.trim(),brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})})
+              fetch("/api/meetings",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName,brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})})
                 .then(r=>r.ok?r.json():null)
                 .then(data=>{
                   if(data?.ok&&data.data?.id){
