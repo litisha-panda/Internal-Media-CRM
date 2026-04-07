@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, meetings, touchpoints, users } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activityLog";
 import { todayIST } from "../lib/date";
@@ -40,13 +40,15 @@ async function scopeCondition(user: any) {
 }
 
 // ─── GET /api/meetings ────────────────────────────────────────────────────────
-// ?date=YYYY-MM-DD  (required for rep; optional for elevated)
-// ?userId=...       (elevated only — filter to a specific user)
+// ?date=YYYY-MM-DD           — single-day filter (legacy)
+// ?dateFrom=YYYY-MM-DD       — range start (inclusive)
+// ?dateTo=YYYY-MM-DD         — range end (inclusive)
+// ?userId=...                — elevated only — filter to a specific user
 
 router.get("/meetings", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    const { date, userId } = req.query as Record<string, string>;
+    const { date, userId, dateFrom, dateTo } = req.query as Record<string, string>;
 
     const conditions: any[] = [];
 
@@ -58,7 +60,9 @@ router.get("/meetings", requireAuth, async (req, res) => {
     }
     // Elevated: no scope filter
 
-    if (date) conditions.push(eq(meetings.date, date));
+    if (date)     conditions.push(eq(meetings.date, date));
+    if (dateFrom) conditions.push(gte(meetings.date, dateFrom));
+    if (dateTo)   conditions.push(lte(meetings.date, dateTo));
     if (userId && u.role !== "SALES REP") conditions.push(eq(meetings.userId, userId));
 
     const rows = conditions.length

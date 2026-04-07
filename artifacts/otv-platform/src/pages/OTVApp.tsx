@@ -1289,7 +1289,7 @@ export default function OTVApp() {
     const combined = [...prevDb.map(meetingToPlan), ...prevEph];
     const next: any[] = typeof updater === "function" ? updater(combined) : updater;
     const dbIdSet = new Set(prevDb.map((m: any) => m.id));
-    // Update DB-originating plans in dbMeetings
+    // Update DB-originating plans in dbMeetings — sync all mutable plan fields back
     setDbMeetings(prev => prev.map((m: any) => {
       const upd = next.find((p: any) => (p.meetingDbId ?? p.id) === m.id);
       if (!upd) return m;
@@ -1297,7 +1297,16 @@ export default function OTVApp() {
                       : upd.status === "Missed"   ? "missed"
                       : upd.status === "Declined" ? "cancelled"
                       : upd.status === "Planned"  ? "planned" : m.status;
-      return { ...m, status: newStatus, date: upd.date ?? m.date };
+      return {
+        ...m,
+        status: newStatus,
+        date: upd.date ?? m.date,
+        time: upd.time ?? m.time,
+        contactName: upd.contactName ?? m.contactName,
+        agenda: upd.agenda ?? m.agenda,
+        // clientAgencyName → clientName mapping (edit form uses clientAgencyName)
+        clientName: upd.clientAgencyName !== undefined ? upd.clientAgencyName : m.clientName,
+      };
     }));
     // Ephemeral: everything NOT from DB
     setEphemeralPlans(next.filter((p: any) => !dbIdSet.has(p.meetingDbId ?? p.id)));
@@ -1326,13 +1335,74 @@ export default function OTVApp() {
   }, []);
 
   // ── Fetch DB meetings whenever the user logs in ─────────────────────────────
+  // For demo users with no meetings, a one-time bootstrap seeds sample data into
+  // the DB and sets a `bootstrapped_demo_<userId>` flag in app_state to prevent
+  // re-seeding on subsequent logins.
   useEffect(() => {
     if (!loggedIn) { setDbMeetingsLoading(false); return; }
     setDbMeetingsLoading(true);
+
+    const u = loginUser as any;
+    const isDemoUser = u?.provider === "demo";
+
+    // Inline demo seed factory — dates relative to today at fetch time
+    const makeSeeds = (): any[] => {
+      if (!u?.id) return [];
+      const addDays = (n: number) => {
+        const d = new Date(); d.setDate(d.getDate() + n);
+        return d.toISOString().split("T")[0];
+      };
+      const base = { userId: u.id, repId: u.repId ?? null, region: u.region || "North", mode: "Physical", status: "planned", meetingKind: "ACTIONABLE" };
+      return [
+        { ...base, id: `demo_${u.id}_1`, clientName: "Star Cement Ltd",    contactName: "Rahul Sharma",    agenda: "Q3 sponsorship package pitch",     date: addDays(0), time: "10:00" },
+        { ...base, id: `demo_${u.id}_2`, clientName: "Patanjali Foods",    contactName: "Anita Panigrahi", agenda: "Prime time slot renewal",           date: addDays(1), time: "11:30", mode: "Virtual" },
+        { ...base, id: `demo_${u.id}_3`, clientName: "OdishaMart Digital", contactName: "Priya Das",       agenda: "Digital + OTT package proposal",    date: addDays(2), time: "14:00" },
+        { ...base, id: `demo_${u.id}_4`, clientName: "Utkal Alumina",      contactName: "Biju Nayak",      agenda: "Brand activation follow-up",        date: addDays(4), time: "10:30" },
+        { ...base, id: `demo_${u.id}_5`, clientName: "Heritage Foods",     contactName: "Sandeep Mishra",  agenda: "News ticker campaign pitch",        date: addDays(5), time: "15:00" },
+      ];
+    };
+
     fetch("/api/meetings", { credentials: "include", headers: authHeaders() })
       .then(r => r.ok ? r.json() : null)
-      .then(data => {
-        if (data?.ok && Array.isArray(data.data)) setDbMeetings(data.data);
+      .then(async (data) => {
+        if (!data?.ok) return;
+        const loaded: any[] = Array.isArray(data.data) ? data.data : [];
+
+        if (isDemoUser && loaded.length === 0 && u?.id) {
+          // Check bootstrap flag to avoid re-seeding on subsequent logins
+          const flagKey = `bootstrapped_demo_${u.id}`;
+          const flagRes = await fetch(`/api/state/${flagKey}`, { credentials: "include", headers: authHeaders() }).catch(() => null);
+          const flagData = flagRes?.ok ? await flagRes.json().catch(() => null) : null;
+
+          if (!flagData?.value) {
+            // First-time demo login — seed sample meetings
+            const seeds = makeSeeds();
+            const settled = await Promise.allSettled(
+              seeds.map(m =>
+                fetch("/api/meetings", {
+                  method: "POST", credentials: "include",
+                  headers: authHeaders({ "Content-Type": "application/json" }),
+                  body: JSON.stringify(m),
+                }).then(r => r.ok ? r.json() : null)
+              )
+            );
+            const seeded = settled
+              .filter(r => r.status === "fulfilled" && (r as any).value?.ok)
+              .map((r: any) => r.value.data)
+              .filter(Boolean);
+            setDbMeetings(seeded);
+            // Store bootstrap flag so we never re-seed
+            fetch(`/api/state/${flagKey}`, {
+              method: "PUT", credentials: "include",
+              headers: authHeaders({ "Content-Type": "application/json" }),
+              body: JSON.stringify({ value: true }),
+            }).catch(() => {});
+          } else {
+            setDbMeetings(loaded);
+          }
+        } else {
+          setDbMeetings(loaded);
+        }
       })
       .catch(() => {})
       .finally(() => setDbMeetingsLoading(false));
@@ -4528,9 +4598,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               const rawPhone = pf.phone.replace(/\D/g,"");
               const storedPhone = rawPhone ? `+91${rawPhone.slice(-10)}` : "";
               const mkind = (pf.meetingKind||"ACTIONABLE") as "PR"|"ACTIONABLE";
-              // DB-first: POST to meetings table, add to local cache on success (no blob write)
-              fetch("/api/meetings",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName:pf.client.trim(),brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})})
-                .then(r=>r.ok?r.json():null).then(data=>{if(data?.ok&&data.data?.id){setDbMeetings(p=>[...p,data.data]);}}).catch(()=>{});
+              // Capture sync preference before async — avoids stale closure in fetch callback
+              const didSyncCalendar = pf.syncToCalendar;
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -4570,9 +4639,21 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 }
               }
 
-              setPf({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",meetingKind:pf.meetingKind,touchpointType:pf.touchpointType,needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform});
-              setAddPlanFor(null);
-              showToast(pf.syncToCalendar?"Meeting planned ✓ · Calendar opening…":"Meeting planned ✓");
+              // DB-first: POST to meetings table — only close form and show success on API response
+              const resetPf = {agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",meetingKind:pf.meetingKind,touchpointType:pf.touchpointType,needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform};
+              fetch("/api/meetings",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName:pf.client.trim(),brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})})
+                .then(r=>r.ok?r.json():null)
+                .then(data=>{
+                  if(data?.ok&&data.data?.id){
+                    setDbMeetings(p=>[...p,data.data]);
+                    setPf(resetPf);
+                    setAddPlanFor(null);
+                    showToast(didSyncCalendar?"Meeting planned ✓ · Calendar opening…":"Meeting planned ✓");
+                  } else {
+                    showToast("Could not save meeting — please try again","err");
+                  }
+                })
+                .catch(()=>showToast("Network error — meeting not saved","err"));
             };
 
             // Inline log state — which plan is being logged right now
