@@ -77,7 +77,35 @@ const HR_EMAIL = "hr@odishatv.com";
 // Plan status
 const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
 
-const SEED_PLANS: any[]        = [];
+// meetingToPlan: maps DB meetings row → plan blob schema for calendar display
+function meetingToPlan(m: any): any {
+  return {
+    id: m.id,                // same as DB primary key
+    meetingDbId: m.id,       // marks this plan as DB-originating
+    repId: m.repId,
+    date: m.date,
+    time: m.time || "10:00",
+    clientAgencyName: m.clientName || m.agencyName || "",
+    agency: m.agencyName || "",
+    client: m.clientName || "",
+    brand: m.brandName || "",
+    contactName: m.contactName || "",
+    phone: m.contactPhone || "",
+    agenda: m.agenda || "",
+    pitchType: "",
+    meetingType: m.mode || "Physical",
+    touchpointType: m.meetingKind === "PR" ? "Relationship" : "Deal Meeting",
+    meetingKind: m.meetingKind || "ACTIONABLE",
+    needsMeet: false,
+    status: m.status === "logged"    ? "Done"    :
+            m.status === "missed"    ? "Missed"  :
+            m.status === "cancelled" ? "Declined": "Planned",
+    loggedMeetingId: m.touchpointId || null,
+    isUnplanned: false,
+    autoCreatedFrom: null,
+  };
+}
+
 const SEED_WEEKLY_PLANS: any[] = [];
 const SEED_ABSENCE_REPORTS: any[] = [];
 const REPS: any[]              = [];
@@ -1233,7 +1261,48 @@ export default function OTVApp() {
   const [loginUser, setLoginUser]         = useState(null);
   const [section, setSection]             = useState("home"); // "home" | "ro" | "crm"
   const [sessionChecking, setSessionChecking] = useState(true); // true until /me resolves
-  const [plans, setPlans]             = usePersistedState("otv_plans",    SEED_PLANS);
+  // ── My Plan: DB-first meeting state ──────────────────────────────────────
+  // dbMeetings: fetched from /api/meetings on login. Single source of truth for planned meetings.
+  // ephemeralPlans: local-only array for auto-created reminders / follow-ups (never persisted).
+  // plans: derived combined view used throughout the calendar (read-only derived).
+  const [dbMeetings, setDbMeetings]           = useState<any[]>([]);
+  const [dbMeetingsLoading, setDbMeetingsLoading] = useState(true);
+  const [ephemeralPlans, setEphemeralPlans]   = useState<any[]>([]);
+
+  // Refs so the smart setPlans can read current state without stale closure issues
+  const dbMeetingsRef    = React.useRef<any[]>([]);
+  const ephemeralRef     = React.useRef<any[]>([]);
+  React.useEffect(() => { dbMeetingsRef.current = dbMeetings; }, [dbMeetings]);
+  React.useEffect(() => { ephemeralRef.current  = ephemeralPlans; }, [ephemeralPlans]);
+
+  // Combined read view — calendar code uses this
+  const plans = React.useMemo(
+    () => [...dbMeetings.map(meetingToPlan), ...ephemeralPlans],
+    [dbMeetings, ephemeralPlans]
+  );
+
+  // Smart setPlans: routes updates to dbMeetings (for DB-originating plans)
+  // or ephemeralPlans (for local auto-created plans). Drops localStorage entirely.
+  const setPlans = React.useCallback((updater: any) => {
+    const prevDb  = dbMeetingsRef.current;
+    const prevEph = ephemeralRef.current;
+    const combined = [...prevDb.map(meetingToPlan), ...prevEph];
+    const next: any[] = typeof updater === "function" ? updater(combined) : updater;
+    const dbIdSet = new Set(prevDb.map((m: any) => m.id));
+    // Update DB-originating plans in dbMeetings
+    setDbMeetings(prev => prev.map((m: any) => {
+      const upd = next.find((p: any) => (p.meetingDbId ?? p.id) === m.id);
+      if (!upd) return m;
+      const newStatus = upd.status === "Done"     ? "logged"
+                      : upd.status === "Missed"   ? "missed"
+                      : upd.status === "Declined" ? "cancelled"
+                      : upd.status === "Planned"  ? "planned" : m.status;
+      return { ...m, status: newStatus, date: upd.date ?? m.date };
+    }));
+    // Ephemeral: everything NOT from DB
+    setEphemeralPlans(next.filter((p: any) => !dbIdSet.has(p.meetingDbId ?? p.id)));
+  }, []);
+
   const [weeklyPlans, setWeeklyPlans] = usePersistedState("otv_wplans",   SEED_WEEKLY_PLANS);
   const [meetings, setMeetings]       = usePersistedState("otv_meetings", SEED_MEETINGS);
   const [deals, setDeals]             = useApiEntityState("/api/deals",    "otv_deals",    []);
@@ -1255,6 +1324,20 @@ export default function OTVApp() {
       .finally(() => setSessionChecking(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── Fetch DB meetings whenever the user logs in ─────────────────────────────
+  useEffect(() => {
+    if (!loggedIn) { setDbMeetingsLoading(false); return; }
+    setDbMeetingsLoading(true);
+    fetch("/api/meetings", { credentials: "include", headers: authHeaders() })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.ok && Array.isArray(data.data)) setDbMeetings(data.data);
+      })
+      .catch(() => {})
+      .finally(() => setDbMeetingsLoading(false));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loggedIn]);
 
   const handleLogin  = (user) => {
     // Clear entity localStorage caches on every fresh login so API data always wins from first paint
@@ -1515,7 +1598,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   // deals is API-backed (owned by OTVApp via useApiEntityState) — use prop directly, no dual-write
   const deals                     = sharedDeals   || SEED_DEALS;
   const [meetings, _setMeetings]  = usePersistedState("otv_meetings", sharedMeetings || SEED_MEETINGS);
-  const [plans_crm]               = [plans || SEED_PLANS];
+  const [plans_crm]               = [plans || []];
   const [att, setAtt]             = usePersistedState("otv_att",      SEED_ATT);
 
   // setDeals: routes directly to OTVApp's useApiEntityState setter (immediate POST/PATCH, no blob store)
@@ -1558,8 +1641,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [excReqForm, setExcReqForm]             = useState({reason:"", notes:""});
   const [excReqSubmitting, setExcReqSubmitting] = useState(false);
   // Fetch attendance records + exceptions from DB when HR view is open
+  // CROApp is only rendered when the user is already authenticated, so no loggedIn guard needed
   const fetchAttendanceData = useCallback(() => {
-    if (!loggedIn) return;
     setAttDbLoading(true);
     Promise.all([
       fetch("/api/attendance-records", {credentials:"include", headers:authHeaders()}),
@@ -1568,7 +1651,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
       if (recRes.ok) { const d = await recRes.json(); if (d.ok) setAttDbRecords(d.data||[]); }
       if (excRes.ok) { const d = await excRes.json(); if (d.ok) setAttExcRequests(d.data||[]); }
     }).catch(()=>{}).finally(()=>setAttDbLoading(false));
-  }, [loggedIn]);
+  }, []);
 
   useEffect(() => {
     if (view === "hr") fetchAttendanceData();
@@ -4413,11 +4496,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               const rawPhone = pf.phone.replace(/\D/g,"");
               const storedPhone = rawPhone ? `+91${rawPhone.slice(-10)}` : "";
               const mkind = (pf.meetingKind||"ACTIONABLE") as "PR"|"ACTIONABLE";
-              const localId = `p${Date.now()}`;
-              setPlans(p=>[...p,{id:localId,repId:myPlanRepId,date,time:planTime,clientAgencyName:clientName,agency:pf.agency.trim(),client:pf.client.trim(),brand:pf.brand.trim(),contactName:pf.contactName.trim(),phone:storedPhone,agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",touchpointType:pf.touchpointType||"Deal Meeting",meetingKind:mkind,needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
-              // S4: dual-write to meetings DB — store returned ID so logging can PATCH status later
+              // DB-first: POST to meetings table, add to local cache on success (no blob write)
               fetch("/api/meetings",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName:pf.client.trim(),brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})})
-                .then(r=>r.ok?r.json():null).then(data=>{if(data?.ok&&data.data?.id){const dbId=data.data.id;setPlans(p=>p.map(pl=>pl.id===localId?{...pl,meetingDbId:dbId}:pl));}}).catch(()=>{});
+                .then(r=>r.ok?r.json():null).then(data=>{if(data?.ok&&data.data?.id){setDbMeetings(p=>[...p,data.data]);}}).catch(()=>{});
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -4985,7 +5066,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   {p.status!=="Done"&&!isFuture&&<span style={{fontSize:10,color:isOpen?C.accent:C.dim}}>{isOpen?"▲":"▼"}</span>}
                                   {isFuture&&p.status!=="Done"&&<button onClick={e=>{e.stopPropagation();if(planEditId===p.id){setPlanEditId(null);}else{setPlanEditId(p.id);setPlanEditForm({time:p.time||"10:00",clientAgencyName:p.clientAgencyName||"",contactName:p.contactName||"",phone:p.phone||"",agenda:p.agenda||"",pitchType:p.pitchType||""});}}} style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,borderRadius:4,padding:"1px 7px",color:C.blue,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap"}}>✎ Edit</button>}
                                   {isFuture&&p.status!=="Done"&&p.date===TOMORROW&&(
-                                    <button onClick={e=>{e.stopPropagation();if(confirm(`Did "${p.clientAgencyName}" actually happen today?`)){setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,date:TODAY,status:"Done"}:pl));showToast("Moved to today and marked Done ✓");}}} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"1px 7px",color:C.green,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4}}>✓ Happened today</button>
+                                    <button onClick={e=>{e.stopPropagation();if(confirm(`Did "${p.clientAgencyName}" actually happen today?`)){setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,date:TODAY,status:"Done"}:pl));if(p.meetingDbId){fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({date:TODAY,status:"logged"})}).catch(()=>{});}showToast("Moved to today and marked Done ✓");}}} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,borderRadius:4,padding:"1px 7px",color:C.green,fontSize:9,fontWeight:700,cursor:"pointer",whiteSpace:"nowrap",marginLeft:4}}>✓ Happened today</button>
                                   )}
                                 </div>
                               </div>
@@ -5003,7 +5084,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                   </div>
                                   <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
                                     <button onClick={()=>setPlanEditId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"4px 12px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
+                                    <button onClick={()=>{setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,...planEditForm,time:planEditForm.time||"10:00"}:pl));if(p.meetingDbId){fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({time:planEditForm.time||"10:00",contactName:planEditForm.contactName||undefined,agenda:planEditForm.agenda||undefined})}).catch(()=>{});}setPlanEditId(null);showToast("Plan updated ✓");}} style={{background:C.blue,border:"none",color:"#fff",borderRadius:4,padding:"4px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Save Changes</button>
                                   </div>
                                 </div>
                               )}
@@ -5192,6 +5273,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       const loggedAt = `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}`;
                                       const newMeetId = `ml${Date.now()}`;
                                       setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done",loggedMeetingId:newMeetId}:pl));
+                                      if (p.meetingDbId) { fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({status:"logged"})}).catch(()=>{}); }
                                       setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,nextMeetingTime:nm_time||"",meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Mail Confirmed":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));
