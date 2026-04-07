@@ -10,4 +10,5 @@ export * from "./activity_log";
 export * from "./notifications";
 export * from "./daily_plans";
 export * from "./target_allocations";
+export * from "./meetings";
 // attendanceRecords is part of the tasks schema file

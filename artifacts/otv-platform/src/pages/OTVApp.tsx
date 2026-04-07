@@ -1506,7 +1506,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (role === "REGION HEAD") return "rh-dashboard";
     if (["SALES HEAD","CRO","SALES STRATEGY"].includes(role)) return "warroom";
     if (role === "DIGI OPS") return "digi-deals";
-    return "my-plan"; // Sales Rep — My Plan is the daily execution home
+    return "rep-dashboard"; // Sales Rep — lands on Dashboard
   };
   const [view, setView] = useState(getCRMDefaultView);
   // T009: Reset landing view whenever the logged-in user switches roles
@@ -1597,7 +1597,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [calDayView, setCalDayView]       = useState<string|null>(null); // date string "YYYY-MM-DD"
   const [myPlanTab,  setMyPlanTab]        = useState<"plan"|"log">("plan"); // My Plan sub-tabs
   const [addPlanFor, setAddPlanFor]       = useState(null);
-  const [planForm, setPlanForm]           = useState({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",touchpointType:"Deal Meeting",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
+  const [planForm, setPlanForm]           = useState({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",touchpointType:"Deal Meeting",meetingKind:"ACTIONABLE",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
   const [planEditId, setPlanEditId]       = useState<string|null>(null);
   const [planEditForm, setPlanEditForm]   = useState({time:"",clientAgencyName:"",contactName:"",phone:"",agenda:"",pitchType:""});
   const [loginProvider, setLoginProvider] = useState<"google"|"zoho"|"demo">("demo");
@@ -1670,6 +1670,7 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     dealAmount:"",
     contactName:"", designation:"", mobile:"",
     meetingType:"Physical",
+    meetingKind:"ACTIONABLE",         // "PR" | "ACTIONABLE"
     // Part 1: new Touchpoint fields
     touchpointType:"Deal Meeting",    // "Deal Meeting" | "Relationship"
     contactLevel:"",                  // C-Suite / VP-GM / etc.
@@ -1940,6 +1941,9 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",targetAmount:""});
+  // S9: Setup Wizard state
+  const [wizardStep, setWizardStep]                     = useState(0);
+  const [wizardClients, setWizardClients]               = useState<{agency:string,client:string,brand:string,q1:string,q2:string,q3:string,q4:string}[]>([{agency:"",client:"",brand:"",q1:"",q2:"",q3:"",q4:""}]);
   // Part 6: Client Account Thread modal
   const [accountThreadOpen, setAccountThreadOpen]       = useState(false);
   const [accountThreadClient, setAccountThreadClient]   = useState<string|null>(null);
@@ -3344,12 +3348,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
     // ── SALES REP ──
     if (isRep) return [
       { label:"DAILY WORK", items:[
+        N("rep-dashboard",       "Dashboard",           "⊡"),
         N("my-plan",             "My Plan",             "◎"),
-        N("tasks",               "Tasks",               "✓", myRepTaskBadge),
-        N("pipeline",            "My Pipeline",         "◈"),
         N("revenue-log",         "Revenue Log",         "₹"),
-        N("target-submit",       "Target",              "◎", targetSubs.filter(t=>t.repId===user_role?.repId&&t.status!=="Approved").length||null),
-        N("internal-requests",   "Requests",            "⬆", irBadge),
+        N("internal-requests",   "Internal Requests",   "⬆", irBadge),
+        N("tasks",               "Tasks",               "✓", myRepTaskBadge),
         N("hr",                  "HR Report",           "⊘", hrBadge),
       ]},
     ];
@@ -3903,6 +3906,366 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             </div>
           )}
 
+          {/* ═══ SETUP WIZARD ═══ */}
+          {view==="setup-wizard" && isRep && (()=>{
+            const myRepId   = user_role?.repId;
+            const myRep     = reps.find(r=>r.id===myRepId);
+            const mySubs    = targetSubs.filter(t=>t.repId===myRepId);
+            const alreadySubmitted = mySubs.length > 0;
+
+            const wStep    = wizardStep;
+            const setWStep = setWizardStep;
+            const wClients    = wizardClients;
+            const setWClients = setWizardClients;
+
+            const parseLakh = (v) => {
+              const s = String(v||"").replace(/,/g,"").trim();
+              if (!s) return 0;
+              if (/^\d+(\.\d+)?[Ll]$/.test(s)) return Math.round(parseFloat(s)*100000);
+              if (/^\d+(\.\d+)?[Cc][Rr]?$/.test(s)) return Math.round(parseFloat(s)*10000000);
+              return Math.round(parseFloat(s)||0);
+            };
+
+            const totalTarget = wClients.reduce((s,c)=>s+parseLakh(c.q1)+parseLakh(c.q2)+parseLakh(c.q3)+parseLakh(c.q4),0);
+
+            const doSubmit = () => {
+              const repIdInt = myRepId;
+              const repName  = myRep?.name || user?.name || "Sales Rep";
+              const rhRegion = myRep?.region || "";
+              const now      = new Date().toISOString();
+              const newSubs  = QUARTERS.slice(0,4).map((q,qi)=>{
+                const clients = wClients.map(c=>({
+                  clientCompany: (c.client||c.agency||c.brand||"").trim(),
+                  agency: c.agency.trim(),
+                  brand: c.brand.trim(),
+                  dealType:"Linear TV",
+                  targetAmount: parseLakh(qi===0?c.q1:qi===1?c.q2:qi===2?c.q3:c.q4),
+                })).filter(c=>c.clientCompany&&c.targetAmount>0);
+                if (clients.length===0) return null;
+                const total = clients.reduce((s,c)=>s+(c.targetAmount||0),0);
+                const id = `ts_wizard_${Date.now()}_q${qi}_${Math.random().toString(36).slice(2,4)}`;
+                return {id,repId:repIdInt,repName,region:rhRegion,quarter:q,clients,totalTarget:total,status:"Pending RH",submittedAt:now,submittedByRole:"SALES REP",approvedAt:null,approvedBy:null,frozenTarget:null,awaitingApprovalSince:now,auditLog:[{at:now,by:"SELF",role:"SALES REP",action:"Submitted (Setup Wizard)"}]};
+              }).filter(Boolean);
+              if (newSubs.length===0) { showToast("Add at least one client with a target amount","err"); return; }
+              setTargetSubs(p=>[...newSubs,...p]);
+              fetch("/api/targets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newSubs[0])}).catch(()=>{});
+              showToast("Target submitted for approval ✓");
+              setView("rep-dashboard");
+            };
+
+            const StepDot = ({n,label}) => (
+              <div style={{display:"flex",alignItems:"center",gap:4}}>
+                <div style={{width:22,height:22,borderRadius:"50%",background:wStep>=n?C.accent:`${C.dim}30`,color:wStep>=n?"#fff":C.muted,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,flexShrink:0,transition:"all .2s"}}>{wStep>n?"✓":n+1}</div>
+                <span style={{fontSize:10,color:wStep>=n?C.text:C.muted,fontFamily:"'DM Sans',sans-serif",fontWeight:wStep===n?700:400}}>{label}</span>
+              </div>
+            );
+
+            return (
+              <div className="fin">
+                <h2 style={{fontSize:18,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",margin:"0 0 4px"}}>Welcome to OTV CRM</h2>
+                <p style={{fontSize:12,color:C.dim,fontFamily:"'DM Sans',sans-serif",margin:"0 0 20px"}}>Let's get your account set up — it takes 2 minutes.</p>
+
+                {/* Step tracker */}
+                <div style={{display:"flex",gap:16,marginBottom:24,flexWrap:"wrap"}}>
+                  {[["Welcome","0"],["Your Profile","1"],["Set Targets","2"],["Review","3"]].map(([lbl],i)=><StepDot key={i} n={i} label={lbl}/>)}
+                </div>
+
+                {/* ── Step 0: Welcome ── */}
+                {wStep===0 && (
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>
+                    <div style={{fontSize:32,marginBottom:12}}>👋</div>
+                    <div style={{fontSize:16,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:8}}>Hi{myRep?.name?", "+myRep.name.split(" ")[0]:""}!</div>
+                    <div style={{fontSize:13,color:C.dim,fontFamily:"'DM Sans',sans-serif",marginBottom:16,lineHeight:1.6}}>
+                      You're about to set up your sales workspace. Here's what you'll need:<br/>
+                      • Your client list for this fiscal year<br/>
+                      • Approximate quarterly targets per client<br/>
+                      • 2 minutes of your time 😊
+                    </div>
+                    <div style={{display:"flex",flexDirection:"column",gap:8,marginBottom:16}}>
+                      {[["📅","My Plan","Plan & log daily client meetings"],["₹","Revenue Log","Record revenue when deals close"],["⬆","Requests","Raise approvals & support requests"],["⊡","Dashboard","Track your targets and performance"]].map(([icon,name,desc])=>(
+                        <div key={name} style={{display:"flex",gap:10,alignItems:"flex-start",padding:"8px 12px",background:C.s2,borderRadius:7}}>
+                          <span style={{fontSize:18,flexShrink:0}}>{icon}</span>
+                          <div><div style={{fontSize:12,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{name}</div><div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>{desc}</div></div>
+                        </div>
+                      ))}
+                    </div>
+                    {alreadySubmitted && (
+                      <div style={{padding:"8px 12px",background:`${C.green}10`,border:`1px solid ${C.green}33`,borderRadius:6,marginBottom:12,fontSize:11,color:C.green,fontFamily:"'DM Sans',sans-serif"}}>
+                        ✓ You already have a target submission. You can skip to the dashboard.
+                      </div>
+                    )}
+                    <div style={{display:"flex",gap:8}}>
+                      {alreadySubmitted && <button onClick={()=>setView("rep-dashboard")} style={{flex:1,padding:"10px 0",border:`1px solid ${C.border}`,background:"transparent",color:C.dim,borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Go to Dashboard</button>}
+                      <button onClick={()=>setWStep(1)} style={{flex:2,padding:"10px 0",background:C.accent,color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Let's get started →</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Step 1: Profile ── */}
+                {wStep===1 && (
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>Your Profile</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:16}}>
+                      {[["Name",myRep?.name||user?.name||"—"],["Region",myRep?.region||"—"],["Role",user_role?.role||"SALES REP"],["Team",myRep?.region?"Sales · "+myRep.region:"—"]].map(([lbl,val])=>(
+                        <div key={lbl} style={{padding:"10px 14px",background:C.s2,borderRadius:7}}>
+                          <div style={{fontSize:10,color:C.muted,fontFamily:"'DM Sans',sans-serif",letterSpacing:.4,textTransform:"uppercase"}}>{lbl}</div>
+                          <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginTop:3}}>{val}</div>
+                        </div>
+                      ))}
+                    </div>
+                    <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif",marginBottom:16}}>If any of this looks wrong, contact your Region Head or Admin to update it.</div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>setWStep(0)} style={{flex:1,padding:"10px 0",border:`1px solid ${C.border}`,background:"transparent",color:C.dim,borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← Back</button>
+                      <button onClick={()=>setWStep(2)} style={{flex:2,padding:"10px 0",background:C.accent,color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Looks good →</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Step 2: Set Targets ── */}
+                {wStep===2 && (
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Set Your Targets</div>
+                    <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif",marginBottom:14}}>Add clients and quarterly targets. You can always add more later from the Target Submission page.</div>
+
+                    {wClients.map((c,ci)=>(
+                      <div key={ci} style={{border:`1px solid ${C.border}`,borderRadius:8,padding:14,marginBottom:10,background:C.s2}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+                          <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>Client {ci+1}</div>
+                          {wClients.length>1&&<button onClick={()=>setWClients(p=>p.filter((_,i)=>i!==ci))} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12}}>✕</button>}
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                          <div>
+                            <label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3,fontFamily:"'DM Sans',sans-serif"}}>Agency (opt.)</label>
+                            <input value={c.agency} onChange={e=>setWClients(p=>p.map((x,i)=>i===ci?{...x,agency:e.target.value}:x))} placeholder="e.g. Dentsu" style={{fontSize:12}} />
+                          </div>
+                          <div>
+                            <label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3,fontFamily:"'DM Sans',sans-serif"}}>Client *</label>
+                            <input value={c.client} onChange={e=>setWClients(p=>p.map((x,i)=>i===ci?{...x,client:e.target.value}:x))} placeholder="e.g. Tata Motors" style={{fontSize:12}} />
+                          </div>
+                          <div>
+                            <label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3,fontFamily:"'DM Sans',sans-serif"}}>Brand (opt.)</label>
+                            <input value={c.brand} onChange={e=>setWClients(p=>p.map((x,i)=>i===ci?{...x,brand:e.target.value}:x))} placeholder="e.g. Nexon" style={{fontSize:12}} />
+                          </div>
+                        </div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
+                          {(["Q1","Q2","Q3","Q4"] as const).map((q,qi)=>(
+                            <div key={q}>
+                              <label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3,fontFamily:"'DM Sans',sans-serif"}}>{q} FY26 (₹)</label>
+                              <input value={c[q.toLowerCase() as "q1"|"q2"|"q3"|"q4"]} onChange={e=>setWClients(p=>p.map((x,i)=>i===ci?{...x,[q.toLowerCase()]:e.target.value}:x))} placeholder="e.g. 25L" style={{fontSize:12}} />
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+
+                    <button onClick={()=>setWClients(p=>[...p,{agency:"",client:"",brand:"",q1:"",q2:"",q3:"",q4:""}])}
+                      style={{width:"100%",padding:"8px 0",border:`1px dashed ${C.border}`,background:"transparent",color:C.blue,borderRadius:6,fontSize:12,cursor:"pointer",marginBottom:14,fontFamily:"'DM Mono',monospace"}}>
+                      + Add another client
+                    </button>
+
+                    {totalTarget>0&&<div style={{padding:"8px 14px",background:`${C.green}10`,border:`1px solid ${C.green}33`,borderRadius:6,fontSize:12,color:C.green,fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>Total annual target: {fmtR(totalTarget)}</div>}
+
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>setWStep(1)} style={{flex:1,padding:"10px 0",border:`1px solid ${C.border}`,background:"transparent",color:C.dim,borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← Back</button>
+                      <button onClick={()=>setWStep(3)} disabled={totalTarget===0} style={{flex:2,padding:"10px 0",background:totalTarget>0?C.accent:`${C.dim}44`,color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:700,cursor:totalTarget>0?"pointer":"default",fontFamily:"'DM Mono',monospace"}}>Review →</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── Step 3: Review & Submit ── */}
+                {wStep===3 && (
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>Review & Submit</div>
+                    <div style={{marginBottom:14}}>
+                      {wClients.filter(c=>c.client||c.agency).map((c,ci)=>{
+                        const qs = {Q1:parseLakh(c.q1),Q2:parseLakh(c.q2),Q3:parseLakh(c.q3),Q4:parseLakh(c.q4)};
+                        const tot = Object.values(qs).reduce((s,v)=>s+v,0);
+                        return (
+                          <div key={ci} style={{padding:"10px 14px",background:C.s2,borderRadius:7,marginBottom:8}}>
+                            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
+                              <div style={{fontWeight:700,fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{c.client||c.agency} {c.brand?`· ${c.brand}`:""}</div>
+                              <div style={{fontWeight:700,fontSize:12,color:C.green}}>{fmtR(tot)}</div>
+                            </div>
+                            <div style={{display:"flex",gap:8}}>
+                              {Object.entries(qs).filter(([,v])=>v>0).map(([q,v])=>(
+                                <div key={q} style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>{q}: {fmtR(v as number)}</div>
+                              ))}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div style={{padding:"10px 14px",background:`${C.accent}10`,border:`1px solid ${C.accent}33`,borderRadius:7,marginBottom:16}}>
+                      <div style={{display:"flex",justifyContent:"space-between",fontFamily:"'DM Sans',sans-serif"}}>
+                        <div style={{fontSize:12,color:C.text}}>Total Annual Target</div>
+                        <div style={{fontSize:15,fontWeight:800,color:C.accent}}>{fmtR(totalTarget)}</div>
+                      </div>
+                      <div style={{fontSize:10,color:C.dim,marginTop:4}}>Submitted → Region Head → NSH → Sales Strategy → CRO</div>
+                    </div>
+                    <div style={{display:"flex",gap:8}}>
+                      <button onClick={()=>setWStep(2)} style={{flex:1,padding:"10px 0",border:`1px solid ${C.border}`,background:"transparent",color:C.dim,borderRadius:6,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← Edit</button>
+                      <button onClick={doSubmit} style={{flex:2,padding:"10px 0",background:C.green,color:"#fff",border:"none",borderRadius:6,fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Submit for Approval ✓</button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            );
+          })()}
+
+          {/* ═══ REP DASHBOARD ═══ */}
+          {view==="rep-dashboard" && isRep && (()=>{
+            const myRepId   = user_role?.repId;
+            const annualTgt = getAnnualTarget(myRepId).amount;
+            const ach       = getAchieved(myRepId);
+            const comm      = getCommitted(myRepId);
+            const inpl      = getInPlay(myRepId);
+            const sf        = getShortfall(annualTgt, myRepId);
+            const pct       = annualTgt > 0 ? Math.min(100, Math.round((ach / annualTgt) * 100)) : 0;
+
+            // Current quarter (Indian FY: Apr=Q1, Jul=Q2, Oct=Q3, Jan=Q4)
+            const todayM    = new Date().getMonth() + 1; // 1-12
+            const qIdx      = todayM >= 4 && todayM <= 6 ? 0 : todayM >= 7 && todayM <= 9 ? 1 : todayM >= 10 && todayM <= 12 ? 2 : 3;
+            const currentQ  = QUARTERS[qIdx]; // "Q1 FY26" etc
+            const qSubs     = targetSubs.filter(s => s.repId === myRepId && s.quarter === currentQ && s.status === "Approved");
+            const qTarget   = qSubs.reduce((s,x) => s + (x.totalTarget||0), 0);
+            const qAch      = revenueEntries.filter(e => e.repId === myRepId && e.quarter === currentQ).reduce((s,e) => s + (parseCurrency(e.amount||"0")||0), 0);
+
+            // Alerts
+            const pendingTasks = tasks.filter(t => (t.assignedTo === myRepId || t.assignedToUserId === activeUser) && t.status !== "Done").length;
+            const pendingIRs   = internalReqs.filter(r => r.status !== "Done" && r.raisedBy === activeUser).length;
+            const myTargetSub  = targetSubs.find(s => s.repId === myRepId);
+            const targetApprovalStatus = !myTargetSub ? "none" : myTargetSub.status === "Approved" ? "approved" : "pending";
+            const todayMeetings = meetings.filter(m => m.repId === myRepId && m.date === TODAY);
+            const plannedToday  = todayMeetings.length;
+
+            const Card = ({label,value,sub=null,color=C.text}) => (
+              <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:"14px 18px",flex:1,minWidth:0}}>
+                <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:4}}>{label}</div>
+                <div style={{fontSize:22,fontWeight:700,color,fontFamily:"'DM Sans',sans-serif",lineHeight:1.1}}>{value}</div>
+                {sub && <div style={{fontSize:11,color:C.muted,marginTop:4,fontFamily:"'DM Sans',sans-serif"}}>{sub}</div>}
+              </div>
+            );
+
+            const Alert = ({icon,msg,color=C.accent,onClick=null,cta=null}) => (
+              <div onClick={onClick} style={{display:"flex",alignItems:"center",gap:10,padding:"10px 14px",background:color+"12",border:`1px solid ${color}33`,borderRadius:8,cursor:onClick?"pointer":"default",marginBottom:8}}>
+                <span style={{fontSize:16}}>{icon}</span>
+                <span style={{flex:1,fontSize:12,color:C.text,fontFamily:"'DM Sans',sans-serif"}}>{msg}</span>
+                {cta && <span style={{fontSize:11,color,fontWeight:600,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap"}}>{cta} →</span>}
+              </div>
+            );
+
+            const QA = ({icon,label,view:v}) => (
+              <div onClick={()=>setView(v)} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:6,padding:"14px 10px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,cursor:"pointer",flex:1,minWidth:0,transition:"box-shadow .15s"}}
+                onMouseEnter={e=>e.currentTarget.style.boxShadow="0 2px 8px #1d5db420"}
+                onMouseLeave={e=>e.currentTarget.style.boxShadow="none"}>
+                <span style={{fontSize:22}}>{icon}</span>
+                <span style={{fontSize:11,fontWeight:600,color:C.text,fontFamily:"'DM Sans',sans-serif",textAlign:"center",lineHeight:1.3}}>{label}</span>
+              </div>
+            );
+
+            return (
+              <div className="fin">
+                {/* Header */}
+                <div style={{marginBottom:20}}>
+                  <h2 style={{fontSize:20,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",margin:0}}>
+                    My Dashboard
+                  </h2>
+                  <p style={{fontSize:12,color:C.dim,fontFamily:"'DM Sans',sans-serif",margin:"4px 0 0"}}>
+                    {new Date().toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}
+                  </p>
+                </div>
+
+                {/* KPI Cards */}
+                <div style={{display:"flex",gap:12,marginBottom:16,flexWrap:"wrap"}}>
+                  <Card label="Annual Target"   value={fmtR(annualTgt)} sub={targetApprovalStatus==="pending"?"Pending approval":targetApprovalStatus==="none"?"Not set yet":undefined} color={C.blue} />
+                  <Card label={`${currentQ} Target`} value={qTarget>0?fmtR(qTarget):"—"} sub={qTarget>0?`Achieved ${fmtR(qAch)}`:undefined} color={C.purple} />
+                  <Card label="Achieved (FY)"   value={fmtR(ach)}  sub={annualTgt>0?`${pct}% of annual target`:undefined} color={C.green} />
+                  <Card label="Shortfall"        value={annualTgt>0?fmtR(sf):"—"} sub={annualTgt>0&&sf===0?"On track 🎉":undefined} color={sf>0?C.red:C.green} />
+                </div>
+
+                {/* Progress bar */}
+                {annualTgt > 0 && (
+                  <div style={{marginBottom:20}}>
+                    {stackedBar(annualTgt, ach, comm, inpl, sf, 0)}
+                    <div style={{display:"flex",gap:16,marginTop:6,flexWrap:"wrap"}}>
+                      {[["Achieved",C.green,ach],["Committed",C.blue,comm],["In Play","#d97706",inpl],["Shortfall",C.red+"99",sf]].map(([lbl,col,val])=>(
+                        <div key={lbl as string} style={{display:"flex",alignItems:"center",gap:4}}>
+                          <div style={{width:8,height:8,borderRadius:2,background:col as string,flexShrink:0}} />
+                          <span style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>{lbl as string} {fmtR(val as number)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Alerts */}
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Alerts</div>
+                  {targetApprovalStatus==="none" && (
+                    <Alert icon="⚠️" msg="No target set yet. Complete the setup to get started." color={C.red} onClick={()=>setView("setup-wizard")} cta="Start Setup →" />
+                  )}
+                  {targetApprovalStatus==="pending" && (
+                    <Alert icon="⏳" msg="Your target submission is pending approval." color={C.accent} />
+                  )}
+                  {plannedToday === 0 && (
+                    <Alert icon="📅" msg="No meetings planned for today. Add your plan for the day." color={C.blue} onClick={()=>setView("my-plan")} cta="Open My Plan" />
+                  )}
+                  {pendingTasks > 0 && (
+                    <Alert icon="✓" msg={`${pendingTasks} task${pendingTasks>1?"s":""} pending completion.`} color={C.purple} onClick={()=>setView("tasks")} cta="View Tasks" />
+                  )}
+                  {pendingIRs > 0 && (
+                    <Alert icon="⬆" msg={`${pendingIRs} internal request${pendingIRs>1?"s":""} awaiting resolution.`} color={C.orange} onClick={()=>setView("internal-requests")} cta="View Requests" />
+                  )}
+                  {hrBadge && (
+                    <Alert icon="⊘" msg={`${hrBadge} HR compliance issue${hrBadge>1?"s":""} require attention.`} color={C.red} onClick={()=>setView("hr")} cta="View HR" />
+                  )}
+                  {!targetApprovalStatus.match(/none|pending/) && plannedToday>0 && !pendingTasks && !pendingIRs && !hrBadge && (
+                    <Alert icon="✅" msg="All clear — you're on track for today!" color={C.green} />
+                  )}
+                </div>
+
+                {/* Today's meetings summary */}
+                {plannedToday > 0 && (
+                  <div style={{marginBottom:20}}>
+                    <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Today's Meetings ({plannedToday})</div>
+                    {todayMeetings.slice(0,4).map(m => (
+                      <div key={m.id} style={{display:"flex",alignItems:"center",gap:10,padding:"8px 12px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,marginBottom:6}}>
+                        <div style={{width:28,height:28,borderRadius:6,background:m.meetingKind==="PR"?"#e0f2fe":"#faf5ff",display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,flexShrink:0}}>
+                          {m.meetingKind==="PR"?"🤝":"🎯"}
+                        </div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontSize:12,fontWeight:600,color:C.text,fontFamily:"'DM Sans',sans-serif",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                            {m.clientName||m.agencyName||"Meeting"}
+                          </div>
+                          <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>
+                            {m.time||""} {m.mode||""} {m.meetingKind==="PR"?"· PR":"· Actionable"}
+                          </div>
+                        </div>
+                        <span style={{fontSize:10,padding:"2px 7px",borderRadius:10,fontFamily:"'DM Sans',sans-serif",fontWeight:600,
+                          background:m.status==="logged"?"#dcfce7":m.status==="missed"?"#fee2e2":"#eff6ff",
+                          color:m.status==="logged"?C.green:m.status==="missed"?C.red:C.blue}}>
+                          {m.status||"planned"}
+                        </span>
+                      </div>
+                    ))}
+                    {plannedToday > 4 && <div style={{fontSize:11,color:C.muted,fontFamily:"'DM Sans',sans-serif",marginTop:4,textAlign:"center"}}>+{plannedToday-4} more — <span style={{color:C.blue,cursor:"pointer"}} onClick={()=>setView("my-plan")}>Open My Plan</span></div>}
+                  </div>
+                )}
+
+                {/* Quick Actions */}
+                <div>
+                  <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif",letterSpacing:.5,textTransform:"uppercase",marginBottom:8}}>Quick Actions</div>
+                  <div style={{display:"flex",gap:10,flexWrap:"wrap"}}>
+                    <QA icon="◎" label="My Plan"         view="my-plan" />
+                    <QA icon="₹" label="Log Revenue"     view="revenue-log" />
+                    <QA icon="⬆" label="Internal Requests" view="internal-requests" />
+                    <QA icon="✓" label="Tasks"           view="tasks" />
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
           {/* ═══ MY PLAN ═══ */}
           {view==="my-plan" && (()=>{
             // ── SALES STRATEGY / CRO: monthly overview (read-only, no daily limits) ──
@@ -3989,7 +4352,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               const planTime = pf.time||"10:00";
               const rawPhone = pf.phone.replace(/\D/g,"");
               const storedPhone = rawPhone ? `+91${rawPhone.slice(-10)}` : "";
-              setPlans(p=>[...p,{id:`p${Date.now()}`,repId:myPlanRepId,date,time:planTime,clientAgencyName:clientName,agency:pf.agency.trim(),client:pf.client.trim(),brand:pf.brand.trim(),contactName:pf.contactName.trim(),phone:storedPhone,agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",touchpointType:pf.touchpointType||"Deal Meeting",needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
+              const mkind = (pf.meetingKind||"ACTIONABLE") as "PR"|"ACTIONABLE";
+              const localId = `p${Date.now()}`;
+              setPlans(p=>[...p,{id:localId,repId:myPlanRepId,date,time:planTime,clientAgencyName:clientName,agency:pf.agency.trim(),client:pf.client.trim(),brand:pf.brand.trim(),contactName:pf.contactName.trim(),phone:storedPhone,agenda:pf.agenda.trim(),pitchType:pf.pitchType,meetingType:pf.meetingType||"Physical",touchpointType:pf.touchpointType||"Deal Meeting",meetingKind:mkind,needsMeet:pf.needsMeet||false,status:"Planned",loggedMeetingId:null,isUnplanned:false}]);
+              // S4: dual-write to meetings DB
+              fetch("/api/meetings",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({repId:myPlanRepId,region:reps.find(r=>r.id===myPlanRepId)?.region||"",date,time:planTime,meetingKind:mkind,agencyName:pf.agency.trim(),clientName:pf.client.trim(),brandName:pf.brand.trim(),contactName:pf.contactName.trim(),contactPhone:storedPhone,mode:pf.meetingType||"Physical",agenda:pf.agenda.trim(),status:"planned"})}).catch(()=>{});
 
               // Calendar sync — open calendar in new tab
               if (pf.syncToCalendar) {
@@ -4029,7 +4396,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                 }
               }
 
-              setPf({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform});
+              setPf({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",meetingKind:pf.meetingKind,touchpointType:pf.touchpointType,needsMeet:false,syncToCalendar:pf.syncToCalendar,calPlatform:pf.calPlatform});
               setAddPlanFor(null);
               showToast(pf.syncToCalendar?"Meeting planned ✓ · Calendar opening…":"Meeting planned ✓");
             };
@@ -4516,14 +4883,15 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     setLogForm(f=>({...BLANK_LOG,repId:String(myRepId),
                                       planId:p.id,
                                       meetingTime:p.time||"",
-                                      touchpointType:(p as any).touchpointType||"Deal Meeting",
+                                      meetingKind:(p as any).meetingKind||"ACTIONABLE",
+                                      touchpointType:(p as any).touchpointType||(((p as any).meetingKind==="PR")?"Relationship":"Deal Meeting"),
                                       clientAgencyName:p.client||p.agency||p.clientAgencyName||"",
                                       agency:p.agency||"",client:p.client||p.clientAgencyName||"",brand:p.brand||"",
                                       contactName:p.contactName||"",mobile:p.phone||"",
                                       meetingType:p.meetingType||"Physical",
                                       pitchType:p.pitchType||"",agenda:p.agenda||"",
                                       // Auto-link deal if client matches
-                                      dealId: deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===(p.client||p.clientAgencyName||"").toLowerCase())?.id || "",
+                                      dealId: (p as any).meetingKind==="PR" ? "" : deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===(p.client||p.clientAgencyName||"").toLowerCase())?.id || "",
                                     }));
                                     setLogOpen(true);
                                   }
@@ -5090,7 +5458,22 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         </div>
                       </div>
 
-                      {/* Deal vs Relationship — set here, not at logging time */}
+                      {/* PR vs Actionable — top-level meeting category */}
+                      <div style={{marginBottom:14}}>
+                        <label style={{marginBottom:6,display:"block"}}>Meeting kind *</label>
+                        <div style={{display:"flex",gap:8}}>
+                          {([["ACTIONABLE","🎯","Sales call · full details","#1d5db4"],["PR","🤝","Quick check-in · relationship","#15803d"]] as [string,string,string,string][]).map(([mk,icon,sub,col])=>(
+                            <button key={mk} onClick={()=>setPf(p=>({...p,meetingKind:mk,touchpointType:mk==="PR"?"Relationship":p.touchpointType}))}
+                              style={{flex:1,padding:"10px 12px",borderRadius:7,border:`1.5px solid ${pf.meetingKind===mk?col:C.border}`,background:pf.meetingKind===mk?`${col}14`:"transparent",cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
+                              <div style={{fontSize:12,fontWeight:700,color:pf.meetingKind===mk?col:C.text}}>{icon} {mk==="ACTIONABLE"?"Actionable":"PR"}</div>
+                              <div style={{fontSize:10,color:C.dim,marginTop:2}}>{sub}</div>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* Deal vs Relationship — only for ACTIONABLE meetings */}
+                      {pf.meetingKind!=="PR" && (
                       <div style={{marginBottom:14}}>
                         <label style={{marginBottom:6,display:"block"}}>Type of touchpoint *</label>
                         <div style={{display:"flex",gap:8}}>
@@ -5103,6 +5486,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           ))}
                         </div>
                       </div>
+                      )}
 
                       <div style={{height:1,background:C.border,marginBottom:14}} />
 
@@ -5137,7 +5521,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           )}
                         </div>
 
-                        {pf.client && pf.client!=="__other__" && (
+                        {pf.meetingKind!=="PR" && pf.client && pf.client!=="__other__" && (
                           <div>
                             <label>Brand / Product <span style={{color:C.dim,fontWeight:400}}>(optional)</span></label>
                             {brandOptions.length>0 ? (
@@ -5208,10 +5592,13 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           </div>
                         )}
 
-                        {/* Agenda */}
-                        <div><label>Agenda — what are you going in for?</label><input placeholder="e.g. Present Q2 FCT grid" value={pf.agenda} onChange={e=>setPf(p=>({...p,agenda:e.target.value}))} /></div>
+                        {/* Agenda — hidden for PR */}
+                        {pf.meetingKind!=="PR" && (
+                          <div><label>Agenda — what are you going in for?</label><input placeholder="e.g. Present Q2 FCT grid" value={pf.agenda} onChange={e=>setPf(p=>({...p,agenda:e.target.value}))} /></div>
+                        )}
 
-                        {/* Pitch Type */}
+                        {/* Pitch Type — hidden for PR */}
+                        {pf.meetingKind!=="PR" && (
                         <div>
                           <label>Pitch Type</label>
                           <div style={{display:"flex",gap:5,flexWrap:"wrap",marginTop:4}}>
@@ -5220,6 +5607,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             ))}
                           </div>
                         </div>
+                        )}
 
                         {/* Calendar sync */}
                         <div style={{borderTop:`1px solid ${C.border}`,paddingTop:10,marginTop:2}}>

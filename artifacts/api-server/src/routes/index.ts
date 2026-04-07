@@ -16,6 +16,7 @@ import notificationsRouter from "./notifications";
 import activityLogRouter from "./activity-log";
 import dailyPlansRouter from "./daily-plans";
 import rhTeamFeedRouter from "./rh-team-feed";
+import meetingsRouter from "./meetings";
 
 const router: IRouter = Router();
 
@@ -56,5 +57,8 @@ router.use(dailyPlansRouter);
 
 // Phase 9 — RH team feed (plans + touchpoints + compliance summary)
 router.use(rhTeamFeedRouter);
+
+// Phase 10 — Meetings (DB-backed scheduling + logging)
+router.use(meetingsRouter);
 
 export default router;

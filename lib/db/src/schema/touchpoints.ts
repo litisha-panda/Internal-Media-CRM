@@ -23,6 +23,8 @@ export const touchpoints = pgTable("touchpoints", {
   clientFeedback:     text("client_feedback"),
   stageUpdate:        text("stage_update"),
   actionItems:        jsonb("action_items").$type<any[]>().default([]),
+  /** FK to meetings.id — set when this touchpoint was logged from a scheduled meeting. */
+  meetingId:          text("meeting_id"),
   loggedAt:           text("logged_at"),
   loggedLate:         boolean("logged_late").default(false),
   loggedByUserId:     text("logged_by_user_id"),

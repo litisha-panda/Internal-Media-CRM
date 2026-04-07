@@ -1,0 +1,117 @@
+We should migrate the planning flow to the proper DB backend now.
+
+Do not build the new Sales Rep UX on top of frontend-only meeting state.
+That will create rework and won’t match the spec.
+
+Please proceed in this exact order:
+
+1. Rep sidebar fix + landing
+- Hide “My Pipeline” for Sales Rep
+- Add Dashboard as the landing page after setup is complete
+- Keep only:
+  Dashboard
+  My Plan
+  Revenue Log
+  Internal Requests
+  Tasks
+  HR Reports
+
+2. Setup Wizard
+Build the first-login setup wizard with:
+- guided tour
+- region
+- reporting manager
+- target entry in Agency > Client > Brand > Q1 > Q2 > Q3 > Q4 > Annual(auto)
+- import/sync clients
+- import achieved so far
+- review and submit
+- approval workflow remains RH → NSH → Strategy → CRO
+- approved = locked
+- rejected = editable and resubmittable
+
+3. Migrate My Plan to proper DB-backed meetings
+This is mandatory.
+Do not keep today/tomorrow planning in frontend state or app_state blobs.
+Use proper PostgreSQL tables and APIs for:
+- meetings
+- daily planning
+- scheduling today/tomorrow
+- linking scheduled meetings to logged touchpoints
+- meeting_id → touchpoint linkage
+- status transitions (planned / logged / missed / cancelled)
+
+4. After DB migration, implement PR vs Actionable meeting types
+PR Meeting:
+- agency
+- client
+- who
+- time
+- contact number
+- save only
+
+Actionable Meeting:
+- agency dropdown/manual
+- client dropdown/manual
+- brand dropdown/manual
+- who
+- contact number
+- mode
+- actionable type
+- agenda
+- date/time
+
+5. Logging flow
+When rep logs from scheduled meeting, auto-fill from the meetings table.
+Do not re-ask the same fields.
+Only ask:
+- discussion
+- feedback dropdown
+- stage
+- support needed
+- from whom
+- by when
+- follow-up
+- next meeting date
+
+If stage = Mail Confirmed or RO Received:
+- hide support-needed section
+If stage = RO Received:
+- prompt Revenue Log
+
+6. Action Required triggers must create proper DB rows
+Do not keep these only inside touchpoint JSON.
+On submit, create proper rows in:
+- tasks
+- internal_requests
+- approvals (if type = Approval)
+and trigger reminders/calendar schedules for both parties
+
+7. Rep Dashboard
+Build the rep dashboard after the meeting flow is DB-backed.
+Show:
+- Annual Target
+- Quarter Target
+- Achieved
+- Shortfall
+- alerts:
+  pending tasks
+  pending internal requests
+  missed HR compliance
+  target approval status
+
+8. Compliance job
+Implement the backend scheduled 11:30 PM IST compliance logic:
+- first day: schedule today + tomorrow + log today
+- second day onward: log today + schedule tomorrow
+- if any required action is missed → absent / non-compliant
+- HR Reports should reflect this
+- exception flow remains RH → NSH → CRO → Admin
+
+Important:
+Do not ask me again whether to use frontend state or proper DB for meetings.
+Use proper DB now.
+
+Before coding further, please respond with:
+A. exact tables/endpoints you will use for meetings + touchpoints linkage
+B. exact sidebar/landing changes
+C. what already exists vs what you still need to build in this order
