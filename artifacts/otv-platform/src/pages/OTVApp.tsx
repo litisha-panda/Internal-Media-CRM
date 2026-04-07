@@ -97,9 +97,9 @@ function meetingToPlan(m: any): any {
     touchpointType: m.meetingKind === "PR" ? "Relationship" : "Deal Meeting",
     meetingKind: m.meetingKind || "ACTIONABLE",
     needsMeet: false,
-    status: m.status === "logged"    ? "Done"    :
-            m.status === "missed"    ? "Missed"  :
-            m.status === "cancelled" ? "Declined": "Planned",
+    status: m.status === "logged"    ? "Done"      :
+            m.status === "missed"    ? "Missed"    :
+            m.status === "cancelled" ? "Cancelled" : "Planned",
     loggedMeetingId: m.touchpointId || null,
     isUnplanned: false,
     autoCreatedFrom: null,
@@ -1293,10 +1293,11 @@ export default function OTVApp() {
     setDbMeetings(prev => prev.map((m: any) => {
       const upd = next.find((p: any) => (p.meetingDbId ?? p.id) === m.id);
       if (!upd) return m;
-      const newStatus = upd.status === "Done"     ? "logged"
-                      : upd.status === "Missed"   ? "missed"
-                      : upd.status === "Declined" ? "cancelled"
-                      : upd.status === "Planned"  ? "planned" : m.status;
+      const newStatus = upd.status === "Done"       ? "logged"
+                      : upd.status === "Missed"    ? "missed"
+                      : upd.status === "Declined"  ? "cancelled"   // declined meeting request
+                      : upd.status === "Cancelled" ? "cancelled"   // canonical cancelled round-trip
+                      : upd.status === "Planned"   ? "planned" : m.status;
       return {
         ...m,
         status: newStatus,
@@ -5386,7 +5387,9 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                       const loggedAt = `${String(new Date().getHours()).padStart(2,"0")}:${String(new Date().getMinutes()).padStart(2,"0")}`;
                                       const newMeetId = `ml${Date.now()}`;
                                       setPlans(q=>q.map(pl=>pl.id===p.id?{...pl,status:"Done",loggedMeetingId:newMeetId}:pl));
-                                      if (p.meetingDbId) { fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({status:"logged"})}).catch(()=>{}); }
+                                      // DB-first: create touchpoint then atomically link to meeting (status+touchpointId)
+                                      const tpIdInline = `tp${Date.now()}`;
+                                      fetch("/api/touchpoints",{method:"POST",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({id:tpIdInline,repId:myRepId,region:reps.find(r=>r.id===myRepId)?.region||"",date:TODAY,touchpointType:p.touchpointType||"Deal Meeting",whatHappened:disc,clientFeedback:fb,stageUpdate:st,actionItems:act&&frm?[{action:act,neededFrom:frm,dueDate:bywhen||fu||TOMORROW,notes:rmk}]:[]})}).then(r=>r.ok?r.json():null).then(tpR=>{const resolvedTpId=tpR?.ok&&tpR.data?.id?tpR.data.id:tpIdInline;if(p.meetingDbId){fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({status:"logged",touchpointId:resolvedTpId})}).catch(()=>{});}}).catch(()=>{if(p.meetingDbId){fetch(`/api/meetings/${p.meetingDbId}`,{method:"PATCH",credentials:"include",headers:authHeaders({"Content-Type":"application/json"}),body:JSON.stringify({status:"logged"})}).catch(()=>{});}});
                                       setMeetings(q=>[{id:newMeetId,repId:myRepId||(reps[0]?.id),repName:reps.find(r=>r.id===myRepId)?.name||"",region:reps.find(r=>r.id===myRepId)?.region||"",clientCompany:p.clientAgencyName,contactName:p.contactName||"",phone:p.phone||"",date:TODAY,loggedAt,late:new Date().getHours()>=23,pitchType:p.pitchType||"",discussion:disc,clientFeedback:fb,status:st,nextSteps:ns,followUpDate:fu,nextMeetingDate:nm,nextMeetingTime:nm_time||"",meetingType:p.meetingType||"Physical",outcome:st==="Closed"?"Mail Confirmed":"Needs Callback",isUnplanned:false},...q]);
                                       if (act && frm && frm!=="Self"&&frm!=="Client") {
                                         const md=deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase()===p.clientAgencyName.toLowerCase())||deals.find(d=>d.repId===myRepId&&(d.clientCompany||"").toLowerCase().includes(p.clientAgencyName.toLowerCase().slice(0,5)));

@@ -48,7 +48,7 @@ async function scopeCondition(user: any) {
 router.get("/meetings", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    const { date, userId, dateFrom, dateTo } = req.query as Record<string, string>;
+    const { date, userId, dateFrom, dateTo, region } = req.query as Record<string, string>;
 
     const conditions: any[] = [];
 
@@ -64,10 +64,15 @@ router.get("/meetings", requireAuth, async (req, res) => {
     if (dateFrom) conditions.push(gte(meetings.date, dateFrom));
     if (dateTo)   conditions.push(lte(meetings.date, dateTo));
     if (userId && u.role !== "SALES REP") conditions.push(eq(meetings.userId, userId));
+    // Explicit region filter for elevated roles (NSH / CRO / Admin) inspecting a region
+    if (region && u.role !== "SALES REP" && u.role !== "REGION HEAD") {
+      conditions.push(eq(meetings.region, region));
+    }
 
+    // Always order date asc, time asc — consistent for all calendar rendering paths
     const rows = conditions.length
       ? await db.select().from(meetings).where(and(...conditions)).orderBy(meetings.date, meetings.time)
-      : await db.select().from(meetings).orderBy(desc(meetings.createdAt)).limit(200);
+      : await db.select().from(meetings).orderBy(meetings.date, meetings.time);
 
     res.json({ ok: true, data: rows });
   } catch (err: any) {
