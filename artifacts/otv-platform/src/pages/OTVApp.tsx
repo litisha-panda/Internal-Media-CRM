@@ -3549,7 +3549,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
         .fin{animation:fin .2s ease}
         @keyframes fin{from{opacity:0;transform:translateY(-4px)}to{opacity:1;transform:translateY(0)}}
         .overlay{position:fixed;inset:0;background:rgba(0,0,0,.72);z-index:100;display:flex;align-items:center;justify-content:center}
-        .modal{background:${C.surface};border:1px solid ${C.border};border-radius:8px;padding:24px;width:560px;max-height:88vh;overflow-y:auto}
+        .modal{background:${C.surface};border:1px solid ${C.border};border-radius:8px;padding:18px;width:560px;max-height:94vh;overflow-y:auto}
         .pbar{height:5px;background:${C.s3};border-radius:3px;overflow:hidden}
         .pfill{height:100%;border-radius:3px;transition:width .6s}
         th{text-align:left;font-size:10px;font-weight:600;letter-spacing:.08em;color:${C.dim};padding:7px 10px;border-bottom:1px solid ${C.border};text-transform:uppercase;white-space:nowrap}
@@ -5050,6 +5050,19 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                                     </div>
                                   </div>
 
+                                  {/* RO Received → Revenue Log prompt */}
+                                  {inlineLogStatus==="RO Received" && (
+                                    <div style={{marginBottom:8,background:`${C.green}10`,border:`1px solid ${C.green}44`,borderRadius:6,padding:"10px 12px"}}>
+                                      <div style={{fontSize:12,fontWeight:700,color:C.green,marginBottom:4}}>🎉 RO Received — great work!</div>
+                                      <div style={{fontSize:11,color:C.dim,marginBottom:8}}>Log your revenue entry so it reflects in your achieved total right away.</div>
+                                      <button onClick={()=>{setInlineLogPlan(null);setView("revenue-log");}}
+                                        style={{background:C.green,color:"#fff",border:"none",borderRadius:5,padding:"6px 14px",fontSize:11,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
+                                        → Go to Revenue Log
+                                      </button>
+                                      <span style={{fontSize:10,color:C.dim,marginLeft:8}}>or finish logging this touchpoint first</span>
+                                    </div>
+                                  )}
+
                                   {/* Next Steps — hidden when Closed */}
                                   {!isClosed && (
                                   <div style={{marginBottom:8}}>
@@ -5459,14 +5472,14 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                       </div>
 
                       {/* PR vs Actionable — top-level meeting category */}
-                      <div style={{marginBottom:14}}>
-                        <label style={{marginBottom:6,display:"block"}}>Meeting kind *</label>
+                      <div style={{marginBottom:10}}>
+                        <label style={{marginBottom:5,display:"block"}}>Meeting kind *</label>
                         <div style={{display:"flex",gap:8}}>
-                          {([["ACTIONABLE","🎯","Sales call · full details","#1d5db4"],["PR","🤝","Quick check-in · relationship","#15803d"]] as [string,string,string,string][]).map(([mk,icon,sub,col])=>(
+                          {([["ACTIONABLE","🎯","Sales call · full details","#1d5db4"],["PR","🤝","Relationship · quick visit","#15803d"]] as [string,string,string,string][]).map(([mk,icon,sub,col])=>(
                             <button key={mk} onClick={()=>setPf(p=>({...p,meetingKind:mk,touchpointType:mk==="PR"?"Relationship":p.touchpointType}))}
-                              style={{flex:1,padding:"10px 12px",borderRadius:7,border:`1.5px solid ${pf.meetingKind===mk?col:C.border}`,background:pf.meetingKind===mk?`${col}14`:"transparent",cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
+                              style={{flex:1,padding:"7px 10px",borderRadius:7,border:`1.5px solid ${pf.meetingKind===mk?col:C.border}`,background:pf.meetingKind===mk?`${col}14`:"transparent",cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
                               <div style={{fontSize:12,fontWeight:700,color:pf.meetingKind===mk?col:C.text}}>{icon} {mk==="ACTIONABLE"?"Actionable":"PR"}</div>
-                              <div style={{fontSize:10,color:C.dim,marginTop:2}}>{sub}</div>
+                              <div style={{fontSize:10,color:C.dim,marginTop:1}}>{sub}</div>
                             </button>
                           ))}
                         </div>
@@ -5474,27 +5487,28 @@ Use the primary calendar. Return the event ID and Meet link if created.`
 
                       {/* Deal vs Relationship — only for ACTIONABLE meetings */}
                       {pf.meetingKind!=="PR" && (
-                      <div style={{marginBottom:14}}>
-                        <label style={{marginBottom:6,display:"block"}}>Type of touchpoint *</label>
+                      <div style={{marginBottom:10}}>
+                        <label style={{marginBottom:5,display:"block"}}>Touchpoint type *</label>
                         <div style={{display:"flex",gap:8}}>
                           {([["Deal Meeting","💼","Updates pipeline & stage","#1d5db4"],["Relationship","🤝","Hi-hello · no pipeline impact","#15803d"]] as const).map(([tt,icon,sub,col])=>(
                             <button key={tt} onClick={()=>setPf(p=>({...p,touchpointType:tt}))}
-                              style={{flex:1,padding:"10px 12px",borderRadius:7,border:`1.5px solid ${pf.touchpointType===tt?col:C.border}`,background:pf.touchpointType===tt?`${col}14`:"transparent",cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
+                              style={{flex:1,padding:"7px 10px",borderRadius:7,border:`1.5px solid ${pf.touchpointType===tt?col:C.border}`,background:pf.touchpointType===tt?`${col}14`:"transparent",cursor:"pointer",textAlign:"left",transition:"all .1s"}}>
                               <div style={{fontSize:12,fontWeight:700,color:pf.touchpointType===tt?col:C.text}}>{icon} {tt}</div>
-                              <div style={{fontSize:10,color:C.dim,marginTop:2}}>{sub}</div>
+                              <div style={{fontSize:10,color:C.dim,marginTop:1}}>{sub}</div>
                             </button>
                           ))}
                         </div>
                       </div>
                       )}
 
-                      <div style={{height:1,background:C.border,marginBottom:14}} />
+                      <div style={{height:1,background:C.border,marginBottom:10}} />
 
-                      <div style={{display:"flex",flexDirection:"column",gap:12}}>
+                      <div style={{display:"flex",flexDirection:"column",gap:8}}>
 
-                        {/* Agency → Client → Brand (cascading) */}
+                        {/* Agency → Client (side by side to save vertical space) */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8}}>
                         <div>
-                          <label>Agency <span style={{color:C.dim,fontWeight:400}}>(optional)</span></label>
+                          <label>Agency <span style={{color:C.dim,fontWeight:400}}>(opt.)</span></label>
                           {allAgencies.length>0 ? (
                             <select value={pf.agency} onChange={e=>setPf(p=>({...p,agency:e.target.value,client:"",brand:""}))} style={{marginBottom:4}}>
                               <option value="">— No agency / direct client —</option>
@@ -5520,6 +5534,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                             <input placeholder="Client name…" value={pf.client==="__other__"?"":pf.client} onChange={e=>setPf(p=>({...p,client:e.target.value,brand:""}))} autoFocus={clientOptions.length===0} />
                           )}
                         </div>
+                        </div>{/* /agency+client 2-col grid */}
 
                         {pf.meetingKind!=="PR" && pf.client && pf.client!=="__other__" && (
                           <div>
