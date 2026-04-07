@@ -2125,6 +2125,8 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
   const [wizardClients, setWizardClients]               = useState<{agency:string,client:string,brand:string,q1:string,q2:string,q3:string,q4:string}[]>([{agency:"",client:"",brand:"",q1:"",q2:"",q3:"",q4:""}]);
   const [wizardRegion, setWizardRegion]                 = useState("");
   const [wizardRM, setWizardRM]                         = useState("");
+  // Track whether the wizard was pre-filled from myRep — prevents re-filling after user clears RM
+  const wizardPrefilled = useRef(false);
   // Part 6: Client Account Thread modal
   const [accountThreadOpen, setAccountThreadOpen]       = useState(false);
   const [accountThreadClient, setAccountThreadClient]   = useState<string|null>(null);
@@ -2391,6 +2393,21 @@ function CROApp({ user, onLogout, section, onGoHome, plans, setPlans, weeklyPlan
     if (dept==="Marketing")      return "admin";
     return "admin"; // HR, Branding, Content, Other → admin
   };
+
+  // Pre-fill wizard region + RM once from the rep record (on first load only).
+  // After pre-fill, the user fully controls both fields; changing region clears RM.
+  // We do NOT use a render-time fallback (|| myRep.x) because that would re-populate
+  // stale values after the user explicitly changes region and clears the RM selection.
+  useEffect(() => {
+    if (wizardPrefilled.current) return; // already done
+    const myRepId = user_role?.repId;
+    if (!myRepId) return;
+    const myRep = reps.find((r:any) => r.id === myRepId || r.repId === myRepId);
+    if (!myRep) return;
+    wizardPrefilled.current = true;
+    if (!wizardRegion && myRep.region) setWizardRegion(myRep.region);
+    if (!wizardRM    && (myRep as any).reportingManager) setWizardRM((myRep as any).reportingManager);
+  }, [reps, user_role?.repId]);
 
   // Auto-fill repId when log meeting modal opens for a Sales Rep
   useEffect(()=>{
@@ -4135,8 +4152,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
             const setWStep = setWizardStep;
             const wClients    = wizardClients;
             const setWClients = setWizardClients;
-            const wRegion  = wizardRegion || myRep?.region || "";
-            const wRM      = wizardRM || (myRep as any)?.reportingManager || "";
+            const wRegion  = wizardRegion;
+            const wRM      = wizardRM;
 
             const parseLakh = (v) => {
               const s = String(v||"").replace(/,/g,"").trim();
