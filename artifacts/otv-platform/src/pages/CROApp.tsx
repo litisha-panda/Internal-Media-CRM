@@ -17,6 +17,7 @@ import { useAttendance } from "../hooks/useAttendance";
 import { RepDashboard } from "../views/rep/RepDashboard";
 import { MyPlan } from "../views/rep/MyPlan";
 import { LogMeeting } from "../views/rep/LogMeeting";
+import { externalPost } from "../services/api/external";
 
 
 // Route all Claude API calls through the API server proxy (key stays server-side)
@@ -93,34 +94,6 @@ const HR_EMAIL = "hr@odishatv.com";
 // Plan status
 const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
 
-// meetingToPlan: maps DB meetings row → plan blob schema for calendar display
-function meetingToPlan(m: any): any {
-  return {
-    id: m.id,                // same as DB primary key
-    meetingDbId: m.id,       // marks this plan as DB-originating
-    repId: m.repId,
-    date: m.date,
-    time: m.time || "10:00",
-    clientAgencyName: m.clientName || m.agencyName || "",
-    agency: m.agencyName || "",
-    client: m.clientName || "",
-    brand: m.brandName || "",
-    contactName: m.contactName || "",
-    phone: m.contactPhone || "",
-    agenda: m.agenda || "",
-    pitchType: "",
-    meetingType: m.mode || "Physical",
-    touchpointType: m.meetingKind === "PR" ? "Relationship" : "Deal Meeting",
-    meetingKind: m.meetingKind || "ACTIONABLE",
-    needsMeet: false,
-    status: m.status === "logged"    ? "Done"      :
-            m.status === "missed"    ? "Missed"    :
-            m.status === "cancelled" ? "Cancelled" : "Planned",
-    loggedMeetingId: m.touchpointId || null,
-    isUnplanned: false,
-    autoCreatedFrom: null,
-  };
-}
 
 const SEED_WEEKLY_PLANS: any[] = [];
 const SEED_ABSENCE_REPORTS: any[] = [];
@@ -654,7 +627,7 @@ function usePersistedState(key, initial) {
     if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
     pendingTimerRef.current = setTimeout(async () => {
       try {
-        await fetch(`/api/state/${key}`, {
+        await apiFetch(`/api/state/${key}`, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ value: state }),
@@ -672,19 +645,18 @@ function usePersistedState(key, initial) {
   useEffect(() => {
     const load = async (isPoll = false) => {
       try {
-        const res = await fetch(`/api/state/${key}`);
-        if (!res.ok) return;
-        const data = await res.json();
-        if (data.ok && data.value !== null) {
+        const data = await apiFetch(`/api/state/${key}`).catch(() => null);
+        if (!data) return;
+        if ((data as any).ok && (data as any).value !== null) {
           // Skip if we have a pending local write that is newer than the server data
-          const serverTs = data.updatedAt ? new Date(data.updatedAt).getTime() : 0;
+          const serverTs = (data as any).updatedAt ? new Date((data as any).updatedAt).getTime() : 0;
           if (lastWriteRef.current > serverTs - 5000) return;
-          setState(data.value);
-          try { localStorage.setItem(key, JSON.stringify(data.value)); } catch {}
+          setState((data as any).value);
+          try { localStorage.setItem(key, JSON.stringify((data as any).value)); } catch {}
         } else if (!isPoll) {
           // Server has no data yet — push local/seed data so other users see it
           const localVal = state;
-          fetch(`/api/state/${key}`, {
+          apiFetch(`/api/state/${key}`, {
             method: "PUT",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ value: localVal }),
@@ -940,55 +912,11 @@ export function CROApp({ user, onLogout, section, onGoHome }) {
   // Deals: API-backed state owned directly by CROApp
   const [deals, setDeals] = useApiEntityState("/api/deals", "otv_deals", []);
 
-  // Meetings: DB-backed via useMeetings hook
-  const { meetings: dbMeetings, isLoading: dbMeetingsLoading, setMeetings: setDbMeetings } = useMeetings();
-  const meetings    = dbMeetings;
-  const setMeetings = setDbMeetings;
+  // Meetings: DB-backed via useMeetings hook (sole source of truth)
+  const { meetings, isLoading: meetingsLoading, setMeetings } = useMeetings();
 
   // WeeklyPlans: local persisted state owned by CROApp
   const [weeklyPlans, setWeeklyPlans] = usePersistedState("otv_wplans", []);
-
-  // Ephemeral plans: local-only reminder entries (follow-ups, auto-created tasks)
-  const [ephemeralPlans, setEphemeralPlans] = useState([]);
-  const dbMeetingsRef = useRef([]);
-  const ephemeralRef  = useRef([]);
-  useEffect(() => { dbMeetingsRef.current = dbMeetings; }, [dbMeetings]);
-  useEffect(() => { ephemeralRef.current  = ephemeralPlans; }, [ephemeralPlans]);
-
-  // plans: combined derived view (DB meetings + ephemeral)
-  const plans = useMemo(
-    () => [...dbMeetings.map(meetingToPlan), ...ephemeralPlans],
-    [dbMeetings, ephemeralPlans]
-  );
-  // plans_crm: alias kept for backward compatibility with inline views
-  const plans_crm = plans;
-
-  // setPlans: smart router — updates DB meetings or ephemeral based on origin
-  const setPlans = useCallback((updater) => {
-    const prevDb  = dbMeetingsRef.current;
-    const prevEph = ephemeralRef.current;
-    const combined = [...prevDb.map(meetingToPlan), ...prevEph];
-    const next = typeof updater === "function" ? updater(combined) : updater;
-    const dbIdSet = new Set(prevDb.map(m => m.id));
-    setDbMeetings(prev => prev.map(m => {
-      const upd = next.find(p => (p.meetingDbId ?? p.id) === m.id);
-      if (!upd) return m;
-      const newStatus = upd.status === "Done"      ? "logged"
-                      : upd.status === "Missed"    ? "missed"
-                      : upd.status === "Declined"  ? "cancelled"
-                      : upd.status === "Cancelled" ? "cancelled"
-                      : upd.status === "Planned"   ? "planned" : m.status;
-      return {
-        ...m, status: newStatus,
-        date: upd.date ?? m.date,
-        time: upd.time ?? m.time,
-        contactName: upd.contactName ?? m.contactName,
-        agenda: upd.agenda ?? m.agenda,
-        clientName: upd.clientAgencyName !== undefined ? upd.clientAgencyName : m.clientName,
-      };
-    }));
-    setEphemeralPlans(next.filter(p => !dbIdSet.has(p.meetingDbId ?? p.id)));
-  }, []);
 
   // att: local persisted state for attendance display
   const [att, setAtt] = usePersistedState("otv_att", {});
@@ -996,9 +924,9 @@ export function CROApp({ user, onLogout, section, onGoHome }) {
   // ── Demo bootstrap: seed sample meetings for first-time demo users ───────────
   // Runs once after useMeetings has loaded and the user is a demo provider with 0 meetings.
   useEffect(() => {
-    if (dbMeetingsLoading) return;
+    if (meetingsLoading) return;
     const u = user as any;
-    if (u?.provider !== "demo" || dbMeetings.length > 0 || !u?.id) return;
+    if (u?.provider !== "demo" || meetings.length > 0 || !u?.id) return;
     const addDays = (n: number) => {
       const d = new Date(); d.setDate(d.getDate() + n);
       return d.toISOString().split("T")[0];
@@ -1013,20 +941,19 @@ export function CROApp({ user, onLogout, section, onGoHome }) {
     ];
     const flagKey = `bootstrapped_demo_${u.id}`;
     (async () => {
-      const flagRes = await fetch(`/api/state/${flagKey}`, { credentials: "include", headers: authHeaders() }).catch(() => null);
-      const flagData = flagRes?.ok ? await flagRes.json().catch(() => null) : null;
-      if (flagData?.value) return;
+      const flagData = await apiFetch(`/api/state/${flagKey}`).catch(() => null);
+      if ((flagData as any)?.value) return;
       const settled = await Promise.allSettled(seeds.map(m => meetingsSvc.createMeeting(m).catch(() => null)));
       const seeded = settled.filter(r => r.status === "fulfilled" && r.value).map(r => r.value);
-      if (seeded.length) setDbMeetings(seeded);
-      fetch(`/api/state/${flagKey}`, {
-        method: "PUT", credentials: "include",
-        headers: authHeaders({ "Content-Type": "application/json" }),
+      if (seeded.length) setMeetings(seeded as any);
+      apiFetch(`/api/state/${flagKey}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ value: true }),
       }).catch(() => {});
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [dbMeetingsLoading]);
+  }, [meetingsLoading]);
 
   // Countdown to 11:30 PM — shown in topbar for all users
   const [countdown, setCountdown] = useState("");
@@ -1623,11 +1550,7 @@ export function CROApp({ user, onLogout, section, onGoHome }) {
   const pushNotification = (event) => {
     const url = adminConfig?.webhookUrl?.trim();
     if (!url) return;
-    fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ source: "OTV CRM", timestamp: new Date().toISOString(), ...event }),
-    }).catch(() => {});
+    externalPost(url, { source: "OTV CRM", timestamp: new Date().toISOString(), ...event });
   };
 
   // HR ENGINE — simulates EOD auto-fire
@@ -1650,7 +1573,7 @@ export function CROApp({ user, onLogout, section, onGoHome }) {
     let count = 0;
     reps.forEach(rep => {
       const todayLogged = meetings.some(m=>m.repId===rep.id&&m.date===TODAY);
-      const tmrwPlanned = (plans_crm||plans||[]).some(p=>p.repId===rep.id&&p.date===TOMORROW&&p.status==="Planned");
+      const tmrwPlanned = meetings.some(m=>m.repId===rep.id&&m.date===TOMORROW&&m.status==="planned");
       const bothDone = todayLogged && tmrwPlanned;
       if (!bothDone) {
         const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === TODAY);
@@ -2052,735 +1975,6 @@ export function CROApp({ user, onLogout, section, onGoHome }) {
       showToast("Deal added ✓");
     }
     setDealForm(BLANK_DEAL); setAddDealOpen(false);
-  };
-
-  const handleLogMeeting = () => {
-    if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
-    if (!logForm.dealId && !logForm.clientAgencyName?.trim()) { showToast("Select a client deal or enter a client company name to proceed", "err"); return; }
-    // Part 1+3: Stage Update required for Deal Meeting
-    if ((logForm.touchpointType || "Deal Meeting") === "Deal Meeting" && !logForm.stageUpdate && !logForm.status) {
-      showToast("Select a Stage Update for this Deal Meeting", "err"); return;
-    }
-    // Part 9: Loss reason mandatory when stage is Lost
-    if (logForm.stageUpdate === "Lost" && !logForm.lossReason?.trim()) {
-      showToast("Loss reason is required when marking a deal as Lost", "err"); return;
-    }
-    const rep  = reps.find(r => r.id === parseInt(logForm.repId));
-    const deal = deals.find(d => d.id === logForm.dealId);
-    const now  = new Date();
-    const late = now.getHours() >= 23;
-    const loggedAt = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-    const clientCompany = deal?.clientCompany || logForm.clientAgencyName || "";
-
-    // Helper: map neededFrom dept name → assignedToUserId for that person's task list
-    const getNeededFromUserId = (neededFrom: string, repId: number): string|null => {
-      const north=[1,7,8,9,10], south=[2,6,11,12,13], east=[3,14,15,16,17], west=[4,18,19,20,21], national=[5,22,23,24,25], central=[26,27,28,29,30];
-      const repRegion = north.includes(repId)?"North":south.includes(repId)?"South":east.includes(repId)?"East":west.includes(repId)?"West":national.includes(repId)?"National":central.includes(repId)?"Central":null;
-      const rhByRegion:Record<string,string> = {North:"rh_north",South:"rh_south",East:"rh_east",West:"rh_west",National:"rh_national",Central:"rh_central"};
-      if (neededFrom==="Region Head") return rhByRegion[repRegion||""]||null;
-      if (neededFrom==="NSH")            return "sales_head";
-      if (neededFrom==="CXO")            return "admin";
-      if (neededFrom==="Sales Strategy") return "sales_strategy";
-      if (neededFrom==="CRO")            return "sales_analysis";
-      return null;
-    };
-
-    // Build a summary of next steps for the meeting record (uses new actionRequired structure)
-    const nextStepsSummary = (logForm.actionRequired||[])
-      .filter(i=>i.what)
-      .map(i=>`${i.what}${i.from?" (→ "+i.from+")":""}${i.description?" — "+i.description:""}`)
-      .join("; ");
-
-    const tpType = logForm.touchpointType || "Deal Meeting";
-    const stageNow = tpType === "Deal Meeting" ? (logForm.stageUpdate || mapLegacyOutcome(logForm.status||"Prospect")) : dealStage(deal||{});
-    const newMeetingId = `ml${Date.now()}`;
-    setMeetings(p => [{
-      id: newMeetingId,
-      ...logForm,
-      repId: parseInt(logForm.repId),
-      repName: rep.name,
-      region: rep.region,
-      clientCompany,
-      date: TODAY,
-      loggedAt,
-      late,
-      loggedByUserId: activeUser,
-      nextSteps: nextStepsSummary || logForm.nextSteps,
-      outcome: stageNow,
-      touchpointType: tpType,
-    }, ...p]);
-    // Mark the matching plan entry as Done so Team's Plan reflects the log
-    setPlans(q=>q.map(pl=>
-      pl.repId===parseInt(logForm.repId) &&
-      pl.date===TODAY &&
-      pl.status!=="Done" &&
-      (pl.clientAgencyName||"").toLowerCase()===(clientCompany||"").toLowerCase()
-        ? {...pl, status:"Done", loggedMeetingId: newMeetingId}
-        : pl
-    ));
-
-    // Part 1: Create Touchpoint record alongside the legacy meeting record
-    const touchpointId = `tp${Date.now()}`;
-    setTouchpoints(p => [{
-      id: touchpointId, clientAccountId: deal?.clientAccountId || "",
-      dealId: logForm.dealId, repId: parseInt(logForm.repId), date: TODAY,
-      time: logForm.meetingTime || loggedAt, meetingType: logForm.meetingType,
-      touchpointType: tpType, contactName: logForm.contactName,
-      contactDesignation: logForm.designation, contactLevel: logForm.contactLevel,
-      whatHappened: logForm.discussion, clientFeedback: logForm.clientFeedback,
-      stageUpdate: tpType === "Deal Meeting" ? stageNow : "",
-      actionItems: (logForm.actionRequired||[]).filter(i=>i.what),
-      loggedAt, loggedLate: late, loggedByUserId: activeUser,
-    }, ...p]);
-
-    // Flow 5: If this meeting was planned via doAddPlan (has a DB meeting ID), update the DB row
-    if (logForm.meetingDbId) {
-      meetingsSvc.patchMeeting(logForm.meetingDbId, { status: "logged", touchpointId }).catch(()=>{});
-    }
-
-    // Part 2: Auto-route action items by their type (5 types from spec)
-    const repIdInt = parseInt(logForm.repId);
-    const repName = rep?.name||"Rep";
-    const newTasks: any[] = [];
-    const newIRsFromLog: any[] = [];
-    const attendPlans: any[] = [];
-    // Process new unified Action Required items → create Task + IR for each
-      (logForm.actionRequired||[]).filter(i=>i.what&&i.from).forEach(i=>{
-        const aType = i.what;
-        const details = i.description||"";
-        const dueDate = i.byWhen||TOMORROW;
-        const neededFrom = i.from;
-        const ts = `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-        if (neededFrom==="Self") {
-          newTasks.push({id:ts,assignedTo:null,assignedToUserId:activeUser,assignedDept:"Self",repId:repIdInt,clientCompany,title:`${aType} — ${clientCompany} — ${details} — by ${dueDate} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-        } else if (neededFrom!=="Client") {
-          if (aType==="Approval needed") {
-            const irSubject = `Approval needed — ${clientCompany} — ${details} — by ${dueDate} — from ${repName}`.slice(0,160);
-            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:neededFrom,subject:irSubject,details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
-            newTasks.push({id:`t_appr_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:irSubject,description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-          } else if (aType==="Attend a meeting") {
-            attendPlans.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserId(neededFrom,repIdInt)||neededFrom,date:dueDate,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repName}] ${details||"Re: "+clientCompany}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repName});
-            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${dueDate} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Attend Meeting",dept:neededFrom,subject:`[Meeting request] ${clientCompany} — ${details||"Attend meeting"} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
-          } else if (aType==="Document needed" || aType==="Document / plan needed") {
-            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${dueDate} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Document needed",dept:neededFrom,subject:`[Doc needed] ${clientCompany} — ${details} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
-          } else if (aType==="Introduction needed" || aType==="Client introduction needed") {
-            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repName}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Introduction needed",dept:neededFrom,subject:`[Intro needed] ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
-          } else if (aType==="Flag for follow-up") {
-            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt)||activeUser,assignedDept:neededFrom||"Self",repId:repIdInt,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — by ${dueDate}`.slice(0,150),description:`Flagged by ${repName}. ${details}`,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-          } else {
-            newTasks.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserId(neededFrom,repIdInt),assignedDept:neededFrom,repId:repIdInt,clientCompany,title:`${aType} — ${clientCompany} — ${details}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType});
-            newIRsFromLog.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:aType,dept:neededFrom,subject:`${aType} — ${clientCompany} — ${details} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:repIdInt,dealId:logForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:"",escalationAt:new Date(Date.now()+12*3600000).toISOString()});
-          }
-        }
-      });
-      // T004: Auto-create a task when plain "Next Steps" text is filled but no explicit actionRequired items exist
-    const hasStepItemAction = (logForm.actionRequired||[]).some(i => i.what);
-    if (logForm.nextSteps?.trim() && !hasStepItemAction) {
-      newTasks.push({
-        id: `t_ns_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        assignedTo: null, assignedToUserId: activeUser, assignedDept: "Self",
-        repId: repIdInt, clientCompany,
-        title: `${logForm.nextSteps.trim()}${clientCompany ? ` — ${clientCompany}` : ""}`.slice(0, 160),
-        description: logForm.nextSteps.trim(),
-        priority: "High", status: "Open",
-        dueDate: logForm.followUpDate || TOMORROW,
-        createdAt: TODAY, assignedBy: activeUser, assignedByName: repName,
-        fromMeetingLog: true,
-      });
-    }
-    // Support Request from dedicated panel in log form
-    if (logForm.supportRequest?.dept && logForm.supportRequest.description?.trim()) {
-      const sr = logForm.supportRequest;
-      const srDept = sr.dept==="Digi Ops"?"Digital":sr.dept;
-      const slaH = {"Sales Strategy":24,"Digi Ops":24,"CRO":48,"Finance":48,"Marketing":48,"Legal":72,"Other":48};
-      newIRsFromLog.push({
-        id:`sr${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        type:"Support Request",
-        dept: srDept,
-        subject:`[Support] ${sr.dept} — ${clientCompany || "General"} — from ${repName}`.slice(0,160),
-        details: sr.description.trim(),
-        raisedBy: activeUser,
-        raisedByName: repName,
-        repId: repIdInt,
-        dealId: logForm.dealId||null,
-        clientCompany,
-        status:"Pending",
-        raisedAt:TODAY,
-        slaHours: slaH[sr.dept]||48,
-        resolvedAt:null,
-        resolverNote:"",
-        priority: sr.priority||"Medium",
-        dueDate: sr.dueDate||null,
-        notes:"",
-        acceptedAt:null,
-      });
-    }
-
-    if (newTasks.length) setTasks(p => [...newTasks, ...p]);
-    if (newIRsFromLog.length) setInternalReqs(p => [...newIRsFromLog, ...p]);
-    if (attendPlans.length) setPlans(p => [...p, ...attendPlans]);
-    // Flow 6: Explicit DB persistence verification.
-    // useApiEntityState immediately POSTs each new item to /api/tasks and
-    // /api/internal-requests on setState. We verify persistence by re-fetching
-    // both endpoints ~1.2s later and confirming the new IDs appear in the DB response.
-    if (newTasks.length || newIRsFromLog.length) {
-      const taskIds = new Set(newTasks.map(t => t.id));
-      const irIds   = new Set(newIRsFromLog.map(r => r.id));
-      setTimeout(async () => {
-        try {
-          const [tList, irList] = await Promise.all([
-            taskIds.size  ? tasksSvc.listTasks().catch(()=>null) : null,
-            irIds.size    ? irSvc.listIRs().catch(()=>null) : null,
-          ]);
-          const dbTaskIds = new Set((tList||[]).map((t:any)=>t.id));
-          const dbIrIds   = new Set((irList||[]).map((r:any)=>r.id));
-          const tasksOk = [...taskIds].every(id=>dbTaskIds.has(id));
-          const irsOk   = [...irIds].every(id=>dbIrIds.has(id));
-          if (tasksOk && irsOk) {
-            console.debug("[Flow6✓] Tasks and IRs confirmed persisted in DB:", [...taskIds,...irIds].join(","));
-          } else {
-            if (!tasksOk) console.warn("[Flow6] Some tasks not yet in DB (no API session in demo mode?):", [...taskIds].filter(id=>!dbTaskIds.has(id)));
-            if (!irsOk)   console.warn("[Flow6] Some IRs not yet in DB:", [...irIds].filter(id=>!dbIrIds.has(id)));
-          }
-        } catch { /* offline / demo mode — verification skipped */ }
-      }, 1200);
-    }
-    // Auto-create plan reminders for each Action Required item:
-    // 1. Self-reminder for the rep on byWhen date
-    // 2. Calendar reminder for the receiver on byWhen date
-    const arRepReminders = (logForm.actionRequired||[]).filter(i=>i.what&&i.byWhen).map((i:any,idx:number)=>({
-      id:`p_ar_rep_${Date.now()}_${idx}`,repId:repIdInt,date:i.byWhen,time:"09:00",
-      clientAgencyName:clientCompany,agency:logForm.agency||"",client:logForm.client||"",brand:logForm.brand||"",
-      agenda:`[Action due] ${i.what}${i.from&&i.from!=="Self"?" → "+i.from:""}: ${i.description||""}`.slice(0,160),
-      meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-reminder-rep",
-    }));
-    const arRecvReminders = (logForm.actionRequired||[]).filter(i=>i.what&&i.from&&i.from!=="Self"&&i.from!=="Client"&&i.byWhen).map((i:any,idx:number)=>({
-      id:`p_ar_recv_${Date.now()}_${idx+1000}`,repId:getNeededFromUserId(i.from,repIdInt)||i.from,date:i.byWhen,time:"09:00",
-      clientAgencyName:clientCompany,agency:logForm.agency||"",client:logForm.client||"",brand:logForm.brand||"",
-      agenda:`[Action requested by ${repName}] ${i.what}: ${i.description||""}`.slice(0,160),
-      meetingType:"Task",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-reminder-receiver",
-    }));
-    if (arRepReminders.length||arRecvReminders.length) setPlans(p=>[...p,...arRepReminders,...arRecvReminders]);
-
-    // Update deal last contact, outcome, stage (Part 3), and next step
-    const firstFollowUpItem = (logForm.nextStepItems||[]).find(i=>i.action);
-    if (deal) {
-      const approvalItem2 = (logForm.nextStepItems||[]).find(i =>
-        i.neededFrom && ["Region Head","NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
-      );
-      const newAmt = logForm.dealAmount ? parseCurrency(logForm.dealAmount) : null;
-      setDeals(p => p.map(d => d.id === logForm.dealId ? {
-        ...d,
-        lastContact: TODAY,
-        // Part 3: stage is the canonical field; also keep outcome as alias
-        ...(tpType === "Deal Meeting" ? { stage: stageNow, outcome: stageNow } : {}),
-        // Update deal value if it was ₹0 and rep entered one
-        amount: (newAmt && (!d.amount||d.amount===0)) ? newAmt : d.amount,
-        pipelineAmount: (newAmt && (!d.pipelineAmount||d.pipelineAmount===0)) ? newAmt : (d.pipelineAmount || parseCurrency(d.amount||"0")||0),
-        targetAmount: (newAmt && (!d.targetAmount||d.targetAmount===0)) ? newAmt : d.targetAmount,
-        nextStep: nextStepsSummary || firstFollowUpItem?.action || logForm.nextSteps,
-        nextStepDate: firstFollowUpItem?.dueDate || logForm.followUpDate || d.nextStepDate,
-        awaitingApproval: approvalItem2 ? approvalItem2.neededFrom : d.awaitingApproval,
-        awaitingApprovalSince: approvalItem2 ? TODAY : d.awaitingApprovalSince,
-        auditLog: [...(d.auditLog||[]), ...(approvalItem2?[{at:TODAY,by:user_role?.name||"Rep",role:user_role?.role||"",action:"Flagged",from:null,to:approvalItem2.neededFrom,note:approvalItem2.action}]:[])],
-      } : d));
-      // Part 1: Update client account dates
-      if (deal.clientAccountId) {
-        setClientAccounts(p => p.map(a => a.id === deal.clientAccountId ? {
-          ...a,
-          lastContactDate: TODAY,
-          // Only Deal Meeting touchpoints reset the escalation clock
-          ...(tpType === "Deal Meeting" ? { lastDealMeetingDate: TODAY, currentStage: stageNow } : {}),
-          updatedAt: TODAY,
-        } : a));
-      }
-    } else if (clientCompany) {
-      // No deal yet — create a pipeline stub for follow-up
-      const stubAmt = logForm.dealAmount ? parseCurrency(logForm.dealAmount) : 0;
-      const stub = {
-        id: `d_stub_${Date.now()}`,
-        repId: parseInt(logForm.repId),
-        clientCompany,
-        contactName: logForm.contactName || "",
-        designation: logForm.designation || "",
-        phone: logForm.mobile || "",
-        dealType: logForm.pitchType ? (logForm.pitchType.includes("FCT")?"Linear TV":logForm.pitchType.includes("Digital")?"Digital":"Media Solutions") : "Linear TV",
-        outcome: "Needs Callback",
-        amount: stubAmt,
-        targetAmount: stubAmt,
-        region: rep?.region || "National",
-        priority: "Regular",
-        quarter: entryQ,
-        notes: `Created from meeting log on ${TODAY}. ${logForm.discussion||""}`,
-        nextStep: nextStepsSummary || "",
-        nextStepDate: firstFollowUpItem?.dueDate || logForm.followUpDate || null,
-        lastContact: TODAY,
-        awaitingApproval: null,
-        awaitingApprovalSince: null,
-        reqs: [],
-      };
-      setDeals(p => [stub, ...p]);
-      showToast(stubAmt > 0 ? `Pipeline entry created — ₹${fmtR(stubAmt)} added to your pipeline` : "Pipeline entry created — set deal value to appear in pipeline");
-    }
-
-    // Auto-create calendar plans for each next-step item that has a due date
-    const stepPlans = (logForm.nextStepItems||[]).filter(i=>i.action&&i.dueDate);
-    if (stepPlans.length) {
-      stepPlans.forEach((item, idx) => {
-        setPlans(p => [...p, {
-          id: `p_ns_${Date.now()}_${idx}`,
-          repId: parseInt(logForm.repId),
-          date: item.dueDate,
-          time: "10:00",
-          clientAgencyName: clientCompany,
-          contactName: logForm.contactName || "",
-          phone: "",
-          agenda: `${item.action}${item.neededFrom ? ` → ${item.neededFrom}` : ""}`,
-          pitchType: "",
-          meetingType: "Task",
-          needsMeet: false,
-          status: "Planned",
-          loggedMeetingId: null,
-          isUnplanned: false,
-          autoCreatedFrom: "next-step",
-          assignedDept: item.neededFrom || "",
-        }]);
-      });
-    }
-
-    // Auto-create calendar plan for next meeting date
-    if (logForm.nextMeetingDate) {
-      setPlans(p => [...p, {
-        id: `p_nxt_${Date.now()}`,
-        repId: parseInt(logForm.repId),
-        date: logForm.nextMeetingDate,
-        time: logForm.nextMeetingTime || "10:00",
-        clientAgencyName: clientCompany,
-        contactName: logForm.contactName || "",
-        phone: logForm.mobile || "",
-        agenda: logForm.nextAgenda || `Next meeting with ${clientCompany}`,
-        pitchType: logForm.pitchType || "",
-        meetingType: logForm.meetingType || "Physical",
-        needsMeet: false,
-        status: "Planned",
-        loggedMeetingId: null,
-        isUnplanned: false,
-        autoCreatedFrom: "next-meeting",
-      }]);
-    }
-    // Auto-create calendar plan for follow-up date
-    if (logForm.followUpDate) {
-      setPlans(p => [...p, {
-        id: `p_fu_${Date.now() + 1}`,
-        repId: parseInt(logForm.repId),
-        date: logForm.followUpDate,
-        time: "10:00",
-        clientAgencyName: clientCompany,
-        contactName: logForm.contactName || "",
-        phone: logForm.mobile || "",
-        agenda: `Follow-up: ${nextStepsSummary || logForm.nextSteps || "Check in with client"}`,
-        pitchType: logForm.pitchType || "",
-        meetingType: "Call",
-        needsMeet: false,
-        status: "Planned",
-        loggedMeetingId: null,
-        isUnplanned: false,
-        autoCreatedFrom: "follow-up",
-      }]);
-    }
-
-    const roReceived = logForm.stageUpdate === "RO Received";
-    setAtt(p => ({ ...p, [TODAY]: { ...(p[TODAY]||{}), [parseInt(logForm.repId)]: true } }));
-    setLogForm(BLANK_LOG);
-    setLogOpen(false);
-    const taskMsg  = newTasks.length      ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
-    const irMsgL   = newIRsFromLog.length ? ` · ${newIRsFromLog.length} request${newIRsFromLog.length>1?"s":""} raised` : "";
-    const arMsgL   = (arRepReminders.length+arRecvReminders.length) > 0 ? ` · ${arRepReminders.length+arRecvReminders.length} reminders added` : "";
-    const planMsg  = (logForm.nextMeetingDate ? 1 : 0) + (logForm.followUpDate ? 1 : 0);
-    const planMsgStr = planMsg > 0 ? ` · ${planMsg} calendar entry added` : "";
-    if (roReceived && isRep) {
-      showToast("RO Received logged ✓ — now log your revenue!");
-      setTimeout(() => setView("revenue-log"), 1200);
-    } else {
-      showToast((late ? "Logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsgL + arMsgL + planMsgStr);
-    }
-  };
-
-  // ─── CALENDAR INTEGRATION ────────────────────────────────────────────────────
-  const createCalendarEvent = async (meeting) => {
-    if (!meeting.nextMeetingDate) { showToast("Set a meeting date first", "err"); return null; }
-    setCalendarLoading(true);
-    try {
-      const rep    = reps.find(r => r.id === parseInt(meeting.repId));
-      const title  = `[OTV] ${rep?.name || "Sales"} × ${meeting.clientCompany || meeting.clientAgencyName} — ${meeting.pitchType || "Meeting"}`;
-      const desc   = [
-        meeting.nextAgenda ? `Agenda: ${meeting.nextAgenda}` : "",
-        meeting.discussion  ? `Last discussion: ${meeting.discussion}` : "",
-        meeting.clientFeedback ? `Client feedback: ${meeting.clientFeedback}` : "",
-        meeting.nextSteps ? `Next steps: ${meeting.nextSteps}` : "",
-        "—",
-        "Logged via OTV CRM",
-      ].filter(Boolean).join("\n");
-
-      const startTime  = meeting.nextMeetingTime || "10:00";
-      const [sh, sm]   = startTime.split(":").map(Number);
-      const endH       = String(sh + 1).padStart(2, "0");
-      const startISO   = `${meeting.nextMeetingDate}T${startTime.padStart(5,"0")}:00`;
-      const endISO     = `${meeting.nextMeetingDate}T${endH}:${String(sm).padStart(2,"0")}:00`;
-
-      // Attendees — rep email + any extra
-      const repEmail  = `${(rep?.name||"").toLowerCase().replace(/\s/g,".")}@odishatv.com`;
-      const extras    = (meeting.attendeeEmails||"").split(",").map(e=>e.trim()).filter(Boolean);
-      const attendees = [repEmail, ...extras];
-
-      const calPrompt = meeting.calendarPlatform === "google"
-        ? `Create a Google Calendar event with these exact details:
-Title: "${title}"
-Date: ${meeting.nextMeetingDate}
-Start time: ${startISO} IST (UTC+5:30)
-End time: ${endISO} IST (UTC+5:30)
-Timezone: Asia/Kolkata
-Description: ${desc}
-Attendees: ${attendees.join(", ")}
-${meeting.addMeetLink ? "Add Google Meet video conferencing link." : ""}
-Use the primary calendar. Return the event ID and Meet link if created.`
-        : `I need to create a calendar event titled "${title}" on ${meeting.nextMeetingDate} from ${startTime} to ${endH}:${String(sm).padStart(2,"0")} IST. Attendees: ${attendees.join(", ")}. Description: ${desc}. Please create this event.`;
-
-      const resp = await fetch("/api/claude", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "claude-sonnet-4-20250514",
-          max_tokens: 1024,
-          messages: [{ role: "user", content: calPrompt }],
-          mcp_servers: meeting.calendarPlatform === "google"
-            ? [{ type: "url", url: "https://gcal.mcp.claude.com/mcp", name: "google-calendar" }]
-            : [],
-        })
-      });
-      const data = await resp.json();
-      if (data.error) throw new Error(data.error.message);
-
-      // Extract event details from response
-      const responseText = (data.content || []).map(b => b.text || "").join("").trim();
-      const meetLinkMatch = responseText.match(/https:\/\/meet\.google\.com\/[a-z0-9\-]+/i);
-      const eventIdMatch  = responseText.match(/event[_\s]?id[:\s]+([a-zA-Z0-9_]+)/i);
-      const meetLink      = meetLinkMatch ? meetLinkMatch[0] : "";
-      const eventId       = eventIdMatch  ? eventIdMatch[1]  : `gcal_${Date.now()}`;
-
-      setCalendarLoading(false);
-      return { eventId, meetLink, calendarStatus: "Created", calendarPlatform: meeting.calendarPlatform };
-    } catch (err) {
-      setCalendarLoading(false);
-      showToast("Calendar error: " + err.message, "err");
-      return null;
-    }
-  };
-
-  const handleLogMeetingWithCalendar = async () => {
-    if (!logForm.repId) { showToast("Select a Sales Rep", "err"); return; }
-    if (!logForm.dealId && !logForm.clientAgencyName?.trim()) { showToast("Select a client deal or enter a client company name to proceed", "err"); return; }
-
-    // ── HARD BLOCK VALIDATION ──
-    if (!logForm.discussion?.trim()) { showToast("'What you pitched' is required", "err"); return; }
-    if (!logForm.clientFeedback?.trim()) { showToast("Client feedback is required", "err"); return; }
-    if (!logForm.status) { showToast("Meeting status is required", "err"); return; }
-    if (!logForm.followUpDate) { showToast("Follow-up date is required", "err"); return; }
-    // Action Required is optional — rep can log touchpoint without any action items
-    // Part 1+3: Stage Update required for Deal Meeting touchpoint
-    if ((logForm.touchpointType || "Deal Meeting") === "Deal Meeting" && !logForm.stageUpdate && !logForm.status) {
-      showToast("Select a Stage Update for this Deal Meeting", "err"); return;
-    }
-    // Part 9: Loss reason mandatory when stage is Lost
-    if (logForm.stageUpdate === "Lost" && !logForm.lossReason?.trim()) {
-      showToast("Loss reason is required when marking a deal as Lost", "err"); return;
-    }
-
-    let calResult = null;
-    if (logForm.scheduleNext && logForm.nextMeetingDate) {
-      calResult = await createCalendarEvent(logForm);
-    }
-    const updatedForm = calResult ? { ...logForm, ...calResult } : logForm;
-    const rep  = reps.find(r => r.id === parseInt(updatedForm.repId));
-    const deal = deals.find(d => d.id === updatedForm.dealId);
-    const now  = new Date();
-    const late = now.getHours() >= 23;
-    const loggedAt = `${String(now.getHours()).padStart(2,"0")}:${String(now.getMinutes()).padStart(2,"0")}`;
-    const clientCompany = deal?.clientCompany || updatedForm.clientAgencyName || "";
-    const tpTypeC = updatedForm.touchpointType || "Deal Meeting";
-    const stageNowC = tpTypeC === "Deal Meeting"
-      ? (updatedForm.stageUpdate || mapLegacyOutcome(updatedForm.status||"Prospect"))
-      : dealStage(deal||{});
-
-    const nextStepsSummary = (updatedForm.nextStepItems||[])
-      .filter(i=>i.action)
-      .map(i=>`${i.action}${i.neededFrom?" (→ "+i.neededFrom+")":""}${i.remarks?" — "+i.remarks:""}`)
-      .join("; ");
-
-    const meetingId = `ml${Date.now()}`;
-
-    setMeetings(p => [{
-      id: meetingId,
-      ...updatedForm,
-      repId: parseInt(updatedForm.repId),
-      repName: rep.name, region: rep.region,
-      clientCompany, date: TODAY, loggedAt, late,
-      loggedByUserId: activeUser,
-      nextSteps: nextStepsSummary || updatedForm.nextSteps,
-      outcome: stageNowC,
-      touchpointType: tpTypeC,
-    }, ...p]);
-
-    // Part 1: Create Touchpoint record (same as non-calendar path)
-    setTouchpoints(p => [{
-      id: `tp${Date.now()}`, clientAccountId: deal?.clientAccountId || "",
-      dealId: updatedForm.dealId, repId: parseInt(updatedForm.repId), date: TODAY,
-      time: updatedForm.meetingTime || loggedAt, meetingType: updatedForm.meetingType,
-      touchpointType: tpTypeC, contactName: updatedForm.contactName,
-      contactDesignation: updatedForm.designation, contactLevel: updatedForm.contactLevel,
-      whatHappened: updatedForm.discussion, clientFeedback: updatedForm.clientFeedback,
-      stageUpdate: tpTypeC === "Deal Meeting" ? stageNowC : "",
-      actionItems: (updatedForm.nextStepItems||[]).filter(i=>i.action),
-      loggedAt, loggedLate: late, loggedByUserId: activeUser,
-    }, ...p]);
-
-    // Auto-create tasks from next step items
-    const repIdIntC = parseInt(updatedForm.repId);
-    const getNeededFromUserIdC = (neededFrom: string, repId: number): string|null => {
-      const north=[1,7,8,9,10], south=[2,6,11,12,13], east=[3,14,15,16,17], west=[4,18,19,20,21], national=[5,22,23,24,25], central=[26,27,28,29,30];
-      const repRegion = north.includes(repId)?"North":south.includes(repId)?"South":east.includes(repId)?"East":west.includes(repId)?"West":national.includes(repId)?"National":central.includes(repId)?"Central":null;
-      const rhByRegion:Record<string,string> = {North:"rh_north",South:"rh_south",East:"rh_east",West:"rh_west",National:"rh_national",Central:"rh_central"};
-      if (neededFrom==="Region Head") return rhByRegion[repRegion||""]||null;
-      if (neededFrom==="NSH")            return "sales_head";
-      if (neededFrom==="CXO")            return "admin";
-      if (neededFrom==="Sales Strategy") return "sales_strategy";
-      if (neededFrom==="CRO")            return "sales_analysis";
-      return null;
-    };
-
-    // Self items → rep's own My Tasks (not an Internal Request)
-    const selfTasks = (updatedForm.nextStepItems||[])
-      .filter(i => i.action && (!i.neededFrom || i.neededFrom === "Self"))
-      .map(i => ({
-        id: `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        assignedTo: rep?.name||null,
-        assignedToUserId: activeUser,
-        assignedDept: "Self",
-        repId: repIdIntC,
-        clientCompany,
-        title: `${i.action}${clientCompany ? " — "+clientCompany : ""}`,
-        description: `${i.remarks ? i.remarks+" — " : ""}My own action item from meeting log on ${TODAY}. Client: ${clientCompany}.`,
-        priority: "Medium",
-        status: "Open",
-        dueDate: i.dueDate || TOMORROW,
-        createdAt: TODAY,
-        assignedBy: activeUser,
-        assignedByName: user_role?.name || "Sales Rep",
-        fromMeetingLog: true,
-        meetingLogId: meetingId,
-        isSelfTask: true,
-      }));
-
-    // Part 2: Auto-route action items by type (5 types from spec) + self tasks
-    const getSlaHours = (dept: string) =>
-      (adminConfig.slaHours as Record<string,number>)?.[dept] ??
-      (adminConfig.slaHours as Record<string,number>)?.default ?? 48;
-    const repNameC = rep?.name||"Rep";
-    const newTasksC: any[] = [];
-    const newIRs: any[] = [];
-    const attendPlansC: any[] = [];
-    if (selfTasks.length) setTasks(p => [...selfTasks, ...p]);
-    (updatedForm.nextStepItems||[]).filter(i=>(i.actionType||i.action)&&i.neededFrom).forEach(i=>{
-      const aType = i.actionType||i.action;
-      const details = i.details||i.remarks||"";
-      const ts = `t${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-      if (i.neededFrom==="Self") {
-        // Self-assigned already handled above in selfTasks
-      } else if (i.neededFrom!=="Client") {
-        if (aType==="Approval needed") {
-          const irSubjectC = `Approval needed — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,160);
-          newIRs.push({id:`ir${Date.now()}_${Math.random().toString(36).slice(2,6)}`,type:"Approval",dept:i.neededFrom,subject:irSubjectC,details:`${details}${clientCompany?` — Re: ${clientCompany}`:""}`,raisedBy:activeUser,raisedByName:repNameC,repId:repIdIntC,dealId:updatedForm.dealId||null,clientCompany,status:"Pending",raisedAt:TODAY,slaHours:getSlaHours(i.neededFrom),resolvedAt:null,resolverNote:"",meetingLogId:meetingId});
-          newTasksC.push({id:`t_appr_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:irSubjectC,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
-        } else if (aType==="Attend a meeting") {
-          attendPlansC.push({id:`p_att_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,repId:getNeededFromUserIdC(i.neededFrom,repIdIntC)||i.neededFrom,date:i.dueDate||TOMORROW,time:"10:00",clientAgencyName:clientCompany,contactName:"",phone:"",agenda:`[Meeting requested by ${repNameC}] ${details||`Re: ${clientCompany}`}`,pitchType:"",meetingType:"Physical",status:"Planned",loggedMeetingId:null,isUnplanned:false,autoCreatedFrom:"action-item",requestedBy:activeUser,requestedByName:repNameC});
-          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Meeting] — ${clientCompany} — ${details||"Attend meeting with client"} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
-        } else if (aType==="Document needed" || aType==="Document / plan needed") {
-          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Doc needed] — ${clientCompany} — ${details} — by ${i.dueDate||TOMORROW} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
-        } else if (aType==="Introduction needed" || aType==="Client introduction needed") {
-          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Intro needed] — ${clientCompany} — ${details} — from ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
-        } else if (aType==="Flag for follow-up") {
-          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:`[Follow-up] — ${clientCompany} — ${details} — Flagged by ${repNameC}`.slice(0,150),description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId,actionType:aType});
-        } else {
-          // Legacy fallback
-          newTasksC.push({id:ts,assignedTo:null,assignedToUserId:getNeededFromUserIdC(i.neededFrom,repIdIntC),assignedDept:i.neededFrom,repId:repIdIntC,clientCompany,title:i.action||aType,description:details,priority:"High",status:"Open",dueDate:i.dueDate||TOMORROW,createdAt:TODAY,assignedBy:activeUser,assignedByName:repNameC,fromMeetingLog:true,meetingLogId:meetingId});
-        }
-      }
-    });
-    // Support Request from dedicated panel in log form
-    if (updatedForm.supportRequest?.dept && updatedForm.supportRequest.description?.trim()) {
-      const sr = updatedForm.supportRequest;
-      const srDept = sr.dept==="Digi Ops"?"Digital":sr.dept;
-      const slaH = {"Sales Strategy":24,"Digi Ops":24,"CRO":48,"Finance":48,"Marketing":48,"Legal":72,"Other":48};
-      newIRs.push({
-        id:`sr${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
-        type:"Support Request",
-        dept: srDept,
-        subject:`[Support] ${sr.dept} — ${clientCompany || "General"} — from ${repNameC}`.slice(0,160),
-        details: sr.description.trim(),
-        raisedBy: activeUser, raisedByName: repNameC,
-        repId: repIdIntC, dealId: updatedForm.dealId||null, clientCompany,
-        status:"Pending", raisedAt:TODAY, slaHours: slaH[sr.dept]||48,
-        resolvedAt:null, resolverNote:"",
-        priority: sr.priority||"Medium", dueDate: sr.dueDate||null,
-        notes:"", acceptedAt:null,
-      });
-    }
-
-    if (newTasksC.length) setTasks(p => [...newTasksC, ...p]);
-    if (newIRs.length) setInternalReqs(p => [...newIRs, ...p]);
-    if (attendPlansC.length) setPlans(p => [...p, ...attendPlansC]);
-
-    const firstFollowUpItem = (updatedForm.nextStepItems||[]).find(i=>i.action);
-    if (deal) {
-      // Determine if any next step requires internal approval
-      const approvalItem = (updatedForm.nextStepItems||[]).find(i =>
-        i.neededFrom && ["Region Head","NSH","CXO","Branding Team","Content Team","Sales Strategy","Digital","Finance","Legal"].includes(i.neededFrom)
-      );
-      const newAwaiting = approvalItem ? approvalItem.neededFrom : deal.awaitingApproval;
-      const auditEntry  = approvalItem ? [{
-        at: TODAY, by: user_role?.name || "Rep", role: user_role?.role || "SALES REP",
-        action: "Flagged for approval", from: null, to: approvalItem.neededFrom,
-        note: `${approvalItem.action} — raised via meeting log`,
-      }] : [];
-      const newAmtC = updatedForm.dealAmount ? parseCurrency(updatedForm.dealAmount) : null;
-      setDeals(p => p.map(d => d.id === updatedForm.dealId ? {
-        ...d, lastContact: TODAY,
-        // Part 3: canonical stage update (only Deal Meeting type)
-        ...(tpTypeC === "Deal Meeting" ? { stage: stageNowC, outcome: stageNowC } : {}),
-        amount: (newAmtC && (!d.amount||d.amount===0)) ? newAmtC : d.amount,
-        pipelineAmount: (newAmtC && (!d.pipelineAmount||d.pipelineAmount===0)) ? newAmtC : (d.pipelineAmount || parseCurrency(d.amount||"0")||0),
-        targetAmount: (newAmtC && (!d.targetAmount||d.targetAmount===0)) ? newAmtC : d.targetAmount,
-        nextStep: nextStepsSummary || firstFollowUpItem?.action || updatedForm.nextSteps,
-        nextStepDate: firstFollowUpItem?.dueDate || updatedForm.followUpDate || d.nextStepDate,
-        awaitingApproval: newAwaiting,
-        awaitingApprovalSince: approvalItem ? TODAY : d.awaitingApprovalSince,
-        auditLog: [...(d.auditLog||[]), ...auditEntry],
-      } : d));
-      // Part 1: Update client account dates + escalation clock
-      if (deal.clientAccountId) {
-        setClientAccounts(p => p.map(a => a.id === deal.clientAccountId ? {
-          ...a,
-          lastContactDate: TODAY,
-          ...(tpTypeC === "Deal Meeting" ? { lastDealMeetingDate: TODAY, currentStage: stageNowC } : {}),
-          updatedAt: TODAY,
-        } : a));
-      }
-    } else if (clientCompany) {
-      const stubAmtC = updatedForm.dealAmount ? parseCurrency(updatedForm.dealAmount) : 0;
-      const stubC = {
-        id: `d_stub_${Date.now()}`,
-        repId: parseInt(updatedForm.repId),
-        clientCompany,
-        contactName: updatedForm.contactName || "",
-        designation: updatedForm.designation || "",
-        phone: updatedForm.mobile || "",
-        dealType: updatedForm.pitchType ? (updatedForm.pitchType.includes("FCT")?"Linear TV":updatedForm.pitchType.includes("Digital")?"Digital":"Media Solutions") : "Linear TV",
-        outcome: "Needs Callback",
-        amount: stubAmtC,
-        targetAmount: stubAmtC,
-        region: rep?.region || "National",
-        priority: "Regular",
-        quarter: entryQ,
-        notes: `Created from meeting log on ${TODAY}. ${updatedForm.discussion||""}`,
-        nextStep: nextStepsSummary || "",
-        nextStepDate: firstFollowUpItem?.dueDate || updatedForm.followUpDate || null,
-        lastContact: TODAY,
-        awaitingApproval: null,
-        awaitingApprovalSince: null,
-        reqs: [],
-      };
-      setDeals(p => [stubC, ...p]);
-      showToast(stubAmtC > 0 ? `Pipeline entry created — ₹${fmtR(stubAmtC)} added to pipeline` : "Pipeline entry created — set deal value to appear in pipeline");
-    }
-
-    // Auto-create calendar plans for each next-step item that has a due date
-    const stepPlansC = (updatedForm.nextStepItems||[]).filter(i=>i.action&&i.dueDate);
-    if (stepPlansC.length) {
-      stepPlansC.forEach((item, idx) => {
-        setPlans(p => [...p, {
-          id: `p_ns_${Date.now()}_${idx}`,
-          repId: parseInt(updatedForm.repId),
-          date: item.dueDate,
-          time: "10:00",
-          clientAgencyName: clientCompany,
-          contactName: updatedForm.contactName || "",
-          phone: "",
-          agenda: `${item.action}${item.neededFrom ? ` → ${item.neededFrom}` : ""}`,
-          pitchType: "",
-          meetingType: "Task",
-          needsMeet: false,
-          status: "Planned",
-          loggedMeetingId: null,
-          isUnplanned: false,
-          autoCreatedFrom: "next-step",
-          assignedDept: item.neededFrom || "",
-        }]);
-      });
-    }
-
-    // Auto-create calendar plan for next meeting date
-    if (updatedForm.nextMeetingDate) {
-      setPlans(p => [...p, {
-        id: `p_nxt_${Date.now()}`,
-        repId: parseInt(updatedForm.repId),
-        date: updatedForm.nextMeetingDate,
-        time: updatedForm.nextMeetingTime || "10:00",
-        clientAgencyName: clientCompany,
-        contactName: updatedForm.contactName || "",
-        phone: updatedForm.mobile || "",
-        agenda: updatedForm.nextAgenda || `Next meeting with ${clientCompany}`,
-        pitchType: updatedForm.pitchType || "",
-        meetingType: updatedForm.meetingType || "Physical",
-        needsMeet: false,
-        status: "Planned",
-        loggedMeetingId: null,
-        isUnplanned: false,
-        autoCreatedFrom: "next-meeting",
-      }]);
-    }
-    // Auto-create calendar plan for follow-up date
-    if (updatedForm.followUpDate) {
-      setPlans(p => [...p, {
-        id: `p_fu_${Date.now() + 1}`,
-        repId: parseInt(updatedForm.repId),
-        date: updatedForm.followUpDate,
-        time: "10:00",
-        clientAgencyName: clientCompany,
-        contactName: updatedForm.contactName || "",
-        phone: updatedForm.mobile || "",
-        agenda: `Follow-up: ${nextStepsSummary || updatedForm.nextSteps || "Check in with client"}`,
-        pitchType: updatedForm.pitchType || "",
-        meetingType: "Call",
-        needsMeet: false,
-        status: "Planned",
-        loggedMeetingId: null,
-        isUnplanned: false,
-        autoCreatedFrom: "follow-up",
-      }]);
-    }
-
-    setAtt(p => ({ ...p, [TODAY]: { ...(p[TODAY]||{}), [parseInt(updatedForm.repId)]: true } }));
-    setLogForm(BLANK_LOG);
-    setLogOpen(false);
-    const taskMsg = newTasks.length ? ` · ${newTasks.length} task${newTasks.length>1?"s":""} assigned` : "";
-    const irMsg   = newIRs.length   ? ` · ${newIRs.length} request${newIRs.length>1?"s":""} raised`  : "";
-    const planMsg2 = (updatedForm.nextMeetingDate ? 1 : 0) + (updatedForm.followUpDate ? 1 : 0);
-    const planMsgStr2 = planMsg2 > 0 ? ` · ${planMsg2} calendar entry added` : "";
-    if (calResult?.meetLink) showToast(`Meeting logged + Calendar event created ✓` + taskMsg + irMsg + planMsgStr2);
-    else showToast((late ? "Meeting logged — flagged late (after 11:30 PM)" : "Meeting logged ✓") + taskMsg + irMsg + planMsgStr2);
   };
 
   // ── TOUR HELPERS ──
@@ -3516,7 +2710,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
               }).filter(Boolean);
               if (newSubs.length===0) { showToast("Add at least one client with a target amount","err"); return; }
               setTargetSubs(p=>[...newSubs,...p]);
-              fetch("/api/targets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newSubs[0])}).catch(()=>{});
+              apiFetch("/api/targets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newSubs[0])}).catch(()=>{});
               showToast("Target submitted for approval ✓");
               setView("rep-dashboard");
             };
@@ -4991,8 +4185,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                     <div className="card" style={{padding:14}}>
                       <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:9}}>COMPLIANCE — TODAY · 11:30 PM</div>
                       {reps.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId).map(r=>{
-                        const tL=meetings.some(m=>m.repId===r.id&&m.date===TODAY)||(plans_crm||plans||[]).some(p=>p.repId===r.id&&p.date===TODAY&&p.status==="Done");
-                        const tP=(plans_crm||plans||[]).some(p=>p.repId===r.id&&p.date===TOMORROW&&p.status==="Planned");
+                        const tL=meetings.some(m=>m.repId===r.id&&m.date===TODAY&&m.status==="logged");
+                        const tP=meetings.some(m=>m.repId===r.id&&m.date===TOMORROW&&m.status==="planned");
                         const ok=tL&&tP;
                         return(
                           <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
@@ -6352,8 +5546,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                           if(typed===null)return;
                           if(typed.trim()!=="RESET"){showToast("Reset cancelled — type RESET exactly","err");return;}
                           try{
-                            const r=await fetch("/api/state/reset-all",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirmText:"RESET",triggeredBy:user?.email||"admin",role:"ADMIN"})});
-                            const j=await r.json();
+                            const j=await apiFetch("/api/state/reset-all",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirmText:"RESET",triggeredBy:user?.email||"admin",role:"ADMIN"})}) as any;
                             if(j.ok){Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));showToast("Demo data cleared — reloading…");setTimeout(()=>window.location.reload(),800);}
                             else showToast("Reset failed: "+j.error,"err");
                           }catch{showToast("Reset failed","err");}
@@ -6490,12 +5683,11 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         if (typed === null) return;
                         if (typed.trim() !== "RESET") { showToast("Reset cancelled — confirmation text did not match","err"); return; }
                         try {
-                          const r = await fetch("/api/state/reset-all", {
+                          const j = await apiFetch("/api/state/reset-all", {
                             method:"POST",
                             headers:{"Content-Type":"application/json"},
                             body: JSON.stringify({ confirmText:"RESET", triggeredBy: user?.email||"admin", role:"ADMIN" })
-                          });
-                          const j = await r.json();
+                          }) as any;
                           if (j.ok) {
                             Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));
                             showToast("All data cleared — reloading…");
@@ -9232,9 +8424,8 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                   <button onClick={()=>{
                     const url=adminConfig.webhookUrl?.trim();
                     if(!url){showToast("No webhook URL configured","err");return;}
-                    fetch(url,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({source:"OTV CRM",event:"test",message:"Webhook test from OTV CRM System Config",timestamp:new Date().toISOString()})})
-                      .then(()=>showToast("Test ping sent ✓"))
-                      .catch(()=>showToast("Webhook call failed — check URL","err"));
+                    externalPost(url,{source:"OTV CRM",event:"test",message:"Webhook test from OTV CRM System Config",timestamp:new Date().toISOString()});
+                    showToast("Test ping sent ✓");
                   }} style={{padding:"7px 14px",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,borderRadius:5,color:C.accent,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",whiteSpace:"nowrap"}}>
                     Send Test Ping
                   </button>
@@ -9290,8 +8481,7 @@ Use the primary calendar. Return the event ID and Meet link if created.`
                         const url=zohoSearchQ.trim().length>=2
                           ?`/api/zoho/accounts?search=${encodeURIComponent(zohoSearchQ.trim())}`
                           :"/api/zoho/accounts";
-                        const r=await fetch(url);
-                        const j=await r.json();
+                        const j=await apiFetch(url) as any;
                         if(j.ok){setZohoAccounts(j.accounts||[]);if(!j.accounts?.length)setZohoError("No accounts found in Zoho CRM.");}
                         else setZohoError(j.error||"Failed to fetch from Zoho CRM.");
                       }catch(e:unknown){setZohoError(e instanceof Error?e.message:"Network error");}

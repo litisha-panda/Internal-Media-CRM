@@ -1,25 +1,25 @@
-// @ts-nocheck
 import React, { useState, useEffect } from "react";
 import { setSessionToken as setSessionTokenLib } from "../services/api/_client";
 import * as authSvc from "../services/api/auth";
+import type { ApiUser } from "../services/api/auth";
 import { CROApp } from "./CROApp";
 import { LoginScreen } from "../views/auth/LoginScreen";
 import { HomeScreen } from "../views/auth/HomeScreen";
 
-function setSessionTokenStore(t) {
+function setSessionTokenStore(t: string | null): void {
   setSessionTokenLib(t);
 }
 
 export default function OTVApp() {
   const [loggedIn, setLoggedIn]               = useState(false);
-  const [loginUser, setLoginUser]             = useState(null);
+  const [loginUser, setLoginUser]             = useState<ApiUser | null>(null);
   const [section, setSection]                 = useState("home");
   const [sessionChecking, setSessionChecking] = useState(true);
 
   // On mount: restore session from stored token (localStorage) or cookie
   useEffect(() => {
     authSvc.getMe()
-      .then(data => {
+      .then((data) => {
         if (data?.ok && data.user) {
           setLoginUser(data.user);
           setLoggedIn(true);
@@ -33,7 +33,7 @@ export default function OTVApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleLogin = (user) => {
+  const handleLogin = (user: ApiUser) => {
     // Clear entity localStorage caches on every fresh login so API data always wins
     ["otv_deals","otv_tasks","otv_internalReqs","otv_targetSubs",
      "otv_revenueEntries","otv_clientAccounts","otv_touchpoints"
@@ -59,8 +59,8 @@ export default function OTVApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSelect = (s) => setSection(s);
-  const handleBack   = ()  => setSection("home");
+  const handleSelect = (s: string) => setSection(s);
+  const handleBack   = ()          => setSection("home");
 
   // While checking session — show neutral loader, never flash the login screen
   if (sessionChecking) return (
@@ -74,7 +74,7 @@ export default function OTVApp() {
 
   return (
     <CROApp
-      key={loginUser?.email || loginUser?.id}
+      key={loginUser?.email || String(loginUser?.id ?? "")}
       user={loginUser}
       onLogout={handleLogout}
       section={section}
