@@ -20,6 +20,7 @@ import { RepDashboard } from "../views/rep/RepDashboard";
 import { MyPlan } from "../views/rep/MyPlan";
 import { LogMeeting } from "../views/rep/LogMeeting";
 import { externalPost } from "../services/api/external";
+import { HomeScreen } from "../views/auth/HomeScreen";
 
 
 // Route all Claude API calls through the API server proxy (key stays server-side)
@@ -712,10 +713,12 @@ const TOUR_DATA = {
     ]
   },
 };
-export function CROApp({ user, onLogout, section, onGoHome }) {
+export function CROApp({ user, onLogout }) {
+  // Home screen (platform landing) vs CRM shell
+  const [showHome, setShowHome] = useState(false);
+
   // T009: Correct CRM landing per role
   const getCRMDefaultView = () => {
-    if (section === "ro") return "ro-parser";
     const role = user?.role || "";
     if (role === "ADMIN" || user?.email==="admin@odishatv.com") return "admin-access";
     if (role === "REGION HEAD") return "rh-dashboard";
@@ -726,6 +729,17 @@ export function CROApp({ user, onLogout, section, onGoHome }) {
   const [view, setView] = useState(getCRMDefaultView);
   // T009: Reset landing view whenever the logged-in user switches roles
   useEffect(() => { setView(getCRMDefaultView()); }, [user?.email]);
+
+  // Home screen: render platform landing when user clicks "← Home"
+  if (showHome) {
+    return (
+      <HomeScreen
+        user={user}
+        onSelect={() => setShowHome(false)}
+        onLogout={onLogout}
+      />
+    );
+  }
 
   // ── DATA STATE — CROApp now owns all entity state (no prop drilling) ──────
 
@@ -2163,14 +2177,14 @@ export function CROApp({ user, onLogout, section, onGoHome }) {
       <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 20px",height:46,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
         <div style={{display:"flex",alignItems:"center",gap:12}}>
           {/* Back to home */}
-          <button onClick={onGoHome} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 10px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s"}}
+          <button onClick={()=>setShowHome(true)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 10px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s"}}
             onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
             onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>
             ← Home
           </button>
           <span style={{color:C.accent,fontWeight:700,fontSize:14,letterSpacing:3}}>OTV</span>
           <span style={{color:C.muted}}>|</span>
-          <span className="sans" style={{fontSize:11,fontWeight:700,color:C.dim,letterSpacing:2,textTransform:"uppercase"}}>{section==="ro"?"RO Management":section==="crm"?"CRM":"CRO Platform"}</span>
+          <span className="sans" style={{fontSize:11,fontWeight:700,color:C.dim,letterSpacing:2,textTransform:"uppercase"}}>CRM</span>
         </div>
 
         {/* ── GLOBAL SEARCH ── */}

@@ -4,7 +4,6 @@ import * as authSvc from "../services/api/auth";
 import type { ApiUser } from "../services/api/auth";
 import { CROApp } from "./CROApp";
 import { LoginScreen } from "../views/auth/LoginScreen";
-import { HomeScreen } from "../views/auth/HomeScreen";
 
 function setSessionTokenStore(t: string | null): void {
   setSessionTokenLib(t);
@@ -13,17 +12,14 @@ function setSessionTokenStore(t: string | null): void {
 export default function OTVApp() {
   const [loggedIn, setLoggedIn]               = useState(false);
   const [loginUser, setLoginUser]             = useState<ApiUser | null>(null);
-  const [section, setSection]                 = useState("home");
   const [sessionChecking, setSessionChecking] = useState(true);
 
-  // On mount: restore session from stored token (localStorage) or cookie
   useEffect(() => {
     authSvc.getMe()
       .then((data) => {
         if (data?.ok && data.user) {
           setLoginUser(data.user);
           setLoggedIn(true);
-          setSection("crm");
         } else {
           setSessionTokenStore(null);
         }
@@ -34,13 +30,11 @@ export default function OTVApp() {
   }, []);
 
   const handleLogin = (user: ApiUser) => {
-    // Clear entity localStorage caches on every fresh login so API data always wins
     ["otv_deals","otv_tasks","otv_internalReqs","otv_targetSubs",
      "otv_revenueEntries","otv_clientAccounts","otv_touchpoints"
     ].forEach(k => { try { localStorage.removeItem(k); } catch {} });
     setLoginUser(user);
     setLoggedIn(true);
-    setSection("crm");
   };
 
   const handleLogout = () => {
@@ -48,10 +42,8 @@ export default function OTVApp() {
     setSessionTokenStore(null);
     setLoggedIn(false);
     setLoginUser(null);
-    setSection("home");
   };
 
-  // Session expiry: any API 401 dispatches "otv:unauthorized"
   useEffect(() => {
     const onUnauth = () => handleLogout();
     window.addEventListener("otv:unauthorized", onUnauth);
@@ -59,10 +51,6 @@ export default function OTVApp() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const handleSelect = (s: string) => setSection(s);
-  const handleBack   = ()          => setSection("home");
-
-  // While checking session — show neutral loader, never flash the login screen
   if (sessionChecking) return (
     <div style={{display:"flex",alignItems:"center",justifyContent:"center",height:"100vh",background:"#f0f4f9"}}>
       <div style={{fontFamily:"'DM Mono',monospace",fontSize:12,color:"#8a97ae",letterSpacing:".08em"}}>OTV CRM</div>
@@ -70,15 +58,12 @@ export default function OTVApp() {
   );
 
   if (!loggedIn) return <LoginScreen onLogin={handleLogin} />;
-  if (section === "home") return <HomeScreen user={loginUser} onSelect={handleSelect} onLogout={handleLogout} />;
 
   return (
     <CROApp
       key={loginUser?.email || String(loginUser?.id ?? "")}
       user={loginUser}
       onLogout={handleLogout}
-      section={section}
-      onGoHome={handleBack}
     />
   );
 }
