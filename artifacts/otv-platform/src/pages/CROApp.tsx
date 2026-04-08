@@ -13,6 +13,8 @@ import * as adminSvc      from "../services/api/admin";
 import { useMeetings } from "../hooks/useMeetings";
 import { useTouchpoints } from "../hooks/useTouchpoints";
 import { useTasks } from "../hooks/useTasks";
+// Context scaffold — wired in Task 12B
+import { CROAppProvider, useCROAppContext } from "../contexts/CROAppContext"; // eslint-disable-line @typescript-eslint/no-unused-vars
 import { useAttendance } from "../hooks/useAttendance";
 import { usePersistedState } from "../hooks/usePersistedState";
 import { useApiEntityState } from "../hooks/useApiEntityState";
