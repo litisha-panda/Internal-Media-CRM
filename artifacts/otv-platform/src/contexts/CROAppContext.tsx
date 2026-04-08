@@ -35,7 +35,7 @@ export interface CROAppContextValue {
 
   // Persisted blob state
   reps: Rep[];                     setReps: React.Dispatch<React.SetStateAction<Rep[]>>;
-  masterClients: string[];         setMasterClients: React.Dispatch<React.SetStateAction<string[]>>;
+  masterClients: any[];            setMasterClients: React.Dispatch<React.SetStateAction<any[]>>;
   clientMasterList: string[];      setClientMasterList: React.Dispatch<React.SetStateAction<string[]>>;
   adminConfig: Record<string, any>; setAdminConfig: React.Dispatch<React.SetStateAction<Record<string, any>>>;
   savedROs: any[];                 setSavedROs: React.Dispatch<React.SetStateAction<any[]>>;
