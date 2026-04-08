@@ -73,7 +73,6 @@ const D14    = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
 const getToday    = () => new Date().toISOString().split("T")[0];
 const getTomorrow = () => new Date(Date.now() + 86400000).toISOString().split("T")[0];
 
-const SEED_TASKS: any[] = [];
 
 // Get start of current week (Monday)
 function getWeekStart(dateStr) {
@@ -98,8 +97,6 @@ const HR_EMAIL = "hr@odishatv.com";
 const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
 
 
-const SEED_WEEKLY_PLANS: any[] = [];
-const SEED_ABSENCE_REPORTS: any[] = [];
 const REPS: any[]              = [];
 
 const USER_ROLES = [
@@ -154,7 +151,6 @@ const USER_ROLES = [
   { id: "rep_debadatta",  name: "Debadatta Patra",       role: "SALES REP",      canView: "self",   region: "Central",  repId: 30 },
 ];
 
-const SEED_PROPERTIES: any[] = [];
 
 const IP_CATALOG: any[] = [];
 
@@ -808,7 +804,7 @@ export function CROApp({ user, onLogout }) {
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
   }, []);
-  const [absenceReports, setAbsenceReports] = usePersistedState("otv_absence", SEED_ABSENCE_REPORTS);
+  const [absenceReports, setAbsenceReports] = usePersistedState("otv_absence", []);
   const [exceptionModal, setExceptionModal] = useState(null); // { reportId, repName }
   const [exceptionReason, setExceptionReason] = useState("");
   const {
@@ -1040,7 +1036,7 @@ export function CROApp({ user, onLogout }) {
   const [roMgmtStatus, setRoMgmtStatus]             = useState("all");
   const [roMgmtViewRO, setRoMgmtViewRO]             = useState(null);
   const [roMgmtConfirmDelete, setRoMgmtConfirmDelete] = useState(null);
-  const [properties, setProperties]                   = usePersistedState("otv_properties", SEED_PROPERTIES);
+  const [properties, setProperties]                   = usePersistedState("otv_properties", []);
   const [ipProposals, setIpProposals]                  = usePersistedState("otv_ipProposals", []);
   const [ipPropOpen, setIpPropOpen]                    = useState<string|null>(null); // "ipId-elemId"
   const [ipPropClient, setIpPropClient]                = useState("");
