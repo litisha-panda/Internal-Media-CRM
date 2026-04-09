@@ -943,7 +943,7 @@ export function CROApp({ user, onLogout }) {
     deals.forEach(d => {
       const key = `${d.clientCompany}|${d.repId}`;
       if (!accountMap[key]) {
-        const rep = USER_ROLES.find(r => r.repId === d.repId);
+        const rep = USER_ROLES.find(r => String(r.repId)===String(d.repId));
         accountMap[key] = {
           id: uid(), clientName: d.clientCompany, repId: d.repId,
           zohoAccountId: d.zohoAccountId || "",
@@ -1022,13 +1022,13 @@ export function CROApp({ user, onLogout }) {
   // ── Part 5: 4-number dashboard helpers ──────────────────────────────────
   const CURRENT_FY = "FY26";
   const getAchieved   = (repId?: string | null, fy = CURRENT_FY) =>
-    revenueEntries.filter(e => (repId == null || e.repId === repId) && (e.fiscalYear === fy || fy === "all")).reduce((s, e) => s + (parseCurrency(e.amount||"0")||0), 0);
+    revenueEntries.filter(e => (repId == null || String(e.repId)===String(repId)) && (e.fiscalYear === fy || fy === "all")).reduce((s, e) => s + (parseCurrency(e.amount||"0")||0), 0);
   // COMMITTED = clientAccounts at Mail Confirmed stage (per spec: read annualTarget from clientAccounts, never from deals.amount)
   const getCommitted  = (repId?: string | null) =>
-    clientAccounts.filter(a => (repId == null || a.repId === repId) && a.currentStage === "Mail Confirmed").reduce((s, a) => s + (a.annualTarget||0), 0);
+    clientAccounts.filter(a => (repId == null || String(a.repId)===String(repId)) && a.currentStage === "Mail Confirmed").reduce((s, a) => s + (a.annualTarget||0), 0);
   // IN PLAY = clientAccounts at In Discussion or Negotiation stage
   const getInPlay     = (repId?: string | null) =>
-    clientAccounts.filter(a => (repId == null || a.repId === repId) && ["In Discussion","Negotiation"].includes(a.currentStage||"")).reduce((s, a) => s + (a.annualTarget||0), 0);
+    clientAccounts.filter(a => (repId == null || String(a.repId)===String(repId)) && ["In Discussion","Negotiation"].includes(a.currentStage||"")).reduce((s, a) => s + (a.annualTarget||0), 0);
   const getShortfall  = (target: number, repId?: string | null) => Math.max(0, target - getAchieved(repId) - getCommitted(repId) - getInPlay(repId));
 
   // Part 5: Stacked bar — proportions of annual target: Achieved (green) / Committed (blue) / In Play (amber) / Shortfall (red)
@@ -1052,7 +1052,7 @@ export function CROApp({ user, onLogout }) {
 
   // Part 9: Return total approved annual target for a rep (sum of all approved targetSubs for CURRENT_FY)
   const getAnnualTarget = (repId?: string | null) => {
-    const subs = targetSubs.filter(s => (repId == null || s.repId === repId) && s.status === "Approved");
+    const subs = targetSubs.filter(s => (repId == null || String(s.repId)===String(repId)) && s.status === "Approved");
     return { amount: subs.reduce((s, sub) => s + (sub.totalTarget || 0), 0) };
   };
 
@@ -1270,7 +1270,7 @@ export function CROApp({ user, onLogout }) {
   // HR ENGINE — simulates EOD auto-fire
   // In production this runs server-side at 23:59 daily via cron
   const fireAbsenceReport = (rep, date) => {
-    const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === date);
+    const alreadyFiled = absenceReports.find(r => String(r.repId)===String(rep.id) && r.date === date);
     if (alreadyFiled) { showToast("Report already filed for this date", "err"); return; }
     const report = {
       id: `ab${Date.now()}`, repId: rep.id, repName: rep.name, region: rep.region, role: rep.role,
@@ -1290,7 +1290,7 @@ export function CROApp({ user, onLogout }) {
       const tmrwPlanned = meetings.some(m=>m.repId===rep.id&&m.date===TOMORROW&&m.status==="planned");
       const bothDone = todayLogged && tmrwPlanned;
       if (!bothDone) {
-        const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === TODAY);
+        const alreadyFiled = absenceReports.find(r => String(r.repId)===String(rep.id) && r.date === TODAY);
         if (!alreadyFiled) {
           const reason = !todayLogged && !tmrwPlanned ? "Neither today's meetings logged nor tomorrow planned"
             : !todayLogged ? "Today's meetings not logged by 11:30 PM"
@@ -1373,7 +1373,7 @@ export function CROApp({ user, onLogout }) {
     if (wizardPrefilled.current) return; // already done
     const myRepId = user_role?.repId;
     if (!myRepId) return;
-    const myRep = reps.find((r:any) => r.id === myRepId || r.repId === myRepId);
+    const myRep = reps.find((r:any) => r.id === myRepId || String(r.repId)===String(myRepId));
     if (!myRep) return;
     wizardPrefilled.current = true;
     if (!wizardRegion && myRep.region) setWizardRegion(myRep.region);
@@ -1658,7 +1658,7 @@ export function CROApp({ user, onLogout }) {
     // @ts-ignore
     setClientAccounts(prev => {
       // @ts-ignore
-      const existing = prev.find(a => a.clientName === dealForm.clientCompany.trim() && a.repId === parsedRepId);
+      const existing = prev.find(a => a.clientName === dealForm.clientCompany.trim() && String(a.repId)===String(parsedRepId));
       if (existing) {
         // @ts-ignore
         if (!existing.zohoAccountId && dealForm.zohoAccountId) {
@@ -2210,10 +2210,10 @@ export function CROApp({ user, onLogout }) {
             const todayM    = new Date().getMonth() + 1;
             const qIdx      = todayM >= 4 && todayM <= 6 ? 0 : todayM >= 7 && todayM <= 9 ? 1 : todayM >= 10 && todayM <= 12 ? 2 : 3;
             const currentQ  = QUARTERS[qIdx];
-            const qSubs     = targetSubs.filter(s => s.repId === myRepId && s.quarter === currentQ && s.status === "Approved");
+            const qSubs     = targetSubs.filter(s => String(s.repId)===String(myRepId) && s.quarter === currentQ && s.status === "Approved");
             const qTarget   = qSubs.reduce((s,x) => s + (x.totalTarget||0), 0);
-            const qAch      = revenueEntries.filter(e => e.repId === myRepId && e.quarter === currentQ).reduce((s,e) => s + (parseCurrency(e.amount||"0")||0), 0);
-            const myTargetSub  = targetSubs.find(s => s.repId === myRepId);
+            const qAch      = revenueEntries.filter(e => String(e.repId)===String(myRepId) && e.quarter === currentQ).reduce((s,e) => s + (parseCurrency(e.amount||"0")||0), 0);
+            const myTargetSub  = targetSubs.find(s => String(s.repId)===String(myRepId));
             const targetApprovalStatus = !myTargetSub ? "none" : myTargetSub.status === "Approved" ? "approved" : "pending";
             return (
               <RepDashboard

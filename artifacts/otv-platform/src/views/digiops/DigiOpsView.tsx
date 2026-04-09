@@ -1,11 +1,9 @@
 import React, { useState } from "react";
 import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
-  USER_ROLES, APPROVAL_SLA_DAYS, APPROVAL_TARGETS, TARGET_APPROVAL_CHAIN,
-  MEETING_STATUS, MEETING_TYPES, CLIENT_OR_AGENCY, TASK_PRIORITIES, TASK_STATUSES,
-  SLA, REQ_STATUS, DEPARTMENTS, PLAN_STATUS, PLAN_DEADLINE, HR_EMAIL,
-  ALL_CHANNELS, D1, D3, D7, D14, THIS_WEEK_START, IP_CATALOG, PITCH_TYPES,
-  getToday, getTomorrow,
+  TASK_STATUSES,
+  D3,
+  D7,
 } from "../../constants";
 
 interface DigiOpsViewProps {
@@ -15,30 +13,22 @@ interface DigiOpsViewProps {
 
 export function DigiOpsView({ view, setView }: DigiOpsViewProps) {
   const {
-    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
-    reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
-    adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
-    weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
-    attDbRecords, attExcRequests, attDbLoading, fetchAttendanceData,
-    user_role, isRep, isRH, isNSH, isCRORole, isStrategy, isDigiOps, isAdmin, isNSHDashboard,
-    canLogMeeting, canGrantException, rhRegion, activeUser, setActiveUser,
-    filterQ, setFilterQ, filterRegion, setFilterRegion, entryQ,
-    visibleDeals, atRisk, overdueNext, closedRevenue, repScores, qMatch,
-    parseCurrency, fmt, fmtR, daysSince, uid, dealStage, oColor, riskColor, riskLabel, lColor,
-    mapLegacyOutcome, deptToUserId, getAchieved, getCommitted, getInPlay, getShortfall,
-    getAnnualTarget, stackedBar,
-    showToast, openNoteModal, pushNotification, updateOutcome, approveDeal, rejectDeal, updateReq,
-    openAddDeal, handleAddDeal, openSelfTask, grantException, revokeException, fireAbsenceReport,
-    runEODCheck, roPushToPipeline,
-    addDealOpen, setAddDealOpen, dealForm, setDealForm,
-    logOpen, setLogOpen, logForm, setLogForm,
-    viewMeetingId, setViewMeetingId, meetingEditMode, setMeetingEditMode, meetingEditForm, setMeetingEditForm,
-    taskModal, setTaskModal, selfTaskMode, setSelfTaskMode, taskForm, setTaskForm,
-    noteModal, setNoteModal, noteModalVal, setNoteModalVal,
-    expanded, setExpanded, toast, setToast, profileOpen, setProfileOpen,
-    accountThreadOpen, setAccountThreadOpen, accountThreadClient, setAccountThreadClient,
-    threadAIForm, setThreadAIForm,
-    DEAL_STAGES, STAGE_PROB, DEAL_TYPES, REGIONS, ALL_ROLES, QUARTERS, C, TODAY, TOMORROW, CURRENT_FY,
+    deals,
+    setDeals,
+    tasks,
+    setTasks,
+    revenueEntries,
+    reps,
+    isDigiOps,
+    filterQ,
+    qMatch,
+    fmtR,
+    daysSince,
+    oColor,
+    showToast,
+    setTaskModal,
+    C,
+    TODAY,
   } = useCROAppContext();
   return (
     <>
