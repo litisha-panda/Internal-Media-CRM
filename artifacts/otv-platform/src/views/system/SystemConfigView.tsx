@@ -772,7 +772,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                 const repLookup = (r: string) => reps.find((rep: Rep)=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
                 const entries = rows.map((row: Record<string,unknown>,i: number)=>{
                   const rep = repLookup(String(row["Rep Name"]||""));
-                  return {id:`re_imp_${Date.now()}_${i}`,repId:rep?.id??0,clientCompany:String(row["Client Company"]||""),dealType:String(row["Deal Type"]||"Linear TV"),amount:parseCur(row["Amount"]),invoiceRef:String(row["Invoice Ref"]||""),date:String(row["Date"]||TODAY),quarter:String(row["Quarter"]||"Q1 FY26"),notes:String(row["Notes"]||"")} as RevenueEntry;
+                  return {id:`re_imp_${Date.now()}_${i}`,repId:(rep?.id??null) as number,clientCompany:String(row["Client Company"]||""),dealType:String(row["Deal Type"]||"Linear TV"),amount:parseCur(row["Amount"]),invoiceRef:String(row["Invoice Ref"]||""),date:String(row["Date"]||TODAY),quarter:String(row["Quarter"]||"Q1 FY26"),notes:String(row["Notes"]||"")} as RevenueEntry;
                 });
                 setRevenueEntries((p: RevenueEntry[])=>[...p,...entries]);
                 showToast(`✓ ${entries.length} revenue entries imported`);
