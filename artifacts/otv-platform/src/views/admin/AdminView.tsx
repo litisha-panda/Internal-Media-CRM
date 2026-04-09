@@ -3,10 +3,30 @@ import { useCROAppContext } from "../../contexts/CROAppContext";
 import { apiFetch } from "../../services/api/_client";
 import * as adminSvc from "../../services/api/admin";
 
+interface PendingUser {
+  id: string | number;
+  _apiId: string;
+  name: string;
+  email: string;
+  requestedAt: string;
+  phone?: string;
+  designation?: string;
+  intendedRole?: string;
+  preferredRegion?: string;
+}
+
+interface LiveRole {
+  id: string | number;
+  _apiId: string;
+  name: string;
+  role: string;
+  region?: string;
+}
+
 interface AdminViewProps {
   view: string;
-  pendingUsers: any[];
-  liveRoles: any[];
+  pendingUsers: PendingUser[];
+  liveRoles: LiveRole[];
   adminUsersLoading: boolean;
   refreshAdminUsers: () => Promise<void>;
 }
@@ -84,7 +104,7 @@ export function AdminView({
                 <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>Pending Access Requests</div>
                 <span style={{background:`${C.orange}22`,color:C.orange,padding:"1px 8px",borderRadius:8,fontSize:11,fontWeight:700}}>{pendingUsers.length}</span>
               </div>
-              {pendingUsers.map((pu: any)=>(
+              {pendingUsers.map((pu: PendingUser)=>(
                 <div key={pu.id} className="card" style={{padding:"14px 18px",marginBottom:8,borderLeft:`3px solid ${C.orange}`,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                   <div style={{width:36,height:36,borderRadius:"50%",background:`${C.orange}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:C.orange,flexShrink:0}}>{pu.name[0]}</div>
                   <div style={{flex:1}}>
@@ -146,7 +166,7 @@ export function AdminView({
             Active Users ({liveRoles.length})
           </div>
           <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {liveRoles.map((u: any)=>(
+            {liveRoles.map((u: LiveRole)=>(
               <div key={u.id} className="card" style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
                 <div style={{width:32,height:32,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.accent,flexShrink:0}}>{u.name[0]}</div>
                 <div style={{flex:1,minWidth:120}}>
