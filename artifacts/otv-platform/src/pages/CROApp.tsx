@@ -36,7 +36,7 @@ import { TargetsView } from "../views/revenue/TargetsView";
 import { RevenueLogView } from "../views/revenue/RevenueLogView";
 import { RHView } from "../views/rh/RHView";
 import { NSHView } from "../views/nsh/NSHView";
-import { CROManagementView } from "../views/cro/CROManagementView";
+
 import { DigiOpsView } from "../views/digiops/DigiOpsView";
 import { AppTopbar } from "../components/AppTopbar";
 import { WelcomeModal } from "../components/WelcomeModal";
@@ -2374,13 +2374,7 @@ export function CROApp({ user, onLogout }) {
           )}
 
           {/* ═══ NSH/STRATEGY + CRO MANAGEMENT VIEWS ═══ */}
-          <CROManagementView
-            view={view} setView={setView} isMobile={isMobile}
-            nshRHDrill={nshRHDrill} setNshRHDrill={setNshRHDrill}
-            nshRegion={nshRegion} setNshRegion={setNshRegion}
-            targetDrilldown={targetDrilldown} setTargetDrilldown={setTargetDrilldown}
-            nshRepDrill={nshRepDrill} setNshRepDrill={setNshRepDrill}
-          />
+          {/* NSHView handles all NSH/Strategy/CRO management screens using isNSHDashboard flag */}
           <NSHView
             view={view} setView={setView} isMobile={isMobile}
             nshRHDrill={nshRHDrill} setNshRHDrill={setNshRHDrill}
