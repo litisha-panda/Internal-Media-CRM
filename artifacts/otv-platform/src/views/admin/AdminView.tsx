@@ -5,7 +5,7 @@ import * as adminSvc from "../../services/api/admin";
 
 interface PendingUser {
   id: string | number;
-  _apiId: string;
+  _apiId: number;
   name: string;
   email: string;
   requestedAt: string;
@@ -17,7 +17,7 @@ interface PendingUser {
 
 interface LiveRole {
   id: string | number;
-  _apiId: string;
+  _apiId: number;
   name: string;
   role: string;
   region?: string;
@@ -176,7 +176,7 @@ export function AdminView({
                 <select value={u.role} onChange={async (e: React.ChangeEvent<HTMLSelectElement>)=>{
                   const newRole = e.target.value;
                   try {
-                    await adminSvc.patchUserRole(u._apiId, newRole, u.region);
+                    await adminSvc.patchUserRole(u._apiId, newRole, u.region || "");
                     await refreshAdminUsers();
                     showToast(`${u.name} role updated to ${newRole}`);
                   } catch { showToast("Network error","err"); }

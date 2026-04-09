@@ -17,6 +17,16 @@ function loadXLSX(): Promise<any> {
   return _xlsxPromise;
 }
 
+interface MasterClient {
+  id: string;
+  company: string;
+  industry: string;
+  contact: string;
+  phone: string;
+  email: string;
+  region: string;
+}
+
 interface SystemConfigViewProps {
   view: string;
 }
@@ -575,7 +585,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
             const INDUSTRIES = ["FMCG","Banking/Finance","Automobile","Healthcare","Retail","Telecom","Technology","Steel/Manufacturing","Beverages","Paints","Media","Government","Other"];
             const saveClient = () => {
               if (!clientEditForm.company?.trim()){showToast("Company name required","err");return;}
-              setMasterClients((p: any[])=>p.map((c: any)=>c.id===clientEditId?{...c,...clientEditForm}:c));
+              setMasterClients((p: MasterClient[])=>p.map((c: MasterClient)=>c.id===clientEditId?{...c,...clientEditForm}:c));
               setClientEditId(null); setClientEditForm({});
               showToast("Client updated");
             };
@@ -638,13 +648,13 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                   <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                     <thead>
                       <tr style={{background:C.s2}}>
-                        {["Company","Industry","Contact","Phone","Region","Actions"].map((h: string)=>(
+                        {["Company","Industry","Contact","Phone","Email","Region","Actions"].map((h: string)=>(
                           <th key={h} style={{padding:"9px 12px",color:C.dim,fontWeight:700,fontSize:10,letterSpacing:".07em",textAlign:"left",whiteSpace:"nowrap"}}>{h}</th>
                         ))}
                       </tr>
                     </thead>
                     <tbody>
-                      {(masterClients as any[]).map((cl: any)=>{
+                      {(masterClients as MasterClient[]).map((cl: MasterClient)=>{
                         const isEditing = clientEditId===cl.id;
                         return (
                           <tr key={cl.id} style={{borderTop:`1px solid ${C.s2}`}}>
@@ -671,6 +681,12 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                             <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",fontSize:11,color:C.dim}}>{cl.phone}</td>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
+                                ? <input value={clientEditForm.email||cl.email||""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientEditForm((p: any)=>({...p,email:e.target.value}))}
+                                    style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:150}} />
+                                : <span style={{fontSize:11,color:C.dim,fontFamily:"'DM Mono',monospace"}}>{cl.email||"—"}</span>}
+                            </td>
+                            <td style={{padding:"9px 12px"}}>
+                              {isEditing
                                 ? <select value={clientEditForm.region||cl.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientEditForm((p: any)=>({...p,region:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11}}>
                                     {CL_REGIONS.map((r: string)=><option key={r}>{r}</option>)}
@@ -690,7 +706,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                                   <>
                                     <button onClick={()=>{setClientEditId(cl.id);setClientEditForm({...cl});setClientAddMode(false);}}
                                       style={{background:`${C.blue}15`,border:"none",color:C.blue,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Edit</button>
-                                    <button onClick={()=>{if(!window.confirm(`Remove ${cl.company}?`))return;setMasterClients((p: any[])=>p.filter((c: any)=>c.id!==cl.id));showToast("Client removed");}}
+                                    <button onClick={()=>{if(!window.confirm(`Remove ${cl.company}?`))return;setMasterClients((p: MasterClient[])=>p.filter((c: MasterClient)=>c.id!==cl.id));showToast("Client removed");}}
                                       style={{background:`${C.red}12`,border:"none",color:C.red,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Remove</button>
                                   </>
                                 )}
