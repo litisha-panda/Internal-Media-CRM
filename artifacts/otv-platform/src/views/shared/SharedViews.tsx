@@ -581,7 +581,7 @@ export function TeamView({ view, setView }: any) {
                           </div>
                           {/* Revenue grid */}
                           <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:8}}>
-                            {[["TARGET",fmtR(rT),C.dim],["CLOSED",fmtR(rC),C.green],["PIPELINE",fmtR(rP),C.accent],["ACHIEVE",`${rPct}%`,sc],["DEALS",rd.length,C.blue]].map(([l,v,c])=>(
+                            {[["TARGET",fmtR(rT),C.dim],["CLOSED",fmtR(rC),C.green],["PIPELINE",fmtR(rP),C.accent],["ACHIEVE",`${rPct}%`,sc],["DEALS",rd.length,C.blue]].map(([l,v,c]: [any,any,any])=>(
                               <div key={l} style={{background:C.s2,borderRadius:5,padding:"7px 10px"}}>
                                 <div style={{fontSize:9,color:C.dim,letterSpacing:".06em",marginBottom:2}}>{l}</div>
                                 <div className="sans" style={{fontSize:14,fontWeight:700,color:c}}>{v}</div>

@@ -185,7 +185,6 @@ const daysSince = (d) => { if (!d) return 999; return Math.floor((Date.now()-new
 // Part 1: helper to read stage from either new `stage` field or legacy `outcome` field
 const dealStage = (d) => d.stage || d.outcome || "Prospect";
 // Part 3: oColor supports both new and legacy stage values
-// @ts-ignore pre-existing IIAFE inline type mismatch
 const oColor = (o) => ({
   "Prospect": C.muted, "In Discussion": C.blue, "Negotiation": C.accent,
   "Mail Confirmed": C.green, "RO Received": "#0f6b2f", "Lost": C.red,
@@ -195,7 +194,6 @@ const oColor = (o) => ({
 }[o] || C.dim);
 const riskColor = (d) => { const s=dealStage(d); if (s==="Lost") return C.muted; if (s==="Mail Confirmed"||s==="RO Received") return C.green; const x=daysSince(d.lastDealMeetingDate||d.lastContact); return x>=7?C.red:x>=3?C.orange:C.green; };
 const riskLabel = (d) => { const s=dealStage(d); if (s==="Lost") return "Lost"; if (s==="RO Received") return "Closed"; if (s==="Mail Confirmed") return "Committed"; if (d.atRisk) return "At Risk"; const x=daysSince(d.lastDealMeetingDate||d.lastContact); return x>=7?"At Risk":x>=3?"Cooling":"Active"; };
-// @ts-ignore pre-existing IIAFE inline type mismatch
 const lColor = (l) => ({ "C-Suite / Owner":C.purple, "VP / GM":C.blue, "Marketing Head":C.green, "Brand Manager":C.accent, "Agency Lead":"#6366f1", "Junior/Exec":C.red }[l]||C.dim);
 // Part 1: map legacy outcome values → new canonical stage (used during migration and legacy rendering)
 const mapLegacyOutcome = (o: string): string => ({
@@ -213,12 +211,11 @@ const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice
 // RO PARSER ENGINE — full v9.5 embedded
 // ═══════════════════════════════════════════════════════════════════
 const XLSX_CDN = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
-// @ts-ignore pre-existing IIAFE inline type mismatch
 let _xlsxLoaded = false, _xlsxPromise = null;
 function loadXLSX() {
   if (_xlsxLoaded) return Promise.resolve((window as any).XLSX);
-  // @ts-ignore pre-existing IIAFE inline type mismatch
   if (_xlsxPromise) return _xlsxPromise;
+  // @ts-ignore
   _xlsxPromise = new Promise((res, rej) => {
     const s = document.createElement("script"); s.src = XLSX_CDN;
     s.onload = () => { _xlsxLoaded = true; res((window as any).XLSX); };
@@ -241,7 +238,6 @@ const ALL_CHANNELS = ["Odisha TV","Tarang","Tarang Music","Alankar","Prarthana"]
 function roNormalizeChannel(ch) {
   if (!ch) return "";
   const l = ch.toLowerCase().trim();
-  // @ts-ignore pre-existing IIAFE inline type mismatch
   for (const k of RO_CHANNEL_MAP_KEYS) { if (l.includes(k)) return RO_CHANNEL_MAP[k]; }
   return ch;
 }
@@ -274,7 +270,6 @@ function roDetectSegment(r) { const t=JSON.stringify(r).toUpperCase(); return RO
 function roParseDays(d) {
   const result={Sun:false,Mon:false,Tues:false,Wed:false,Thurs:false,Fri:false,Sat:false};
   if(!d)return result; const s=String(d).toLowerCase();
-  // @ts-ignore pre-existing IIAFE inline type mismatch
   if(s.includes("daily")||s.includes("all")||s.includes("everyday")){Object.keys(result).forEach(k=>result[k]=true);return result;}
   if(s.includes("weekday")||s.match(/mon.*fri/)){result.Mon=result.Tues=result.Wed=result.Thurs=result.Fri=true;return result;}
   if(s.includes("weekend")){result.Sun=result.Sat=true;return result;}
@@ -297,7 +292,7 @@ function roGetPTNPT(s) { const m=roToMins(s); return m>=RO_PT_START&&m<RO_PT_END
 function roBuildDealName(r) {
   const client=r.client_name||"",agency=r.agency_name||"",ch=roNormalizeChannel(r.channel||"");
   let my=r.activity_month||"";
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   if(!my&&r.start_date){try{const d=new Date(r.start_date);if(!isNaN(d))my=d.toLocaleDateString("en-IN",{month:"short",year:"numeric"});}catch(e){}}
   return [client,agency,ch,my].filter(Boolean).join(" - ");
 }
@@ -322,7 +317,6 @@ function roBuildExport(r) {
     "Currencies":"","Remarks":r.special_instructions||"","Payment Terms":r.payment_terms||"",
     "Credit Period":"","Region Name":"","Sales Executive Name":"","Reference Date":"","Deal Owner":"",
   };
-  // @ts-ignore pre-existing IIAFE inline type mismatch
   const breakupRows=[]; let lineNo=1;
   const spotItems=(r.spot_items||[]).filter(item=>{
     const prog=(item.program_or_timeband||"").trim().toLowerCase();
@@ -340,6 +334,7 @@ function roBuildExport(r) {
     const days=roParseDays(item.days||"");
     const prog=item.program_or_timeband||item.caption||"";
     splits.forEach(sp=>{
+      // @ts-ignore
       breakupRows.push({
         "Deal Line No":lineNo++,"Channel":ch,"From Date":r.start_date||"","To Date":r.end_date||"",
         "Contract Type":"","Secondary Type":"","Timeband Name":prog,"Content Type":prog,
@@ -354,13 +349,11 @@ function roBuildExport(r) {
       });
     });
   });
-  // @ts-ignore pre-existing IIAFE inline type mismatch
   const totalInventory=breakupRows.filter(r=>r["Spot Type"]!=="Bonus").reduce((s,r)=>s+Number(r["Inventory"]||0),0);
   const totalSlots=spotItems.filter(s=>s.payment_type!=="Bonus").reduce((s,i)=>s+Number(i.no_of_spots||0),0);
   const totalAmount=spotItems.filter(s=>s.payment_type!=="Bonus").reduce((s,i)=>s+Number(i.net_cost||0),0);
   const er=totalInventory>0?roRound2(totalAmount*10/totalInventory):0;
   const summaryRow={"Inventory":totalInventory||"","Total Slot":totalSlots||"","Amount":totalAmount||"","Inventory Eff. Rate":er||"","Slot/Secondary Eff. Rate":"","ER comparison with...":"","Volume Discount":"","Volume Discount Amount":"","Total Amount":expectedRevenue||totalAmount||""};
-  // @ts-ignore pre-existing IIAFE inline type mismatch
   return {dealRow,breakupRows,summaryRow,meta:{totalInventory,totalSlots,totalAmount,er,expectedRevenue,grossAmt,discountAmt,commAmt}};
 }
 
@@ -375,7 +368,7 @@ function ROFieldCard({label,value,highlight=false,warn=false}: {label:any,value:
 }
 function ROTableView({rows,hideCols=[]}){
   if(!rows||!rows.length)return<div style={{color:"#7d8590",fontSize:12,padding:8}}>No rows.</div>;
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const keys=Object.keys(rows[0]).filter(k=>!k.startsWith("_")&&!hideCols.includes(k));
   return(
     <div style={{overflowX:"auto"}}>
@@ -399,7 +392,6 @@ function ROTableView({rows,hideCols=[]}){
 }
 function ZohoHierarchy({r,exp}){
   const ch=roNormalizeChannel(r.channel||"");
-  // @ts-ignore pre-existing IIAFE inline type mismatch
   const company=RO_CHANNEL_COMPANY[ch]||"Odisha Television Ltd";
   const dealType=roDetectDealType(r);
   const dtColor=dealType==="IPs"?"#f0a500":dealType==="Impact"?"#f97316":"#a855f7";
@@ -435,7 +427,6 @@ function ZohoHierarchy({r,exp}){
 function ROCard({result,onExport,onPushToPipeline}){
   const [activeTab,setActiveTab]=useState("deal");
   const [copied,setCopied]=useState(false);
-  // @ts-ignore pre-existing IIAFE inline type mismatch
   const badge={RELEASE_ORDER:{bg:"#1a1a3a",color:"#a855f7",label:"Release Order"},RO_ADDITION:{bg:"#2a1a1a",color:"#f97316",label:"RO Addition"},SALES_AGREEMENT:{bg:"#0a1a0a",color:"#16c784",label:"Sales Agreement"}}[result.document_type]||{bg:"#1a2332",color:"#7d8590",label:"RO"};
   const exp=roBuildExport(result);
   const dealType=roDetectDealType(result);
@@ -586,19 +577,20 @@ function roFriendlyError(err) {
   return `Parse failed: ${m}`;
 }
 
-// @ts-ignore pre-existing IIAFE inline type mismatch
 let _roAbortCtrl = null;
-// @ts-ignore pre-existing IIAFE inline type mismatch
+// @ts-ignore
 function roCancelParse() { if (_roAbortCtrl) { _roAbortCtrl.abort(); _roAbortCtrl = null; } }
 
 async function roCallAPI(msgs) {
   roCancelParse();
+  // @ts-ignore
   _roAbortCtrl = new AbortController();
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const tid = setTimeout(() => { if (_roAbortCtrl) _roAbortCtrl.abort(); }, 120000);
   try {
     const resp = await fetch("/api/claude", {
       method: "POST",
+      // @ts-ignore
       signal: _roAbortCtrl.signal,
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:16000, system:RO_PROMPT, messages:msgs })
@@ -820,7 +812,7 @@ export function CROApp({ user, onLogout }) {
     const tick = () => {
       const now = new Date(), dl = new Date();
       dl.setHours(23, 30, 0, 0);
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const diff = dl - now;
       if (diff <= 0) { setCountdown("11:30 PM passed"); return; }
       const h = Math.floor(diff / 3600000);
@@ -831,8 +823,8 @@ export function CROApp({ user, onLogout }) {
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
   }, []);
-  const [absenceReports, setAbsenceReports] = usePersistedState("otv_absence", []);
-  const [exceptionModal, setExceptionModal] = useState(null); // { reportId, repName }
+  const [absenceReports, setAbsenceReports] = usePersistedState<any[]>("otv_absence", []);
+  const [exceptionModal, setExceptionModal] = useState<any>(null); // { reportId, repName }
   const [exceptionReason, setExceptionReason] = useState("");
   const {
     records: attDbRecords,
@@ -875,15 +867,14 @@ export function CROApp({ user, onLogout }) {
       "vikram@odishatv.com":     "rep_vikram",
       "meera@odishatv.com":      "rep_meera",
     };
-    // @ts-ignore pre-existing IIAFE inline type mismatch
     return emailToId[email] || "admin";
   }, [user?.email]);
   const [activeUser, setActiveUser] = useState(() => derivedUserId);
   const [filterRegion, setFilterRegion] = useState("All");
   const [filterQ, setFilterQ]     = useState("Q1 FY26");
   const [expanded, setExpanded]   = useState(null);
-  const [toast, setToast]         = useState(null);
-  const [noteModal, setNoteModal] = useState(null);   // {title, placeholder, onSubmit}
+  const [toast, setToast]         = useState<any>(null);
+  const [noteModal, setNoteModal] = useState<any>(null);   // {title, placeholder, onSubmit}
   const [noteModalVal, setNoteModalVal] = useState("");
   const [profileOpen, setProfileOpen] = useState(false);
   const { tasks, setTasks, isLoading: tasksLoading, syncError: tasksError } = useTasks(!!user);
@@ -891,8 +882,8 @@ export function CROApp({ user, onLogout }) {
   const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [importData, setImportData] = useState(null);
-  // @ts-ignore pre-existing IIAFE inline type mismatch
-  const importRef = useRef();
+  // @ts-ignore
+  const importRef = useRef<HTMLInputElement>(null);
   // My Plan calendar state — must be at component level (React hooks rule)
   const [calWeekOffset, setCalWeekOffset] = useState(0);
   const [calDayView, setCalDayView]       = useState<string|null>(null); // date string "YYYY-MM-DD"
@@ -940,7 +931,6 @@ export function CROApp({ user, onLogout }) {
   // Auto-navigate when tour step changes + compute target highlight rect
   useEffect(() => {
     if (!tourActive) return;
-    // @ts-ignore pre-existing IIAFE inline type mismatch
     const step = (TOUR_DATA[tourKey]?.steps || [])[tourStep];
     if (step?.nav) setView(step.nav);
     // Slight delay so the view re-renders before we measure
@@ -1016,31 +1006,31 @@ export function CROApp({ user, onLogout }) {
   useEffect(() => {
     const escalateDays = adminConfig?.inactivityDaysEscalate || 14;
     const riskDays     = adminConfig?.inactivityDaysRisk     || 7;
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setDeals(prev => prev.map(d => {
       const ds = dealStage(d);
       // Closed deals never escalate
       if (ds === "RO Received" || ds === "Mail Confirmed" || ds === "Lost") return d;
       // Part 4: Escalation clock is only reset by Deal Meeting touchpoints
       // Use lastDealMeetingDate if available, else fall back to lastContact
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const idleClock = d.lastDealMeetingDate || d.lastContact;
       const idle = daysSince(idleClock);
       // 7+ days without a Deal Meeting → mark at risk
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       if (idle >= riskDays && idle < escalateDays && !d.atRisk) {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         return { ...d, atRisk: true };
       }
       // escalateDays+ idle → auto-escalate to NSH if not already flagged
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       if (idle >= escalateDays && !d.awaitingApproval) {
         return {
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           ...d, atRisk: true,
           awaitingApproval:      "NSH",
           awaitingApprovalSince: TODAY,
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           auditLog: [...(d.auditLog || []), {
             at: TODAY, by: "System", role: "AUTO",
             action: "Auto-escalated", from: null, to: "NSH",
@@ -1049,9 +1039,9 @@ export function CROApp({ user, onLogout }) {
         };
       }
       // Clear atRisk if a Deal Meeting was logged recently
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       if (idle < riskDays && d.atRisk) {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         return { ...d, atRisk: false };
       }
       return d;
@@ -1068,8 +1058,8 @@ export function CROApp({ user, onLogout }) {
   const [roProgress, setRoProgress]   = useState("");
   const [roSearch, setRoSearch]       = useState("");
   const [savedROs, setSavedROs]       = usePersistedState("otv_savedROs", []);
-  // @ts-ignore pre-existing IIAFE inline type mismatch
-  const roFileRef = useRef();
+  // @ts-ignore
+  const roFileRef = useRef<HTMLInputElement>(null);
 
   // RO MANAGEMENT STATE
   const [roMgmtChannel, setRoMgmtChannel]           = useState("all");
@@ -1087,7 +1077,7 @@ export function CROApp({ user, onLogout }) {
   const [irStatusFilter, setIrStatusFilter]                   = useState("all");
   const [lbTab, setLbTab]                                     = useState("team");
   const [targetSubs, setTargetSubs, targetLoading, targetError] = useApiEntityState("/api/targets",        "otv_targetSubs",      []);
-  const [revenueEntries, setRevenueEntries, revLoading, revError] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  []);
+  const [revenueEntries, setRevenueEntries, revLoading, revError]: [any[], any, any, any] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  []);
   // ── Part 1: New data model objects ──────────────────────────────────────
   const [clientAccounts, setClientAccounts, , caError] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
   const { touchpoints, setTouchpoints, syncError: tpError } = useTouchpoints(!!user);
@@ -1098,65 +1088,65 @@ export function CROApp({ user, onLogout }) {
     if (deals.length === 0 && meetings.length === 0) return; // nothing to migrate
     const accountMap: Record<string, any> = {}; // key: `${clientCompany}|${repId}`
     deals.forEach(d => {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const key = `${d.clientCompany}|${d.repId}`;
       if (!accountMap[key]) {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const rep = USER_ROLES.find(r => r.repId === d.repId);
         accountMap[key] = {
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           id: uid(), clientName: d.clientCompany, repId: d.repId,
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           zohoAccountId: d.zohoAccountId || "",
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           region: rep?.region || d.region || "",
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           fiscalYear: d.quarter?.slice(-3) === "FY26" ? "FY26" : "FY26",
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           annualTarget: parseCurrency(d.targetAmount || "0") || 0,
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           currentStage: mapLegacyOutcome(d.outcome || "Prospect"),
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           lastContactDate: d.lastContact || "",
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           lastDealMeetingDate: d.lastContact || "",
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           createdAt: d.createdAt || TODAY, updatedAt: TODAY,
         };
       }
       // link deal back to its account
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       if (!d.clientAccountId) {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         setDeals(prev => prev.map(x => x.id === d.id ? {...x, clientAccountId: accountMap[key].id, stage: mapLegacyOutcome(x.outcome||"Prospect"), pipelineAmount: parseCurrency(x.amount||"0")||0} : x));
       }
     });
     const newAccounts = Object.values(accountMap);
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     if (newAccounts.length > 0) setClientAccounts(newAccounts);
     // Migrate meetings → touchpoints
     const newTouchpoints = meetings.map(m => {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const deal = deals.find(d => d.id === m.dealId || d.clientCompany === m.clientAgencyName);
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const acctKey = deal ? `${deal.clientCompany}|${deal.repId}` : null;
       const acct = acctKey ? accountMap[acctKey] : null;
       return {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         id: m.id, clientAccountId: acct?.id || "", dealId: m.dealId || deal?.id || "",
         repId: m.repId, date: m.date, time: m.meetingTime || "",
         meetingType: m.meetingType || "Physical Meeting",
         touchpointType: "Deal Meeting", contactName: m.contactName || "",
         contactDesignation: m.designation || "", contactLevel: m.contactLevel || "",
         whatHappened: m.discussion || "", clientFeedback: m.clientFeedback || "",
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         stageUpdate: mapLegacyOutcome(m.outcome || "Prospect"),
         actionItems: m.actionItems || [],
         loggedAt: m.loggedAt || m.date, loggedLate: m.loggedLate || false,
         loggedByUserId: m.loggedByUserId || String(m.repId),
       };
     }).filter(t => t.clientAccountId);
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     if (newTouchpoints.length > 0) setTouchpoints(newTouchpoints);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1185,13 +1175,13 @@ export function CROApp({ user, onLogout }) {
   useEffect(() => {
     if (stubsCleanedRef.current) return;
     const hasStubs = revenueEntries.some(
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       e => e.invoiceRef === "PO Pending" && String(e.notes||"").startsWith("Auto-stub:")
     );
     if (!hasStubs) return;
     stubsCleanedRef.current = true;
     setRevenueEntries(p => p.filter(
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       e => !(e.invoiceRef === "PO Pending" && String(e.notes||"").startsWith("Auto-stub:"))
     ));
   }, [revenueEntries]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -1199,15 +1189,15 @@ export function CROApp({ user, onLogout }) {
   // ── Part 5: 4-number dashboard helpers ──────────────────────────────────
   const CURRENT_FY = "FY26";
   const getAchieved   = (repId?: number, fy = CURRENT_FY) =>
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     revenueEntries.filter(e => (repId == null || e.repId === repId) && (e.fiscalYear === fy || fy === "all")).reduce((s, e) => s + (parseCurrency(e.amount||"0")||0), 0);
   // COMMITTED = clientAccounts at Mail Confirmed stage (per spec: read annualTarget from clientAccounts, never from deals.amount)
   const getCommitted  = (repId?: number) =>
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     clientAccounts.filter(a => (repId == null || a.repId === repId) && a.currentStage === "Mail Confirmed").reduce((s, a) => s + (a.annualTarget||0), 0);
   // IN PLAY = clientAccounts at In Discussion or Negotiation stage
   const getInPlay     = (repId?: number) =>
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     clientAccounts.filter(a => (repId == null || a.repId === repId) && ["In Discussion","Negotiation"].includes(a.currentStage||"")).reduce((s, a) => s + (a.annualTarget||0), 0);
   const getShortfall  = (target: number, repId?: number) => Math.max(0, target - getAchieved(repId) - getCommitted(repId) - getInPlay(repId));
 
@@ -1232,9 +1222,9 @@ export function CROApp({ user, onLogout }) {
 
   // Part 9: Return total approved annual target for a rep (sum of all approved targetSubs for CURRENT_FY)
   const getAnnualTarget = (repId?: number) => {
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const subs = targetSubs.filter(s => (repId == null || s.repId === repId) && s.status === "Approved");
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     return { amount: subs.reduce((s, sub) => s + (sub.totalTarget || 0), 0) };
   };
 
@@ -1330,12 +1320,12 @@ export function CROApp({ user, onLogout }) {
     return isNaN(n) ? 0 : Math.round(n);
   };
 
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
   const openNoteModal = (title, placeholder, onSubmit) => {
     setNoteModalVal(placeholder || "");
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setNoteModal({ title, placeholder: placeholder || "", onSubmit });
   };
 
@@ -1344,7 +1334,6 @@ export function CROApp({ user, onLogout }) {
     if(!roFiles.length&&!roInputText.trim())return;
     setRoLoading(true);setRoError(null);setRoResults([]);
     try{
-      // @ts-ignore pre-existing IIAFE inline type mismatch
       const parsed=[];
       if(roFiles.length>0){
         for(let i=0;i<roFiles.length;i++){
@@ -1353,6 +1342,7 @@ export function CROApp({ user, onLogout }) {
           const text=await roCallAPI(msgs);
           const raw=roExtractJSON(text);
           const deals=Array.isArray(raw)?raw:[raw];
+          // @ts-ignore
           deals.forEach((result,di)=>{roNormalizeDoc(result);result._filename=roFiles[i].name+(deals.length>1?` [${di+1}]`:"");parsed.push(result);});
         }
       }else{
@@ -1360,9 +1350,9 @@ export function CROApp({ user, onLogout }) {
         const text=await roCallAPI([{role:"user",content:"Parse this TV RO. If multiple channels return JSON array:\n\n"+roInputText}]);
         const raw=roExtractJSON(text);
         const deals=Array.isArray(raw)?raw:[raw];
+        // @ts-ignore
         deals.forEach((result,di)=>{roNormalizeDoc(result);result._filename="Pasted Text"+(deals.length>1?` [${di+1}]`:"");parsed.push(result);});
       }
-      // @ts-ignore pre-existing IIAFE inline type mismatch
       setRoResults(parsed);setRoActiveDoc(0);
     }catch(err: any) {setRoError(roFriendlyError(err));}
     finally{setRoLoading(false);setRoProgress("");}
@@ -1379,14 +1369,14 @@ export function CROApp({ user, onLogout }) {
     XLSX.writeFile(wb,(r.client_name||"ro").replace(/[^a-zA-Z0-9]/g,"_")+"_Zoho.xlsx");
     // Auto-save to management
     const saved={id:`ro_${Date.now()}`,savedAt:new Date().toISOString(),client_name:r.client_name||"",brand_name:r.brand_name||"",agency_name:r.agency_name||"",channel:roNormalizeChannel(r.channel||""),ro_number:r.ro_number||"",ro_date:r.ro_date||"",gross_amount:r.gross_amount||0,total_payable:r.total_payable||0,filename:r._filename||"",data:r,status:"Exported"};
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setSavedROs(p=>[saved,...p.filter(x=>x.ro_number!==saved.ro_number||!saved.ro_number)]);
     showToast("Exported + saved to RO Management");
   };
 
   const roSaveResult = (r) => {
     const saved={id:`ro_${Date.now()}`,savedAt:new Date().toISOString(),client_name:r.client_name||"",brand_name:r.brand_name||"",agency_name:r.agency_name||"",channel:roNormalizeChannel(r.channel||""),ro_number:r.ro_number||"",ro_date:r.ro_date||"",gross_amount:r.gross_amount||0,total_payable:r.total_payable||0,filename:r._filename||"",data:r,status:"Parsed"};
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setSavedROs(p=>[saved,...p.filter(x=>x.ro_number!==saved.ro_number||!saved.ro_number)]);
     showToast("Saved to RO Management");
   };
@@ -1432,7 +1422,7 @@ export function CROApp({ user, onLogout }) {
       reqs:           [],
       _fromRO:        roResult.ro_number || "",
     };
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setDealForm(prefilled);
     setAddDealOpen(true);
     showToast(`RO pre-filled → deal form opened ✓`);
@@ -1442,10 +1432,9 @@ export function CROApp({ user, onLogout }) {
     if(!roResults.length)return;
     const XLSX=await loadXLSX();
     const wb=XLSX.utils.book_new();
-    // @ts-ignore pre-existing IIAFE inline type mismatch
     const allDeals=[],allBreakup=[],allSummary=[];
+    // @ts-ignore
     roResults.forEach(r=>{const exp=roBuildExport(r);allDeals.push(exp.dealRow);allBreakup.push(...exp.breakupRows);allSummary.push(exp.summaryRow);});
-    // @ts-ignore pre-existing IIAFE inline type mismatch
     roMakeSheet(wb,"Deals",allDeals);roMakeSheet(wb,"Deal Breakup",allBreakup);roMakeSheet(wb,"Summary",allSummary);
     XLSX.writeFile(wb,"All_Deals_Zoho.xlsx");
     showToast("All ROs exported");
@@ -1461,7 +1450,7 @@ export function CROApp({ user, onLogout }) {
   // HR ENGINE — simulates EOD auto-fire
   // In production this runs server-side at 23:59 daily via cron
   const fireAbsenceReport = (rep, date) => {
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === date);
     if (alreadyFiled) { showToast("Report already filed for this date", "err"); return; }
     const report = {
@@ -1470,7 +1459,7 @@ export function CROApp({ user, onLogout }) {
       status: "Sent to HR", sentTo: HR_EMAIL, markedAs: "Absent",
       exception: null, exceptionBy: null, exceptionReason: null, generatedBy: "System (Auto)"
     };
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setAbsenceReports(p => [report, ...p]);
     showToast(`Absence report fired to HR for ${rep.name}`);
   };
@@ -1483,13 +1472,13 @@ export function CROApp({ user, onLogout }) {
       const tmrwPlanned = meetings.some(m=>m.repId===rep.id&&m.date===TOMORROW&&m.status==="planned");
       const bothDone = todayLogged && tmrwPlanned;
       if (!bothDone) {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === TODAY);
         if (!alreadyFiled) {
           const reason = !todayLogged && !tmrwPlanned ? "Neither today's meetings logged nor tomorrow planned"
             : !todayLogged ? "Today's meetings not logged by 11:30 PM"
             : "Tomorrow's meetings not planned by 11:30 PM";
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           setAbsenceReports(p => [{
             id:`ab${Date.now()+rep.id}`, repId:rep.id, repName:rep.name, region:rep.region, role:rep.role,
             date:TODAY, generatedAt:"23:30", status:"Sent to HR", sentTo:HR_EMAIL, markedAs:"Absent",
@@ -1520,16 +1509,15 @@ export function CROApp({ user, onLogout }) {
   const grantException = () => {
     if (!canGrantException) { showToast("Only Admin or CXO can grant exceptions", "err"); return; }
     if (!exceptionReason.trim()) { showToast("Reason required", "err"); return; }
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setAbsenceReports(p => p.map(r => r.id === exceptionModal.reportId
-      // @ts-ignore pre-existing IIAFE inline type mismatch
       ? { ...r, status:"Exception Granted", markedAs:"Present", exception:"Overridden", exceptionBy:user_role?.name||"Admin", exceptionReason: exceptionReason.trim() }
       : r
     ));
     // Also mark them present in attendance
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const rep = absenceReports.find(r => r.id === exceptionModal.reportId);
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     if (rep) setAtt(p => ({...p, [rep.date]: {...(p[rep.date]||{}), [rep.repId]: true}}));
     setExceptionModal(null); setExceptionReason("");
     showToast("Exception granted — HR notified, marked Present");
@@ -1537,9 +1525,8 @@ export function CROApp({ user, onLogout }) {
 
   const revokeException = (reportId) => {
     if (!canGrantException) { showToast("Only Admin or CXO can revoke exceptions", "err"); return; }
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setAbsenceReports(p => p.map(r => r.id === reportId
-      // @ts-ignore pre-existing IIAFE inline type mismatch
       ? { ...r, status:"Sent to HR", markedAs:"Absent", exception:null, exceptionBy:null, exceptionReason:null }
       : r
     ));
@@ -1601,31 +1588,31 @@ export function CROApp({ user, onLogout }) {
         if (!t.dueDate || t.dueDate >= TODAY) return t;
         if (!["Open","Escalated"].includes(t.status||"Open")) return t;
         const level = t.escLevel||0;
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const escAt = t.escAt ? new Date(t.escAt).getTime() : new Date(t.dueDate).getTime() + 12*3600000;
         if (now < escAt) return t.status==="Open"?{...t,status:"Escalated",escAt:t.escAt||new Date(new Date(t.dueDate).getTime()+12*3600000).toISOString()}:t;
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const newLevel = Math.min(level+1, ESC_CHAIN.length);
         const nextEscAt = new Date(escAt+12*3600000).toISOString();
         return {...t,status:"Escalated",escLevel:newLevel,escDept:ESC_CHAIN[newLevel-1]||t.escDept,escAt:nextEscAt};
       }));
     }
     // Auto-escalate IRs along the 4-step chain
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const hasOpenIRs = internalReqs.some(r => r.status==="Pending"&&r.escalationAt&&new Date(r.escalationAt).getTime()<now);
     if (hasOpenIRs) {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       setInternalReqs(prev => prev.map(r => {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         if (r.status!=="Pending"||!r.escalationAt) return r;
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         if (new Date(r.escalationAt).getTime()>=now) return r;
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const level = r.escLevel||0;
         const newLevel = Math.min(level+1, ESC_CHAIN.length);
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const nextEscAt = new Date(new Date(r.escalationAt).getTime()+12*3600000).toISOString();
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         return {...r,status:"Pending",escLevel:newLevel,escDept:ESC_CHAIN[newLevel-1]||r.dept,escalationAt:nextEscAt};
       }));
     }
@@ -1651,12 +1638,12 @@ export function CROApp({ user, onLogout }) {
     const toMark: string[] = [];
     pastDays.forEach(day => {
       const hasLog = (meetings||[]).some(m=>m.repId===repId&&m.date===day);
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const alreadyMarked = (absenceReports||[]).some(a=>a.repId===repId&&a.date===day);
       if (!hasLog&&!alreadyMarked) toMark.push(day);
     });
     if (toMark.length>0) {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       setAbsenceReports((prev:any[])=>[...prev,...toMark.map(day=>({
         id:`abs_auto_${day}_${repId}`,repId,date:day,markedAs:"Absent",
         exception:null,exceptionBy:null,exceptionReason:null,
@@ -1675,69 +1662,69 @@ export function CROApp({ user, onLogout }) {
 
   // Filtered visible deals
   const visibleDeals = deals.filter(d => {
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const regionOk = user_role.canView==="all" ? (filterRegion==="All"||d.region===filterRegion) : user_role.canView==="region" ? d.region===user_role.region : d.repId===user_role.repId;
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     return regionOk && qMatch(d.quarter);
   });
 
   // Revenue Tracker: group visibleDeals by client
   const rtClientMap = {};
   visibleDeals.forEach(d=>{
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     if(!rtClientMap[d.clientCompany]) rtClientMap[d.clientCompany]={
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       clientCompany:d.clientCompany, repId:d.repId, lastContact:d.lastContact,
       deals:[], fct:0, digital:0, integrated:0, sponsorship:0, branded:0, total:0, target:0
     };
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const c = rtClientMap[d.clientCompany];
     c.deals.push(d);
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     c.target += (d.targetAmount||0);
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     if(d.outcome==="Mail Confirmed"){
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       if(d.dealType==="Linear TV") c.fct += d.amount;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       else if(d.dealType==="Digital") c.digital += d.amount;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       else if(d.dealType==="Integrated Packages") c.integrated += d.amount;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       else if(d.dealType==="IPs") c.sponsorship += d.amount;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       else if(d.dealType==="Media Solutions") c.branded += d.amount;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       c.total += d.amount;
     }
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     if(!c.lastContact||d.lastContact>c.lastContact) c.lastContact=d.lastContact;
   });
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const rtClients = Object.values(rtClientMap).sort((a,b)=>daysSince(b.lastContact)-daysSince(a.lastContact));
 
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const closedDeals  = visibleDeals.filter(d=>d.outcome==="Mail Confirmed");
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const activeDeals  = visibleDeals.filter(d=>d.outcome!=="Not Interested");
   // Bug 5 fix: CLOSED QTD in War Room must equal sum of actual revenue entries, not deal pipeline amounts.
   // We determine visible reps from visibleDeals, then sum their revenue entries for the current quarter.
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const visibleRepIdsSet = new Set(visibleDeals.map(d=>d.repId));
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const closedRevenue = revenueEntries.filter(e => visibleRepIdsSet.has(e.repId) && qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
   // Part 4: at-risk = clientAccounts (spec: In Discussion / Negotiation / Mail Confirmed, 7+ days since last DEAL meeting)
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const atRisk       = clientAccounts.filter(a => visibleRepIdsSet.has(a.repId) && ["In Discussion","Negotiation","Mail Confirmed"].includes(a.currentStage||"") && daysSince(a.lastDealMeetingDate||a.lastContactDate) >= 7);
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const overdueNext  = activeDeals.filter(d=>d.nextStepDate && d.nextStepDate<TODAY && d.outcome!=="Mail Confirmed");
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const allReqs      = deals.flatMap((d,_)=>d.reqs.map((r,i)=>({...r,dealId:d.id,reqIdx:i,clientCompany:d.clientCompany,amount:d.amount,repId:d.repId})));
   const todayMtgs    = meetings.filter(m=>m.date===TODAY);
 
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const totalTarget  = visibleDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const weightedPipe = activeDeals.filter(d=>d.outcome!=="Mail Confirmed").reduce((s,d)=>s+((d.amount||0)*(STAGE_PROB[d.outcome]||0)/100),0);
   const forecast     = closedRevenue+weightedPipe;
   const gap          = Math.max(0,totalTarget-forecast);
@@ -1747,18 +1734,17 @@ export function CROApp({ user, onLogout }) {
   const repScores = useMemo(() => reps
     .filter(r => user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId)
     .map(rep => {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const rd      = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const closed  = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const pipe    = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
       const rm      = meetings.filter(m=>m.repId===rep.id);
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const seniorM = rm.filter(m=>["C-Suite / Owner","VP / GM","Marketing Head","Brand Manager"].includes(m.contactLevel)).length;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const risk    = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
       const attOk   = att[TODAY]?.[rep.id];
       const cPct    = rep.target>0?Math.round((closed/rep.target)*100):0;
       const senPct  = rm.length>0?Math.round((seniorM/rm.length)*100):0;
@@ -1803,9 +1789,9 @@ export function CROApp({ user, onLogout }) {
     const scopedDeals = !dealView ? [] : canView==="all"
       ? deals
       : canView==="region"
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         ? deals.filter(d=>d.region===myRegion)
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         : deals.filter(d=>d.repId===myRepId);
     const scopedMeetings = !meetingView ? [] : canView==="all"
       ? meetings
@@ -1818,72 +1804,70 @@ export function CROApp({ user, onLogout }) {
         ? tasks.filter(t=>reps.find(r=>r.id===t.repId)?.region===myRegion)
         : tasks.filter(t=>t.assignedTo===myRepId||t.assignedToUserId===activeUser||t.assignedBy===activeUser);
 
-    // @ts-ignore pre-existing IIAFE inline type mismatch
-    const out = [];
+    const out: any[] = [];
     scopedDeals.filter(d =>
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       d.clientCompany?.toLowerCase().includes(q) ||
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       d.contactName?.toLowerCase().includes(q) ||
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       d.notes?.toLowerCase().includes(q)
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     ).slice(0, 5).forEach(d => out.push({ type:"deal", label:d.clientCompany, sub:`${d.outcome} · ${fmtR(d.amount)}`, action:()=>{ setView(dealView); setGlobalSearch(""); setSearchOpen(false); } }));
     scopedMeetings.filter(m =>
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       m.clientCompany?.toLowerCase().includes(q) ||
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       m.discussion?.toLowerCase().includes(q) ||
       m.contactName?.toLowerCase().includes(q)
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     ).slice(0, 3).forEach(m => out.push({ type:"meeting", label:m.clientCompany, sub:`${m.date} · ${(m.discussion||"").slice(0,55)}`, action:()=>{ setView(meetingView); setGlobalSearch(""); setSearchOpen(false); } }));
     scopedTasks.filter(t =>
       t.clientCompany?.toLowerCase().includes(q) ||
       t.title?.toLowerCase().includes(q)
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     ).slice(0, 3).forEach(t => out.push({ type:"task", label:t.title, sub:t.clientCompany, action:()=>{ setView(taskView); setGlobalSearch(""); setSearchOpen(false); } }));
-    // @ts-ignore pre-existing IIAFE inline type mismatch
     return out.slice(0, 8);
   }, [globalSearch, deals, meetings, tasks, user_role, reps, activeUser,
       isRep, isRH, isNSH, isStrategy, isCRORole, isDigiOps, isAdmin]);
 
   const updateOutcome = (id, outcome) => {
     const closed = outcome === "Mail Confirmed";
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setDeals(p => p.map(d => {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       if (d.id !== id) return d;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const entry  = closed && d.awaitingApproval ? [{
         at: TODAY, by: user_role?.name||"Manager", role: user_role?.role||"",
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         action: "Closed", from: d.awaitingApproval, to: null, note: "Deal closed — approval cleared",
       }] : [];
       return {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         ...d, outcome, lastContact: TODAY,
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         awaitingApproval:      closed ? null : d.awaitingApproval,
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         awaitingApprovalSince: closed ? null : d.awaitingApprovalSince,
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         atRisk: closed ? false : d.atRisk,
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         auditLog: [...(d.auditLog||[]), ...entry],
       };
     }));
     if (closed) {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const deal = deals.find(d => d.id === id);
       if (deal) {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         pushNotification({ event: "deal_closed", client: deal.clientCompany, amount: deal.amount, rep: deal.repName, message: `Deal won: ${deal.clientCompany} — ${fmtR(deal.amount)}` });
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         showToast(`Deal marked won: ${deal.clientCompany}. Log the booked amount in Revenue Log.`);
       }
     }
   };
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const updateReq     = (dealId, reqIdx, status) => setDeals(p=>p.map(d=>d.id===dealId?{...d,reqs:d.reqs.map((r,i)=>i===reqIdx?{...r,status}:r)}:d));
 
   const openSelfTask = () => {
@@ -1905,17 +1889,17 @@ export function CROApp({ user, onLogout }) {
     const tgtAmt = parseCurrency(dealForm.targetAmount);
     const dealQ  = dealForm.quarter || entryQ;
     const newDealId = `d${Date.now()}`;
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setDeals(p=>[...p,{id:newDealId,...dealForm,repId:parsedRepId,repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:tgtAmt,lastContact:TODAY,reqs:[]}]);
     // Upsert clientAccount so the new deal has a linked account with its Zoho ID
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setClientAccounts(prev => {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const existing = prev.find(a => a.clientName === dealForm.clientCompany.trim() && a.repId === parsedRepId);
       if (existing) {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         if (!existing.zohoAccountId && dealForm.zohoAccountId) {
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           return prev.map(a => a.id === existing.id ? {...a, zohoAccountId: dealForm.zohoAccountId, updatedAt: TODAY} : a);
         }
         return prev;
@@ -1929,7 +1913,7 @@ export function CROApp({ user, onLogout }) {
         createdAt: TODAY, updatedAt: TODAY,
       };
       // Link the new deal to this account
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       setDeals(p => p.map(d => d.id === newDealId ? {...d, clientAccountId: newAcct.id} : d));
       return [...prev, newAcct];
     });
@@ -1942,13 +1926,13 @@ export function CROApp({ user, onLogout }) {
       const skipLog  = steps.slice(0,startIdx).map(step=>({step,by:user_role?.name||"",at:TODAY,note:`Submitted by ${user_role?.role}`}));
       const newEntry = {clientCompany:dealForm.clientCompany.trim(),dealType:dealForm.dealType||"Linear TV",targetAmount:tgtAmt};
       // Never modify an approved (frozen) submission — always create a new one
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const existingSub = targetSubs.find(s=>s.repId===parsedRepId&&s.quarter===dealQ&&s.status===initStatus&&s.status!=="Approved"&&s.submittedByRole===user_role?.role);
       if (existingSub) {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         setTargetSubs(p=>p.map(s=>s.id===existingSub.id?{...s,clients:[...s.clients,newEntry],totalTarget:s.totalTarget+tgtAmt}:s));
       } else {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         setTargetSubs(p=>[...p,{
           id:`ts${Date.now()}`,
           repId:parsedRepId,repName:rep.name,region:rep.region,
@@ -2016,62 +2000,62 @@ export function CROApp({ user, onLogout }) {
   };
 
   const approveDeal = (dealId, note = "") => {
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setDeals(prev => prev.map(d => {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       if (d.id !== dealId) return d;
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       const next  = getApprovalChainNext(d.awaitingApproval, d.amount);
       const entry = {
         at:       TODAY,
         by:       user_role?.name || "Unknown",
         role:     user_role?.role || "",
         action:   "Approved",
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         from:     d.awaitingApproval,
         to:       next,
         note,
       };
       return {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         ...d,
         awaitingApproval:      next,
         awaitingApprovalSince: next ? TODAY : null,
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         auditLog:              [...(d.auditLog || []), entry],
       };
     }));
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const d = deals.find(x => x.id === dealId);
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const next = d ? getApprovalChainNext(d.awaitingApproval, d.amount) : null;
     showToast(next ? `Approved → forwarded to ${next}` : "Deal fully approved ✓");
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     if (d) pushNotification({ event: next ? "deal_approval_advanced" : "deal_fully_approved", client: d.clientCompany, amount: d.amount, approvedBy: user_role?.name, next, message: next ? `${d.clientCompany} approval forwarded to ${next}` : `${d.clientCompany} fully approved — ${fmtR(d.amount)}` });
   };
 
   const rejectDeal = (dealId, note = "") => {
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     setDeals(prev => prev.map(d => {
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       if (d.id !== dealId) return d;
       const entry = {
         at:     TODAY,
         by:     user_role?.name || "Unknown",
         role:   user_role?.role || "",
         action: "Rejected",
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         from:   d.awaitingApproval,
         to:     null,
         note,
       };
       return {
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         ...d,
         awaitingApproval:      null,
         awaitingApprovalSince: null,
         outcome:               "Price Concern",
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         auditLog:              [...(d.auditLog || []), entry],
       };
     }));
@@ -2079,42 +2063,42 @@ export function CROApp({ user, onLogout }) {
   };
 
   // ── BADGE COUNTS ──
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const rhEscBadge = deals.filter(d=>d.awaitingApproval==="NSH"&&daysSince(d.awaitingApprovalSince||TODAY)>=APPROVAL_SLA_DAYS).length||null;
   const escBadge   = allReqs.filter(r=>r.status==="Overdue").length||null;
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const hrBadge    = absenceReports.filter(r=>r.markedAs==="Absent"&&r.status==="Sent to HR").length||null;
   const rhRegion   = user_role?.region;
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const rhApprovalBadge = isRH?(targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length)||null:null;
-  // @ts-ignore pre-existing IIAFE inline type mismatch
+  // @ts-ignore
   const rhTaskBadge    = isRH ? tasks.filter(t=>t.assignedToUserId===activeUser&&t.status!=="Done").length||null : null;
   const rhDashBadge    = isRH ? (()=>{
     const _myRepIdsDB = reps.filter(r=>r.region===rhRegion).map(r=>r.id);
     const notLoggedDB = _myRepIdsDB.filter(id=>!(meetings||[]).some(m=>m.repId===id&&m.date===TODAY)).length;
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const pendingAppDB= (targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length);
     return (notLoggedDB+pendingAppDB)||null;
   })() : null;
 
   const myRepTaskBadge = isRep
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     ? tasks.filter(t=>(t.assignedToUserId===activeUser||t.assignedTo===user_role?.repId)&&t.status!=="Done").length||null
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     : tasks.filter(t=>t.status!=="Done").length||null;
 
   // ── SECTIONED NAV BUILDER ──
-  const N = (id,label,icon,badge=null) => ({id,label,icon,badge});
+  const N = (id: any, label: any, icon: any, badge: any = null) => ({id,label,icon,badge});
   const getSidebarSections = () => {
     if (view === "ro-parser") return [];
 
-    // @ts-ignore pre-existing IIAFE inline type mismatch
+    // @ts-ignore
     const irBadge      = internalReqs.filter(r=>r.status!=="Done"&&r.raisedBy===activeUser).length||null;
     const irInboxDept  = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":isDigiOps?"Digital":null;
     const irInboxBadge = irInboxDept
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       ? internalReqs.filter(r=>r.status!=="Done"&&r.dept===irInboxDept).length||null
-      // @ts-ignore pre-existing IIAFE inline type mismatch
+      // @ts-ignore
       : internalReqs.filter(r=>r.status!=="Done"&&["NSH","Sales Strategy","CRO","Branding Team","Content Team","Digital","Finance","Legal"].includes(r.dept)).length||null;
 
     // ── SALES REP ──
@@ -2123,11 +2107,11 @@ export function CROApp({ user, onLogout }) {
         N("rep-dashboard",       "Dashboard",           "⊡"),
         N("my-plan",             "My Plan",             "◎"),
         N("revenue-log",         "Revenue Log",         "₹"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("internal-requests",   "Internal Requests",   "⬆", irBadge),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("tasks",               "Tasks",               "✓", myRepTaskBadge),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("hr",                  "HR Report",           "⊘", hrBadge),
       ]},
     ];
@@ -2135,7 +2119,7 @@ export function CROApp({ user, onLogout }) {
     // ── REGION HEAD ──
     if (isRH) return [
       { label:"MY TEAM", items:[
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("rh-dashboard",        "Dashboard",           "⬡", rhDashBadge),
         N("rh-team-plan",        "Team Meetings",       "◎"),
         N("warroom",             "War Room",            "⬡"),
@@ -2143,18 +2127,18 @@ export function CROApp({ user, onLogout }) {
       ]},
       { label:"MY WORK", items:[
         N("my-plan",             "My Plan",             "◎"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("target-approvals",    "Approvals",           "◎", rhApprovalBadge),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("my-tasks",            "My Tasks",            "✓", rhTaskBadge),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("internal-requests",   "Requests",            "⬆", irBadge),
       ]},
       { label:"REPORTS", items:[
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("rh-escalations",      "Escalations",         "⚠", rhEscBadge),
         N("rh-team-report",      "Team Report",         "◈"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("rh-my-hr",            "My HR",               "⊘", hrBadge),
       ]},
     ];
@@ -2163,19 +2147,19 @@ export function CROApp({ user, onLogout }) {
     if (isNSH) return [
       { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("nsh-rh-plan","RH's Plan","◎"), N("nsh-regional-plan","Rep's Plan","◎")] },
       { label:"COMMAND",     items:[
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
+        // @ts-ignore
+        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending NSH").length||null),
+        // @ts-ignore
+        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending NSH").length||undefined),
         N("my-tasks","My Tasks","✓"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("escalations","Escalations","▲",escBadge),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"REGION HEADS", items:[
@@ -2205,18 +2189,18 @@ export function CROApp({ user, onLogout }) {
         N("nsh-regional-plan","Rep's Plans","◎"),
       ]},
       { label:"COMMAND",     items:[
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
+        // @ts-ignore
+        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending Strategy").length||null),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
+        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending Strategy").length||undefined),
+        // @ts-ignore
         N("escalations","Escalations","▲",escBadge),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"REGION HEADS", items:[
@@ -2249,18 +2233,18 @@ export function CROApp({ user, onLogout }) {
         N("nsh-regional-plan","Rep's Plans","◎"),
       ]},
       { label:"COMMAND",     items:[
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
+        // @ts-ignore
+        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending CRO").length||null),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
+        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending CRO").length||undefined),
+        // @ts-ignore
         N("escalations","Escalations","▲",escBadge),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"REGION HEADS", items:[
@@ -2286,31 +2270,28 @@ export function CROApp({ user, onLogout }) {
       { label:"DIGITAL",     items:[
         N("digi-deals","Digital Deals","◉"),
         N("digi-tv-deals","TV + Digital Deals","◉"),
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        N("digi-tasks","My Tasks","✓",tasks.filter(t=>t.dept==="Digital"&&t.status!=="Done").length||null),
+        // @ts-ignore
+        N("digi-tasks","My Tasks","✓",tasks.filter(t=>t.dept==="Digital"&&t.status!=="Done").length||undefined),
         N("digi-projects","Digital Projects","◈"),
       ]},
       { label:"PIPELINE",    items:[N("pipeline","Revenue Tracker","◈")] },
-      // @ts-ignore pre-existing IIAFE inline type mismatch
       { label:"APPROVALS",   items:[N("internal-requests","Internal Requests","⬆",irInboxBadge)] },
       { label:"LEADERBOARD", items:[N("leaderboard","Leaderboard","◇")] },
     ];
 
     // ── ADMIN ──
     if (isAdmin) return [
-      // @ts-ignore pre-existing IIAFE inline type mismatch
-      { label:"ACCESS",    items:[N("admin-access","Access Management","◎",pendingUsers.length||null)] },
+      { label:"ACCESS",    items:[N("admin-access","Access Management","◎",pendingUsers.length||undefined)] },
       { label:"PLATFORM",  items:[N("import","Target Import","⬆"), N("admin-config","Platform Config","⚙")] },
       { label:"MONITOR",   items:[N("warroom","War Room","⬡"), N("pipeline","Revenue Tracker","◈")] },
-      // @ts-ignore pre-existing IIAFE inline type mismatch
-      { label:"APPROVALS", items:[N("admin-approvals","Approval Queue","✦",internalReqs.filter(r=>r.status==="Pending"||r.status==="Overdue").length||null)] },
+      { label:"APPROVALS", items:[N("admin-approvals","Approval Queue","✦",(internalReqs as any[]).filter((r:any)=>r.status==="Pending"||r.status==="Overdue").length||undefined)] },
     ];
 
     // Fallback — should never reach here but prevents blank screen
     return [
       { label:"CRM", items:[
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||null),
+        // @ts-ignore
+        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
         N("leaderboard","Leaderboard","◇"),
@@ -2382,7 +2363,7 @@ export function CROApp({ user, onLogout }) {
       onLogout={onLogout}
     />
   ) : (
-    <CROAppProvider value={ctxValue}>
+    <CROAppProvider value={ctxValue as any}>
     <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace",background:C.bg,color:C.text,minHeight:"100vh",display:"flex",flexDirection:"column",fontSize:13}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;600;700&display=swap');
@@ -2476,7 +2457,9 @@ export function CROApp({ user, onLogout }) {
                     onMouseOver={e=>e.currentTarget.style.background=C.s2}
                     onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                     <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,
+                      // @ts-ignore
                       background: r.type==="deal"?`${C.accent}22`:r.type==="meeting"?`${C.blue}22`:`${C.green}22`,
+                      // @ts-ignore
                       color: r.type==="deal"?C.accent:r.type==="meeting"?C.blue:C.green,
                       whiteSpace:"nowrap"}}>
                       {r.type==="deal"?"DEAL":r.type==="meeting"?"MTG":"TASK"}
@@ -2687,10 +2670,8 @@ export function CROApp({ user, onLogout }) {
                 {/* Description */}
                 <div style={{fontSize:12,color:C.dim,lineHeight:1.7,marginBottom:(step as any).tip?10:0}}>{step.desc}</div>
                 {/* Tip */}
-                // @ts-ignore pre-existing IIAFE inline type mismatch
                 {(step as any).tip && (
                   <div style={{background:`${C.accent}12`,border:`1px solid ${C.accent}30`,borderRadius:6,padding:"8px 12px",fontSize:11,color:C.accent,lineHeight:1.5}}>
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
                     💡 {(step as any).tip}
                   </div>
                 )}
@@ -2731,7 +2712,6 @@ export function CROApp({ user, onLogout }) {
                 style={{flexShrink:0,padding:"6px 10px",background:view===n.id?`${C.accent}18`:"transparent",border:"none",borderBottom:view===n.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===n.id?C.accent:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:5,fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:view===n.id?600:400,whiteSpace:"nowrap",transition:"all .1s"}}>
                 <span style={{fontSize:11}}>{n.icon}</span>
                 <span>{n.label}</span>
-                // @ts-ignore pre-existing IIAFE inline type mismatch
                 {(n.badge||0)>0&&<span style={{background:C.red,color:"#fff",borderRadius:8,minWidth:14,height:14,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 3px"}}>{n.badge}</span>}
               </button>
             ))}
@@ -2747,7 +2727,6 @@ export function CROApp({ user, onLogout }) {
                     style={{width:"100%",padding:"8px 14px",background:view===n.id?`${C.accent}12`:"transparent",border:"none",borderLeft:view===n.id?`2px solid ${C.accent}`:"2px solid transparent",color:view===n.id?C.accent:C.dim,cursor:"pointer",display:"flex",alignItems:"center",gap:7,fontFamily:"'DM Mono',monospace",fontSize:11,fontWeight:view===n.id?600:400,letterSpacing:".03em",textAlign:"left",transition:"all .1s"}}>
                     <span style={{fontSize:12,opacity:.75}}>{n.icon}</span>
                     <span style={{flex:1}}>{n.label}</span>
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
                     {(n.badge||0)>0&&<span style={{background:C.red,color:"#fff",borderRadius:8,minWidth:15,height:15,display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,fontWeight:800,padding:"0 3px"}}>{n.badge}</span>}
                   </button>
                 ))}
@@ -2761,8 +2740,7 @@ export function CROApp({ user, onLogout }) {
         <div data-tour="content-area" style={{flex:1,overflow:"auto",padding: isMobile ? 12 : 20}}>
 
           {/* Soft banner: targets not yet finalised — does not block the platform */}
-          // @ts-ignore pre-existing IIAFE inline type mismatch
-          {isRep && adminConfig.platformLive === false && view === "target-submit" && targetSubs.filter(t=>t.repId===user_role?.repId).length === 0 && (
+          {isRep && adminConfig.platformLive === false && view === "target-submit" && (targetSubs as any[]).filter((t:any)=>t.repId===user_role?.repId).length === 0 && (
             <div style={{background:"#fffbeb",border:"1px solid #f59e0b44",borderRadius:8,padding:"12px 18px",marginBottom:16,display:"flex",alignItems:"center",gap:10}}>
               <span style={{fontSize:18}}>⚠</span>
               <span style={{fontSize:12,color:"#92400e",fontFamily:"'DM Sans',sans-serif"}}>No targets assigned yet. Contact your Admin or CRO to get started.</span>
@@ -2795,19 +2773,19 @@ export function CROApp({ user, onLogout }) {
             const todayM    = new Date().getMonth() + 1;
             const qIdx      = todayM >= 4 && todayM <= 6 ? 0 : todayM >= 7 && todayM <= 9 ? 1 : todayM >= 10 && todayM <= 12 ? 2 : 3;
             const currentQ  = QUARTERS[qIdx];
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             const qSubs     = targetSubs.filter(s => s.repId === myRepId && s.quarter === currentQ && s.status === "Approved");
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             const qTarget   = qSubs.reduce((s,x) => s + (x.totalTarget||0), 0);
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             const qAch      = revenueEntries.filter(e => e.repId === myRepId && e.quarter === currentQ).reduce((s,e) => s + (parseCurrency(e.amount||"0")||0), 0);
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             const myTargetSub  = targetSubs.find(s => s.repId === myRepId);
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             const targetApprovalStatus = !myTargetSub ? "none" : myTargetSub.status === "Approved" ? "approved" : "pending";
             return (
               <RepDashboard
-                // @ts-ignore pre-existing IIAFE inline type mismatch
+                // @ts-ignore
                 userRole={user_role}
                 activeUser={activeUser}
                 currentQ={currentQ}
@@ -2829,7 +2807,7 @@ export function CROApp({ user, onLogout }) {
                   const ikey = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
                   const id   = `re_d${Date.now()}`;
                   const entry = {id,repId:myRepId,clientCompany:clientName.trim(),zohoAccountId:"",dealType:"Linear TV",amount:amt,invoiceRef:invoiceRef.trim(),date:date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:""};
-                  // @ts-ignore pre-existing IIAFE inline type mismatch
+                  // @ts-ignore
                   setRevenueEntries(p=>[entry,...p]);
                   revSvc.createRevenueEntry({
                     id, repId:myRepId, clientCompany:clientName.trim(), amount:amt,
@@ -2839,7 +2817,7 @@ export function CROApp({ user, onLogout }) {
                     showToast(`₹${(amt/100000).toFixed(1)}L logged for ${clientName.trim()} ✓`);
                   }).catch((err:any)=>{
                     showToast(err?.body?.error||"Failed to save revenue entry","err");
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
+                    // @ts-ignore
                     setRevenueEntries(p=>p.filter(e=>e.id!==id));
                   });
                 }}
@@ -2851,7 +2829,7 @@ export function CROApp({ user, onLogout }) {
           {/* ═══ MY PLAN ═══ */}
           {view==="my-plan" && (
             <MyPlan
-              // @ts-ignore pre-existing IIAFE inline type mismatch
+              // @ts-ignore
               userRole={user_role}
               activeUser={activeUser}
               loginProvider={loginProvider}
@@ -2993,7 +2971,7 @@ export function CROApp({ user, onLogout }) {
                   <div style={{flex:1,minWidth:220}}>
                     <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:6}}>Upload Files</div>
                     <div
-                      // @ts-ignore pre-existing IIAFE inline type mismatch
+                      // @ts-ignore
                       onClick={()=>roFileRef.current.click()}
                       style={{border:`2px dashed ${roFiles.length?C.green:C.border}`,borderRadius:8,padding:"20px 16px",textAlign:"center",cursor:"pointer",transition:"border-color .15s",background:C.s2}}
                       onDragOver={e=>{e.preventDefault();e.currentTarget.style.borderColor=C.accent;}}
@@ -3004,7 +2982,7 @@ export function CROApp({ user, onLogout }) {
                       <div style={{fontSize:10,color:C.dim,marginTop:4}}>PDF · Excel · Images · CSV</div>
                     </div>
                     <input ref={roFileRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp" style={{display:"none"}}
-                      // @ts-ignore pre-existing IIAFE inline type mismatch
+                      // @ts-ignore
                       onChange={e=>setRoFiles(p=>[...p,...Array.from((e.target as HTMLInputElement).files)])} />
                     {roFiles.length>0&&(
                       <div style={{marginTop:8}}>
@@ -3159,7 +3137,7 @@ export function CROApp({ user, onLogout }) {
                   :assignedUser?.role==="CRO"?"CRO"
                   :assignedUser?.role==="REGION HEAD"?"Region Head"
                   :null;
-                // @ts-ignore pre-existing IIAFE inline type mismatch
+                // @ts-ignore
                 setTasks(p=>[{id:`t${Date.now()}`,...taskForm,dept:taskDept,assignedToUserId:assignedUserId,assignedToName:assignedUser?.name||"",assignedTo:repId,repId:repId,assignedBy:activeUser,assignedByName:user_role?.name||user.name,status:"Open",createdAt:TODAY},...p]);
                 closeTaskModal();
                 showToast(assignedUserId===activeUser?"✓ Task created for yourself":"Task assigned to "+(assignedUser?.name||""));
@@ -3291,7 +3269,7 @@ export function CROApp({ user, onLogout }) {
                   // CRO submission → immediately approved → also create deal stubs
                   if(initStatus==="Approved"){
                     const newDeals = clients
-                      // @ts-ignore pre-existing IIAFE inline type mismatch
+                      // @ts-ignore
                       .filter(cl=>!deals.find(d=>d.repId===parsedRepId&&d.clientCompany===cl.clientCompany&&d.quarter===planUploadForm.quarter))
                       .map(cl=>({
                         id:`d_plan_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
@@ -3304,13 +3282,13 @@ export function CROApp({ user, onLogout }) {
                         nextStep:"",nextStepDate:null,lastContact:TODAY,reqs:[],auditLog:[],
                         awaitingApproval:null,awaitingApprovalSince:null,
                       }));
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
+                    // @ts-ignore
                     if(newDeals.length>0) setDeals(p=>[...p,...newDeals]);
                     showToast(`Plan auto-approved — ${clients.length} client${clients.length!==1?"s":""} added to ${rep?.name||"rep"}'s targets ✓`);
                   } else {
                     showToast(`Plan submitted for ${rep?.name||"rep"} — enters at ${initStatus} ✓`);
                   }
-                  // @ts-ignore pre-existing IIAFE inline type mismatch
+                  // @ts-ignore
                   setTargetSubs(p=>[sub,...p]);
                   setPlanUploadOpen(false);
                 }}
@@ -3326,18 +3304,18 @@ export function CROApp({ user, onLogout }) {
       {addDealOpen && (()=>{
         const formRepId = String(dealForm.repId);
         const approvedTargetClients = targetSubs
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           .filter(s=>String(s.repId)===formRepId && s.status==="Approved")
           .flatMap((s:any)=>s.clients||[]);
         const isDuplicateDeal = !!(dealForm.clientCompany && dealForm.dealType && dealForm.quarter &&
           deals.some(d=>
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             String(d.repId)===formRepId &&
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             (d.clientCompany||"").toLowerCase()===(dealForm.clientCompany||"").toLowerCase() &&
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             d.quarter===dealForm.quarter &&
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             d.dealType===dealForm.dealType
           ));
         return (
@@ -3433,7 +3411,7 @@ export function CROApp({ user, onLogout }) {
           meeting={null}
           onClose={() => { setLogOpen(false); }}
           onSubmit={(_tp) => { setLogOpen(false); showToast("Touchpoint logged ✓"); }}
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           userRole={user_role}
           deals={deals}
           showToast={showToast}
@@ -3443,9 +3421,9 @@ export function CROApp({ user, onLogout }) {
 
       {/* MEETING DETAIL MODAL — view logged meeting */}
       {viewMeetingId && (()=>{
-        const vm = meetings.find(m=>m.id===viewMeetingId);
+        const vm: any = meetings.find(m=>m.id===viewMeetingId);
         if (!vm) return null;
-        const ef = meetingEditMode ? meetingEditForm : vm;
+        const ef: any = meetingEditMode ? meetingEditForm : vm;
         const statusColor = (ef.status||vm.status||"")===("Closed")?C.green:(ef.status||vm.status||"")===("Positive")?C.blue:(ef.status||vm.status||"")===("Follow-up Needed")?C.orange:C.dim;
         const canEdit = isRep ? vm.repId===user_role?.repId : true;
         const setEf = (patch) => setMeetingEditForm(f=>({...f,...patch}));
@@ -3465,7 +3443,7 @@ export function CROApp({ user, onLogout }) {
                 <div>
                   {meetingEditMode
                     ? <input value={ef.clientCompany||""} onChange={e=>setEf({clientCompany:e.target.value})} className="sans" style={{fontSize:17,fontWeight:700,color:C.text,background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 8px",width:220}} />
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
+                    // @ts-ignore
                     : <div className="sans" style={{fontSize:17,fontWeight:700,color:C.text}}>{vm.clientCompany}</div>
                   }
                   <div style={{fontSize:11,color:C.dim,marginTop:4,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
@@ -3475,23 +3453,22 @@ export function CROApp({ user, onLogout }) {
                     }
                     {meetingEditMode
                       ? <input type="time" value={ef.loggedAt||""} onChange={e=>setEf({loggedAt:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim,width:90}} />
-                      // @ts-ignore pre-existing IIAFE inline type mismatch
+                      // @ts-ignore
                       : <span>{vm.loggedAt||"—"}</span>
                     }
                     {meetingEditMode
                       ? <select value={ef.meetingType||"Physical"} onChange={e=>setEf({meetingType:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim}}>
                           {["Physical","Online","Phone Call"].map(t=><option key={t}>{t}</option>)}
                         </select>
-                      // @ts-ignore pre-existing IIAFE inline type mismatch
+                      // @ts-ignore
                       : <span>{vm.meetingType||"Physical"}</span>
                     }
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
                     {meetingEditMode
                       ? <select value={ef.pitchType||""} onChange={e=>setEf({pitchType:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.accent}}>
                           <option value="">No pitch type</option>
                           {["Linear TV","IPs","Digital","Media Solutions","Integrated Packages","FCT","Generic"].map(t=><option key={t}>{t}</option>)}
                         </select>
-                      // @ts-ignore pre-existing IIAFE inline type mismatch
+                      // @ts-ignore
                       : vm.pitchType&&<span style={{color:C.accent}}>{vm.pitchType}</span>
                     }
                   </div>
@@ -3530,11 +3507,8 @@ export function CROApp({ user, onLogout }) {
                       </>
                     : <>
                         {vm.contactName&&<span>🧑 {vm.contactName}</span>}
-                        // @ts-ignore pre-existing IIAFE inline type mismatch
                         {vm.phone&&<span>📱 {vm.phone}</span>}
-                        // @ts-ignore pre-existing IIAFE inline type mismatch
                         {vm.contactLevel&&<span>🎯 {vm.contactLevel}</span>}
-                        // @ts-ignore pre-existing IIAFE inline type mismatch
                         {vm.repName&&<span>👤 Rep: {vm.repName}</span>}
                       </>
                   }
@@ -3546,7 +3520,7 @@ export function CROApp({ user, onLogout }) {
                 <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>What Happened {meetingEditMode&&<span style={{color:C.red,fontWeight:400}}>*</span>}</div>
                 {meetingEditMode
                   ? <textarea rows={3} value={ef.discussion||""} onChange={e=>setEf({discussion:e.target.value})} placeholder="What was discussed, how the client reacted..." style={{width:"100%",fontSize:12,resize:"vertical"}} />
-                  // @ts-ignore pre-existing IIAFE inline type mismatch
+                  // @ts-ignore
                   : <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.discussion||<span style={{color:C.muted}}>Not recorded</span>}</div>
                 }
               </div>
@@ -3557,7 +3531,6 @@ export function CROApp({ user, onLogout }) {
                 {meetingEditMode
                   ? <textarea rows={2} value={ef.clientFeedback||""} onChange={e=>setEf({clientFeedback:e.target.value})} placeholder="Positive, hesitant, needs approval..." style={{width:"100%",fontSize:12,resize:"vertical"}} />
                   : vm.clientFeedback
-                      // @ts-ignore pre-existing IIAFE inline type mismatch
                       ? <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.clientFeedback}</div>
                       : <div style={{fontSize:11,color:C.muted}}>—</div>
                 }
@@ -3565,26 +3538,26 @@ export function CROApp({ user, onLogout }) {
 
               {/* Action Items — hidden if ANY of stageUpdate/status/outcome is a terminal stage */}
               {!["Mail Confirmed","Lost","RO Received"].some(ts=>ts===(ef.stageUpdate||"")||ts===(ef.status||"")||ts===(ef.outcome||"")) && (()=>{
-                // @ts-ignore pre-existing IIAFE inline type mismatch
+                // @ts-ignore
                 const items = (vm.nextStepItems||[]).filter(i=>i.action);
                 const addItem = () => {
                   setMeetings(p => p.map(m => m.id===viewMeetingId ? {
                     ...m,
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
+                    // @ts-ignore
                     nextStepItems:[...(m.nextStepItems||[]),{action:"",neededFrom:"",remarks:"",dueDate:""}]
                   }:m));
                 };
                 const updateItem = (idx:number, field:string, val:string) => {
                   setMeetings(p => p.map(m => m.id===viewMeetingId ? {
                     ...m,
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
+                    // @ts-ignore
                     nextStepItems:(m.nextStepItems||[]).map((it,i)=>i===idx?{...it,[field]:val}:it)
                   }:m));
                 };
                 const removeItem = (idx:number) => {
                   setMeetings(p => p.map(m => m.id===viewMeetingId ? {
                     ...m,
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
+                    // @ts-ignore
                     nextStepItems:(m.nextStepItems||[]).filter((_,i)=>i!==idx)
                   }:m));
                 };
@@ -3599,17 +3572,14 @@ export function CROApp({ user, onLogout }) {
                         + Add Action Item
                       </button>
                     </div>
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
                     {((vm as any).nextStepItems||[]).length===0 && !meetingEditMode && (
                       vm.nextSteps
-                        // @ts-ignore pre-existing IIAFE inline type mismatch
                         ? <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:`${C.accent}11`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"10px 12px"}}>{vm.nextSteps}</div>
                         : <div style={{fontSize:11,color:C.muted}}>No action items recorded.</div>
                     )}
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
                     {((vm as any).nextStepItems||[]).map((item, idx) => {
-                      // @ts-ignore pre-existing IIAFE inline type mismatch
-                      const linkedIR = item.action ? internalReqs.find(r=>r.meetingLogId===vm.id&&r.subject===item.action) : null;
+                      // @ts-ignore
+                      const linkedIR: any = item.action ? (internalReqs as any[]).find(r=>r.meetingLogId===vm.id&&r.subject===item.action) : null;
                       const linkedTask = item.action ? tasks.find(t=>t.meetingLogId===vm.id&&t.title?.includes(item.action.slice(0,30))) : null;
                       return (
                         <div key={idx} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 11px",marginBottom:7}}>
@@ -3637,7 +3607,7 @@ export function CROApp({ user, onLogout }) {
                             <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
                               {linkedIR&&(
                                 <span style={{fontSize:10,background:`${linkedIRColor(linkedIR.status)}18`,color:linkedIRColor(linkedIR.status),border:`1px solid ${linkedIRColor(linkedIR.status)}44`,borderRadius:4,padding:"2px 8px",fontWeight:600}}>
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
+                                  // @ts-ignore
                                   IR → {linkedIR.dept}: {linkedIR.status}
                                 </span>
                               )}
@@ -3662,7 +3632,6 @@ export function CROApp({ user, onLogout }) {
                   {meetingEditMode
                     ? <input type="date" min="2020-01-01" max="2099-12-31" value={ef.followUpDate||""} onChange={e=>setEf({followUpDate:e.target.value})} style={{width:"100%",fontSize:12}} />
                     : vm.followUpDate
-                        // @ts-ignore pre-existing IIAFE inline type mismatch
                         ? <div style={{fontSize:13,fontWeight:600,color:C.text,background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"8px 12px"}}>{vm.followUpDate}</div>
                         : <div style={{fontSize:11,color:C.muted}}>Not set</div>
                   }
@@ -3672,7 +3641,6 @@ export function CROApp({ user, onLogout }) {
                   {meetingEditMode
                     ? <input type="date" min="2020-01-01" max="2099-12-31" value={ef.nextMeetingDate||""} onChange={e=>setEf({nextMeetingDate:e.target.value})} style={{width:"100%",fontSize:12}} />
                     : vm.nextMeetingDate
-                        // @ts-ignore pre-existing IIAFE inline type mismatch
                         ? <div style={{fontSize:13,fontWeight:600,color:C.text,background:`${C.green}11`,border:`1px solid ${C.green}33`,borderRadius:6,padding:"8px 12px"}}>{vm.nextMeetingDate}</div>
                         : <div style={{fontSize:11,color:C.muted}}>Not set</div>
                   }
@@ -3751,8 +3719,7 @@ export function CROApp({ user, onLogout }) {
               <select value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
                 style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}>
                 <option value="">— Select client —</option>
-                // @ts-ignore pre-existing IIAFE inline type mismatch
-                {[...new Set(deals.filter((d:any)=>user_role?.repId?d.repId===user_role.repId:true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
+                {[...new Set(deals.filter((d:any)=>user_role?.repId?d.repId===user_role.repId:true).map((d:any)=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
               </select>
             </div>
             <div style={{marginBottom:16}}>
@@ -3765,7 +3732,7 @@ export function CROApp({ user, onLogout }) {
               <button onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
               <button onClick={()=>{
                 if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
-                // @ts-ignore pre-existing IIAFE inline type mismatch
+                // @ts-ignore
                 setInternalReqs(p=>p.map(r=>r.id===editIrId?{...r,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),clientCompany:irForm.clientCompany.trim()}:r));
                 setEditIrId(null);setIrForm(BLANK_IR_FORM);
                 showToast("Request updated ✓");
@@ -3842,35 +3809,34 @@ export function CROApp({ user, onLogout }) {
       {/* ═══ PART 6: CLIENT ACCOUNT THREAD MODAL ═══ */}
       {accountThreadOpen && accountThreadClient && (()=>{
         const clientName = accountThreadClient;
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        const clientDeals = deals.filter(d => d.clientCompany === clientName);
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
+        const clientDeals: any[] = (deals as any[]).filter((d:any) => d.clientCompany === clientName);
+        // @ts-ignore
         const clientTPs   = touchpoints.filter(t => clientDeals.some(d => d.id === t.dealId) || t.clientAccountId === clientDeals[0]?.clientAccountId);
         // Revenue matching: prefer zohoAccountId over name string; fall back for legacy entries
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const accountZohoId = clientAccounts.find(a=>a.clientName===clientName)?.zohoAccountId || deals.find(d=>d.clientCompany===clientName)?.zohoAccountId || "";
         const clientRevs  = revenueEntries.filter(e =>
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           accountZohoId && e.zohoAccountId
-            // @ts-ignore pre-existing IIAFE inline type mismatch
             ? e.zohoAccountId === accountZohoId
-            // @ts-ignore pre-existing IIAFE inline type mismatch
+            // @ts-ignore
             : e.clientCompany === clientName
         );
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const account     = clientAccounts.find(a => a.clientName === clientName) || clientDeals[0];
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const currentStage = account?.currentStage || dealStage(clientDeals[0]||{});
-        // @ts-ignore pre-existing IIAFE inline type mismatch
-        const repObj      = reps.find(r => r.id === (clientDeals[0]?.repId));
+        // @ts-ignore
+        const repObj: any  = (reps as any[]).find((r:any) => r.id === (clientDeals[0]?.repId));
         // 4-number metrics for this client
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const cTarget     = clientDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const cAchieved   = clientRevs.reduce((s,e)=>s+(e.amount||0),0);
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const cCommitted  = clientDeals.filter(d=>dealStage(d)==="Mail Confirmed").reduce((s,d)=>s+(d.pipelineAmount||parseCurrency(d.amount||"0")||0),0);
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const cInPlay     = clientDeals.filter(d=>["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s,d)=>s+(d.pipelineAmount||parseCurrency(d.amount||"0")||0),0);
         const cShortfall  = Math.max(0, cTarget - cAchieved - cCommitted - cInPlay);
         // Merge meetings + touchpoints into thread (touchpoints preferred)
@@ -3878,11 +3844,11 @@ export function CROApp({ user, onLogout }) {
         const allEntries  = [
           ...clientTPs.map(t => ({...t, _type:"tp"})),
           ...legacyMeetings.map(m => ({...m, _type:"meeting"})),
-          // @ts-ignore pre-existing IIAFE inline type mismatch
+          // @ts-ignore
           ...clientRevs.map(r => ({...r, _type:"revenue"})),
         ].sort((a,b) => ((b.date||"") > (a.date||"") ? 1 : -1));
         // Pending action items from tasks
-        // @ts-ignore pre-existing IIAFE inline type mismatch
+        // @ts-ignore
         const pendingAIs  = tasks.filter(t => t.clientCompany === clientName && t.status !== "Done" && t.status !== "Closed");
         return (
           <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:9500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}}
@@ -3896,9 +3862,7 @@ export function CROApp({ user, onLogout }) {
                     <span style={{background:`${oColor(currentStage)}18`,color:oColor(currentStage),padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:700}}>{currentStage}</span>
                   </div>
                   <div style={{fontSize:11,color:C.dim}}>
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
                     {repObj?.name} · {clientDeals[0]?.region}
-                    // @ts-ignore pre-existing IIAFE inline type mismatch
                     {(()=>{const idleClock=account?.lastDealMeetingDate||clientDeals[0]?.lastDealMeetingDate||clientDeals[0]?.lastContact; const idle=daysSince(idleClock); return idleClock ? <span style={{color:idle>=7?C.red:idle>=3?C.orange:C.green,fontWeight:600,marginLeft:8}}>{idle===0?"Deal meeting today":`Last deal meeting: ${idle}d ago`}</span> : null;})()}
                   </div>
                 </div>
@@ -4004,39 +3968,29 @@ export function CROApp({ user, onLogout }) {
                                 <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>By When *</div>
                                 <input type="date" min="2020-01-01" max="2099-12-31" value={threadAIForm?.dueDate} onChange={e=>setThreadAIForm(p=>p?({...p,dueDate:e.target.value}):null)} />
                               </div>
-                              // @ts-ignore pre-existing IIAFE inline type mismatch
                               {threadAIForm?.actionType&&threadAIForm?.neededFrom&&(
                                 <div style={{fontSize:10,color:C.blue,fontWeight:600,marginBottom:8}}>
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   {threadAIForm?.actionType==="Approval needed"&&`→ Approvals tab of ${threadAIForm?.neededFrom}`}
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   {threadAIForm?.actionType==="Attend a meeting"&&`→ My Plan of ${threadAIForm?.neededFrom}`}
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   {["Document needed","Introduction needed","Flag for follow-up"].includes(threadAIForm?.actionType)&&`→ My Tasks of ${threadAIForm?.neededFrom}`}
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   {threadAIForm?.neededFrom==="Self"&&" (personal reminder — no one else notified)"}
                                 </div>
                               )}
                               <div style={{display:"flex",gap:8}}>
                                 <button onClick={()=>setThreadAIForm(null)} style={{flex:1,background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
                                 <button onClick={()=>{
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   if(!threadAIForm?.actionType||!threadAIForm?.neededFrom||!threadAIForm?.dueDate){showToast("Fill all required fields");return;}
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   const aType=threadAIForm?.actionType;
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   const neededFrom=threadAIForm?.neededFrom;
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   const details=threadAIForm?.details;
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
                                   const dueDate=threadAIForm?.dueDate;
                                   const repName=user_role?.name||"Rep";
                                   const ts=`ai_tp_${Date.now()}`;
-                                  // @ts-ignore pre-existing IIAFE inline type mismatch
+                                  // @ts-ignore
                                   const baseTask:any={id:ts,assignedTo:null,assignedToUserId:null,assignedDept:neededFrom==="Self"?"Self":neededFrom,repId:clientDeals[0]?.repId||null,clientCompany:clientName,title:`${aType} — ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType};
                                   setTasks(p=>[baseTask,...p]);
                                   if(aType==="Approval needed"&&neededFrom!=="Self"){
-                                    // @ts-ignore pre-existing IIAFE inline type mismatch
+                                    // @ts-ignore
                                     setInternalReqs(p=>[{id:`ir_tp_${Date.now()}`,type:"Approval",dept:neededFrom,subject:`[Approval needed] ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:clientDeals[0]?.repId||null,dealId:clientDeals[0]?.id||null,clientCompany:clientName,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""},...p]);
                                   }
                                   setThreadAIForm(null);
@@ -4074,10 +4028,10 @@ export function CROApp({ user, onLogout }) {
           <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:24,width:380,boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
             <div className="sans" style={{fontWeight:700,fontSize:15,marginBottom:14}}>{noteModal.title}</div>
             <textarea autoFocus rows={3} value={noteModalVal} onChange={e=>setNoteModalVal(e.target.value)}
-              // @ts-ignore pre-existing IIAFE inline type mismatch
+              // @ts-ignore
               onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();noteModal.onSubmit(noteModalVal||noteModal.placeholder);setNoteModal(null);}}}
               style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace",resize:"none",outline:"none"}}
-              // @ts-ignore pre-existing IIAFE inline type mismatch
+              // @ts-ignore
               placeholder={noteModal.placeholder}/>
             <div style={{display:"flex",gap:8,marginTop:12,justifyContent:"flex-end"}}>
               <button onClick={()=>setNoteModal(null)} style={{padding:"7px 16px",background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Cancel</button>
@@ -4089,7 +4043,6 @@ export function CROApp({ user, onLogout }) {
       )}
 
       {/* TOAST */}
-      // @ts-ignore pre-existing IIAFE inline type mismatch
       {toast && <div className="fin" style={{position:"fixed",bottom:18,right:18,background:toast.type==="err"?C.red:C.green,color:"#fff",padding:"9px 16px",borderRadius:5,fontWeight:700,fontSize:12,zIndex:999,boxShadow:"0 4px 20px rgba(0,0,0,.5)"}}>{toast.msg}</div>}
     </div>
     </CROAppProvider>

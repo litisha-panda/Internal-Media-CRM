@@ -1161,7 +1161,7 @@ export function TargetsView({
                                 approvalLog:[...t.approvalLog,{step:pendingStep,by:user_role?.name||"",at:TODAY,note:`Approved ${approvedOnly.length} client${approvedOnly.length!==1?"s":""}`}]
                               }:t));
                               if(nextStep==="Approved"){
-                                const newDeals = [];
+                                const newDeals: any[] = [];
                                 approvedOnly.forEach(cl=>{
                                   const existing = deals.find(d=>d.repId===sub.repId&&d.clientCompany===cl.clientCompany&&d.quarter===sub.quarter);
                                   if(existing){
