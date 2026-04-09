@@ -106,3 +106,56 @@ export const USER_ROLES: any[] = [
   { id: "rep_sunita",     name: "Sunita Sahoo",          role: "SALES REP",      canView: "self",   region: "Central",  repId: 29 },
   { id: "rep_debadatta",  name: "Debadatta Patra",       role: "SALES REP",      canView: "self",   region: "Central",  repId: 30 },
 ];
+
+export const fmt = (n: number | null | undefined | string): string => {
+  if (n == null || n === "") return "—";
+  const num = typeof n === "string" ? parseFloat(n) : n;
+  if (num === 0) return "0";
+  if (num >= 10000000) return `${(num/10000000).toFixed(1)}Cr`;
+  if (num >= 100000) return `${(num/100000).toFixed(1)}L`;
+  return `${(num/1000).toFixed(0)}K`;
+};
+export const fmtR = (n: number | null | undefined | string): string =>
+  (n == null || n === "") ? "—" : `₹${fmt(n)}`;
+export const daysSince = (d: string | null | undefined): number => {
+  if (!d) return 999;
+  return Math.floor((Date.now() - new Date(d).getTime()) / 86400000);
+};
+export const dealStage = (d: { stage?: string; outcome?: string }): string =>
+  d.stage || d.outcome || "Prospect";
+export const oColor = (o: string): string => (({
+  "Prospect": C.muted, "In Discussion": C.blue, "Negotiation": C.accent,
+  "Mail Confirmed": C.green, "RO Received": "#0f6b2f", "Lost": C.red,
+  "Very Interested": C.blue, "Interested – Needs Revision": C.accent,
+  "Price Concern": C.orange, "Needs Callback": C.blue, "Not Interested": C.muted,
+} as Record<string, string>)[o] || C.dim);
+export const riskColor = (d: { stage?: string; outcome?: string; lastDealMeetingDate?: string; lastContact?: string }): string => {
+  const s = dealStage(d);
+  if (s === "Lost") return C.muted;
+  if (s === "Mail Confirmed" || s === "RO Received") return C.green;
+  const x = daysSince(d.lastDealMeetingDate || d.lastContact);
+  return x >= 7 ? C.red : x >= 3 ? C.orange : C.green;
+};
+export const riskLabel = (d: { stage?: string; outcome?: string; atRisk?: boolean; lastDealMeetingDate?: string; lastContact?: string }): string => {
+  const s = dealStage(d);
+  if (s === "Lost") return "Lost";
+  if (s === "RO Received") return "Closed";
+  if (s === "Mail Confirmed") return "Committed";
+  if (d.atRisk) return "At Risk";
+  const x = daysSince(d.lastDealMeetingDate || d.lastContact);
+  return x >= 7 ? "At Risk" : x >= 3 ? "Cooling" : "Active";
+};
+export const lColor = (l: string): string => (({
+  "C-Suite / Owner": C.purple, "VP / GM": C.blue, "Marketing Head": C.green,
+  "Brand Manager": C.accent, "Agency Lead": "#6366f1", "Junior/Exec": C.red,
+} as Record<string, string>)[l] || C.dim);
+export const mapLegacyOutcome = (o: string): string => (({
+  "Mail Confirmed": "Mail Confirmed", "Very Interested": "In Discussion",
+  "Interested – Needs Revision": "Negotiation", "Proposal Shared": "Negotiation",
+  "Negotiation": "Negotiation", "Price Concern": "Negotiation",
+  "Needs Callback": "Prospect", "Not Interested": "Lost",
+  "Prospect": "Prospect", "In Discussion": "In Discussion",
+  "RO Received": "RO Received", "Lost": "Lost",
+} as Record<string, string>)[o] || "Prospect");
+export const uid = (): string => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
+export const REPS: any[] = [];

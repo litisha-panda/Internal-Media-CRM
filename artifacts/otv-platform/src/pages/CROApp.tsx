@@ -48,174 +48,29 @@ import { EditIRModal } from "../components/EditIRModal";
 import { ExceptionModal } from "../components/ExceptionModal";
 import { ExceptionRequestModal } from "../components/ExceptionRequestModal";
 import { AccountThreadModal } from "../components/AccountThreadModal";
+import { AssignTaskModal } from "../components/AssignTaskModal";
+import { NoteModal } from "../components/NoteModal";
 // eslint-disable-next-line
 declare const window: Window & typeof globalThis & { XLSX?: any; };
 
 
+
+import {
+  REGIONS, ALL_ROLES, DEAL_TYPES, CONTACT_LEVELS, DEAL_STAGES, OUTCOMES,
+  DEPARTMENTS, REQ_STATUS, SLA, QUARTERS, STAGE_PROB, PITCH_TYPES,
+  MEETING_STATUS, MEETING_TYPES, CLIENT_OR_AGENCY, TASK_PRIORITIES, TASK_STATUSES,
+  APPROVAL_TARGETS, APPROVAL_SLA_DAYS, TODAY, TOMORROW, D1, D3, D7, D14,
+  getToday, getTomorrow, getWeekStart, THIS_WEEK_START, PLAN_DEADLINE, HR_EMAIL,
+  PLAN_STATUS, USER_ROLES, IP_CATALOG, TARGET_APPROVAL_CHAIN,
+  ACTION_TYPES, C,
+  fmt, fmtR, daysSince, dealStage, oColor, riskColor, riskLabel, lColor,
+  mapLegacyOutcome, uid, REPS,
+} from "../constants";
+import type { Deal, RevenueEntry, Meeting, Touchpoint, Task, InternalReq, TargetSub, ClientAccount, UserRole, TaskForm, DealForm, IrForm, NoteModalConfig, SavedRO, AbsenceReport } from "../types";
+
 // Route all Claude API calls through the API server proxy (key stays server-side)
 const CLAUDE_PROXY_URL = `${window.location.protocol}//${window.location.hostname}:8080/api/claude`;
-const REGIONS   = ["North", "South", "East", "West", "National", "Central"];
-const ALL_ROLES = ["SALES REP","REGION HEAD","SALES HEAD","CRO","SALES STRATEGY","DIGI OPS","ADMIN"];
-const DEAL_TYPES = ["Linear TV", "IPs", "Digital", "Media Solutions", "Integrated Packages"];
-const CONTACT_LEVELS = ["C-Suite / Owner", "VP / GM", "Marketing Head", "Brand Manager", "Agency Lead", "Junior/Exec"];
-// Part 3 — canonical deal stages (replaces old OUTCOMES enum)
-const DEAL_STAGES = ["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"];
-// Keep OUTCOMES as legacy alias so old deal records still render until fully migrated
-const OUTCOMES = DEAL_STAGES;
-const DEPARTMENTS = ["Sales Strategy", "Digital", "Production", "National Head", "Finance", "Legal"];
-const REQ_STATUS = ["Pending", "In Progress", "Done", "Overdue"];
-const SLA = { "Sales Strategy": 24, "Digital": 24, "Production": 48, "National Head": 12, "Finance": 48, "Legal": 72 };
-const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26", "FY26 Annual"];
-const STAGE_PROB = { "Prospect": 10, "In Discussion": 40, "Negotiation": 70, "Mail Confirmed": 90, "RO Received": 100, "Lost": 0,
-  // legacy mapping so old records still resolve
-  "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 10, "Not Interested": 0 };
-const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
-const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "RO Received"];
-const MEETING_TYPES  = ["Physical", "Online", "Phone Call"];
-const CLIENT_OR_AGENCY = ["Client", "Agency"];
-const TASK_PRIORITIES = ["High", "Medium", "Low"];
-const TASK_STATUSES   = ["Open", "In Progress", "Done", "Overdue"];
 
-const APPROVAL_TARGETS = [
-  "Region Head",
-  "NSH",
-  "Branding Team",
-  "Content Team",
-  "Sales Strategy",
-  "Digital",
-  "Finance",
-  "Legal",
-  "CXO",
-];
-// If approval has been pending more than this many days → auto-escalates
-const APPROVAL_SLA_DAYS = 2;
-
-// ── DATE CONSTANTS — must be before any seed data that references them ──
-const TODAY    = new Date().toISOString().split("T")[0];
-const TOMORROW = new Date(Date.now() + 86400000).toISOString().split("T")[0];
-const D1     = new Date(Date.now() - 86400000).toISOString().split("T")[0];
-const D3     = new Date(Date.now() - 3 * 86400000).toISOString().split("T")[0];
-const D7     = new Date(Date.now() - 7 * 86400000).toISOString().split("T")[0];
-const D14    = new Date(Date.now() - 14 * 86400000).toISOString().split("T")[0];
-
-// Live date helpers — call these in handlers/effects so dates stay correct across midnight
-const getToday    = () => new Date().toISOString().split("T")[0];
-const getTomorrow = () => new Date(Date.now() + 86400000).toISOString().split("T")[0];
-
-
-// Get start of current week (Monday)
-function getWeekStart(dateStr) {
-  const d = new Date(dateStr);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  return d.toISOString().split("T")[0];
-}
-const THIS_WEEK_START = getWeekStart(TODAY);
-
-// PLANNING ENGINE
-// Rule: By 11:30 PM every night, rep must have:
-//   1. Logged today's meetings
-//   2. Planned tomorrow's meetings
-// Both required. Either missing = absent.
-// Weekly plan due by Saturday 11:30 PM.
-const PLAN_DEADLINE = "23:30";
-const HR_EMAIL = "hr@odishatv.com";
-
-// Plan status
-const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
-
-
-const REPS: any[]              = [];
-
-const USER_ROLES = [
-  // FULL ACCESS
-  { id: "admin",          name: "Admin",                  role: "ADMIN",          canView: "all",    region: null },
-  { id: "sales_head",     name: "Sales Head",             role: "SALES HEAD",     canView: "all",    region: null },
-  { id: "sales_strategy", name: "Sachin (Sales Strategy)",role: "SALES STRATEGY", canView: "all",    region: null },
-  { id: "sales_analysis", name: "Darpan (CRO)",           role: "CRO",            canView: "all",    region: null },
-  { id: "digi_ops",       name: "Digi Ops Team",          role: "DIGI OPS",       canView: "all",    region: null },
-  // REGION ACCESS
-  { id: "rh_north",       name: "Region Head – North",   role: "REGION HEAD",    canView: "region", region: "North" },
-  { id: "rh_south",       name: "Region Head – South",   role: "REGION HEAD",    canView: "region", region: "South" },
-  { id: "rh_east",        name: "Region Head – East",    role: "REGION HEAD",    canView: "region", region: "East" },
-  { id: "rh_west",        name: "Region Head – West",    role: "REGION HEAD",    canView: "region", region: "West" },
-  { id: "rh_national",    name: "Region Head – National",role: "REGION HEAD",    canView: "region", region: "National" },
-  { id: "rh_central",     name: "Region Head – Central", role: "REGION HEAD",    canView: "region", region: "Central" },
-  // SELF ONLY — NORTH
-  { id: "rep_arjun",      name: "Arjun Mishra",          role: "SALES REP",      canView: "self",   region: "North",    repId:  1 },
-  { id: "rep_rahul",      name: "Rahul Sharma",          role: "SALES REP",      canView: "self",   region: "North",    repId:  7 },
-  { id: "rep_kavya",      name: "Kavya Singh",           role: "SALES REP",      canView: "self",   region: "North",    repId:  8 },
-  { id: "rep_manish",     name: "Manish Tiwari",         role: "SALES REP",      canView: "self",   region: "North",    repId:  9 },
-  { id: "rep_pooja",      name: "Pooja Agarwal",         role: "SALES REP",      canView: "self",   region: "North",    repId: 10 },
-  // SOUTH
-  { id: "rep_priya",      name: "Priya Dash",            role: "SALES REP",      canView: "self",   region: "South",    repId:  2 },
-  { id: "rep_meera",      name: "Meera Rao",             role: "SALES REP",      canView: "self",   region: "South",    repId:  6 },
-  { id: "rep_suresh",     name: "Suresh Reddy",          role: "SALES REP",      canView: "self",   region: "South",    repId: 11 },
-  { id: "rep_ananya",     name: "Ananya Krishnan",       role: "SALES REP",      canView: "self",   region: "South",    repId: 12 },
-  { id: "rep_karthik",    name: "Karthik Iyer",          role: "SALES REP",      canView: "self",   region: "South",    repId: 13 },
-  // EAST
-  { id: "rep_rohit",      name: "Rohit Nanda",           role: "SALES REP",      canView: "self",   region: "East",     repId:  3 },
-  { id: "rep_sanjay",     name: "Sanjay Mohanty",        role: "SALES REP",      canView: "self",   region: "East",     repId: 14 },
-  { id: "rep_debasmita",  name: "Debasmita Das",         role: "SALES REP",      canView: "self",   region: "East",     repId: 15 },
-  { id: "rep_bikash",     name: "Bikash Pradhan",        role: "SALES REP",      canView: "self",   region: "East",     repId: 16 },
-  { id: "rep_rina",       name: "Rina Panda",            role: "SALES REP",      canView: "self",   region: "East",     repId: 17 },
-  // WEST
-  { id: "rep_sneha",      name: "Sneha Patel",           role: "SALES REP",      canView: "self",   region: "West",     repId:  4 },
-  { id: "rep_varun",      name: "Varun Mehta",           role: "SALES REP",      canView: "self",   region: "West",     repId: 18 },
-  { id: "rep_divya",      name: "Divya Joshi",           role: "SALES REP",      canView: "self",   region: "West",     repId: 19 },
-  { id: "rep_amit_d",     name: "Amit Desai",            role: "SALES REP",      canView: "self",   region: "West",     repId: 20 },
-  { id: "rep_preethi",    name: "Preethi Shah",          role: "SALES REP",      canView: "self",   region: "West",     repId: 21 },
-  // NATIONAL
-  { id: "rep_vikram",     name: "Vikram Sen",            role: "SALES REP",      canView: "self",   region: "National", repId:  5 },
-  { id: "rep_neha",       name: "Neha Kapoor",           role: "SALES REP",      canView: "self",   region: "National", repId: 22 },
-  { id: "rep_rajesh_m",   name: "Rajesh Malhotra",       role: "SALES REP",      canView: "self",   region: "National", repId: 23 },
-  { id: "rep_shreya",     name: "Shreya Bose",           role: "SALES REP",      canView: "self",   region: "National", repId: 24 },
-  { id: "rep_aditya",     name: "Aditya Kumar",          role: "SALES REP",      canView: "self",   region: "National", repId: 25 },
-  // CENTRAL
-  { id: "rep_sameer",     name: "Sameer Nayak",          role: "SALES REP",      canView: "self",   region: "Central",  repId: 26 },
-  { id: "rep_lipika",     name: "Lipika Mishra",         role: "SALES REP",      canView: "self",   region: "Central",  repId: 27 },
-  { id: "rep_pratap",     name: "Pratap Rath",           role: "SALES REP",      canView: "self",   region: "Central",  repId: 28 },
-  { id: "rep_sunita",     name: "Sunita Sahoo",          role: "SALES REP",      canView: "self",   region: "Central",  repId: 29 },
-  { id: "rep_debadatta",  name: "Debadatta Patra",       role: "SALES REP",      canView: "self",   region: "Central",  repId: 30 },
-];
-
-
-const IP_CATALOG: any[] = [];
-
-// Target approval chain: Draft → Pending RH → Pending NSH → Pending Strategy → Pending CRO → Approved
-const TARGET_APPROVAL_CHAIN = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO","Approved"];
-
-// ─── COLORS ───────────────────────────────────────────────────────────────────
-const C = { bg:"#f0f4f9", surface:"#ffffff", s2:"#e8eef7", s3:"#dde5f0", border:"#c8d3e5", accent:"#c47d00", green:"#15803d", red:"#c92828", blue:"#1d5db4", purple:"#7920e8", orange:"#c24000", text:"#18243a", dim:"#4d5e78", muted:"#8a97ae" };
-
-const fmt = (n) => { if (n == null || n === "") return "—"; if (n===0) return "0"; if (n>=10000000) return `${(n/10000000).toFixed(1)}Cr`; if (n>=100000) return `${(n/100000).toFixed(1)}L`; return `${(n/1000).toFixed(0)}K`; };
-const fmtR = (n) => (n == null || n === "") ? "—" : `₹${fmt(n)}`;
-const daysSince = (d) => { if (!d) return 999; return Math.floor((Date.now()-new Date(d).getTime())/86400000); };
-// Part 1: helper to read stage from either new `stage` field or legacy `outcome` field
-const dealStage = (d) => d.stage || d.outcome || "Prospect";
-// Part 3: oColor supports both new and legacy stage values
-const oColor = (o) => ({
-  "Prospect": C.muted, "In Discussion": C.blue, "Negotiation": C.accent,
-  "Mail Confirmed": C.green, "RO Received": "#0f6b2f", "Lost": C.red,
-  // legacy
-  "Very Interested": C.blue, "Interested – Needs Revision": C.accent,
-  "Price Concern": C.orange, "Needs Callback": C.blue, "Not Interested": C.muted,
-}[o] || C.dim);
-const riskColor = (d) => { const s=dealStage(d); if (s==="Lost") return C.muted; if (s==="Mail Confirmed"||s==="RO Received") return C.green; const x=daysSince(d.lastDealMeetingDate||d.lastContact); return x>=7?C.red:x>=3?C.orange:C.green; };
-const riskLabel = (d) => { const s=dealStage(d); if (s==="Lost") return "Lost"; if (s==="RO Received") return "Closed"; if (s==="Mail Confirmed") return "Committed"; if (d.atRisk) return "At Risk"; const x=daysSince(d.lastDealMeetingDate||d.lastContact); return x>=7?"At Risk":x>=3?"Cooling":"Active"; };
-const lColor = (l) => ({ "C-Suite / Owner":C.purple, "VP / GM":C.blue, "Marketing Head":C.green, "Brand Manager":C.accent, "Agency Lead":"#6366f1", "Junior/Exec":C.red }[l]||C.dim);
-// Part 1: map legacy outcome values → new canonical stage (used during migration and legacy rendering)
-const mapLegacyOutcome = (o: string): string => ({
-  "Mail Confirmed": "Mail Confirmed", "Very Interested": "In Discussion",
-  "Interested – Needs Revision": "Negotiation", "Proposal Shared": "Negotiation",
-  "Negotiation": "Negotiation", "Price Concern": "Negotiation",
-  "Needs Callback": "Prospect", "Not Interested": "Lost",
-  "Prospect": "Prospect", "In Discussion": "In Discussion",
-  "RO Received": "RO Received", "Lost": "Lost",
-}[o] || "Prospect");
-// Simple unique ID generator — avoids dependency on nanoid
-const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice(2,7)}`;
 
 // ═══════════════════════════════════════════════════════════════════
 // RO PARSER ENGINE — full v9.5 embedded
@@ -768,7 +623,7 @@ export function CROApp({ user, onLogout }) {
   // ── DATA STATE — CROApp now owns all entity state (no prop drilling) ──────
 
   // Deals: API-backed state owned directly by CROApp
-  const [deals, setDeals] = useApiEntityState("/api/deals", "otv_deals", []);
+  const [deals, setDeals] = useApiEntityState<Deal>("/api/deals", "otv_deals", []);
 
   // Meetings: DB-backed via useMeetings hook (sole source of truth)
   const { meetings, isLoading: meetingsLoading, setMeetings } = useMeetings();
@@ -822,8 +677,7 @@ export function CROApp({ user, onLogout }) {
     const tick = () => {
       const now = new Date(), dl = new Date();
       dl.setHours(23, 30, 0, 0);
-      // @ts-ignore
-      const diff = dl - now;
+      const diff = +dl - +now;
       if (diff <= 0) { setCountdown("11:30 PM passed"); return; }
       const h = Math.floor(diff / 3600000);
       const m = Math.floor((diff % 3600000) / 60000);
@@ -833,7 +687,7 @@ export function CROApp({ user, onLogout }) {
     const id = setInterval(tick, 60000);
     return () => clearInterval(id);
   }, []);
-  const [absenceReports, setAbsenceReports] = usePersistedState<any[]>("otv_absence", []);
+  const [absenceReports, setAbsenceReports] = usePersistedState<AbsenceReport[]>("otv_absence", []);
   const [exceptionModal, setExceptionModal] = useState<any>(null); // { reportId, repName }
   const [exceptionReason, setExceptionReason] = useState("");
   const {
@@ -892,7 +746,6 @@ export function CROApp({ user, onLogout }) {
   const [selfTaskMode, setSelfTaskMode] = useState(false);
   const [bulkImportOpen, setBulkImportOpen] = useState(false);
   const [importData, setImportData] = useState(null);
-  // @ts-ignore
   const importRef = useRef<HTMLInputElement>(null);
   // My Plan calendar state — must be at component level (React hooks rule)
   const [calWeekOffset, setCalWeekOffset] = useState(0);
@@ -1016,31 +869,24 @@ export function CROApp({ user, onLogout }) {
   useEffect(() => {
     const escalateDays = adminConfig?.inactivityDaysEscalate || 14;
     const riskDays     = adminConfig?.inactivityDaysRisk     || 7;
-    // @ts-ignore
     setDeals(prev => prev.map(d => {
       const ds = dealStage(d);
       // Closed deals never escalate
       if (ds === "RO Received" || ds === "Mail Confirmed" || ds === "Lost") return d;
       // Part 4: Escalation clock is only reset by Deal Meeting touchpoints
       // Use lastDealMeetingDate if available, else fall back to lastContact
-      // @ts-ignore
       const idleClock = d.lastDealMeetingDate || d.lastContact;
       const idle = daysSince(idleClock);
       // 7+ days without a Deal Meeting → mark at risk
-      // @ts-ignore
       if (idle >= riskDays && idle < escalateDays && !d.atRisk) {
-        // @ts-ignore
         return { ...d, atRisk: true };
       }
       // escalateDays+ idle → auto-escalate to NSH if not already flagged
-      // @ts-ignore
       if (idle >= escalateDays && !d.awaitingApproval) {
         return {
-          // @ts-ignore
           ...d, atRisk: true,
           awaitingApproval:      "NSH",
           awaitingApprovalSince: TODAY,
-          // @ts-ignore
           auditLog: [...(d.auditLog || []), {
             at: TODAY, by: "System", role: "AUTO",
             action: "Auto-escalated", from: null, to: "NSH",
@@ -1049,9 +895,7 @@ export function CROApp({ user, onLogout }) {
         };
       }
       // Clear atRisk if a Deal Meeting was logged recently
-      // @ts-ignore
       if (idle < riskDays && d.atRisk) {
-        // @ts-ignore
         return { ...d, atRisk: false };
       }
       return d;
@@ -1067,8 +911,7 @@ export function CROApp({ user, onLogout }) {
   const [roError, setRoError]         = useState<string|null>(null);
   const [roProgress, setRoProgress]   = useState("");
   const [roSearch, setRoSearch]       = useState("");
-  const [savedROs, setSavedROs]       = usePersistedState("otv_savedROs", []);
-  // @ts-ignore
+  const [savedROs, setSavedROs]       = usePersistedState<SavedRO[]>("otv_savedROs", []);
   const roFileRef = useRef<HTMLInputElement>(null);
 
   // RO MANAGEMENT STATE
@@ -1083,13 +926,13 @@ export function CROApp({ user, onLogout }) {
   const [ipPropNote, setIpPropNote]                    = useState("");
   const [ipPropValue, setIpPropValue]                  = useState("");
   const [ipApprovalPrices, setIpApprovalPrices]        = useState<Record<string,string>>({});
-  const [internalReqs, setInternalReqs, , irError]            = useApiEntityState("/api/internal-requests", "otv_internalReqs", []);
+  const [internalReqs, setInternalReqs, , irError]            = useApiEntityState<InternalReq>("/api/internal-requests", "otv_internalReqs", []);
   const [irStatusFilter, setIrStatusFilter]                   = useState("all");
   const [lbTab, setLbTab]                                     = useState("team");
-  const [targetSubs, setTargetSubs, targetLoading, targetError] = useApiEntityState("/api/targets",        "otv_targetSubs",      []);
-  const [revenueEntries, setRevenueEntries, revLoading, revError]: [any[], any, any, any] = useApiEntityState("/api/revenue",      "otv_revenueEntries",  []);
+  const [targetSubs, setTargetSubs, targetLoading, targetError] = useApiEntityState<TargetSub>("/api/targets",        "otv_targetSubs",      []);
+  const [revenueEntries, setRevenueEntries, revLoading, revError] = useApiEntityState<RevenueEntry>("/api/revenue",      "otv_revenueEntries",  []);
   // ── Part 1: New data model objects ──────────────────────────────────────
-  const [clientAccounts, setClientAccounts, , caError] = useApiEntityState("/api/client-accounts", "otv_clientAccounts", []);
+  const [clientAccounts, setClientAccounts, , caError] = useApiEntityState<ClientAccount>("/api/client-accounts", "otv_clientAccounts", []);
   const { touchpoints, setTouchpoints, syncError: tpError } = useTouchpoints(!!user);
 
   // Part 1: One-time migration — runs when clientAccounts is empty but deals/meetings exist
@@ -1098,66 +941,48 @@ export function CROApp({ user, onLogout }) {
     if (deals.length === 0 && meetings.length === 0) return; // nothing to migrate
     const accountMap: Record<string, any> = {}; // key: `${clientCompany}|${repId}`
     deals.forEach(d => {
-      // @ts-ignore
       const key = `${d.clientCompany}|${d.repId}`;
       if (!accountMap[key]) {
-        // @ts-ignore
         const rep = USER_ROLES.find(r => r.repId === d.repId);
         accountMap[key] = {
-          // @ts-ignore
           id: uid(), clientName: d.clientCompany, repId: d.repId,
-          // @ts-ignore
           zohoAccountId: d.zohoAccountId || "",
-          // @ts-ignore
           region: rep?.region || d.region || "",
-          // @ts-ignore
           fiscalYear: d.quarter?.slice(-3) === "FY26" ? "FY26" : "FY26",
-          // @ts-ignore
           annualTarget: parseCurrency(d.targetAmount || "0") || 0,
-          // @ts-ignore
           currentStage: mapLegacyOutcome(d.outcome || "Prospect"),
-          // @ts-ignore
           lastContactDate: d.lastContact || "",
-          // @ts-ignore
           lastDealMeetingDate: d.lastContact || "",
-          // @ts-ignore
           createdAt: d.createdAt || TODAY, updatedAt: TODAY,
         };
       }
       // link deal back to its account
-      // @ts-ignore
       if (!d.clientAccountId) {
-        // @ts-ignore
         setDeals(prev => prev.map(x => x.id === d.id ? {...x, clientAccountId: accountMap[key].id, stage: mapLegacyOutcome(x.outcome||"Prospect"), pipelineAmount: parseCurrency(x.amount||"0")||0} : x));
       }
     });
     const newAccounts = Object.values(accountMap);
-    // @ts-ignore
     if (newAccounts.length > 0) setClientAccounts(newAccounts);
     // Migrate meetings → touchpoints
     const newTouchpoints = meetings.map(m => {
-      // @ts-ignore
       const deal = deals.find(d => d.id === m.dealId || d.clientCompany === m.clientAgencyName);
-      // @ts-ignore
       const acctKey = deal ? `${deal.clientCompany}|${deal.repId}` : null;
       const acct = acctKey ? accountMap[acctKey] : null;
       return {
-        // @ts-ignore
         id: m.id, clientAccountId: acct?.id || "", dealId: m.dealId || deal?.id || "",
         repId: m.repId, date: m.date, time: m.meetingTime || "",
         meetingType: m.meetingType || "Physical Meeting",
         touchpointType: "Deal Meeting", contactName: m.contactName || "",
         contactDesignation: m.designation || "", contactLevel: m.contactLevel || "",
         whatHappened: m.discussion || "", clientFeedback: m.clientFeedback || "",
-        // @ts-ignore
-        stageUpdate: mapLegacyOutcome(m.outcome || "Prospect"),
+        stageUpdate: mapLegacyOutcome(String(m.outcome || "Prospect")),
         actionItems: m.actionItems || [],
         loggedAt: m.loggedAt || m.date, loggedLate: m.loggedLate || false,
         loggedByUserId: m.loggedByUserId || String(m.repId),
       };
     }).filter(t => t.clientAccountId);
     // @ts-ignore
-    if (newTouchpoints.length > 0) setTouchpoints(newTouchpoints);
+    if (newTouchpoints.length > 0) setTouchpoints(newTouchpoints as unknown as Touchpoint[]);
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Normalise adminConfig.slaHours: rename legacy short keys (RH→Region Head, etc.) ──
@@ -1185,31 +1010,26 @@ export function CROApp({ user, onLogout }) {
   useEffect(() => {
     if (stubsCleanedRef.current) return;
     const hasStubs = revenueEntries.some(
-      // @ts-ignore
       e => e.invoiceRef === "PO Pending" && String(e.notes||"").startsWith("Auto-stub:")
     );
     if (!hasStubs) return;
     stubsCleanedRef.current = true;
     setRevenueEntries(p => p.filter(
-      // @ts-ignore
       e => !(e.invoiceRef === "PO Pending" && String(e.notes||"").startsWith("Auto-stub:"))
     ));
   }, [revenueEntries]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Part 5: 4-number dashboard helpers ──────────────────────────────────
   const CURRENT_FY = "FY26";
-  const getAchieved   = (repId?: number, fy = CURRENT_FY) =>
-    // @ts-ignore
+  const getAchieved   = (repId?: string | null, fy = CURRENT_FY) =>
     revenueEntries.filter(e => (repId == null || e.repId === repId) && (e.fiscalYear === fy || fy === "all")).reduce((s, e) => s + (parseCurrency(e.amount||"0")||0), 0);
   // COMMITTED = clientAccounts at Mail Confirmed stage (per spec: read annualTarget from clientAccounts, never from deals.amount)
-  const getCommitted  = (repId?: number) =>
-    // @ts-ignore
+  const getCommitted  = (repId?: string | null) =>
     clientAccounts.filter(a => (repId == null || a.repId === repId) && a.currentStage === "Mail Confirmed").reduce((s, a) => s + (a.annualTarget||0), 0);
   // IN PLAY = clientAccounts at In Discussion or Negotiation stage
-  const getInPlay     = (repId?: number) =>
-    // @ts-ignore
+  const getInPlay     = (repId?: string | null) =>
     clientAccounts.filter(a => (repId == null || a.repId === repId) && ["In Discussion","Negotiation"].includes(a.currentStage||"")).reduce((s, a) => s + (a.annualTarget||0), 0);
-  const getShortfall  = (target: number, repId?: number) => Math.max(0, target - getAchieved(repId) - getCommitted(repId) - getInPlay(repId));
+  const getShortfall  = (target: number, repId?: string | null) => Math.max(0, target - getAchieved(repId) - getCommitted(repId) - getInPlay(repId));
 
   // Part 5: Stacked bar — proportions of annual target: Achieved (green) / Committed (blue) / In Play (amber) / Shortfall (red)
   // When shortfall reaches zero the entire bar turns solid green.
@@ -1231,10 +1051,8 @@ export function CROApp({ user, onLogout }) {
   };
 
   // Part 9: Return total approved annual target for a rep (sum of all approved targetSubs for CURRENT_FY)
-  const getAnnualTarget = (repId?: number) => {
-    // @ts-ignore
+  const getAnnualTarget = (repId?: string | null) => {
     const subs = targetSubs.filter(s => (repId == null || s.repId === repId) && s.status === "Approved");
-    // @ts-ignore
     return { amount: subs.reduce((s, sub) => s + (sub.totalTarget || 0), 0) };
   };
 
@@ -1330,12 +1148,10 @@ export function CROApp({ user, onLogout }) {
     return isNaN(n) ? 0 : Math.round(n);
   };
 
-  // @ts-ignore
   const showToast = (msg, type="ok") => { setToast({msg,type}); setTimeout(()=>setToast(null),3000); };
 
   const openNoteModal = (title, placeholder, onSubmit) => {
     setNoteModalVal(placeholder || "");
-    // @ts-ignore
     setNoteModal({ title, placeholder: placeholder || "", onSubmit });
   };
 
@@ -1344,7 +1160,7 @@ export function CROApp({ user, onLogout }) {
     if(!roFiles.length&&!roInputText.trim())return;
     setRoLoading(true);setRoError(null);setRoResults([]);
     try{
-      const parsed=[];
+      const parsed: any[]=[];
       if(roFiles.length>0){
         for(let i=0;i<roFiles.length;i++){
           setRoProgress(`Parsing ${i+1}/${roFiles.length}: ${roFiles[i].name}...`);
@@ -1352,7 +1168,6 @@ export function CROApp({ user, onLogout }) {
           const text=await roCallAPI(msgs);
           const raw=roExtractJSON(text);
           const deals=Array.isArray(raw)?raw:[raw];
-          // @ts-ignore
           deals.forEach((result,di)=>{roNormalizeDoc(result);result._filename=roFiles[i].name+(deals.length>1?` [${di+1}]`:"");parsed.push(result);});
         }
       }else{
@@ -1360,7 +1175,6 @@ export function CROApp({ user, onLogout }) {
         const text=await roCallAPI([{role:"user",content:"Parse this TV RO. If multiple channels return JSON array:\n\n"+roInputText}]);
         const raw=roExtractJSON(text);
         const deals=Array.isArray(raw)?raw:[raw];
-        // @ts-ignore
         deals.forEach((result,di)=>{roNormalizeDoc(result);result._filename="Pasted Text"+(deals.length>1?` [${di+1}]`:"");parsed.push(result);});
       }
       setRoResults(parsed);setRoActiveDoc(0);
@@ -1379,14 +1193,12 @@ export function CROApp({ user, onLogout }) {
     XLSX.writeFile(wb,(r.client_name||"ro").replace(/[^a-zA-Z0-9]/g,"_")+"_Zoho.xlsx");
     // Auto-save to management
     const saved={id:`ro_${Date.now()}`,savedAt:new Date().toISOString(),client_name:r.client_name||"",brand_name:r.brand_name||"",agency_name:r.agency_name||"",channel:roNormalizeChannel(r.channel||""),ro_number:r.ro_number||"",ro_date:r.ro_date||"",gross_amount:r.gross_amount||0,total_payable:r.total_payable||0,filename:r._filename||"",data:r,status:"Exported"};
-    // @ts-ignore
     setSavedROs(p=>[saved,...p.filter(x=>x.ro_number!==saved.ro_number||!saved.ro_number)]);
     showToast("Exported + saved to RO Management");
   };
 
   const roSaveResult = (r) => {
     const saved={id:`ro_${Date.now()}`,savedAt:new Date().toISOString(),client_name:r.client_name||"",brand_name:r.brand_name||"",agency_name:r.agency_name||"",channel:roNormalizeChannel(r.channel||""),ro_number:r.ro_number||"",ro_date:r.ro_date||"",gross_amount:r.gross_amount||0,total_payable:r.total_payable||0,filename:r._filename||"",data:r,status:"Parsed"};
-    // @ts-ignore
     setSavedROs(p=>[saved,...p.filter(x=>x.ro_number!==saved.ro_number||!saved.ro_number)]);
     showToast("Saved to RO Management");
   };
@@ -1432,8 +1244,7 @@ export function CROApp({ user, onLogout }) {
       reqs:           [],
       _fromRO:        roResult.ro_number || "",
     };
-    // @ts-ignore
-    setDealForm(prefilled);
+    setDealForm(prefilled as any);
     setAddDealOpen(true);
     showToast(`RO pre-filled → deal form opened ✓`);
   };
@@ -1442,8 +1253,7 @@ export function CROApp({ user, onLogout }) {
     if(!roResults.length)return;
     const XLSX=await loadXLSX();
     const wb=XLSX.utils.book_new();
-    const allDeals=[],allBreakup=[],allSummary=[];
-    // @ts-ignore
+    const allDeals: any[]=[],allBreakup: any[]=[],allSummary: any[]=[];
     roResults.forEach(r=>{const exp=roBuildExport(r);allDeals.push(exp.dealRow);allBreakup.push(...exp.breakupRows);allSummary.push(exp.summaryRow);});
     roMakeSheet(wb,"Deals",allDeals);roMakeSheet(wb,"Deal Breakup",allBreakup);roMakeSheet(wb,"Summary",allSummary);
     XLSX.writeFile(wb,"All_Deals_Zoho.xlsx");
@@ -1460,7 +1270,6 @@ export function CROApp({ user, onLogout }) {
   // HR ENGINE — simulates EOD auto-fire
   // In production this runs server-side at 23:59 daily via cron
   const fireAbsenceReport = (rep, date) => {
-    // @ts-ignore
     const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === date);
     if (alreadyFiled) { showToast("Report already filed for this date", "err"); return; }
     const report = {
@@ -1469,7 +1278,6 @@ export function CROApp({ user, onLogout }) {
       status: "Sent to HR", sentTo: HR_EMAIL, markedAs: "Absent",
       exception: null, exceptionBy: null, exceptionReason: null, generatedBy: "System (Auto)"
     };
-    // @ts-ignore
     setAbsenceReports(p => [report, ...p]);
     showToast(`Absence report fired to HR for ${rep.name}`);
   };
@@ -1482,13 +1290,11 @@ export function CROApp({ user, onLogout }) {
       const tmrwPlanned = meetings.some(m=>m.repId===rep.id&&m.date===TOMORROW&&m.status==="planned");
       const bothDone = todayLogged && tmrwPlanned;
       if (!bothDone) {
-        // @ts-ignore
         const alreadyFiled = absenceReports.find(r => r.repId === rep.id && r.date === TODAY);
         if (!alreadyFiled) {
           const reason = !todayLogged && !tmrwPlanned ? "Neither today's meetings logged nor tomorrow planned"
             : !todayLogged ? "Today's meetings not logged by 11:30 PM"
             : "Tomorrow's meetings not planned by 11:30 PM";
-          // @ts-ignore
           setAbsenceReports(p => [{
             id:`ab${Date.now()+rep.id}`, repId:rep.id, repName:rep.name, region:rep.region, role:rep.role,
             date:TODAY, generatedAt:"23:30", status:"Sent to HR", sentTo:HR_EMAIL, markedAs:"Absent",
@@ -1519,7 +1325,6 @@ export function CROApp({ user, onLogout }) {
   const grantException = () => {
     if (!canGrantException) { showToast("Only Admin or CXO can grant exceptions", "err"); return; }
     if (!exceptionReason.trim()) { showToast("Reason required", "err"); return; }
-    // @ts-ignore
     setAbsenceReports(p => p.map(r => r.id === exceptionModal.reportId
       ? { ...r, status:"Exception Granted", markedAs:"Present", exception:"Overridden", exceptionBy:user_role?.name||"Admin", exceptionReason: exceptionReason.trim() }
       : r
@@ -1527,7 +1332,6 @@ export function CROApp({ user, onLogout }) {
     // Also mark them present in attendance
     // @ts-ignore
     const rep = absenceReports.find(r => r.id === exceptionModal.reportId);
-    // @ts-ignore
     if (rep) setAtt(p => ({...p, [rep.date]: {...(p[rep.date]||{}), [rep.repId]: true}}));
     setExceptionModal(null); setExceptionReason("");
     showToast("Exception granted — HR notified, marked Present");
@@ -1535,7 +1339,6 @@ export function CROApp({ user, onLogout }) {
 
   const revokeException = (reportId) => {
     if (!canGrantException) { showToast("Only Admin or CXO can revoke exceptions", "err"); return; }
-    // @ts-ignore
     setAbsenceReports(p => p.map(r => r.id === reportId
       ? { ...r, status:"Sent to HR", markedAs:"Absent", exception:null, exceptionBy:null, exceptionReason:null }
       : r
@@ -1594,35 +1397,27 @@ export function CROApp({ user, onLogout }) {
     const now = Date.now();
     const hasOpenTasks = tasks.some(t => t.dueDate && t.dueDate < TODAY && ["Open","Escalated"].includes(t.status||"Open"));
     if (hasOpenTasks) {
-      setTasks(prev => prev.map(t => {
+      (setTasks as React.Dispatch<React.SetStateAction<any>>)(prev => prev.map((t: any) => {
         if (!t.dueDate || t.dueDate >= TODAY) return t;
         if (!["Open","Escalated"].includes(t.status||"Open")) return t;
-        const level = t.escLevel||0;
-        // @ts-ignore
-        const escAt = t.escAt ? new Date(t.escAt).getTime() : new Date(t.dueDate).getTime() + 12*3600000;
+        const level = Number(t.escLevel)||0;
+        const escAt: number = t.escAt ? new Date(t.escAt).getTime() : new Date(t.dueDate).getTime() + 12*3600000;
         if (now < escAt) return t.status==="Open"?{...t,status:"Escalated",escAt:t.escAt||new Date(new Date(t.dueDate).getTime()+12*3600000).toISOString()}:t;
-        // @ts-ignore
         const newLevel = Math.min(level+1, ESC_CHAIN.length);
         const nextEscAt = new Date(escAt+12*3600000).toISOString();
         return {...t,status:"Escalated",escLevel:newLevel,escDept:ESC_CHAIN[newLevel-1]||t.escDept,escAt:nextEscAt};
       }));
     }
     // Auto-escalate IRs along the 4-step chain
-    // @ts-ignore
     const hasOpenIRs = internalReqs.some(r => r.status==="Pending"&&r.escalationAt&&new Date(r.escalationAt).getTime()<now);
     if (hasOpenIRs) {
-      // @ts-ignore
       setInternalReqs(prev => prev.map(r => {
-        // @ts-ignore
         if (r.status!=="Pending"||!r.escalationAt) return r;
         // @ts-ignore
         if (new Date(r.escalationAt).getTime()>=now) return r;
-        // @ts-ignore
-        const level = r.escLevel||0;
+        const level = Number(r.escLevel)||0;
         const newLevel = Math.min(level+1, ESC_CHAIN.length);
-        // @ts-ignore
         const nextEscAt = new Date(new Date(r.escalationAt).getTime()+12*3600000).toISOString();
-        // @ts-ignore
         return {...r,status:"Pending",escLevel:newLevel,escDept:ESC_CHAIN[newLevel-1]||r.dept,escalationAt:nextEscAt};
       }));
     }
@@ -1648,13 +1443,11 @@ export function CROApp({ user, onLogout }) {
     const toMark: string[] = [];
     pastDays.forEach(day => {
       const hasLog = (meetings||[]).some(m=>m.repId===repId&&m.date===day);
-      // @ts-ignore
       const alreadyMarked = (absenceReports||[]).some(a=>a.repId===repId&&a.date===day);
       if (!hasLog&&!alreadyMarked) toMark.push(day);
     });
     if (toMark.length>0) {
-      // @ts-ignore
-      setAbsenceReports((prev:any[])=>[...prev,...toMark.map(day=>({
+      setAbsenceReports((prev)=>[...(prev as any[]),...toMark.map((day:string)=>({
         id:`abs_auto_${day}_${repId}`,repId,date:day,markedAs:"Absent",
         exception:null,exceptionBy:null,exceptionReason:null,
         status:"Auto-marked",autoMarked:true,createdAt:TODAY,
@@ -1671,65 +1464,43 @@ export function CROApp({ user, onLogout }) {
   const entryQ   = isAnnual ? "Q4 FY26" : filterQ;
 
   // Filtered visible deals
-  const visibleDeals = deals.filter(d => {
-    // @ts-ignore
+  const visibleDeals = (deals as any[]).filter((d: any) => {
     const regionOk = user_role.canView==="all" ? (filterRegion==="All"||d.region===filterRegion) : user_role.canView==="region" ? d.region===user_role.region : d.repId===user_role.repId;
-    // @ts-ignore
-    return regionOk && qMatch(d.quarter);
-  });
+    return regionOk && qMatch(d.quarter||"");
+  }) as Deal[];
 
   // Revenue Tracker: group visibleDeals by client
-  const rtClientMap = {};
-  visibleDeals.forEach(d=>{
-    // @ts-ignore
+  const rtClientMap: Record<string, any> = {};
+  visibleDeals.forEach((d: any)=>{
     if(!rtClientMap[d.clientCompany]) rtClientMap[d.clientCompany]={
-      // @ts-ignore
       clientCompany:d.clientCompany, repId:d.repId, lastContact:d.lastContact,
       deals:[], fct:0, digital:0, integrated:0, sponsorship:0, branded:0, total:0, target:0
     };
-    // @ts-ignore
     const c = rtClientMap[d.clientCompany];
     c.deals.push(d);
-    // @ts-ignore
     c.target += (d.targetAmount||0);
-    // @ts-ignore
     if(d.outcome==="Mail Confirmed"){
-      // @ts-ignore
-      if(d.dealType==="Linear TV") c.fct += d.amount;
-      // @ts-ignore
-      else if(d.dealType==="Digital") c.digital += d.amount;
-      // @ts-ignore
-      else if(d.dealType==="Integrated Packages") c.integrated += d.amount;
-      // @ts-ignore
-      else if(d.dealType==="IPs") c.sponsorship += d.amount;
-      // @ts-ignore
-      else if(d.dealType==="Media Solutions") c.branded += d.amount;
-      // @ts-ignore
-      c.total += d.amount;
+      if(d.dealType==="Linear TV") c.fct += (d.amount||0);
+      else if(d.dealType==="Digital") c.digital += (d.amount||0);
+      else if(d.dealType==="Integrated Packages") c.integrated += (d.amount||0);
+      else if(d.dealType==="IPs") c.sponsorship += (d.amount||0);
+      else if(d.dealType==="Media Solutions") c.branded += (d.amount||0);
+      c.total += (d.amount||0);
     }
-    // @ts-ignore
     if(!c.lastContact||d.lastContact>c.lastContact) c.lastContact=d.lastContact;
   });
-  // @ts-ignore
-  const rtClients = Object.values(rtClientMap).sort((a,b)=>daysSince(b.lastContact)-daysSince(a.lastContact));
+  const rtClients = Object.values(rtClientMap).sort((a: any, b: any)=>daysSince(b.lastContact)-daysSince(a.lastContact));
 
-  // @ts-ignore
   const closedDeals  = visibleDeals.filter(d=>d.outcome==="Mail Confirmed");
-  // @ts-ignore
   const activeDeals  = visibleDeals.filter(d=>d.outcome!=="Not Interested");
   // Bug 5 fix: CLOSED QTD in War Room must equal sum of actual revenue entries, not deal pipeline amounts.
   // We determine visible reps from visibleDeals, then sum their revenue entries for the current quarter.
-  // @ts-ignore
   const visibleRepIdsSet = new Set(visibleDeals.map(d=>d.repId));
-  // @ts-ignore
-  const closedRevenue = revenueEntries.filter(e => visibleRepIdsSet.has(e.repId) && qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+  const closedRevenue = (revenueEntries as any[]).filter((e: any) => visibleRepIdsSet.has(e.repId) && qMatch(e.quarter||"")).reduce((s: number, e: any)=>s+(e.amount||0), 0);
   // Part 4: at-risk = clientAccounts (spec: In Discussion / Negotiation / Mail Confirmed, 7+ days since last DEAL meeting)
-  // @ts-ignore
-  const atRisk       = clientAccounts.filter(a => visibleRepIdsSet.has(a.repId) && ["In Discussion","Negotiation","Mail Confirmed"].includes(a.currentStage||"") && daysSince(a.lastDealMeetingDate||a.lastContactDate) >= 7);
-  // @ts-ignore
-  const overdueNext  = activeDeals.filter(d=>d.nextStepDate && d.nextStepDate<TODAY && d.outcome!=="Mail Confirmed");
-  // @ts-ignore
-  const allReqs      = deals.flatMap((d,_)=>d.reqs.map((r,i)=>({...r,dealId:d.id,reqIdx:i,clientCompany:d.clientCompany,amount:d.amount,repId:d.repId})));
+  const atRisk       = (clientAccounts as any[]).filter((a: any) => visibleRepIdsSet.has(a.repId) && ["In Discussion","Negotiation","Mail Confirmed"].includes(a.currentStage||"") && daysSince(a.lastDealMeetingDate||a.lastContactDate) >= 7);
+  const overdueNext  = activeDeals.filter((d: any)=>d.nextStepDate && d.nextStepDate<TODAY && d.outcome!=="Mail Confirmed");
+  const allReqs      = (deals as any[]).flatMap((d: any)=>((d.reqs)||[]).map((r: any,i: number)=>({...r,dealId:d.id,reqIdx:i,clientCompany:d.clientCompany,amount:d.amount,repId:d.repId})));
   const todayMtgs    = meetings.filter(m=>m.date===TODAY);
 
   // @ts-ignore
@@ -1744,17 +1515,12 @@ export function CROApp({ user, onLogout }) {
   const repScores = useMemo(() => reps
     .filter(r => user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId)
     .map(rep => {
-      // @ts-ignore
-      const rd      = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
-      // @ts-ignore
-      const closed  = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-      // @ts-ignore
-      const pipe    = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
-      const rm      = meetings.filter(m=>m.repId===rep.id);
-      // @ts-ignore
-      const seniorM = rm.filter(m=>["C-Suite / Owner","VP / GM","Marketing Head","Brand Manager"].includes(m.contactLevel)).length;
-      // @ts-ignore
-      const risk    = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
+      const rd      = (deals as any[]).filter((d: any)=>String(d.repId)===String(rep.id)&&qMatch(d.quarter||""));
+      const closed  = (revenueEntries as any[]).filter((e: any)=>String(e.repId)===String(rep.id)&&qMatch(e.quarter||"")).reduce((s: number, e: any)=>s+(e.amount||0), 0);
+      const pipe    = rd.filter((d: any)=>!["Mail Confirmed","Not Interested"].includes(d.outcome||"")).reduce((s: number, d: any)=>s+(d.amount||0), 0);
+      const rm      = (meetings as any[]).filter((m: any)=>String(m.repId)===String(rep.id));
+      const seniorM = rm.filter((m: any)=>["C-Suite / Owner","VP / GM","Marketing Head","Brand Manager"].includes(m.contactLevel||"")).length;
+      const risk    = rd.filter((d: any)=>!["Mail Confirmed","Not Interested"].includes(d.outcome||"")&&daysSince(d.lastContact)>=7).length;
       const attOk   = att[TODAY]?.[rep.id];
       const cPct    = rep.target>0?Math.round((closed/rep.target)*100):0;
       const senPct  = rm.length>0?Math.round((seniorM/rm.length)*100):0;
@@ -1841,44 +1607,31 @@ export function CROApp({ user, onLogout }) {
   }, [globalSearch, deals, meetings, tasks, user_role, reps, activeUser,
       isRep, isRH, isNSH, isStrategy, isCRORole, isDigiOps, isAdmin]);
 
-  const updateOutcome = (id, outcome) => {
+  const updateOutcome = (id: string, outcome: string) => {
     const closed = outcome === "Mail Confirmed";
-    // @ts-ignore
-    setDeals(p => p.map(d => {
-      // @ts-ignore
+    setDeals(p => p.map((d: any) => {
       if (d.id !== id) return d;
-      // @ts-ignore
-      const entry  = closed && d.awaitingApproval ? [{
+      const entry = closed && d.awaitingApproval ? [{
         at: TODAY, by: user_role?.name||"Manager", role: user_role?.role||"",
-        // @ts-ignore
         action: "Closed", from: d.awaitingApproval, to: null, note: "Deal closed — approval cleared",
       }] : [];
       return {
-        // @ts-ignore
         ...d, outcome, lastContact: TODAY,
-        // @ts-ignore
         awaitingApproval:      closed ? null : d.awaitingApproval,
-        // @ts-ignore
         awaitingApprovalSince: closed ? null : d.awaitingApprovalSince,
-        // @ts-ignore
         atRisk: closed ? false : d.atRisk,
-        // @ts-ignore
         auditLog: [...(d.auditLog||[]), ...entry],
-      };
-    }));
+      } as any;
+    }) as Deal[]);
     if (closed) {
-      // @ts-ignore
-      const deal = deals.find(d => d.id === id);
+      const deal = deals.find((d: Deal) => d.id === id);
       if (deal) {
-        // @ts-ignore
-        pushNotification({ event: "deal_closed", client: deal.clientCompany, amount: deal.amount, rep: deal.repName, message: `Deal won: ${deal.clientCompany} — ${fmtR(deal.amount)}` });
-        // @ts-ignore
+        pushNotification({ event: "deal_closed", client: deal.clientCompany, amount: deal.amount, rep: (deal as any).repName, message: `Deal won: ${deal.clientCompany} — ${fmtR(deal.amount)}` });
         showToast(`Deal marked won: ${deal.clientCompany}. Log the booked amount in Revenue Log.`);
       }
     }
   };
-  // @ts-ignore
-  const updateReq     = (dealId, reqIdx, status) => setDeals(p=>p.map(d=>d.id===dealId?{...d,reqs:d.reqs.map((r,i)=>i===reqIdx?{...r,status}:r)}:d));
+  const updateReq     = (dealId: string, reqIdx: number, status: string) => setDeals(p=>p.map(d=>d.id===dealId?{...d,reqs:(d.reqs||[]).map((r: any,i: number)=>i===reqIdx?{...r,status}:r)}:d) as Deal[]);
 
   const openSelfTask = () => {
     setTaskForm({...BLANK_TASK_FORM, assignedToUserId: activeUser, dueDate: TOMORROW});
@@ -1939,20 +1692,18 @@ export function CROApp({ user, onLogout }) {
       // @ts-ignore
       const existingSub = targetSubs.find(s=>s.repId===parsedRepId&&s.quarter===dealQ&&s.status===initStatus&&s.status!=="Approved"&&s.submittedByRole===user_role?.role);
       if (existingSub) {
-        // @ts-ignore
-        setTargetSubs(p=>p.map(s=>s.id===existingSub.id?{...s,clients:[...s.clients,newEntry],totalTarget:s.totalTarget+tgtAmt}:s));
+        setTargetSubs(p=>p.map(s=>s.id===existingSub.id?{...s,clients:[...(s.clients||[]),newEntry],totalTarget:s.totalTarget+tgtAmt}:s) as TargetSub[]);
       } else {
-        // @ts-ignore
         setTargetSubs(p=>[...p,{
           id:`ts${Date.now()}`,
-          repId:parsedRepId,repName:rep.name,region:rep.region,
+          repId:String(parsedRepId),repName:(rep as any).name,region:(rep as any).region,
           quarter:dealQ,clients:[newEntry],totalTarget:tgtAmt,
           // Freeze immediately if auto-approved at CRO level
           ...(initStatus==="Approved" ? {frozenTarget: tgtAmt} : {}),
           status:initStatus,submittedAt:TODAY,
           submittedByName:user_role?.name||"",submittedByRole:user_role?.role||"",
           approvalLog:skipLog,
-        }]);
+        } as unknown as TargetSub]);
       }
       showToast(initStatus==="Approved"?`Deal added + target auto-approved ✓`:`Deal added + target plan submitted → ${initStatus} ✓`);
     } else {
@@ -2009,84 +1760,44 @@ export function CROApp({ user, onLogout }) {
     return false;
   };
 
-  const approveDeal = (dealId, note = "") => {
-    // @ts-ignore
-    setDeals(prev => prev.map(d => {
-      // @ts-ignore
+  const approveDeal = (dealId: string, note = "") => {
+    setDeals(prev => prev.map((d: any) => {
       if (d.id !== dealId) return d;
-      // @ts-ignore
       const next  = getApprovalChainNext(d.awaitingApproval, d.amount);
       const entry = {
-        at:       TODAY,
-        by:       user_role?.name || "Unknown",
-        role:     user_role?.role || "",
-        action:   "Approved",
-        // @ts-ignore
-        from:     d.awaitingApproval,
-        to:       next,
-        note,
+        at: TODAY, by: user_role?.name || "Unknown", role: user_role?.role || "",
+        action: "Approved", from: d.awaitingApproval, to: next, note,
       };
-      return {
-        // @ts-ignore
-        ...d,
-        awaitingApproval:      next,
-        awaitingApprovalSince: next ? TODAY : null,
-        // @ts-ignore
-        auditLog:              [...(d.auditLog || []), entry],
-      };
-    }));
-    // @ts-ignore
-    const d = deals.find(x => x.id === dealId);
-    // @ts-ignore
+      return { ...d, awaitingApproval: next, awaitingApprovalSince: next ? TODAY : null, auditLog: [...(d.auditLog || []), entry] } as any;
+    }) as Deal[]);
+    const d = deals.find((x: Deal) => x.id === dealId) as any;
     const next = d ? getApprovalChainNext(d.awaitingApproval, d.amount) : null;
     showToast(next ? `Approved → forwarded to ${next}` : "Deal fully approved ✓");
-    // @ts-ignore
     if (d) pushNotification({ event: next ? "deal_approval_advanced" : "deal_fully_approved", client: d.clientCompany, amount: d.amount, approvedBy: user_role?.name, next, message: next ? `${d.clientCompany} approval forwarded to ${next}` : `${d.clientCompany} fully approved — ${fmtR(d.amount)}` });
   };
 
-  const rejectDeal = (dealId, note = "") => {
-    // @ts-ignore
-    setDeals(prev => prev.map(d => {
-      // @ts-ignore
+  const rejectDeal = (dealId: string, note = "") => {
+    setDeals(prev => prev.map((d: any) => {
       if (d.id !== dealId) return d;
       const entry = {
-        at:     TODAY,
-        by:     user_role?.name || "Unknown",
-        role:   user_role?.role || "",
-        action: "Rejected",
-        // @ts-ignore
-        from:   d.awaitingApproval,
-        to:     null,
-        note,
+        at: TODAY, by: user_role?.name || "Unknown", role: user_role?.role || "",
+        action: "Rejected", from: d.awaitingApproval, to: null, note,
       };
-      return {
-        // @ts-ignore
-        ...d,
-        awaitingApproval:      null,
-        awaitingApprovalSince: null,
-        outcome:               "Price Concern",
-        // @ts-ignore
-        auditLog:              [...(d.auditLog || []), entry],
-      };
-    }));
+      return { ...d, awaitingApproval: null, awaitingApprovalSince: null, outcome: "Price Concern", auditLog: [...(d.auditLog || []), entry] } as any;
+    }) as Deal[]);
     showToast("Deal rejected — rep notified");
   };
 
   // ── BADGE COUNTS ──
-  // @ts-ignore
   const rhEscBadge = deals.filter(d=>d.awaitingApproval==="NSH"&&daysSince(d.awaitingApprovalSince||TODAY)>=APPROVAL_SLA_DAYS).length||null;
   const escBadge   = allReqs.filter(r=>r.status==="Overdue").length||null;
-  // @ts-ignore
   const hrBadge    = absenceReports.filter(r=>r.markedAs==="Absent"&&r.status==="Sent to HR").length||null;
   const rhRegion   = user_role?.region;
-  // @ts-ignore
   const rhApprovalBadge = isRH?(targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length)||null:null;
-  // @ts-ignore
-  const rhTaskBadge    = isRH ? tasks.filter(t=>t.assignedToUserId===activeUser&&t.status!=="Done").length||null : null;
+  const rhTaskBadge    = isRH ? (tasks as any[]).filter((t: any)=>t.assignedToUserId===activeUser&&t.status!=="Done").length||null : null;
   const rhDashBadge    = isRH ? (()=>{
     const _myRepIdsDB = reps.filter(r=>r.region===rhRegion).map(r=>r.id);
     const notLoggedDB = _myRepIdsDB.filter(id=>!(meetings||[]).some(m=>m.repId===id&&m.date===TODAY)).length;
-    // @ts-ignore
     const pendingAppDB= (targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH").length+internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval").length);
     return (notLoggedDB+pendingAppDB)||null;
   })() : null;
@@ -2102,7 +1813,6 @@ export function CROApp({ user, onLogout }) {
   const getSidebarSections = () => {
     if (view === "ro-parser") return [];
 
-    // @ts-ignore
     const irBadge      = internalReqs.filter(r=>r.status!=="Done"&&r.raisedBy===activeUser).length||null;
     const irInboxDept  = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":isDigiOps?"Digital":null;
     const irInboxBadge = irInboxDept
@@ -2117,11 +1827,8 @@ export function CROApp({ user, onLogout }) {
         N("rep-dashboard",       "Dashboard",           "⊡"),
         N("my-plan",             "My Plan",             "◎"),
         N("revenue-log",         "Revenue Log",         "₹"),
-        // @ts-ignore
         N("internal-requests",   "Internal Requests",   "⬆", irBadge),
-        // @ts-ignore
         N("tasks",               "Tasks",               "✓", myRepTaskBadge),
-        // @ts-ignore
         N("hr",                  "HR Report",           "⊘", hrBadge),
       ]},
     ];
@@ -2129,7 +1836,6 @@ export function CROApp({ user, onLogout }) {
     // ── REGION HEAD ──
     if (isRH) return [
       { label:"MY TEAM", items:[
-        // @ts-ignore
         N("rh-dashboard",        "Dashboard",           "⬡", rhDashBadge),
         N("rh-team-plan",        "Team Meetings",       "◎"),
         N("warroom",             "War Room",            "⬡"),
@@ -2137,18 +1843,13 @@ export function CROApp({ user, onLogout }) {
       ]},
       { label:"MY WORK", items:[
         N("my-plan",             "My Plan",             "◎"),
-        // @ts-ignore
         N("target-approvals",    "Approvals",           "◎", rhApprovalBadge),
-        // @ts-ignore
         N("my-tasks",            "My Tasks",            "✓", rhTaskBadge),
-        // @ts-ignore
         N("internal-requests",   "Requests",            "⬆", irBadge),
       ]},
       { label:"REPORTS", items:[
-        // @ts-ignore
         N("rh-escalations",      "Escalations",         "⚠", rhEscBadge),
         N("rh-team-report",      "Team Report",         "◈"),
-        // @ts-ignore
         N("rh-my-hr",            "My HR",               "⊘", hrBadge),
       ]},
     ];
@@ -2157,19 +1858,14 @@ export function CROApp({ user, onLogout }) {
     if (isNSH) return [
       { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("nsh-rh-plan","RH's Plan","◎"), N("nsh-regional-plan","Rep's Plan","◎")] },
       { label:"COMMAND",     items:[
-        // @ts-ignore
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
-        // @ts-ignore
         N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending NSH").length||undefined),
         N("my-tasks","My Tasks","✓"),
-        // @ts-ignore
         N("escalations","Escalations","▲",escBadge),
-        // @ts-ignore
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        // @ts-ignore
         N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"REGION HEADS", items:[
@@ -2199,18 +1895,13 @@ export function CROApp({ user, onLogout }) {
         N("nsh-regional-plan","Rep's Plans","◎"),
       ]},
       { label:"COMMAND",     items:[
-        // @ts-ignore
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
-        // @ts-ignore
         N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending Strategy").length||undefined),
-        // @ts-ignore
         N("escalations","Escalations","▲",escBadge),
-        // @ts-ignore
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        // @ts-ignore
         N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"REGION HEADS", items:[
@@ -2243,18 +1934,13 @@ export function CROApp({ user, onLogout }) {
         N("nsh-regional-plan","Rep's Plans","◎"),
       ]},
       { label:"COMMAND",     items:[
-        // @ts-ignore
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
-        // @ts-ignore
         N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending CRO").length||undefined),
-        // @ts-ignore
         N("escalations","Escalations","▲",escBadge),
-        // @ts-ignore
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),
-        // @ts-ignore
         N("hr","My HR Report","⊘",hrBadge),
       ]},
       { label:"REGION HEADS", items:[
@@ -2280,8 +1966,7 @@ export function CROApp({ user, onLogout }) {
       { label:"DIGITAL",     items:[
         N("digi-deals","Digital Deals","◉"),
         N("digi-tv-deals","TV + Digital Deals","◉"),
-        // @ts-ignore
-        N("digi-tasks","My Tasks","✓",tasks.filter(t=>t.dept==="Digital"&&t.status!=="Done").length||undefined),
+        N("digi-tasks","My Tasks","✓",(tasks as any[]).filter((t: any)=>t.dept==="Digital"&&t.status!=="Done").length||undefined),
         N("digi-projects","Digital Projects","◈"),
       ]},
       { label:"PIPELINE",    items:[N("pipeline","Revenue Tracker","◈")] },
@@ -2300,7 +1985,6 @@ export function CROApp({ user, onLogout }) {
     // Fallback — should never reach here but prevents blank screen
     return [
       { label:"CRM", items:[
-        // @ts-ignore
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
@@ -2529,19 +2213,13 @@ export function CROApp({ user, onLogout }) {
             const todayM    = new Date().getMonth() + 1;
             const qIdx      = todayM >= 4 && todayM <= 6 ? 0 : todayM >= 7 && todayM <= 9 ? 1 : todayM >= 10 && todayM <= 12 ? 2 : 3;
             const currentQ  = QUARTERS[qIdx];
-            // @ts-ignore
             const qSubs     = targetSubs.filter(s => s.repId === myRepId && s.quarter === currentQ && s.status === "Approved");
-            // @ts-ignore
             const qTarget   = qSubs.reduce((s,x) => s + (x.totalTarget||0), 0);
-            // @ts-ignore
             const qAch      = revenueEntries.filter(e => e.repId === myRepId && e.quarter === currentQ).reduce((s,e) => s + (parseCurrency(e.amount||"0")||0), 0);
-            // @ts-ignore
             const myTargetSub  = targetSubs.find(s => s.repId === myRepId);
-            // @ts-ignore
             const targetApprovalStatus = !myTargetSub ? "none" : myTargetSub.status === "Approved" ? "approved" : "pending";
             return (
               <RepDashboard
-                // @ts-ignore
                 userRole={user_role}
                 activeUser={activeUser}
                 currentQ={currentQ}
@@ -2554,7 +2232,7 @@ export function CROApp({ user, onLogout }) {
                 qTarget={qTarget}
                 qAch={qAch}
                 targetApprovalStatus={targetApprovalStatus}
-                internalReqs={internalReqs}
+                internalReqs={internalReqs as any}
                 hrBadge={hrBadge}
                 stackedBar={stackedBar}
                 onLogRevenue={({clientName,amount,invoiceRef,date}) => {
@@ -2563,7 +2241,6 @@ export function CROApp({ user, onLogout }) {
                   const ikey = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
                   const id   = `re_d${Date.now()}`;
                   const entry = {id,repId:myRepId,clientCompany:clientName.trim(),zohoAccountId:"",dealType:"Linear TV",amount:amt,invoiceRef:invoiceRef.trim(),date:date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:""};
-                  // @ts-ignore
                   setRevenueEntries(p=>[entry,...p]);
                   revSvc.createRevenueEntry({
                     id, repId:myRepId, clientCompany:clientName.trim(), amount:amt,
@@ -2573,7 +2250,6 @@ export function CROApp({ user, onLogout }) {
                     showToast(`₹${(amt/100000).toFixed(1)}L logged for ${clientName.trim()} ✓`);
                   }).catch((err:any)=>{
                     showToast(err?.body?.error||"Failed to save revenue entry","err");
-                    // @ts-ignore
                     setRevenueEntries(p=>p.filter(e=>e.id!==id));
                   });
                 }}
@@ -2585,7 +2261,6 @@ export function CROApp({ user, onLogout }) {
           {/* ═══ MY PLAN ═══ */}
           {view==="my-plan" && (
             <MyPlan
-              // @ts-ignore
               userRole={user_role}
               activeUser={activeUser}
               loginProvider={loginProvider}
@@ -2596,7 +2271,7 @@ export function CROApp({ user, onLogout }) {
               isCRORole={isCRORole}
               isAdmin={isAdmin}
               isDigiOps={isDigiOps}
-              deals={deals}
+              deals={deals as any}
               filterQ={filterQ}
               adminConfig={adminConfig}
               reps={reps}
@@ -2738,8 +2413,7 @@ export function CROApp({ user, onLogout }) {
                       <div style={{fontSize:10,color:C.dim,marginTop:4}}>PDF · Excel · Images · CSV</div>
                     </div>
                     <input ref={roFileRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp" style={{display:"none"}}
-                      // @ts-ignore
-                      onChange={e=>setRoFiles(p=>[...p,...Array.from((e.target as HTMLInputElement).files)])} />
+                      onChange={e=>setRoFiles(p=>[...p,...Array.from((e.target as HTMLInputElement).files||[])])} />
                     {roFiles.length>0&&(
                       <div style={{marginTop:8}}>
                         {roFiles.map((f,i)=>(
@@ -2830,79 +2504,14 @@ export function CROApp({ user, onLogout }) {
       </div>
 
       {/* ASSIGN TASK MODAL */}
-      {taskModal && (() => {
-        const closeTaskModal = () => { setTaskModal(false); setSelfTaskMode(false); setTaskForm(BLANK_TASK_FORM); };
-        const modalTitle = selfTaskMode ? "Create Task for Myself" : isRep ? "Create Task" : "Assign Task";
-        // For reps in non-self mode: default assignee is themselves (can override)
-        const repDefaultUserId = (isRep && !selfTaskMode && !taskForm.assignedToUserId) ? (user_role?.id || "") : "";
-        return (
-        <div className="overlay" onClick={closeTaskModal}>
-          <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:500}}>
-            <div className="sans" style={{fontSize:16,fontWeight:700,marginBottom:4}}>{modalTitle}</div>
-            {selfTaskMode&&<div style={{fontSize:11,color:C.dim,marginBottom:14}}>This task will appear in your My Tasks</div>}
-            <div style={{display:"flex",flexDirection:"column",gap:10}}>
-              {/* Assignee — locked to self when selfTaskMode, or full picker otherwise */}
-              {selfTaskMode ? (
-                <div>
-                  <label>Assigned To</label>
-                  <input readOnly value={(user_role?.name||"Me")+" (You)"} style={{color:C.text,background:C.s2,cursor:"default"}} />
-                </div>
-              ) : (
-                <div><label>{isRep ? "Assign to (default: yourself)" : "Assign to *"}</label>
-                  <select value={taskForm.assignedToUserId || repDefaultUserId} onChange={e=>setTaskForm(p=>({...p,assignedToUserId:e.target.value}))}>
-                    <option value="">— Select person —</option>
-                    <optgroup label="Leadership &amp; Strategy">
-                      {USER_ROLES.filter(u=>["ADMIN","SALES HEAD","SALES STRATEGY","CRO","DIGI OPS"].includes(u.role)).map(u=>(
-                        <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name} · {u.role}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Region Heads">
-                      {USER_ROLES.filter(u=>u.role==="REGION HEAD").map(u=>(
-                        <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name}</option>
-                      ))}
-                    </optgroup>
-                    <optgroup label="Sales Reps">
-                      {USER_ROLES.filter(u=>u.role==="SALES REP").map(u=>(
-                        <option key={u.id} value={u.id}>{u.id===activeUser?"Me — "+u.name:u.name} · {u.region}</option>
-                      ))}
-                    </optgroup>
-                  </select>
-                </div>
-              )}
-              <div><label>Task *</label><input placeholder="What needs to happen?" value={taskForm.title} onChange={e=>setTaskForm(p=>({...p,title:e.target.value}))} /></div>
-              <div><label>Related Client (optional)</label><input placeholder="Which client is this about?" value={taskForm.clientCompany} onChange={e=>setTaskForm(p=>({...p,clientCompany:e.target.value}))} /></div>
-              <div><label>Details</label><textarea rows={3} placeholder="Add context or instructions..." value={taskForm.description} onChange={e=>setTaskForm(p=>({...p,description:e.target.value}))} style={{resize:"none"}} /></div>
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
-                <div><label>Priority</label>
-                  <select value={taskForm.priority} onChange={e=>setTaskForm(p=>({...p,priority:e.target.value}))}>
-                    {TASK_PRIORITIES.map(p=><option key={p}>{p}</option>)}
-                  </select></div>
-                <div><label>Due Date</label><input type="date" min="2020-01-01" max="2099-12-31" value={taskForm.dueDate} onChange={e=>setTaskForm(p=>({...p,dueDate:e.target.value}))} /></div>
-              </div>
-            </div>
-            <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
-              <button className="btn btn-ghost" onClick={closeTaskModal}>Cancel</button>
-              <button className="btn btn-primary" onClick={()=>{
-                const assignedUserId = taskForm.assignedToUserId || (isRep&&user_role?.id?user_role.id:"");
-                if(!assignedUserId||!taskForm.title){showToast("Task title and assignee required","err");return;}
-                const assignedUser = USER_ROLES.find(u=>u.id===assignedUserId);
-                const repId = assignedUser?.repId||null;
-                const taskDept = assignedUser?.role==="DIGI OPS"?"Digital"
-                  :assignedUser?.role==="SALES HEAD"?"NSH"
-                  :assignedUser?.role==="SALES STRATEGY"?"Sales Strategy"
-                  :assignedUser?.role==="CRO"?"CRO"
-                  :assignedUser?.role==="REGION HEAD"?"Region Head"
-                  :null;
-                // @ts-ignore
-                setTasks(p=>[{id:`t${Date.now()}`,...taskForm,dept:taskDept,assignedToUserId:assignedUserId,assignedToName:assignedUser?.name||"",assignedTo:repId,repId:repId,assignedBy:activeUser,assignedByName:user_role?.name||user.name,status:"Open",createdAt:TODAY},...p]);
-                closeTaskModal();
-                showToast(assignedUserId===activeUser?"✓ Task created for yourself":"Task assigned to "+(assignedUser?.name||""));
-              }}>{selfTaskMode?"Create Task":isRep?"Create Task":"Assign Task"}</button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      <AssignTaskModal
+        taskModal={taskModal} selfTaskMode={selfTaskMode}
+        taskForm={taskForm} setTaskForm={setTaskForm}
+        isRep={isRep} user_role={user_role} activeUser={activeUser} user={user}
+        BLANK_TASK_FORM={BLANK_TASK_FORM}
+        setTaskModal={setTaskModal} setSelfTaskMode={setSelfTaskMode}
+        setTasks={setTasks} showToast={showToast}
+      />
       {/* PLAN UPLOAD MODAL */}
       {planUploadOpen && !isRep && (
         <PlanUploadModal
@@ -2932,7 +2541,6 @@ export function CROApp({ user, onLogout }) {
           meeting={null}
           onClose={() => { setLogOpen(false); }}
           onSubmit={(_tp) => { setLogOpen(false); showToast("Touchpoint logged ✓"); }}
-          // @ts-ignore
           userRole={user_role}
           deals={deals}
           showToast={showToast}
@@ -2991,23 +2599,10 @@ export function CROApp({ user, onLogout }) {
 
       {/* NOTE MODAL */}
       {noteModal && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",zIndex:300,display:"flex",alignItems:"center",justifyContent:"center"}}
-          onClick={e=>{if(e.target===e.currentTarget)setNoteModal(null);}}>
-          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:24,width:380,boxShadow:"0 8px 32px rgba(0,0,0,.5)"}}>
-            <div className="sans" style={{fontWeight:700,fontSize:15,marginBottom:14}}>{noteModal.title}</div>
-            <textarea autoFocus rows={3} value={noteModalVal} onChange={e=>setNoteModalVal(e.target.value)}
-              // @ts-ignore
-              onKeyDown={e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();noteModal.onSubmit(noteModalVal||noteModal.placeholder);setNoteModal(null);}}}
-              style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace",resize:"none",outline:"none"}}
-              // @ts-ignore
-              placeholder={noteModal.placeholder}/>
-            <div style={{display:"flex",gap:8,marginTop:12,justifyContent:"flex-end"}}>
-              <button onClick={()=>setNoteModal(null)} style={{padding:"7px 16px",background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-              <button onClick={()=>{noteModal.onSubmit(noteModalVal||noteModal.placeholder);setNoteModal(null);}}
-                style={{padding:"7px 18px",background:C.accent,border:"none",color:"#fff",borderRadius:5,cursor:"pointer",fontSize:12,fontFamily:"'DM Mono',monospace",fontWeight:700}}>Submit</button>
-            </div>
-          </div>
-        </div>
+        <NoteModal
+          noteModal={noteModal}
+          onClose={() => setNoteModal(null)}
+        />
       )}
 
       {/* TOAST */}
