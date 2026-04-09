@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import ZohoSearchInput from "../components/ZohoSearchInput";
 import { getSessionToken, setSessionToken as setSessionTokenLib, authHeaders, apiFetch, ApiError } from "../services/api/_client";
@@ -37,7 +36,10 @@ import { TargetsView } from "../views/revenue/TargetsView";
 import { RevenueLogView } from "../views/revenue/RevenueLogView";
 import { RHView } from "../views/rh/RHView";
 import { NSHView } from "../views/nsh/NSHView";
+import { CROManagementView } from "../views/cro/CROManagementView";
 import { DigiOpsView } from "../views/digiops/DigiOpsView";
+// eslint-disable-next-line
+declare const window: Window & typeof globalThis & { XLSX?: any; };
 
 
 // Route all Claude API calls through the API server proxy (key stays server-side)
@@ -211,11 +213,11 @@ const uid = () => `${Date.now().toString(36)}-${Math.random().toString(36).slice
 const XLSX_CDN = "https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js";
 let _xlsxLoaded = false, _xlsxPromise = null;
 function loadXLSX() {
-  if (_xlsxLoaded) return Promise.resolve(window.XLSX);
+  if (_xlsxLoaded) return Promise.resolve((window as any).XLSX);
   if (_xlsxPromise) return _xlsxPromise;
   _xlsxPromise = new Promise((res, rej) => {
     const s = document.createElement("script"); s.src = XLSX_CDN;
-    s.onload = () => { _xlsxLoaded = true; res(window.XLSX); };
+    s.onload = () => { _xlsxLoaded = true; res((window as any).XLSX); };
     s.onerror = rej; document.head.appendChild(s);
   });
   return _xlsxPromise;
@@ -294,8 +296,8 @@ function roBuildDealName(r) {
 }
 function roMakeSheet(wb,name,rows){
   if(!rows||(Array.isArray(rows)&&!rows.length))return;
-  const ws=window.XLSX.utils.json_to_sheet(Array.isArray(rows)?rows:[rows]);
-  ws["!cols"]=Array(50).fill({wch:18}); window.XLSX.utils.book_append_sheet(wb,ws,name);
+  const ws=(window as any).XLSX.utils.json_to_sheet(Array.isArray(rows)?rows:[rows]);
+  ws["!cols"]=Array(50).fill({wch:18}); (window as any).XLSX.utils.book_append_sheet(wb,ws,name);
 }
 function roBuildExport(r) {
   const ch=roNormalizeChannel(r.channel||"");
@@ -534,11 +536,11 @@ async function roReadExcelAsText(file) {
     const reader=new FileReader();
     reader.onload=e=>{
       try{
-        const wb=XLSX.read(e.target.result,{type:"array",cellFormula:false,cellNF:false,raw:false});
+        const wb=XLSX.read((e.target as FileReader).result,{type:"array",cellFormula:false,cellNF:false,raw:false});
         let text="";
         wb.SheetNames.forEach(n=>{text+="\n=== Sheet: "+n+" ===\n";text+=XLSX.utils.sheet_to_csv(wb.Sheets[n]);});
         res(text);
-      }catch(err){rej(err);}
+      }catch(err: any) {rej(err);}
     };
     reader.readAsArrayBuffer(file);
   });
@@ -552,14 +554,14 @@ async function roBuildMessages(file) {
     return new Promise(res=>{
       const r=new FileReader();
       r.onload=()=>{
-        const b64=r.result.split(",")[1];
+        const b64=(r.result as string).split(",")[1];
         const block=file.type==="application/pdf"?{type:"document",source:{type:"base64",media_type:"application/pdf",data:b64}}:{type:"image",source:{type:"base64",media_type:file.type,data:b64}};
         res([{role:"user",content:[block,{type:"text",text:"Parse this TV Release Order. Extract ALL items. If multiple channels return JSON ARRAY one object per channel."}]}]);
       };
       r.readAsDataURL(file);
     });
   }
-  return new Promise(res=>{const r=new FileReader();r.onload=()=>res([{role:"user",content:"Parse this TV RO. If multiple channels return JSON array:\n\n"+r.result}]);r.readAsText(file);});
+  return new Promise(res=>{const r=new FileReader();r.onload=()=>res([{role:"user",content:"Parse this TV RO. If multiple channels return JSON array:\n\n"+(r.result as string)}]);r.readAsText(file);});
 }
 function roFriendlyError(err) {
   const m = err.message || "";
@@ -589,7 +591,7 @@ async function roCallAPI(msgs) {
     const data = await resp.json();
     if (data.error) throw new Error(data.error.message || JSON.stringify(data.error));
     return (data.content || []).map(b => b.text || "").join("").trim();
-  } catch(err) {
+  } catch(err: any) {
     if (err.name === "AbortError") throw new Error("timed out");
     throw err;
   } finally {
@@ -1028,10 +1030,10 @@ export function CROApp({ user, onLogout }) {
   }, [adminConfig?.inactivityDaysEscalate, adminConfig?.inactivityDaysRisk]);
 
   // RO PARSER STATE
-  const [roFiles, setRoFiles]         = useState([]);
+  const [roFiles, setRoFiles]         = useState<any[]>([]);
   const [roInputText, setRoInputText] = useState("");
   const [roLoading, setRoLoading]     = useState(false);
-  const [roResults, setRoResults]     = useState([]);
+  const [roResults, setRoResults]     = useState<any[]>([]);
   const [roActiveDoc, setRoActiveDoc] = useState(0);
   const [roError, setRoError]         = useState(null);
   const [roProgress, setRoProgress]   = useState("");
@@ -1233,7 +1235,7 @@ export function CROApp({ user, onLogout }) {
   const [planUploadOpen, setPlanUploadOpen]             = useState(false);
   const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,quarter:string,clients:{clientCompany:string,dealType:string,targetAmount:string}[]}>({repId:"",quarter:"Q1 FY26",clients:[{clientCompany:"",dealType:"Linear TV",targetAmount:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
-  const [editSubClients, setEditSubClients]             = useState([]);
+  const [editSubClients, setEditSubClients]             = useState<any[]>([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [editingRevId, setEditingRevId]                 = useState<string|null>(null);
   const [editRevData, setEditRevData]                   = useState<any>({});
@@ -1302,7 +1304,7 @@ export function CROApp({ user, onLogout }) {
         deals.forEach((result,di)=>{roNormalizeDoc(result);result._filename="Pasted Text"+(deals.length>1?` [${di+1}]`:"");parsed.push(result);});
       }
       setRoResults(parsed);setRoActiveDoc(0);
-    }catch(err){setRoError(roFriendlyError(err));}
+    }catch(err: any) {setRoError(roFriendlyError(err));}
     finally{setRoLoading(false);setRoProgress("");}
   };
 
@@ -2569,6 +2571,9 @@ export function CROApp({ user, onLogout }) {
             newClients={newClients} setNewClients={setNewClients}
             addClientModalOpen={addClientModalOpen} setAddClientModalOpen={setAddClientModalOpen}
             addClientForm={addClientForm} setAddClientForm={setAddClientForm}
+            rhRepDrill={rhRepDrill} setRhRepDrill={setRhRepDrill}
+            targetDrilldown={targetDrilldown} setTargetDrilldown={setTargetDrilldown}
+            nshRepDrill={nshRepDrill} setNshRepDrill={setNshRepDrill}
           />
           {/* ═══ REP DASHBOARD ═══ */}
           {view==="rep-dashboard" && isRep && (()=>{
@@ -2742,7 +2747,14 @@ export function CROApp({ user, onLogout }) {
             <SystemConfigView view={view} />
           )}
 
-          {/* ═══ STRATEGY + DIGI OPS VIEWS ═══ */}
+          {/* ═══ NSH/STRATEGY + CRO MANAGEMENT VIEWS ═══ */}
+          <CROManagementView
+            view={view} setView={setView} isMobile={isMobile}
+            nshRHDrill={nshRHDrill} setNshRHDrill={setNshRHDrill}
+            nshRegion={nshRegion} setNshRegion={setNshRegion}
+            targetDrilldown={targetDrilldown} setTargetDrilldown={setTargetDrilldown}
+            nshRepDrill={nshRepDrill} setNshRepDrill={setNshRepDrill}
+          />
           <NSHView
             view={view} setView={setView} isMobile={isMobile}
             nshRHDrill={nshRHDrill} setNshRHDrill={setNshRHDrill}
@@ -2774,7 +2786,7 @@ export function CROApp({ user, onLogout }) {
                       <div style={{fontSize:10,color:C.dim,marginTop:4}}>PDF · Excel · Images · CSV</div>
                     </div>
                     <input ref={roFileRef} type="file" multiple accept=".pdf,.xlsx,.xls,.csv,.png,.jpg,.jpeg,.webp" style={{display:"none"}}
-                      onChange={e=>setRoFiles(p=>[...p,...Array.from(e.target.files)])} />
+                      onChange={e=>setRoFiles(p=>[...p,...Array.from((e.target as HTMLInputElement).files)])} />
                     {roFiles.length>0&&(
                       <div style={{marginTop:8}}>
                         {roFiles.map((f,i)=>(
