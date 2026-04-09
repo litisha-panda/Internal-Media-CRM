@@ -137,7 +137,7 @@ export function AdminView({
                         await adminSvc.approveUser(pu._apiId, role, region);
                         if (role === "SALES REP") {
                           setReps((prev: Rep[]) => {
-                            const nextId = prev.length > 0 ? Math.max(...prev.map((r: Rep)=>r.id)) + 1 : 1;
+                            const nextId = prev.length > 0 ? Math.max(...prev.map((r: Rep)=>Number(r.id))) + 1 : 1;
                             return [...prev, {id:nextId, name:pu.name, region, role:"Sales Executive", target:0}];
                           });
                         }

@@ -282,8 +282,8 @@ export function TargetsView({
                 }
                 // Rep tiles view
                 const regionT=visibleDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-                const regionRepIds=new Set(myReps.map(r=>r.id));
-                const regionC=revenueEntries.filter(e=>regionRepIds.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                const regionRepIds=new Set(myReps.map(r=>String(r.id)));
+                const regionC=revenueEntries.filter(e=>regionRepIds.has(String(e.repId))&&qMatch(e.quarter||"")).reduce((s,e)=>s+(e.amount||0),0);
                 const regionPct=regionT>0?Math.round((regionC/regionT)*100):0;
                 const rsc=regionPct>=100?C.green:regionPct>=60?C.accent:C.red;
                 return (

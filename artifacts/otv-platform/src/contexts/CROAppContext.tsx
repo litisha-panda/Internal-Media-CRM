@@ -1,17 +1,18 @@
 import React, { createContext, useContext } from "react";
 
 // ── Minimal entity shapes ─────────────────────────────────────────────────────
-// Full field modeling is deferred to 12B when the provider is wired.
+// repId is always string — API/PostgreSQL returns numeric IDs as strings over JSON.
+// Legacy numeric comparisons use String(x) === String(y) or Number(x) === Number(y).
 
-export type Deal           = Record<string, any> & { id: string; repId: number };
-export type Meeting        = Record<string, any> & { id: string; repId: number };
+export type Deal           = Record<string, any> & { id: string };
+export type Meeting        = Record<string, any> & { id: string };
 export type Task_          = Record<string, any> & { id: string };
-export type TargetSub      = Record<string, any> & { id: string; repId: number };
-export type RevenueEntry   = Record<string, any> & { id: string; repId: number };
-export type ClientAccount  = Record<string, any> & { id: string; repId: number };
-export type Touchpoint     = Record<string, any> & { id: string; repId: number };
+export type TargetSub      = Record<string, any> & { id: string };
+export type RevenueEntry   = Record<string, any> & { id: string };
+export type ClientAccount  = Record<string, any> & { id: string };
+export type Touchpoint     = Record<string, any> & { id: string };
 export type InternalReq    = Record<string, any> & { id: string };
-export type Rep            = Record<string, any> & { id: number; name: string };
+export type Rep            = Record<string, any> & { id: string | number; name: string };
 export type UserRole       = Record<string, any> & { id: string; name: string; role: string };
 export type Property       = Record<string, any> & { id: string };
 export type MasterClient   = { id: string; company: string; industry: string; contact: string; phone: string; email: string; region: string };
@@ -67,7 +68,7 @@ export interface CROAppContextValue {
   isNSHDashboard: boolean;
   canLogMeeting: boolean;
   canGrantException: boolean;
-  rhRegion: string | null;
+  rhRegion: string | null | undefined;
   activeUser: string;
   setActiveUser: React.Dispatch<React.SetStateAction<string>>;
 
@@ -99,11 +100,11 @@ export interface CROAppContextValue {
   lColor: (l: string) => string;
   mapLegacyOutcome: (o: string) => string;
   deptToUserId: (dept: string) => string;
-  getAchieved: (repId?: number, fy?: string) => number;
-  getCommitted: (repId?: number) => number;
-  getInPlay: (repId?: number) => number;
-  getShortfall: (target: number, repId?: number) => number;
-  getAnnualTarget: (repId?: number) => { amount: number };
+  getAchieved: (repId?: string | null, fy?: string) => number;
+  getCommitted: (repId?: string | null) => number;
+  getInPlay: (repId?: string | null) => number;
+  getShortfall: (target: number, repId?: string | null) => number;
+  getAnnualTarget: (repId?: string | null) => { amount: number };
   stackedBar: (...args: any[]) => React.ReactNode;
 
   // Shared handlers

@@ -55,7 +55,7 @@ export function RHView({
               </div>
               {(()=>{
                 const myRegion = user_role?.region;
-                const myRepIds = reps.filter(r=>r.region===myRegion).map(r=>r.id);
+                const myRepIds = reps.filter(r=>r.region===myRegion).map(r=>String(r.id));
 
                 // 1. IRs escalated to RH via ESC_CHAIN (escDept="Region Head" or dept=Region Head + past SLA)
                 const escalatedIRs = internalReqs.filter(r=>
@@ -71,21 +71,21 @@ export function RHView({
 
                 // 3. Stalled deals in region (no contact 7+ days, not closed)
                 const stalledDeals = visibleDeals.filter(d=>
-                  myRepIds.includes(d.repId) &&
+                  myRepIds.includes(String(d.repId)) &&
                   !["Lost","RO Received","Mail Confirmed"].includes(d.outcome||"") &&
                   daysSince(d.lastContact||d.createdAt||TODAY) >= 7
                 );
 
                 // 4. Overdue rep tasks in region (broader — for rep management)
                 const overdueRepTasks = tasks.filter(t=>
-                  myRepIds.includes(t.repId) &&
+                  myRepIds.includes(String(t.repId)) &&
                   t.dueDate < TODAY && t.status !== "Done" &&
                   t.assignedToUserId !== activeUser // exclude RH's own tasks (shown in #2)
                 );
 
                 // Historical: deals awaiting approval past SLA
                 const blockedDeals = visibleDeals.filter(d=>
-                  myRepIds.includes(d.repId) &&
+                  myRepIds.includes(String(d.repId)) &&
                   d.awaitingApproval && d.awaitingApprovalSince &&
                   daysSince(d.awaitingApprovalSince) >= APPROVAL_SLA_DAYS &&
                   !["Mail Confirmed","RO Received","Not Interested"].includes(d.outcome||"")
@@ -264,17 +264,17 @@ export function RHView({
           {/* ═══ RH DASHBOARD ═══ */}
           {view==="rh-dashboard" && isRH && (()=>{
             const myReps   = USER_ROLES.filter(u=>u.role==="SALES REP"&&u.region===rhRegion);
-            const myRepIds2= myReps.map(u=>u.repId);
-            const regionTarget   = targetSubs.filter(s=>myRepIds2.includes(s.repId)&&s.status==="Approved").reduce((s,t)=>s+t.totalTarget,0);
-            const regionAchieved = revenueEntries.filter(e=>myRepIds2.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+            const myRepIds2= myReps.map(u=>String(u.repId));
+            const regionTarget   = targetSubs.filter(s=>myRepIds2.includes(String(s.repId))&&s.status==="Approved").reduce((s,t)=>s+t.totalTarget,0);
+            const regionAchieved = revenueEntries.filter(e=>myRepIds2.includes(String(e.repId))&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const regionShortfall= Math.max(0,regionTarget-regionAchieved);
-            const regionPipeline = visibleDeals.filter(d=>myRepIds2.includes(d.repId)&&!["Lost","RO Received"].includes(d.outcome||"")).reduce((s,d)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
+            const regionPipeline = visibleDeals.filter(d=>myRepIds2.includes(String(d.repId))&&!["Lost","RO Received"].includes(d.outcome||"")).reduce((s,d)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
             const notLoggedToday  = myReps.filter(u=>!(meetings||[]).some(m=>m.repId===u.repId&&m.date===TODAY));
             const notPlannedTmrw  = myReps.filter(u=>!(weeklyPlans||[]).some(p=>p.repId===u.repId&&p.date===TOMORROW));
             const pendingApprovals= targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH");
             const pendingIRs      = internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval");
-            const overdueActions  = tasks.filter(t=>myRepIds2.includes(t.repId)&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY);
-            const stalledDeals    = visibleDeals.filter(d=>myRepIds2.includes(d.repId)&&!["Lost","RO Received"].includes(d.outcome||"")&&daysSince(d.lastContact||d.createdAt||TODAY)>=7);
+            const overdueActions  = tasks.filter(t=>myRepIds2.includes(String(t.repId))&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY);
+            const stalledDeals    = visibleDeals.filter(d=>myRepIds2.includes(String(d.repId))&&!["Lost","RO Received"].includes(d.outcome||"")&&daysSince(d.lastContact||d.createdAt||TODAY)>=7);
             const myEscalations   = internalReqs.filter(r=>r.dept==="Region Head"&&r.status!=="Done"&&r.status!=="Withdrawn"&&USER_ROLES.find(u=>u.id===r.raisedBy)?.region===rhRegion);
             const flags = [
               {label:"Reps not logged today",         items:notLoggedToday,    color:C.red,    icon:"⚠",
@@ -400,12 +400,12 @@ export function RHView({
           {/* ═══ RH TEAM PLAN ═══ */}
           {view==="rh-team-plan" && isRH && (()=>{
             const myUserReps = USER_ROLES.filter(u=>u.role==="SALES REP"&&u.region===rhRegion);
-            const myRepIds   = myUserReps.map(u=>u.repId);
+            const myRepIds   = myUserReps.map(u=>String(u.repId));
             const tf = rhTeamFilter;
             // Build filtered plan list
             const dateRangeStart = tf.dateRange==="today"?TODAY:tf.dateRange==="tomorrow"?TOMORROW:TODAY;
             const dateRangeEnd   = tf.dateRange==="today"?TODAY:tf.dateRange==="tomorrow"?TOMORROW:tf.dateRange==="week"?SUNDAY:tf.dateRange==="month"?TODAY.slice(0,7)+"-31":"9999-12-31";
-            const allTeamPlans = (weeklyPlans||[]).filter(p=>myRepIds.includes(p.repId));
+            const allTeamPlans = (weeklyPlans||[]).filter(p=>myRepIds.includes(String(p.repId)));
             const filtered = allTeamPlans.filter(p=>{
               if (tf.rep&&p.repId!==tf.rep) return false;
               if (tf.dateRange==="today-tomorrow"&&p.date!==TODAY&&p.date!==TOMORROW) return false;
@@ -590,8 +590,8 @@ export function RHView({
 
           {/* ═══ MY TASKS (Region Head / NSH) ═══ */}
           {view==="my-tasks" && (isRH||isNSH) && (()=>{
-            const myRepIds = isRH ? reps.filter(r=>r.region===rhRegion).map(r=>r.id) : reps.map(r=>r.id);
-            const myActionTasks = tasks.filter(t=>t.dept==="NSH"&&t.status!=="Done"&&myRepIds.includes(t.repId));
+            const myRepIds = isRH ? reps.filter(r=>r.region===rhRegion).map(r=>String(r.id)) : reps.map(r=>r.id);
+            const myActionTasks = tasks.filter(t=>t.dept==="NSH"&&t.status!=="Done"&&myRepIds.includes(String(t.repId)));
             const myAssignedTasks = tasks.filter(t=>t.assignedToUserId===activeUser);
             const allMine = [...myAssignedTasks, ...myActionTasks.filter(t=>!myAssignedTasks.find(x=>x.id===t.id))];
             const openCount=allMine.filter(t=>t.status!=="Done").length;
@@ -717,8 +717,8 @@ export function RHView({
           {view==="rh-team-targets" && isRH && view==="rh-team-targets" && (()=>{
             const myReps=reps.filter(r=>r.region===rhRegion);
             const rhT=visibleDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-            const rhRepIds_tm=[...new Set(myReps.map(r=>r.id))];
-            const rhC=revenueEntries.filter(e=>rhRepIds_tm.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+            const rhRepIds_tm=[...new Set(myReps.map(r=>String(r.id)))];
+            const rhC=revenueEntries.filter(e=>rhRepIds_tm.includes(String(e.repId))&&qMatch(e.quarter||"")).reduce((s,e)=>s+(e.amount||0),0);
             const rhPct=rhT>0?Math.round((rhC/rhT)*100):0;
             const sc=rhPct>=80?C.green:rhPct>=50?C.accent:C.red;
             return (
@@ -797,7 +797,7 @@ export function RHView({
           {/* ═══ RH TEAM TASKS ═══ */}
           {view==="rh-team-tasks" && isRH && (()=>{
             const myRepIds=reps.filter(r=>r.region===rhRegion).map(r=>r.id);
-            const teamTasks=tasks.filter(t=>myRepIds.includes(t.repId));
+            const teamTasks=tasks.filter(t=>myRepIds.includes(String(t.repId)));
             return (
               <div className="fin">
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>

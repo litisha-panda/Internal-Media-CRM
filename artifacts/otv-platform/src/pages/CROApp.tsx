@@ -13,7 +13,7 @@ import { useMeetings } from "../hooks/useMeetings";
 import { useTouchpoints } from "../hooks/useTouchpoints";
 import { useTasks } from "../hooks/useTasks";
 // Context scaffold — provider wired in Task 12B
-import { CROAppProvider } from "../contexts/CROAppContext";
+import { CROAppProvider, CROAppContextValue } from "../contexts/CROAppContext";
 import { useAttendance } from "../hooks/useAttendance";
 import { usePersistedState } from "../hooks/usePersistedState";
 import { useApiEntityState } from "../hooks/useApiEntityState";
@@ -2001,7 +2001,7 @@ export function CROApp({ user, onLogout }) {
   const syncError  = tasksError || tpError || irError || targetError || revError || caError;
 
   // ── CROApp context value — provided to all extracted views ──────────────────
-  const ctxValue = {
+  const ctxValue: CROAppContextValue = {
     user,
     deals, setDeals,
     meetings, setMeetings,
@@ -2057,7 +2057,7 @@ export function CROApp({ user, onLogout }) {
       onLogout={onLogout}
     />
   ) : (
-    <CROAppProvider value={ctxValue as any}>
+    <CROAppProvider value={ctxValue}>
     <div style={{fontFamily:"'DM Mono','JetBrains Mono',monospace",background:C.bg,color:C.text,minHeight:"100vh",display:"flex",flexDirection:"column",fontSize:13}}>
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@300;400;500&family=DM+Sans:wght@400;500;600;700&display=swap');

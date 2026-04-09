@@ -253,11 +253,11 @@ export function NSHView({
 
                 {displayRegions.map(region=>{
                   const rReps = reps.filter(r=>r.region===region);
-                  const rRepIds = rReps.map(r=>r.id);
+                  const rRepIds = rReps.map(r=>String(r.id));
                   // Get today's deals with weeklyPlans logged
                   const regionDeals = deals.filter(d=>d.region===region&&qMatch(d.quarter)&&d.outcome!=="Not Interested");
                   const todayMtgs   = meetings.filter(m=>reps.find(r=>r.id===m.repId&&r.region===region)&&m.date===TODAY);
-                  const todayPlanned= (weeklyPlans||[]).filter(p=>rRepIds.includes(p.repId)&&p.date===TODAY);
+                  const todayPlanned= (weeklyPlans||[]).filter(p=>rRepIds.includes(String(p.repId))&&p.date===TODAY);
                   const tmrwPlanned = (weeklyPlans||[]).filter(p=>rRepIds.includes(p.repId)&&p.date===TOMORROW);
                   return (
                     <div key={region} style={{marginBottom:18}}>
@@ -265,7 +265,7 @@ export function NSHView({
                         <span className="sans" style={{fontWeight:700,fontSize:13}}>{region}</span>
                         <span style={{fontSize:10,color:C.dim}}>{rReps.length} reps · {todayPlanned.length} today · {tmrwPlanned.length} tomorrow</span>
                         <span style={{marginLeft:"auto",fontSize:11,color:C.green,fontWeight:600}}>
-                          {fmtR(revenueEntries.filter(e=>rRepIds.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0))} closed
+                          {fmtR(revenueEntries.filter(e=>rRepIds.includes(String(e.repId))&&qMatch(e.quarter||"")).reduce((s,e)=>s+(e.amount||0),0))} closed
                         </span>
                       </div>
 

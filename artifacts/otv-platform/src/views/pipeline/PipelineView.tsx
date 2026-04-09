@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from "react";
-import { useCROAppContext } from "../../contexts/CROAppContext";
+import { useCROAppContext, Deal } from "../../contexts/CROAppContext";
 import {
   USER_ROLES, APPROVAL_SLA_DAYS, APPROVAL_TARGETS, TARGET_APPROVAL_CHAIN,
   MEETING_STATUS, MEETING_TYPES, CLIENT_OR_AGENCY, TASK_PRIORITIES, TASK_STATUSES,
@@ -633,7 +633,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: any) 
                         const val = "1000000";
                         // TODO: replace with Add Deal modal
                         const newDeal = {...BLANK_DEAL,clientCompany:client,dealType:"Media Solutions",outcome:"Needs Callback",amount:parseCurrency(val||"0"),targetAmount:parseCurrency(val||"0"),quarter:entryQ,repId:user_role?.repId||"",lastContact:TODAY,notes:pkg};
-                        setDeals(p=>[{id:`d${Date.now()}`,...newDeal,repId:parseInt(newDeal.repId)||5,region:user_role?.region||"National",reqs:[]},...p]);
+                        setDeals(p=>[{id:`d${Date.now()}`,...newDeal,repId:String(parseInt(newDeal.repId)||5),region:user_role?.region||"National",reqs:[]},...p] as Deal[]);
                         showToast("Brand Solutions deal created ✓");
                       }}>+ New Package</button>}
                     </div>

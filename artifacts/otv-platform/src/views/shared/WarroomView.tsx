@@ -50,23 +50,23 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
           {view==="warroom" && isRH && (()=>{
             const rhRegion = user_role?.region;
             const myReps   = reps.filter(r => r.region === rhRegion);
-            const myRepIds = myReps.map(r => r.id);
+            const myRepIds = myReps.map(r => String(r.id));
             const rhDeals  = visibleDeals;
 
             // ── MY OWN ACTIONABLES (directed to Region Head) ──
             const myApprovals = rhDeals.filter(d =>
-              d.awaitingApproval === "NSH" && d.awaitingApprovalSince && myRepIds.includes(d.repId)
+              d.awaitingApproval === "NSH" && d.awaitingApprovalSince && myRepIds.includes(String(d.repId))
             );
             const myTasks_rh = tasks.filter(t =>
-              t.dept === "NSH" && t.status !== "Done" && myRepIds.includes(t.repId)
+              t.dept === "NSH" && t.status !== "Done" && myRepIds.includes(String(t.repId))
             );
             const myOverdueTasks = tasks.filter(t =>
-              t.assignedTo && myRepIds.includes(t.repId) && t.dueDate < TODAY && t.status !== "Done"
+              t.assignedTo && myRepIds.includes(String(t.repId)) && t.dueDate < TODAY && t.status !== "Done"
             );
 
             // ── TEAM NUMBERS ──
             const rhT  = rhDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-            const rhC  = revenueEntries.filter(e=>myRepIds.includes(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+            const rhC  = revenueEntries.filter(e=>myRepIds.includes(String(e.repId))&&qMatch(e.quarter||"")).reduce((s,e)=>s+(e.amount||0),0);
             const rhP  = rhDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
             const rhPct= rhT>0?Math.round((rhC/rhT)*100):0;
             // Part 4+9: escalation clock = lastDealMeetingDate, tiered at 7/10/14 days
@@ -79,7 +79,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
             const thirtyDaysAgo = new Date(Date.now()-30*864e5).toISOString().slice(0,10);
             const trigger2A: {repName:string,clientCompany:string,count:number,stageNow:string}[] = [];
             {
-              const dealMeetings30 = touchpoints.filter(t=>t.touchpointType==="Deal Meeting"&&(t.date||"")>=thirtyDaysAgo&&myRepIds.includes(t.repId as any));
+              const dealMeetings30 = touchpoints.filter(t=>t.touchpointType==="Deal Meeting"&&(t.date||"")>=thirtyDaysAgo&&myRepIds.includes(String(t.repId)));
               const byDealId: Record<string,typeof touchpoints> = {};
               dealMeetings30.forEach(t=>{if(t.dealId){if(!byDealId[t.dealId])byDealId[t.dealId]=[];byDealId[t.dealId].push(t);}});
               Object.entries(byDealId).forEach(([dealId,tps])=>{
@@ -98,7 +98,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
 
             // Part 4 — Trigger 2B: <15 touchpoints in current calendar month for any rep in region
             const monthStart = TODAY.slice(0,7)+"-01";
-            const trigger2B: {repName:string,count:number,repId:number}[] = [];
+            const trigger2B: {repName:string,count:number,repId:string|number}[] = [];
             {
               myReps.forEach(r=>{
                 const monthTPs=touchpoints.filter(t=>t.repId===r.id&&(t.date||"")>=monthStart).length;
@@ -161,7 +161,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   const regionSRs = internalReqs.filter(r=>
                     r.type==="Support Request" &&
                     !["Done","Withdrawn","Rejected"].includes(r.status||"") &&
-                    myRepIds.includes(r.repId as any)
+                    myRepIds.includes(String(r.repId))
                   );
                   if (!regionSRs.length) return null;
                   return (
@@ -457,8 +457,8 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
 
                 {/* ── TEAM PLAN: TODAY + TOMORROW ── */}
                 {(()=>{
-                  const rhTodayPlans = (weeklyPlans||[]).filter(p=>myRepIds.includes(p.repId)&&p.date===TODAY);
-                  const rhTmrwPlans  = (weeklyPlans||[]).filter(p=>myRepIds.includes(p.repId)&&p.date===TOMORROW);
+                  const rhTodayPlans = (weeklyPlans||[]).filter(p=>myRepIds.includes(String(p.repId))&&p.date===TODAY);
+                  const rhTmrwPlans  = (weeklyPlans||[]).filter(p=>myRepIds.includes(String(p.repId))&&p.date===TOMORROW);
                   if(!rhTodayPlans.length&&!rhTmrwPlans.length) return null;
                   const renderPlanRow = (p) => {
                     const rep=reps.find(r=>r.id===p.repId);

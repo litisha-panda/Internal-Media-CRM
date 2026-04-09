@@ -49,7 +49,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
   const [zohoSearchQ, setZohoSearchQ] = useState("");
   const [importTab, setImportTab] = useState("targets");
   const [dmTab, setDmTab] = useState<"reps" | "clients" | "bulk">("reps");
-  const [repEditId, setRepEditId] = useState<number | null>(null);
+  const [repEditId, setRepEditId] = useState<string | number | null>(null);
   const [repEditForm, setRepEditForm] = useState<Partial<Rep>>({});
   const [repAddMode, setRepAddMode] = useState(false);
   const [repAddForm, setRepAddForm] = useState({ name: "", region: "North", role: "Sales Executive", target: 10000000, active: true });
@@ -443,7 +443,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
             };
             const addRep = () => {
               if (!repAddForm.name.trim()){showToast("Name required","err");return;}
-              const newId = Math.max(0,...reps.map((r: Rep)=>r.id))+1;
+              const newId = Math.max(0,...reps.map((r: Rep)=>Number(r.id)))+1;
               setReps((p: Rep[])=>[...p,{id:newId,...repAddForm,active:true}]);
               setRepAddMode(false);
               setRepAddForm({name:"",region:"North",role:"Sales Executive",target:10000000,active:true});
@@ -772,7 +772,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                 const repLookup = (r: string) => reps.find((rep: Rep)=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
                 const entries = rows.map((row: Record<string,unknown>,i: number)=>{
                   const rep = repLookup(String(row["Rep Name"]||""));
-                  return {id:`re_imp_${Date.now()}_${i}`,repId:(rep?.id??null) as number,clientCompany:String(row["Client Company"]||""),dealType:String(row["Deal Type"]||"Linear TV"),amount:parseCur(row["Amount"]),invoiceRef:String(row["Invoice Ref"]||""),date:String(row["Date"]||TODAY),quarter:String(row["Quarter"]||"Q1 FY26"),notes:String(row["Notes"]||"")} as RevenueEntry;
+                  return {id:`re_imp_${Date.now()}_${i}`,repId:rep?.id!=null?String(rep.id):null,clientCompany:String(row["Client Company"]||""),dealType:String(row["Deal Type"]||"Linear TV"),amount:parseCur(row["Amount"]),invoiceRef:String(row["Invoice Ref"]||""),date:String(row["Date"]||TODAY),quarter:String(row["Quarter"]||"Q1 FY26"),notes:String(row["Notes"]||"")} as unknown as RevenueEntry;
                 });
                 setRevenueEntries((p: RevenueEntry[])=>[...p,...entries]);
                 showToast(`✓ ${entries.length} revenue entries imported`);
