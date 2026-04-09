@@ -9,9 +9,9 @@ import {
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 
-export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWarroomClient, rhWarroomRep, setRhWarroomRep }) {
+export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWarroomClient, rhWarroomRep, setRhWarroomRep }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -37,6 +37,13 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
     DEAL_STAGES, STAGE_PROB, DEAL_TYPES, REGIONS, ALL_ROLES, QUARTERS, C, TODAY, TOMORROW, CURRENT_FY,
   } = useCROAppContext();
   const visibleRepIdsSet = new Set(visibleDeals.map(d => d.repId));
+  const canApprove = (deal: any) => { const wa = deal.awaitingApproval; if (!wa) return false; if (isAdmin) return true; if (wa==="NSH" && isNSH) return true; if (wa==="CXO" && (isAdmin||user_role?.role==="CXO"||user_role?.role==="CRO")) return true; if (wa==="RH" && isRH && deal.region===rhRegion) return true; if (wa==="Sales Strategy" && isStrategy) return true; if (wa==="Digital" && isDigiOps) return true; return false; };
+  const activeDeals2  = visibleDeals.filter(d=>d.outcome!=="Not Interested");
+  const weightedPipe2 = activeDeals2.filter(d=>d.outcome!=="Mail Confirmed").reduce((s:any,d:any)=>s+((d.amount||0)*(STAGE_PROB[d.outcome]||0)/100),0);
+  const totalTarget  = visibleDeals.reduce((s:any,d:any)=>s+(d.targetAmount||0),0);
+  const forecast     = closedRevenue + weightedPipe2;
+  const fcastPct     = totalTarget>0?Math.round((forecast/totalTarget)*100):0;
+  const gap          = Math.max(0,totalTarget-forecast);
   return (
     <>
           {/* ═══ RH WAR ROOM (Region Head) ═══ */}
@@ -244,7 +251,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                     const c=revenueEntries.filter(e=>e.repId===r.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                     return {name:r.name,pct:t>0?Math.round((c/t)*100):null};
                   }).filter(r=>r.pct!==null);
-                  const laggingReps  = repPcts.filter(r=>r.pct<40);
+                  const laggingReps  = repPcts.filter((r:any)=>r.pct<40);
                   const pendingApps  = targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH");
                   const closingSoon  = rhDeals.filter(d=>["Very Interested","Interested – Needs Revision"].includes(d.outcome)&&d.nextStepDate&&d.nextStepDate<=TOMORROW);
 
@@ -523,7 +530,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                 const pct = d.targetAmount>0?Math.round((achieved/d.targetAmount)*100):0;
                 return {...d, pct};
               })
-              .sort((a,b)=> (b.targetAmount - a.targetAmount) || (a.pct - b.pct)) // biggest target first, then lowest achieved
+              .sort((a:any,b:any)=> (b.targetAmount - a.targetAmount) || (a.pct - b.pct)) // biggest target first, then lowest achieved
               .slice(0,8);
 
             return (
@@ -823,7 +830,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                     const c=revenueEntries.filter(e=>e.repId===r.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                     return {name:r.name,region:r.region,pct:t>0?Math.round((c/t)*100):null};
                   }).filter(r=>r.pct!==null);
-                  const laggingReps = repPcts.filter(r=>r.pct<30);
+                  const laggingReps = repPcts.filter((r:any)=>r.pct<30);
 
                   // Forecast vs target gap
                   const fcastGapSevere = gap > totT * 0.3; // >30% gap to forecast

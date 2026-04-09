@@ -10,9 +10,9 @@ import {
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 import * as revSvc from "../../services/api/revenue";
 
-export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setRevForm, editingRevId, setEditingRevId, editRevData, setEditRevData }) {
+export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setRevForm, editingRevId, setEditingRevId, editRevData, setEditRevData }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -130,7 +130,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                             <select value={rf.clientCompany} onChange={e=>{
                               const sel = e.target.value;
                               // Auto-populate from clientAccount (the canonical source)
-                              const matchAcct = myApprovedAccts.find(a=>a.clientName===sel);
+                              const matchAcct = myApprovedAccts.find((a:any)=>a.clientName===sel) as any;
                               setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",zohoAccountId:matchAcct?.zohoAccountId||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
                             }}
                               style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.zohoAccountId?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>

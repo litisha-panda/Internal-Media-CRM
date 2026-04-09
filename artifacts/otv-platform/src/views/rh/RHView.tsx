@@ -4,7 +4,7 @@ import {
   USER_ROLES, APPROVAL_SLA_DAYS, APPROVAL_TARGETS, TARGET_APPROVAL_CHAIN,
   MEETING_STATUS, MEETING_TYPES, CLIENT_OR_AGENCY, TASK_PRIORITIES, TASK_STATUSES,
   SLA, REQ_STATUS, DEPARTMENTS, PLAN_STATUS, PLAN_DEADLINE, HR_EMAIL,
-  ALL_CHANNELS, D1, D3, D7, D14, THIS_WEEK_START, IP_CATALOG, PITCH_TYPES,
+  ALL_CHANNELS, D1, D3, D7, D14, THIS_WEEK_START, MONDAY, SUNDAY, IP_CATALOG, PITCH_TYPES,
   getToday, getTomorrow,
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
@@ -17,9 +17,9 @@ export function RHView({
   rhWarroomClient, setRhWarroomClient,
   rhWarroomRep, setRhWarroomRep,
   rhTeamReportRep, setRhTeamReportRep,
-}) {
+}: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -856,7 +856,7 @@ export function RHView({
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>{["Rep","Date","Status","Exception","Notes"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{teamAbs.map(r=>(
-                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}  onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"9px 12px",fontWeight:600}}>{r.repName}</td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{r.date}</td>
                           <td style={{padding:"9px 12px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 7px",borderRadius:5,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>

@@ -19,9 +19,12 @@ export function TargetsView({
   newClients, setNewClients,
   addClientModalOpen, setAddClientModalOpen,
   addClientForm, setAddClientForm,
-}) {
+  rhRepDrill, setRhRepDrill,
+  targetDrilldown, setTargetDrilldown,
+  nshRepDrill, setNshRepDrill,
+}: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -61,7 +64,7 @@ export function TargetsView({
             const sc = rhPct>=80?C.green:rhPct>=50?C.accent:C.red;
 
             // All clients sorted by gap (biggest gap = least achieved vs target = top of list)
-            const clientRows = rhDeals
+            const clientRows: any[] = (rhDeals as any[])
               .filter(d=>d.outcome!=="Not Interested")
               .map(d=>{
                 const ach = revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);

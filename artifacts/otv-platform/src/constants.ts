@@ -51,6 +51,8 @@ export function getWeekStart(dateStr: string): string {
   return d.toISOString().split("T")[0];
 }
 export const THIS_WEEK_START = getWeekStart(TODAY);
+export const MONDAY = THIS_WEEK_START;
+export const SUNDAY = (() => { const d = new Date(MONDAY); d.setDate(d.getDate() + 6); return d.toISOString().split("T")[0]; })();
 
 export const C = {
   bg:"#f0f4f9", surface:"#ffffff", s2:"#e8eef7", s3:"#dde5f0", border:"#c8d3e5",

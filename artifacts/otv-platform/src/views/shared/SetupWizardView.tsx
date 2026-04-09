@@ -1,4 +1,6 @@
 import React, { useState, useRef } from "react";
+import { apiFetch } from "../../services/api/_client";
+import * as adminSvc from "../../services/api/admin";
 import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
   USER_ROLES, APPROVAL_SLA_DAYS, APPROVAL_TARGETS, TARGET_APPROVAL_CHAIN,
@@ -17,9 +19,9 @@ export function SetupWizardView({
   newClients, setNewClients,
   addClientModalOpen, setAddClientModalOpen,
   addClientForm, setAddClientForm,
-}) {
+}: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -92,7 +94,7 @@ export function SetupWizardView({
                 return {id,repId:repIdInt,repName,region:rhRegion,quarter:q,clients,totalTarget:total,status:"Pending RH",submittedAt:now,submittedByRole:"SALES REP",approvedAt:null,approvedBy:null,frozenTarget:null,awaitingApprovalSince:now,auditLog:[{at:now,by:"SELF",role:"SALES REP",action:"Submitted (Setup Wizard)"}]};
               }).filter(Boolean);
               if (newSubs.length===0) { showToast("Add at least one client with a target amount","err"); return; }
-              setTargetSubs(p=>[...newSubs,...p]);
+              setTargetSubs(p=>[...(newSubs as any[]),...p]);
               apiFetch("/api/targets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newSubs[0])}).catch(()=>{});
               showToast("Target submitted for approval ✓");
               setView("rep-dashboard");

@@ -9,9 +9,9 @@ import {
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 
-export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }) {
+export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -37,6 +37,28 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }) {
     DEAL_STAGES, STAGE_PROB, DEAL_TYPES, REGIONS, ALL_ROLES, QUARTERS, C, TODAY, TOMORROW, CURRENT_FY,
   } = useCROAppContext();
   const visibleRepIdsSet = new Set(visibleDeals.map(d => d.repId));
+
+  // IP Proposal modal state (was CROApp-level state in original)
+  const [ipPropOpen,   setIpPropOpen]   = useState<string|null>(null);
+  const [ipPropClient, setIpPropClient] = useState("");
+  const [ipPropNote,   setIpPropNote]   = useState("");
+  const [ipPropValue,  setIpPropValue]  = useState("");
+  const [ipApprovalPrices, setIpApprovalPrices] = useState<Record<string,string>>({});
+
+  const BLANK_LOG = {
+    repId:"", planId:"", meetingDbId:"", meetingTime:"", clientOrAgency:"Client",
+    dealId:"", clientAgencyName:"", agency:"", client:"", brand:"", dealAmount:"",
+    contactName:"", designation:"", mobile:"", meetingType:"Physical",
+    meetingKind:"ACTIONABLE", touchpointType:"Deal Meeting", contactLevel:"",
+    discussion:"", clientFeedback:"", stageUpdate:"", lossReason:"", pitchType:"",
+    nextSteps:"", followUpDate:"", status:"",
+    actionRequired:[{...{what:"", from:"", description:"", byWhen:""}}],
+    seniorRequested:"No", seniorRequestedName:"", seniorRequestedRole:"",
+    scheduleNext:false, nextMeetingDate:"", nextMeetingTime:"", nextAgenda:"",
+    calendarPlatform:"google", addMeetLink:true, attendeeEmails:"",
+    calendarEventId:"", meetLink:"", calendarStatus:"",
+    nextStepItems:[] as any[], supportRequest:{dept:"", description:"", priority:"Medium", dueDate:""},
+  };
 
   // Derived computations (previously inline in CROApp)
   const closedDeals  = visibleDeals.filter(d=>d.outcome==="Mail Confirmed");

@@ -15,9 +15,9 @@ export function NSHView({
   nshRegion, setNshRegion,
   targetDrilldown, setTargetDrilldown,
   nshRepDrill, setNshRepDrill,
-}) {
+}: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -467,7 +467,7 @@ export function NSHView({
                       const rRisk=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
                       const nReps=reps.filter(r=>r.region===region).length;
                       const sc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
-                      return(<tr key={region} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                      return(<tr key={region} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                         <td style={{padding:"10px 14px"}}><div className="sans" style={{fontWeight:700}}>{region}</div></td>
                         <td style={{padding:"10px 14px",color:C.dim}}>{fmtR(rT)}</td>
                         <td style={{padding:"10px 14px",color:C.green,fontWeight:600}}>{fmtR(rC)}</td>
@@ -503,7 +503,8 @@ export function NSHView({
                       <thead><tr>{["Task","Client","Region","Priority","Status","Due","Update"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{rhTasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
                         const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
-                        return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(t.clientCompany||"")
+;setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:1,maxWidth:200,whiteSpace:"normal"}}>{t.description}</div>}</td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{t.clientCompany||"—"}</td>
                           <td style={{padding:"9px 12px",color:C.dim,fontSize:11}}>{rep?reps.find(r=>r.id===rep.id)?.region:"—"}</td>
@@ -533,14 +534,14 @@ export function NSHView({
                 <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:20}}>
                   {REGIONS.map(reg=>{
                     const rh   = rhUsers.find(u=>u.region===reg);
-                    const reps = reps.filter(r=>r.region===reg);
-                    const rAbs = absenceReports.filter(a=>reps.map(r=>r.id).includes(a.repId));
+                    const regReps = reps.filter(r=>r.region===reg);
+                    const rAbs = absenceReports.filter(a=>regReps.map(r=>r.id).includes(a.repId));
                     const absent = rAbs.filter(a=>a.markedAs==="Absent").length;
                     const exc    = rAbs.filter(a=>a.exception==="Overridden").length;
                     return (
                       <div key={reg} style={{background:C.surface,border:`1px solid ${absent>0?C.red:C.border}`,borderTop:`2px solid ${absent>0?C.red:C.green}`,borderRadius:8,padding:"12px 14px"}}>
                         <div className="sans" style={{fontWeight:700,fontSize:13,marginBottom:2}}>{reg}</div>
-                        <div style={{fontSize:10,color:C.dim,marginBottom:8}}>{rh?.name||"RH"} · {reps.length} reps</div>
+                        <div style={{fontSize:10,color:C.dim,marginBottom:8}}>{rh?.name||"RH"} · {regReps.length} reps</div>
                         <div style={{fontSize:10,color:C.red,fontWeight:700}}>{absent} absent</div>
                         <div style={{fontSize:10,color:C.green}}>{exc} exception{exc!==1?"s":""}</div>
                       </div>
@@ -550,8 +551,8 @@ export function NSHView({
 
                 {/* Per-region breakdown */}
                 {REGIONS.map(reg=>{
-                  const reps = reps.filter(r=>r.region===reg);
-                  const rAbs = absenceReports.filter(a=>reps.map(r=>r.id).includes(a.repId));
+                  const regReps = reps.filter(r=>r.region===reg);
+                  const rAbs = absenceReports.filter(a=>regReps.map(r=>r.id).includes(a.repId));
                   if (!rAbs.length) return null;
                   const rh = rhUsers.find(u=>u.region===reg);
                   return (
@@ -565,7 +566,7 @@ export function NSHView({
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead><tr>{["Rep","Date","Status","Exception"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                           <tbody>{rAbs.map(r=>(
-                            <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                            <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}  onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                               <td style={{padding:"8px 12px",fontWeight:600}}>{r.repName}</td>
                               <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{r.date}</td>
                               <td style={{padding:"8px 12px"}}><span style={{background:r.markedAs==="Absent"?`${C.red}22`:`${C.green}22`,color:r.markedAs==="Absent"?C.red:C.green,padding:"2px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.markedAs}</span></td>
@@ -688,7 +689,7 @@ export function NSHView({
                       const rC=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const rP=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                       const rG=Math.max(0,rT-rC);const rPct=rT>0?Math.round((rC/rT)*100):0;const sc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
-                      return (<tr key={rep.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                      return (<tr key={rep.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}  onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                         <td style={{padding:"10px 14px"}}><div style={{fontWeight:700}}>{rep.name}</div></td>
                         <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 6px",borderRadius:5,fontSize:10,fontWeight:600}}>{rep.region}</span></td>
                         <td style={{padding:"10px 14px",color:C.dim}}>{fmtR(rT)}</td>
@@ -729,7 +730,8 @@ export function NSHView({
                       <thead><tr>{["Rep","Region","Task","Client","Priority","Status","Due"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{fTasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
                         const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
-                        return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(t.clientCompany||"")
+;setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"8px 12px",fontWeight:600,fontSize:11}}>{rep?.name||"—"}</td>
                           <td style={{padding:"8px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{rep?.region||"—"}</span></td>
                           <td style={{padding:"8px 12px"}}><div style={{fontWeight:600}}>{t.title}</div></td>
@@ -766,7 +768,7 @@ export function NSHView({
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>{["Rep","Region","Date","Status","Exception"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{fAbs.map(r=>(
-                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                        <tr key={r.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}  onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                           <td style={{padding:"8px 12px",fontWeight:600}}>{r.repName}</td>
                           <td style={{padding:"8px 12px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 6px",borderRadius:4,fontSize:10,fontWeight:600}}>{r.region}</span></td>
                           <td style={{padding:"8px 12px",color:C.dim,fontSize:11}}>{r.date}</td>

@@ -1,3 +1,4 @@
+import * as attendSvc from "../../services/api/attendance";
 import React, { useState, useRef } from "react";
 import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
@@ -9,9 +10,9 @@ import {
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 
-export function LeaderboardView({ view, setView, lbTab, setLbTab }) {
+export function LeaderboardView({ view, setView, lbTab, setLbTab }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -59,12 +60,12 @@ export function LeaderboardView({ view, setView, lbTab, setLbTab }) {
             }).sort((a,b)=>b.cPct-a.cPct);
 
             // Filter sets per tab
-            const teamReps   = lbAllReps.filter(r => myRegion ? r.region===myRegion : true);
-            const allReps    = lbAllReps;
+            const teamReps   = lbAllReps.filter((r:any) => myRegion ? r.region===myRegion : true);
+            const allReps    = lbAllReps as any[];
 
             // Region rollup for Region tab
-            const regionMap  = {};
-            lbAllReps.forEach(r => {
+            const regionMap: Record<string, any> = {};
+            lbAllReps.forEach((r:any) => {
               if (!regionMap[r.region]) regionMap[r.region] = {region:r.region, reps:0, meetings:0, seniorM:0, risk:0, attOk:0, cPct:0};
               const g = regionMap[r.region];
               g.reps++;
@@ -211,9 +212,9 @@ export function LeaderboardView({ view, setView, lbTab, setLbTab }) {
   );
 }
 
-export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen, irForm, setIrForm, editIrId, setEditIrId, irStatusFilter, setIrStatusFilter }) {
+export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen, irForm, setIrForm, editIrId, setEditIrId, irStatusFilter, setIrStatusFilter }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -512,9 +513,9 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
   );
 }
 
-export function TeamView({ view, setView }) {
+export function TeamView({ view, setView }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -661,9 +662,9 @@ export function TeamView({ view, setView }) {
   );
 }
 
-export function ActivityView({ view, setView }) {
+export function ActivityView({ view, setView }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -829,7 +830,7 @@ export function ActivityView({ view, setView }) {
                 return (
                   <div style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:8,padding:"12px 16px",marginBottom:18}}>
                     <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>⏰ Action Item Due Dates ({all.length})</div>
-                    {all.slice(0,12).map((item,i)=>{
+                    {all.slice(0,12).map((item:any,i)=>{
                       const clr = item._urgency==="overdue"?C.red:item._urgency==="today"?C.orange:C.blue;
                       const rep = reps.find(r=>r.id===(item.repId||item.assignedTo));
                       return (
@@ -952,9 +953,9 @@ export function ActivityView({ view, setView }) {
   );
 }
 
-export function EscalationsView({ view, setView }) {
+export function EscalationsView({ view, setView }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -979,6 +980,7 @@ export function EscalationsView({ view, setView }) {
     threadAIForm, setThreadAIForm,
     DEAL_STAGES, STAGE_PROB, DEAL_TYPES, REGIONS, ALL_ROLES, QUARTERS, C, TODAY, TOMORROW, CURRENT_FY,
   } = useCROAppContext();
+  const canApprove = (deal: any) => { const wa = deal.awaitingApproval; if (!wa) return false; if (isAdmin) return true; if (wa==="NSH" && isNSH) return true; if (wa==="CXO" && (isAdmin||user_role?.role==="CXO"||user_role?.role==="CRO")) return true; if (wa==="RH" && isRH && deal.region===rhRegion) return true; if (wa==="Sales Strategy" && isStrategy) return true; if (wa==="Digital" && isDigiOps) return true; return false; };
   return (
     <>
           {/* ═══ ESCALATIONS ═══ */}
@@ -1221,9 +1223,9 @@ export function EscalationsView({ view, setView }) {
   );
 }
 
-export function ComplianceView({ view, setView }) {
+export function ComplianceView({ view, setView }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -1297,9 +1299,9 @@ export function ComplianceView({ view, setView }) {
   );
 }
 
-export function HRView({ view, setView, exceptionModal, setExceptionModal, exceptionReason, setExceptionReason, excReqOpen, setExcReqOpen, excReqRecord, setExcReqRecord, excReqForm, setExcReqForm, excReqSubmitting, setExcReqSubmitting }) {
+export function HRView({ view, setView, exceptionModal, setExceptionModal, exceptionReason, setExceptionReason, excReqOpen, setExcReqOpen, excReqRecord, setExcReqRecord, excReqForm, setExcReqForm, excReqSubmitting, setExcReqSubmitting }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -1523,9 +1525,9 @@ export function HRView({ view, setView, exceptionModal, setExceptionModal, excep
   );
 }
 
-export function TasksView({ view, setView }) {
+export function TasksView({ view, setView }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -1645,9 +1647,11 @@ export function TasksView({ view, setView }) {
   );
 }
 
-export function ROManagementView({ view, setView, roMgmtChannel, setRoMgmtChannel, roMgmtStatus, setRoMgmtStatus, roMgmtViewRO, setRoMgmtViewRO, roMgmtConfirmDelete, setRoMgmtConfirmDelete }) {
+function roFmtMoney(n: any) { return n?"Rs."+Number(n).toLocaleString("en-IN"):"---"; }
+
+export function ROManagementView({ view, setView, roMgmtChannel, setRoMgmtChannel, roMgmtStatus, setRoMgmtStatus, roMgmtViewRO, setRoMgmtViewRO, roMgmtConfirmDelete, setRoMgmtConfirmDelete, ROCard, roExportSingle }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -1672,6 +1676,7 @@ export function ROManagementView({ view, setView, roMgmtChannel, setRoMgmtChanne
     threadAIForm, setThreadAIForm,
     DEAL_STAGES, STAGE_PROB, DEAL_TYPES, REGIONS, ALL_ROLES, QUARTERS, C, TODAY, TOMORROW, CURRENT_FY,
   } = useCROAppContext();
+  const [roSearch, setRoSearch] = React.useState("");
   return (
     <>
           {/* ═══ RO MANAGEMENT (CROApp) ═══ */}
@@ -1783,9 +1788,9 @@ export function ROManagementView({ view, setView, roMgmtChannel, setRoMgmtChanne
   );
 }
 
-export function RHXScoreView({ view, setView }) {
+export function RHXScoreView({ view, setView }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -1867,9 +1872,9 @@ export function RHXScoreView({ view, setView }) {
   );
 }
 
-export function RepAllRepsView({ view, setView }) {
+export function RepAllRepsView({ view, setView }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,
@@ -1899,7 +1904,7 @@ export function RepAllRepsView({ view, setView }) {
           {/* ═══ REP ALL-REPS SCORECARD ═══ */}
           {view==="rep-allreps" && isRep && (()=>{
             const myRepId  = user_role?.repId;
-            const allReps  = reps.map(rep=>{
+            const allReps: any[] = reps.map((rep:any)=>{
               const rd   = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
               const rT   = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
               const rC   = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
@@ -1964,9 +1969,9 @@ export function RepAllRepsView({ view, setView }) {
   );
 }
 
-export function RepTeamView({ view, setView }) {
+export function RepTeamView({ view, setView }: any) {
   const {
-    user, deals, meetings, tasks, targetSubs, revenueEntries, clientAccounts, touchpoints, internalReqs,
+    user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
     adminConfig, setAdminConfig, savedROs, setSavedROs, att, setAtt, absenceReports, setAbsenceReports,
     weeklyPlans, setWeeklyPlans, properties, setProperties, ipProposals, setIpProposals,

@@ -2854,6 +2854,7 @@ export function CROApp({ user, onLogout }) {
             roMgmtStatus={roMgmtStatus} setRoMgmtStatus={setRoMgmtStatus}
             roMgmtViewRO={roMgmtViewRO} setRoMgmtViewRO={setRoMgmtViewRO}
             roMgmtConfirmDelete={roMgmtConfirmDelete} setRoMgmtConfirmDelete={setRoMgmtConfirmDelete}
+            ROCard={ROCard} roExportSingle={roExportSingle}
           />
           {/* ═══ RH XSCORE / REP SCOREBOARDS ═══ */}
           <RHXScoreView view={view} setView={setView} />
