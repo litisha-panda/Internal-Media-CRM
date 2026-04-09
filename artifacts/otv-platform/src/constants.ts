@@ -60,6 +60,9 @@ export const C = {
   orange:"#c24000", text:"#18243a", dim:"#4d5e78", muted:"#8a97ae"
 };
 
+
+export const ACTION_TYPES = ["Approval needed","Document needed","Attend a meeting","Introduction needed","Flag for follow-up"];
+
 export const USER_ROLES: any[] = [
   { id: "admin",          name: "Admin",                  role: "ADMIN",          canView: "all",    region: null },
   { id: "sales_head",     name: "Sales Head",             role: "SALES HEAD",     canView: "all",    region: null },

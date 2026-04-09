@@ -38,6 +38,16 @@ import { RHView } from "../views/rh/RHView";
 import { NSHView } from "../views/nsh/NSHView";
 import { CROManagementView } from "../views/cro/CROManagementView";
 import { DigiOpsView } from "../views/digiops/DigiOpsView";
+import { AppTopbar } from "../components/AppTopbar";
+import { WelcomeModal } from "../components/WelcomeModal";
+import { TourOverlay } from "../components/TourOverlay";
+import { MeetingDetailModal } from "../components/MeetingDetailModal";
+import { PlanUploadModal } from "../components/PlanUploadModal";
+import { AddDealModal } from "../components/AddDealModal";
+import { EditIRModal } from "../components/EditIRModal";
+import { ExceptionModal } from "../components/ExceptionModal";
+import { ExceptionRequestModal } from "../components/ExceptionRequestModal";
+import { AccountThreadModal } from "../components/AccountThreadModal";
 // eslint-disable-next-line
 declare const window: Window & typeof globalThis & { XLSX?: any; };
 
@@ -1299,7 +1309,7 @@ export function CROApp({ user, onLogout }) {
   // Global search
   const [globalSearch, setGlobalSearch] = useState("");
   const [searchOpen, setSearchOpen]     = useState(false);
-  const searchRef                       = useRef(null);
+  const searchRef                       = useRef<HTMLDivElement>(null);
 
   // Mobile responsive
   const [windowW, setWindowW] = useState(typeof window !== "undefined" ? window.innerWidth : 1280);
@@ -2419,289 +2429,35 @@ export function CROApp({ user, onLogout }) {
           <div style={{fontSize:11,color:C.dim}}>{adminUsersError}</div>
         </div>
       )}
-
       {/* TOPBAR */}
-      <div style={{background:C.surface,borderBottom:`1px solid ${C.border}`,padding:"0 20px",height:46,display:"flex",alignItems:"center",justifyContent:"space-between",flexShrink:0}}>
-        <div style={{display:"flex",alignItems:"center",gap:12}}>
-          {/* Back to home */}
-          <button onClick={()=>setShowHome(true)} style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 10px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",display:"flex",alignItems:"center",gap:5,transition:"border-color .15s,color .15s"}}
-            onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
-            onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>
-            ← Home
-          </button>
-          <span style={{color:C.accent,fontWeight:700,fontSize:14,letterSpacing:3}}>OTV</span>
-          <span style={{color:C.muted}}>|</span>
-          <span className="sans" style={{fontSize:11,fontWeight:700,color:C.dim,letterSpacing:2,textTransform:"uppercase"}}>CRM</span>
-        </div>
-
-        {/* ── GLOBAL SEARCH ── */}
-        {!isMobile && (
-          <div ref={searchRef} style={{position:"relative",flex:1,maxWidth:320,margin:"0 16px"}}>
-            <div style={{position:"relative",display:"flex",alignItems:"center"}}>
-              <span style={{position:"absolute",left:9,color:C.dim,fontSize:13,pointerEvents:"none"}}>⌕</span>
-              <input
-                value={globalSearch}
-                onChange={e=>{setGlobalSearch(e.target.value);setSearchOpen(true);}}
-                onFocus={()=>setSearchOpen(true)}
-                onBlur={()=>setTimeout(()=>setSearchOpen(false),150)}
-                placeholder="Search clients, deals, tasks…"
-                style={{width:"100%",background:C.s2,border:`1px solid ${globalSearch?C.accent:C.border}`,borderRadius:6,padding:"5px 10px 5px 28px",fontSize:11,color:C.text,fontFamily:"'DM Mono',monospace",outline:"none",transition:"border-color .15s"}}
-              />
-              {globalSearch && <button onClick={()=>{setGlobalSearch("");setSearchOpen(false);}} style={{position:"absolute",right:7,background:"none",border:"none",color:C.dim,cursor:"pointer",fontSize:13,lineHeight:1}}>×</button>}
-            </div>
-            {searchOpen && searchResults.length > 0 && (
-              <div style={{position:"absolute",top:"calc(100% + 4px)",left:0,right:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,zIndex:500,boxShadow:"0 8px 32px rgba(0,0,0,.5)",overflow:"hidden"}}>
-                {searchResults.map((r,i)=>(
-                  <div key={i} onMouseDown={e=>{e.preventDefault();r.action();}}
-                    style={{display:"flex",alignItems:"center",gap:10,padding:"9px 12px",cursor:"pointer",borderBottom:i<searchResults.length-1?`1px solid ${C.border}`:"none",transition:"background .1s"}}
-                    onMouseOver={e=>e.currentTarget.style.background=C.s2}
-                    onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                    <span style={{fontSize:10,fontWeight:700,padding:"2px 6px",borderRadius:4,
-                      // @ts-ignore
-                      background: r.type==="deal"?`${C.accent}22`:r.type==="meeting"?`${C.blue}22`:`${C.green}22`,
-                      // @ts-ignore
-                      color: r.type==="deal"?C.accent:r.type==="meeting"?C.blue:C.green,
-                      whiteSpace:"nowrap"}}>
-                      {r.type==="deal"?"DEAL":r.type==="meeting"?"MTG":"TASK"}
-                    </span>
-                    <div style={{flex:1,minWidth:0}}>
-                      <div style={{fontSize:12,fontWeight:600,color:C.text,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.label}</div>
-                      <div style={{fontSize:10,color:C.dim,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{r.sub}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div style={{display:"flex",alignItems:"center",gap:10}}>
-          <select value={filterQ} onChange={e=>setFilterQ(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px"}}>{QUARTERS.map(q=><option key={q}>{q}</option>)}</select>
-          {user_role.canView==="all" && <select value={filterRegion} onChange={e=>setFilterRegion(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px"}}><option>All</option>{REGIONS.map(r=><option key={r}>{r}</option>)}</select>}
-          <div style={{width:1,height:20,background:C.border}} />
-          {/* Preview-as-role — Admin and CXO only */}
-          {["ADMIN","CXO","CEO","CRO"].includes(user_role?.role) && (
-            <div style={{display:"flex",alignItems:"center",gap:5}}>
-              <span style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",whiteSpace:"nowrap"}}>Preview as</span>
-              <select value={activeUser} onChange={e=>setActiveUser(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px",color:C.accent,background:`${C.accent}18`,borderColor:`${C.accent}44`}}>
-                {USER_ROLES.map(u=><option key={u.id} value={u.id}>{u.name} — {u.role}</option>)}
-              </select>
-            </div>
-          )}
-          <div style={{width:1,height:20,background:C.border}} />
-
-          {/* Virtual Tour / Help button */}
-          <button onClick={openWelcome}
-            title="Virtual Tour & Help"
-            style={{background:"transparent",border:`1px solid ${C.border}`,borderRadius:"50%",width:28,height:28,display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer",fontSize:13,color:C.dim,fontWeight:700,transition:"border-color .15s,color .15s",flexShrink:0}}
-            onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.color=C.accent;}}
-            onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.color=C.dim;}}>?</button>
-
-          {/* Countdown — only reps + RHs have 11:30 PM obligation */}
-          {(isRep || isRH) && (()=>{
-            const hr = new Date().getHours();
-            const cdColor = countdown.includes("passed") ? C.red : hr >= 21 ? C.red : hr >= 18 ? C.orange : C.green;
-            return <div style={{fontSize:11,fontWeight:700,color:cdColor,background:`${cdColor}12`,border:`1px solid ${cdColor}33`,padding:"3px 10px",borderRadius:4,whiteSpace:"nowrap"}}>⏱ {countdown}</div>;
-          })()}
-
-          {/* Profile button — click to open dropdown with sign out */}
-          <div style={{position:"relative"}}>
-            <button
-              onClick={()=>setProfileOpen(p=>!p)}
-              style={{display:"flex",alignItems:"center",gap:7,background:"transparent",border:`1px solid ${profileOpen?C.accent:C.border}`,borderRadius:6,padding:"4px 10px 4px 6px",cursor:"pointer",transition:"border-color .15s"}}>
-              <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,border:`1px solid ${C.accent}55`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:11,fontWeight:700,color:C.accent,flexShrink:0}}>
-                {(user.name||"?")[0].toUpperCase()}
-              </div>
-              <span style={{fontSize:11,color:C.text,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{user.name}</span>
-              <span style={{fontSize:9,color:C.dim,marginLeft:2}}>{profileOpen?"▲":"▼"}</span>
-            </button>
-            {profileOpen && (
-              <div style={{position:"absolute",top:"calc(100% + 6px)",right:0,background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:8,zIndex:200,minWidth:180,boxShadow:"0 8px 24px rgba(0,0,0,.4)"}}>
-                <div style={{padding:"8px 12px",marginBottom:4}}>
-                  <div style={{fontSize:12,fontWeight:700,color:C.text}}>{user.name}</div>
-                  <div style={{fontSize:10,color:C.dim,marginTop:1}}>{user.email}</div>
-                  <div style={{fontSize:10,color:C.accent,marginTop:2,fontWeight:600}}>{user_role?.role}</div>
-                </div>
-                <div style={{height:1,background:C.border,margin:"4px 0"}} />
-                <button
-                  onClick={()=>{setProfileOpen(false);onLogout();}}
-                  style={{width:"100%",background:"transparent",border:"none",padding:"8px 12px",textAlign:"left",color:C.red,fontSize:12,cursor:"pointer",borderRadius:5,fontFamily:"'DM Mono',monospace",transition:"background .1s"}}
-                  onMouseOver={e=>e.currentTarget.style.background=`${C.red}18`}
-                  onMouseOut={e=>e.currentTarget.style.background="transparent"}>
-                  Sign out
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ── WELCOME MODAL ────────────────────────────────────────────────── */}
-      {showWelcomeModal && (()=>{
-        const wd = currentTourData.welcome;
-        return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.72)",zIndex:9000,display:"flex",alignItems:"center",justifyContent:"center",padding:20}}>
-            <div style={{background:C.surface,border:`1px solid ${C.accent}44`,borderRadius:16,maxWidth:460,width:"100%",padding:"36px 40px",boxShadow:"0 24px 80px rgba(0,0,0,.6)",position:"relative"}}>
-              {/* Close X */}
-              <button onClick={()=>{setShowWelcomeModal(false);localStorage.setItem(`otv_welcome_${activeUser}`,"1");}}
-                style={{position:"absolute",top:14,right:16,background:"none",border:"none",color:C.dim,fontSize:20,cursor:"pointer",lineHeight:1}}>×</button>
-              {/* OTV badge */}
-              <div style={{width:48,height:48,borderRadius:12,background:`${C.accent}22`,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:20,fontWeight:700,color:C.accent,marginBottom:20}}>OTV</div>
-              <div className="sans" style={{fontSize:22,fontWeight:800,color:C.text,marginBottom:4}}>{wd.title}</div>
-              <div style={{fontSize:13,color:C.dim,marginBottom:24}}>{wd.subtitle}</div>
-              {/* Bullet highlights */}
-              <div style={{background:C.s2,borderRadius:10,padding:"16px 20px",marginBottom:28}}>
-                {wd.bullets.map((b,i)=>(
-                  <div key={i} style={{display:"flex",alignItems:"flex-start",gap:10,marginBottom:i<wd.bullets.length-1?10:0}}>
-                    <span style={{color:C.accent,marginTop:1,fontSize:14}}>{b.split(" ")[0]}</span>
-                    <span style={{fontSize:12,color:C.text,lineHeight:1.5}}>{b.split(" ").slice(1).join(" ")}</span>
-                  </div>
-                ))}
-              </div>
-              {/* Action buttons */}
-              <div style={{display:"flex",gap:10}}>
-                <button onClick={startTour}
-                  style={{flex:1,background:C.accent,border:"none",color:"#000",borderRadius:8,padding:"12px 20px",fontSize:13,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace",letterSpacing:.3}}>
-                  Start Tour →
-                </button>
-                <button onClick={()=>{setShowWelcomeModal(false);localStorage.setItem(`otv_welcome_${activeUser}`,"1");}}
-                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:8,padding:"12px 20px",fontSize:13,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                  Skip for now
-                </button>
-              </div>
-              <div style={{fontSize:10,color:C.muted,marginTop:14,textAlign:"center"}}>You can replay this tour anytime by clicking the <strong>?</strong> button in the top bar</div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* ── TOUR OVERLAY ─────────────────────────────────────────────────── */}
-      {tourActive && (()=>{
-        const steps = currentTourSteps;
-        const step  = steps[tourStep];
-        const total = steps.length;
-        const isLast = tourStep === total - 1;
-        const isFirst = tourStep === 0;
-        const pct = Math.round(((tourStep + 1) / total) * 100);
-
-        // ── Dynamic card positioning ──
-        const CARD_W = 390;
-        const GAP = 18;
-        const PAD = 16;
-        let cardStyle: React.CSSProperties = { bottom: 32, right: 32 }; // fallback
-        if (tourTargetRect) {
-          const W = window.innerWidth;
-          const H = window.innerHeight;
-          const spaceRight  = W - tourTargetRect.right;
-          const spaceLeft   = tourTargetRect.left;
-          const spaceBottom = H - tourTargetRect.bottom;
-          const spaceTop    = tourTargetRect.top;
-          if (spaceRight >= CARD_W + GAP) {
-            // Place card to the right
-            cardStyle = {
-              position:"fixed", left: tourTargetRect.right + GAP,
-              top: Math.max(PAD, Math.min(tourTargetRect.top, H - 350 - PAD)),
-              width: CARD_W,
-            };
-          } else if (spaceLeft >= CARD_W + GAP) {
-            // Place card to the left
-            cardStyle = {
-              position:"fixed", right: W - tourTargetRect.left + GAP,
-              top: Math.max(PAD, Math.min(tourTargetRect.top, H - 350 - PAD)),
-              width: CARD_W,
-            };
-          } else if (spaceBottom >= 300 + GAP) {
-            // Place card below
-            cardStyle = {
-              position:"fixed", top: tourTargetRect.bottom + GAP,
-              left: Math.max(PAD, Math.min(tourTargetRect.left, W - CARD_W - PAD)),
-              width: CARD_W,
-            };
-          } else if (spaceTop >= 300 + GAP) {
-            // Place card above
-            cardStyle = {
-              position:"fixed", bottom: H - tourTargetRect.top + GAP,
-              left: Math.max(PAD, Math.min(tourTargetRect.left, W - CARD_W - PAD)),
-              width: CARD_W,
-            };
-          } else {
-            // Center fallback
-            cardStyle = {
-              position:"fixed", bottom: 32, left: "50%",
-              transform:"translateX(-50%)", width: CARD_W,
-            };
-          }
-        }
-
-        return (
-          <>
-            {/* Dark backdrop */}
-            <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.5)",zIndex:8000,pointerEvents:"none"}} />
-            {/* Spotlight highlight ring around target */}
-            {tourTargetRect && (
-              <div style={{
-                position:"fixed",
-                left: tourTargetRect.left - 5,
-                top:  tourTargetRect.top  - 5,
-                width:  tourTargetRect.width  + 10,
-                height: tourTargetRect.height + 10,
-                border:`2px solid ${C.accent}`,
-                borderRadius:8,
-                boxShadow:`0 0 0 3px ${C.accent}44, 0 0 22px 4px ${C.accent}55`,
-                zIndex:8002,
-                pointerEvents:"none",
-                transition:"all .25s cubic-bezier(.4,0,.2,1)",
-              }} />
-            )}
-            {/* Floating tooltip card — dynamically positioned */}
-            <div style={{...cardStyle,position:"fixed",zIndex:8003,background:C.surface,border:`1px solid ${C.accent}55`,borderRadius:14,boxShadow:"0 20px 60px rgba(0,0,0,.7)",overflow:"hidden",transition:"top .25s,left .25s,right .25s,bottom .25s"}}>
-              {/* Progress bar */}
-              <div style={{height:3,background:C.s2}}>
-                <div style={{height:"100%",width:`${pct}%`,background:C.accent,transition:"width .35s"}} />
-              </div>
-              <div style={{padding:"20px 22px 18px"}}>
-                {/* Step counter */}
-                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
-                  <span style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>Step {tourStep+1} of {total}</span>
-                  <button onClick={closeTour} style={{background:"none",border:"none",color:C.muted,fontSize:18,cursor:"pointer",lineHeight:1,padding:0}}>×</button>
-                </div>
-                {/* Title */}
-                <div className="sans" style={{fontSize:16,fontWeight:700,color:C.text,marginBottom:8,lineHeight:1.3}}>{step.title}</div>
-                {/* Description */}
-                <div style={{fontSize:12,color:C.dim,lineHeight:1.7,marginBottom:(step as any).tip?10:0}}>{step.desc}</div>
-                {/* Tip */}
-                {(step as any).tip && (
-                  <div style={{background:`${C.accent}12`,border:`1px solid ${C.accent}30`,borderRadius:6,padding:"8px 12px",fontSize:11,color:C.accent,lineHeight:1.5}}>
-                    💡 {(step as any).tip}
-                  </div>
-                )}
-              </div>
-              {/* Navigation */}
-              <div style={{borderTop:`1px solid ${C.border}`,padding:"12px 22px",display:"flex",gap:8,alignItems:"center"}}>
-                <button onClick={()=>setTourStep(s=>Math.max(0,s-1))} disabled={isFirst}
-                  style={{background:"transparent",border:`1px solid ${isFirst?C.s3:C.border}`,borderRadius:6,padding:"6px 14px",color:isFirst?C.muted:C.dim,fontSize:11,cursor:isFirst?"default":"pointer",fontFamily:"'DM Mono',monospace"}}>
-                  ← Prev
-                </button>
-                {isLast ? (
-                  <button onClick={closeTour}
-                    style={{flex:1,background:C.accent,border:"none",color:"#000",borderRadius:6,padding:"8px 14px",fontSize:12,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                    Done ✓
-                  </button>
-                ) : (
-                  <button onClick={()=>setTourStep(s=>Math.min(total-1,s+1))}
-                    style={{flex:1,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"8px 14px",fontSize:12,color:C.accent,fontWeight:700,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                    Next →
-                  </button>
-                )}
-                <button onClick={closeTour}
-                  style={{background:"transparent",border:"none",color:C.muted,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",padding:"6px 8px"}}>
-                  Skip all
-                </button>
-              </div>
-            </div>
-          </>
-        );
-      })()}
+      <AppTopbar
+        C={C} user={user} user_role={user_role}
+        activeUser={activeUser} setActiveUser={setActiveUser}
+        isMobile={isMobile} filterQ={filterQ} setFilterQ={setFilterQ}
+        filterRegion={filterRegion} setFilterRegion={setFilterRegion}
+        QUARTERS={QUARTERS} REGIONS={REGIONS}
+        globalSearch={globalSearch} setGlobalSearch={setGlobalSearch}
+        searchOpen={searchOpen} setSearchOpen={setSearchOpen}
+        searchResults={searchResults} searchRef={searchRef}
+        profileOpen={profileOpen} setProfileOpen={setProfileOpen}
+        countdown={countdown} isRep={isRep} isRH={isRH}
+        openWelcome={openWelcome} onLogout={onLogout} setShowHome={setShowHome}
+      />
+      {/* WELCOME MODAL */}
+      {showWelcomeModal && (
+        <WelcomeModal
+          C={C} activeUser={activeUser} currentTourData={currentTourData}
+          startTour={startTour} onClose={()=>setShowWelcomeModal(false)}
+        />
+      )}
+      {/* TOUR OVERLAY */}
+      {tourActive && (
+        <TourOverlay
+          C={C} tourStep={tourStep} setTourStep={setTourStep}
+          currentTourSteps={currentTourSteps} tourTargetRect={tourTargetRect}
+          closeTour={closeTour}
+        />
+      )}
 
       <div style={{display:"flex",flex:1,overflow:"hidden",flexDirection: isMobile ? "column" : "row"}}>
         {/* SIDEBAR — vertical on desktop, horizontal tab bar on mobile */}
@@ -3147,262 +2903,27 @@ export function CROApp({ user, onLogout }) {
         </div>
         );
       })()}
-
-      {/* ── PLAN UPLOAD MODAL (managers only) ── */}
+      {/* PLAN UPLOAD MODAL */}
       {planUploadOpen && !isRep && (
-        <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:9999}} onClick={e=>{if(e.target===e.currentTarget)setPlanUploadOpen(false);}}>
-          <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,padding:"28px 28px 24px",width:580,maxWidth:"95vw",maxHeight:"88vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,.55)"}}>
-            {/* Header */}
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:18}}>
-              <div>
-                <div className="sans" style={{fontWeight:700,fontSize:16,letterSpacing:.5}}>UPLOAD PLAN FOR REP</div>
-                <div style={{fontSize:11,color:C.dim,marginTop:4}}>
-                  This plan enters the approval chain at{" "}
-                  <span style={{fontWeight:700,color:C.accent}}>{isRH?"NSH level":isNSH?"Sales Strategy level":isStrategy?"CRO level":isCRORole?"final approval (auto-approved)":"NSH level"}</span>.
-                  Once fully approved, it shows in the rep's My Targets.
-                </div>
-              </div>
-              <button onClick={()=>setPlanUploadOpen(false)} style={{background:"none",border:"none",color:C.dim,fontSize:20,cursor:"pointer",lineHeight:1,marginLeft:12}}>✕</button>
-            </div>
-            {/* Approval chain visual */}
-            <div style={{display:"flex",alignItems:"center",gap:0,marginBottom:18,flexWrap:"wrap"}}>
-              {(isRH
-                ?[{s:"RH",done:true},{s:"NSH",done:false},{s:"Strategy",done:false},{s:"CRO → ✓",done:false}]
-                :isNSH
-                ?[{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:false},{s:"CRO → ✓",done:false}]
-                :isStrategy
-                ?[{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:true},{s:"CRO → ✓",done:false}]
-                :[{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:true},{s:"CRO → ✓",done:true}]
-              ).map((step,i,arr)=>(
-                <div key={step.s} style={{display:"flex",alignItems:"center"}}>
-                  <div style={{background:step.done?`${C.green}22`:`${C.accent}18`,border:`1px solid ${step.done?C.green+"55":C.accent+"44"}`,borderRadius:6,padding:"3px 10px",fontSize:10,color:step.done?C.green:C.accent,fontWeight:600,whiteSpace:"nowrap"}}>{step.done&&"✓ "}{step.s}</div>
-                  {i<arr.length-1&&<div style={{width:14,height:1,background:C.border}}/>}
-                </div>
-              ))}
-            </div>
-            {/* Rep + Quarter */}
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16}}>
-              <div>
-                <div style={{fontSize:10,color:C.dim,marginBottom:5,letterSpacing:".05em",fontWeight:700}}>SALES REP *</div>
-                {reps.filter(r=>isRH?r.region===user_role?.region:true).length===0
-                  ? <div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>
-                  : <select value={planUploadForm.repId} onChange={e=>setPlanUploadForm(p=>({...p,repId:e.target.value}))}
-                    style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:planUploadForm.repId?C.text:C.muted,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
-                    <option value="">Select rep…</option>
-                    {reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} · {r.region}</option>)}
-                  </select>
-                }
-              </div>
-              <div>
-                <div style={{fontSize:10,color:C.dim,marginBottom:5,letterSpacing:".05em",fontWeight:700}}>QUARTER *</div>
-                <select value={planUploadForm.quarter} onChange={e=>setPlanUploadForm(p=>({...p,quarter:e.target.value}))}
-                  style={{width:"100%",padding:"9px 12px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:6,color:C.text,fontSize:13,fontFamily:"'DM Mono',monospace"}}>
-                  {QUARTERS.map(q=><option key={q}>{q}</option>)}
-                </select>
-              </div>
-            </div>
-            {/* Client rows */}
-            <div style={{marginBottom:14}}>
-              <div style={{fontSize:10,color:C.dim,marginBottom:8,letterSpacing:".05em",fontWeight:700}}>CLIENT TARGETS</div>
-              {planUploadForm.clients.map((cl,i)=>(
-                <div key={i} style={{display:"grid",gridTemplateColumns:"2fr 1.4fr 1.2fr auto",gap:8,marginBottom:7,alignItems:"center"}}>
-                  {(()=>{
-                    const val=cl.clientCompany.trim();
-                    const offList=val.length>0&&clientMasterList.length>0&&!clientMasterList.some(n=>n.toLowerCase()===val.toLowerCase());
-                    return <input list="cm-list" value={cl.clientCompany} placeholder={clientMasterList.length>0?"Search client list…":`Client ${i+1} name`}
-                      onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,clientCompany:e.target.value}:c)}))}
-                      style={{padding:"8px 10px",background:C.s2,border:`1px solid ${offList?C.orange:C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}} title={offList?`"${val}" not in approved client list`:undefined}/>;
-                  })()}
-                  <select value={cl.dealType}
-                    onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,dealType:e.target.value}:c)}))}
-                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                    {["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"].map(d=><option key={d}>{d}</option>)}
-                  </select>
-                  <input value={cl.targetAmount} placeholder="Target e.g. 50L"
-                    onChange={e=>setPlanUploadForm(p=>({...p,clients:p.clients.map((c,j)=>j===i?{...c,targetAmount:e.target.value}:c)}))}
-                    style={{padding:"8px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                  {planUploadForm.clients.length>1
-                    ? <button onClick={()=>setPlanUploadForm(p=>({...p,clients:p.clients.filter((_,j)=>j!==i)}))}
-                        style={{background:`${C.red}18`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"7px 10px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",lineHeight:1}}>✕</button>
-                    : <div style={{width:36}}/>}
-                </div>
-              ))}
-              <button onClick={()=>setPlanUploadForm(p=>({...p,clients:[...p.clients,{clientCompany:"",dealType:"Linear TV",targetAmount:""}]}))}
-                style={{background:`${C.blue}18`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"6px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginTop:2}}>
-                + Add Client
-              </button>
-            </div>
-            {/* Footer */}
-            <div style={{borderTop:`1px solid ${C.border}`,paddingTop:16,display:"flex",gap:10,justifyContent:"space-between",alignItems:"center"}}>
-              <div style={{fontSize:11,color:C.muted}}>
-                {(()=>{
-                  const valid = planUploadForm.clients.filter(c=>c.clientCompany.trim()&&c.targetAmount);
-                  const total = valid.reduce((s,c)=>s+parseCurrency(c.targetAmount),0);
-                  return valid.length>0?`${valid.length} client${valid.length!==1?"s":""} · ${fmtR(total)} total`:"Add at least one client";
-                })()}
-              </div>
-              <div style={{display:"flex",gap:10}}>
-                <button onClick={()=>setPlanUploadOpen(false)}
-                  style={{padding:"9px 18px",background:"transparent",border:`1px solid ${C.border}`,borderRadius:6,color:C.dim,fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                <button onClick={()=>{
-                  const parsedRepId = parseInt(planUploadForm.repId);
-                  const validClients = planUploadForm.clients.filter(c=>c.clientCompany.trim()&&c.targetAmount);
-                  if(!parsedRepId){showToast("Select a sales rep","err");return;}
-                  if(!validClients.length){showToast("Add at least one client with a target","err");return;}
-                  const rep = reps.find(r=>r.id===parsedRepId);
-                  const initStatus = isRH?"Pending NSH":isNSH?"Pending Strategy":isStrategy?"Pending CRO":isCRORole?"Approved":"Pending NSH";
-                  const steps = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO"];
-                  const startIdx = steps.indexOf(initStatus);
-                  const skipLog  = steps.slice(0,startIdx).map(step=>({step,by:user_role?.name||"",at:TODAY,note:`Plan uploaded by ${user_role?.role}`}));
-                  const clients  = validClients.map(c=>({clientCompany:c.clientCompany.trim(),dealType:c.dealType,targetAmount:parseCurrency(c.targetAmount)}));
-                  const total    = clients.reduce((s,c)=>s+(c.targetAmount||0),0);
-                  const sub = {
-                    id:`ts${Date.now()}`,
-                    repId:parsedRepId,repName:rep?.name||"",region:rep?.region||"",
-                    quarter:planUploadForm.quarter,clients,totalTarget:total,
-                    // Freeze quota at creation time when CRO uploads (auto-approved)
-                    ...(initStatus==="Approved" ? {frozenTarget: total} : {}),
-                    status:initStatus,submittedAt:TODAY,
-                    submittedByName:user_role?.name||"",submittedByRole:user_role?.role||"",
-                    approvalLog:skipLog,
-                  };
-                  // CRO submission → immediately approved → also create deal stubs
-                  if(initStatus==="Approved"){
-                    const newDeals = clients
-                      // @ts-ignore
-                      .filter(cl=>!deals.find(d=>d.repId===parsedRepId&&d.clientCompany===cl.clientCompany&&d.quarter===planUploadForm.quarter))
-                      .map(cl=>({
-                        id:`d_plan_${Date.now()}_${Math.random().toString(36).slice(2,5)}`,
-                        repId:parsedRepId,repName:rep?.name||"",region:rep?.region||"",
-                        clientCompany:cl.clientCompany,contactName:"",designation:"",contactLevel:"",phone:"",email:"",
-                        dealType:cl.dealType,outcome:"Needs Callback",
-                        amount:cl.targetAmount,targetAmount:cl.targetAmount,
-                        priority:"Regular",quarter:planUploadForm.quarter,
-                        notes:`Plan uploaded by ${user_role?.role}`,
-                        nextStep:"",nextStepDate:null,lastContact:TODAY,reqs:[],auditLog:[],
-                        awaitingApproval:null,awaitingApprovalSince:null,
-                      }));
-                    // @ts-ignore
-                    if(newDeals.length>0) setDeals(p=>[...p,...newDeals]);
-                    showToast(`Plan auto-approved — ${clients.length} client${clients.length!==1?"s":""} added to ${rep?.name||"rep"}'s targets ✓`);
-                  } else {
-                    showToast(`Plan submitted for ${rep?.name||"rep"} — enters at ${initStatus} ✓`);
-                  }
-                  // @ts-ignore
-                  setTargetSubs(p=>[sub,...p]);
-                  setPlanUploadOpen(false);
-                }}
-                  style={{background:"linear-gradient(135deg,#6366f1,#8b5cf6)",border:"none",color:"#fff",borderRadius:6,padding:"9px 22px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                  {isCRORole?"Submit & Auto-Approve ✓":"Submit Plan →"}
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <PlanUploadModal
+          C={C} reps={reps} user_role={user_role}
+          isRH={isRH} isNSH={isNSH} isStrategy={isStrategy} isCRORole={isCRORole}
+          planUploadForm={planUploadForm} setPlanUploadForm={setPlanUploadForm}
+          clientMasterList={clientMasterList} deals={deals} setDeals={setDeals}
+          targetSubs={targetSubs} setTargetSubs={setTargetSubs}
+          TODAY={TODAY} parseCurrency={parseCurrency} fmtR={fmtR}
+          showToast={showToast} onClose={()=>setPlanUploadOpen(false)}
+        />
       )}
-
-      {addDealOpen && (()=>{
-        const formRepId = String(dealForm.repId);
-        const approvedTargetClients = targetSubs
-          // @ts-ignore
-          .filter(s=>String(s.repId)===formRepId && s.status==="Approved")
-          .flatMap((s:any)=>s.clients||[]);
-        const isDuplicateDeal = !!(dealForm.clientCompany && dealForm.dealType && dealForm.quarter &&
-          deals.some(d=>
-            // @ts-ignore
-            String(d.repId)===formRepId &&
-            // @ts-ignore
-            (d.clientCompany||"").toLowerCase()===(dealForm.clientCompany||"").toLowerCase() &&
-            // @ts-ignore
-            d.quarter===dealForm.quarter &&
-            // @ts-ignore
-            d.dealType===dealForm.dealType
-          ));
-        return (
-        <div className="overlay" onClick={()=>setAddDealOpen(false)}>
-          <div className="modal fin" onClick={e=>e.stopPropagation()}>
-            <div className="sans" style={{fontSize:16,fontWeight:700,marginBottom:16}}>ADD NEW DEAL</div>
-
-            {/* ── Approved target client quick-picks ── */}
-            {approvedTargetClients.length > 0 && (
-              <div style={{background:`${C.accent}08`,border:`1px solid ${C.accent}33`,borderRadius:7,padding:"10px 14px",marginBottom:14}}>
-                <div style={{fontSize:9,color:C.accent,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:6}}>Target Clients · Quick Pick</div>
-                <div style={{display:"flex",flexWrap:"wrap",gap:5}}>
-                  {approvedTargetClients.map((c:any,i:number)=>{
-                    const isSelected = dealForm.clientCompany.toLowerCase()===(c.clientCompany||"").toLowerCase() && dealForm.dealType===c.dealType;
-                    return (
-                      <button key={i}
-                        onClick={()=>setDealForm(p=>({...p,clientCompany:c.clientCompany,dealType:c.dealType||p.dealType,targetAmount:c.targetAmount||p.targetAmount}))}
-                        style={{padding:"3px 10px",fontSize:11,borderRadius:4,border:`1px solid ${isSelected?C.accent:C.border}`,background:isSelected?`${C.accent}18`:C.s2,color:isSelected?C.accent:C.text,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:isSelected?700:400}}>
-                        {c.clientCompany}{c.dealType?` · ${c.dealType}`:""}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ── Duplicate warning ── */}
-            {isDuplicateDeal && (
-              <div style={{background:`${C.orange}10`,border:`1.5px solid ${C.orange}55`,borderRadius:7,padding:"8px 14px",marginBottom:14,display:"flex",alignItems:"center",gap:8}}>
-                <span style={{fontSize:14}}>⚠️</span>
-                <div>
-                  <span style={{fontWeight:700,fontSize:12,color:C.orange}}>Possible duplicate — </span>
-                  <span style={{fontSize:12,color:C.dim}}>a {dealForm.dealType} deal for <strong>{dealForm.clientCompany}</strong> in {dealForm.quarter} already exists. You can still save this as a new entry.</span>
-                </div>
-              </div>
-            )}
-
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              {/* Client Company — Zoho live search */}
-              <div>
-                <label>Client Company *</label>
-                <ZohoSearchInput
-                  value={dealForm.clientCompany||""}
-                  zohoId={dealForm.zohoAccountId||""}
-                  onChange={(name,id)=>setDealForm(p=>({...p,clientCompany:name,zohoAccountId:id}))}
-                  endpoint="/api/zoho/clients"
-                  placeholder="Type to search Zoho…"
-                />
-              </div>
-              {/* Agency Name — optional Zoho live search */}
-              <div>
-                <label>Agency Name (optional)</label>
-                <ZohoSearchInput
-                  value={dealForm.agencyName||""}
-                  zohoId={dealForm.zohoAgencyId||""}
-                  onChange={(name,id)=>setDealForm(p=>({...p,agencyName:name,zohoAgencyId:id}))}
-                  endpoint="/api/zoho/agencies"
-                  placeholder="e.g. Madison, Wavemaker…"
-                />
-              </div>
-              {[
-                {label:"Contact Name",key:"contactName",type:"text",ph:"Full name"},
-                {label:"Designation",key:"designation",type:"text",ph:"e.g. VP Marketing"},
-                {label:"Phone",key:"phone",type:"text",ph:"Mobile"},
-                {label:"Email",key:"email",type:"text",ph:"email@company.com"},
-                {label:"Target Amount * — e.g. 50L or 2.5Cr",key:"targetAmount",type:"text",ph:"50L / 2.5Cr / 5000000"},
-                {label:"Expected Amount — likely close (blank = same as target)",key:"amount",type:"text",ph:"50L / 2.5Cr / leave blank"},
-                {label:"Next Step",key:"nextStep",type:"text",ph:"Action item"},
-                {label:"Next Step Date",key:"nextStepDate",type:"date",ph:""},
-              ].map(f=>(
-                <div key={f.key}><label>{f.label}</label><input type={f.type} placeholder={f.ph} value={dealForm[f.key]||""} onChange={e=>setDealForm(p=>({...p,[f.key]:e.target.value}))} /></div>
-              ))}
-              <div><label>Assign Rep *</label>{isRep?(<input readOnly value={reps.find(r=>r.id===parseInt(dealForm.repId))?.name||""} style={{color:C.text,background:C.s2,cursor:"default"}} />):(reps.filter(r=>isRH?r.region===user_role?.region:true).length===0?(<div style={{padding:"9px 12px",background:`${C.orange}12`,border:`1px solid ${C.orange}`,borderRadius:6,color:C.orange,fontSize:12}}>No reps added yet — ask Admin to add reps first.</div>):(<select value={dealForm.repId} onChange={e=>setDealForm(p=>({...p,repId:e.target.value}))}><option value="">Select</option>{reps.filter(r=>isRH?r.region===user_role?.region:true).map(r=><option key={r.id} value={r.id}>{r.name} ({r.region})</option>)}</select>))}</div>
-              <div><label>Deal Type</label><select value={dealForm.dealType} onChange={e=>setDealForm(p=>({...p,dealType:e.target.value}))}><option value="">Select</option>{DEAL_TYPES.map(d=><option key={d}>{d}</option>)}</select></div>
-              <div><label>Contact Level</label><select value={dealForm.contactLevel} onChange={e=>setDealForm(p=>({...p,contactLevel:e.target.value}))}><option value="">Select</option>{CONTACT_LEVELS.map(c=><option key={c}>{c}</option>)}</select></div>
-              <div><label>Priority</label><select value={dealForm.priority} onChange={e=>setDealForm(p=>({...p,priority:e.target.value}))}><option>Top 5</option><option>Regular</option></select></div>
-              <div><label>Quarter</label><select value={dealForm.quarter} onChange={e=>setDealForm(p=>({...p,quarter:e.target.value}))}>{QUARTERS.map(q=><option key={q}>{q}</option>)}</select></div>
-            </div>
-            <div><label>Notes / Context</label><textarea rows={2} placeholder="Competitor intel, history, strategy..." value={dealForm.notes} onChange={e=>setDealForm(p=>({...p,notes:e.target.value}))} style={{resize:"none"}} /></div>
-            <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
-              <button className="btn btn-ghost" onClick={()=>setAddDealOpen(false)}>Cancel</button>
-              <button className="btn btn-primary" onClick={handleAddDeal}>ADD DEAL</button>
-            </div>
-          </div>
-        </div>
-        );
-      })()}
+      {/* ADD DEAL MODAL */}
+      {addDealOpen && (
+        <AddDealModal
+          C={C} dealForm={dealForm} setDealForm={setDealForm}
+          reps={reps} user_role={user_role} isRep={isRep} isRH={isRH}
+          targetSubs={targetSubs} deals={deals}
+          handleAddDeal={handleAddDeal} onClose={()=>setAddDealOpen(false)}
+        />
+      )}
 
       {/* LOG TOUCHPOINT MODAL — global standalone entry point (no parent meeting) */}
       {logOpen && (
@@ -3418,608 +2939,55 @@ export function CROApp({ user, onLogout }) {
           onNavigateRevenue={() => { setLogOpen(false); setView('revenue-log'); }}
         />
       )}
-
-      {/* MEETING DETAIL MODAL — view logged meeting */}
-      {viewMeetingId && (()=>{
-        const vm: any = meetings.find(m=>m.id===viewMeetingId);
-        if (!vm) return null;
-        const ef: any = meetingEditMode ? meetingEditForm : vm;
-        const statusColor = (ef.status||vm.status||"")===("Closed")?C.green:(ef.status||vm.status||"")===("Positive")?C.blue:(ef.status||vm.status||"")===("Follow-up Needed")?C.orange:C.dim;
-        const canEdit = isRep ? vm.repId===user_role?.repId : true;
-        const setEf = (patch) => setMeetingEditForm(f=>({...f,...patch}));
-        const closeMeetingModal = () => { setViewMeetingId(null); setMeetingEditMode(false); setMeetingEditForm({}); };
-        const startEdit = () => { setMeetingEditForm({...vm}); setMeetingEditMode(true); };
-        const saveEdit = () => {
-          if (!meetingEditForm.discussion?.trim()) { alert("What Happened is required"); return; }
-          setMeetings(p=>p.map(m=>m.id===viewMeetingId?{...m,...meetingEditForm}:m));
-          setMeetingEditMode(false);
-          showToast("Meeting updated ✓");
-        };
-        return (
-          <div className="overlay" onClick={closeMeetingModal}>
-            <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:560,maxHeight:"88vh",overflowY:"auto"}}>
-              {/* Header */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-                <div>
-                  {meetingEditMode
-                    ? <input value={ef.clientCompany||""} onChange={e=>setEf({clientCompany:e.target.value})} className="sans" style={{fontSize:17,fontWeight:700,color:C.text,background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 8px",width:220}} />
-                    // @ts-ignore
-                    : <div className="sans" style={{fontSize:17,fontWeight:700,color:C.text}}>{vm.clientCompany}</div>
-                  }
-                  <div style={{fontSize:11,color:C.dim,marginTop:4,display:"flex",gap:8,flexWrap:"wrap",alignItems:"center"}}>
-                    {meetingEditMode
-                      ? <input type="date" min="2020-01-01" max="2099-12-31" value={ef.date||""} onChange={e=>setEf({date:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim}} />
-                      : <span>{vm.date}</span>
-                    }
-                    {meetingEditMode
-                      ? <input type="time" value={ef.loggedAt||""} onChange={e=>setEf({loggedAt:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim,width:90}} />
-                      // @ts-ignore
-                      : <span>{vm.loggedAt||"—"}</span>
-                    }
-                    {meetingEditMode
-                      ? <select value={ef.meetingType||"Physical"} onChange={e=>setEf({meetingType:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.dim}}>
-                          {["Physical","Online","Phone Call"].map(t=><option key={t}>{t}</option>)}
-                        </select>
-                      // @ts-ignore
-                      : <span>{vm.meetingType||"Physical"}</span>
-                    }
-                    {meetingEditMode
-                      ? <select value={ef.pitchType||""} onChange={e=>setEf({pitchType:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px",color:C.accent}}>
-                          <option value="">No pitch type</option>
-                          {["Linear TV","IPs","Digital","Media Solutions","Integrated Packages","FCT","Generic"].map(t=><option key={t}>{t}</option>)}
-                        </select>
-                      // @ts-ignore
-                      : vm.pitchType&&<span style={{color:C.accent}}>{vm.pitchType}</span>
-                    }
-                  </div>
-                </div>
-                <div style={{display:"flex",gap:8,alignItems:"center"}}>
-                  {meetingEditMode
-                    ? <select value={ef.status||"Meeting Done"} onChange={e=>setEf({status:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"3px 8px",color:statusColor,fontWeight:700}}>
-                        {MEETING_STATUS.map(s=><option key={s}>{s}</option>)}
-                      </select>
-                    : <span style={{background:`${statusColor}22`,color:statusColor,padding:"3px 10px",borderRadius:5,fontSize:11,fontWeight:700}}>{vm.status||"Done"}</span>
-                  }
-                  <button onClick={closeMeetingModal} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
-                </div>
-              </div>
-
-              {/* Contact row */}
-              <div style={{background:C.s2,borderRadius:6,padding:"8px 12px",marginBottom:14}}>
-                <div style={{display:"flex",gap:12,flexWrap:"wrap",fontSize:11,color:C.dim,alignItems:"center"}}>
-                  {meetingEditMode
-                    ? <>
-                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                          <span>🧑</span>
-                          <input value={ef.contactName||""} onChange={e=>setEf({contactName:e.target.value})} placeholder="Contact name" style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 8px",width:140}} />
-                        </div>
-                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                          <span>📱</span>
-                          <input value={ef.phone||""} onChange={e=>setEf({phone:e.target.value})} placeholder="Phone" style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 8px",width:120}} />
-                        </div>
-                        <div style={{display:"flex",gap:6,alignItems:"center"}}>
-                          <span>🎯</span>
-                          <select value={ef.contactLevel||""} onChange={e=>setEf({contactLevel:e.target.value})} style={{fontSize:11,background:C.s3,border:`1px solid ${C.border}`,borderRadius:4,padding:"2px 6px"}}>
-                            <option value="">Contact level…</option>
-                            {["C-Suite / Owner","VP / GM","Junior/Exec","Agency"].map(l=><option key={l}>{l}</option>)}
-                          </select>
-                        </div>
-                      </>
-                    : <>
-                        {vm.contactName&&<span>🧑 {vm.contactName}</span>}
-                        {vm.phone&&<span>📱 {vm.phone}</span>}
-                        {vm.contactLevel&&<span>🎯 {vm.contactLevel}</span>}
-                        {vm.repName&&<span>👤 Rep: {vm.repName}</span>}
-                      </>
-                  }
-                </div>
-              </div>
-
-              {/* What happened */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>What Happened {meetingEditMode&&<span style={{color:C.red,fontWeight:400}}>*</span>}</div>
-                {meetingEditMode
-                  ? <textarea rows={3} value={ef.discussion||""} onChange={e=>setEf({discussion:e.target.value})} placeholder="What was discussed, how the client reacted..." style={{width:"100%",fontSize:12,resize:"vertical"}} />
-                  // @ts-ignore
-                  : <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.discussion||<span style={{color:C.muted}}>Not recorded</span>}</div>
-                }
-              </div>
-
-              {/* Client feedback */}
-              <div style={{marginBottom:12}}>
-                <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Client Feedback</div>
-                {meetingEditMode
-                  ? <textarea rows={2} value={ef.clientFeedback||""} onChange={e=>setEf({clientFeedback:e.target.value})} placeholder="Positive, hesitant, needs approval..." style={{width:"100%",fontSize:12,resize:"vertical"}} />
-                  : vm.clientFeedback
-                      ? <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.clientFeedback}</div>
-                      : <div style={{fontSize:11,color:C.muted}}>—</div>
-                }
-              </div>
-
-              {/* Action Items — hidden if ANY of stageUpdate/status/outcome is a terminal stage */}
-              {!["Mail Confirmed","Lost","RO Received"].some(ts=>ts===(ef.stageUpdate||"")||ts===(ef.status||"")||ts===(ef.outcome||"")) && (()=>{
-                // @ts-ignore
-                const items = (vm.nextStepItems||[]).filter(i=>i.action);
-                const addItem = () => {
-                  setMeetings(p => p.map(m => m.id===viewMeetingId ? {
-                    ...m,
-                    // @ts-ignore
-                    nextStepItems:[...(m.nextStepItems||[]),{action:"",neededFrom:"",remarks:"",dueDate:""}]
-                  }:m));
-                };
-                const updateItem = (idx:number, field:string, val:string) => {
-                  setMeetings(p => p.map(m => m.id===viewMeetingId ? {
-                    ...m,
-                    // @ts-ignore
-                    nextStepItems:(m.nextStepItems||[]).map((it,i)=>i===idx?{...it,[field]:val}:it)
-                  }:m));
-                };
-                const removeItem = (idx:number) => {
-                  setMeetings(p => p.map(m => m.id===viewMeetingId ? {
-                    ...m,
-                    // @ts-ignore
-                    nextStepItems:(m.nextStepItems||[]).filter((_,i)=>i!==idx)
-                  }:m));
-                };
-                const linkedIRColor = (status:string) => status==="Done"||status==="Resolved"?C.green:status==="In Progress"?C.blue:status==="Rejected"?C.red:C.accent;
-                return (
-                  <div style={{marginBottom:12}}>
-                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
-                      <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>
-                        Action Items {items.length>0&&<span style={{color:C.blue,fontWeight:400}}>({items.length})</span>}
-                      </div>
-                      <button onClick={addItem} style={{fontSize:10,color:C.blue,background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:4,padding:"3px 9px",cursor:"pointer",fontWeight:600}}>
-                        + Add Action Item
-                      </button>
-                    </div>
-                    {((vm as any).nextStepItems||[]).length===0 && !meetingEditMode && (
-                      vm.nextSteps
-                        ? <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:`${C.accent}11`,border:`1px solid ${C.accent}33`,borderRadius:6,padding:"10px 12px"}}>{vm.nextSteps}</div>
-                        : <div style={{fontSize:11,color:C.muted}}>No action items recorded.</div>
-                    )}
-                    {((vm as any).nextStepItems||[]).map((item, idx) => {
-                      // @ts-ignore
-                      const linkedIR: any = item.action ? (internalReqs as any[]).find(r=>r.meetingLogId===vm.id&&r.subject===item.action) : null;
-                      const linkedTask = item.action ? tasks.find(t=>t.meetingLogId===vm.id&&t.title?.includes(item.action.slice(0,30))) : null;
-                      return (
-                        <div key={idx} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:7,padding:"9px 11px",marginBottom:7}}>
-                          {/* Row 1: action text + remove button */}
-                          <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:8,marginBottom:5}}>
-                            <input
-                              value={item.action||""}
-                              onChange={e=>updateItem(idx,"action",e.target.value)}
-                              placeholder="What needs to happen…"
-                              style={{fontSize:12,fontWeight:600,width:"100%",color:C.text,flex:1}}
-                            />
-                            <button onClick={()=>removeItem(idx)} style={{fontSize:14,color:C.red,background:"transparent",border:"none",cursor:"pointer",lineHeight:1,padding:0,marginLeft:4,flexShrink:0}}>×</button>
-                          </div>
-                          {/* Row 2: neededFrom + dueDate + remarks */}
-                          <div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center",marginBottom:(linkedIR||linkedTask)?6:0}}>
-                            <select value={item.neededFrom||""} onChange={e=>updateItem(idx,"neededFrom",e.target.value)} style={{fontSize:11,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:C.dim}}>
-                              <option value="">Self</option>
-                              {["Region Head","NSH","CXO","Sales Strategy","Digital","Finance","Legal","Branding Team","Content Team","Client"].map(r=><option key={r}>{r}</option>)}
-                            </select>
-                            <input type="date" min="2020-01-01" max="2099-12-31" value={item.dueDate||""} onChange={e=>updateItem(idx,"dueDate",e.target.value)} style={{fontSize:11,padding:"2px 6px",borderRadius:4,border:`1px solid ${C.border}`,background:C.surface,color:C.dim}} />
-                            <input value={item.remarks||""} onChange={e=>updateItem(idx,"remarks",e.target.value)} placeholder="Notes…" style={{fontSize:11,flex:1,minWidth:80}} />
-                          </div>
-                          {/* Linked IR or Task status badge */}
-                          {(linkedIR||linkedTask)&&(
-                            <div style={{display:"flex",gap:6,flexWrap:"wrap",marginTop:4}}>
-                              {linkedIR&&(
-                                <span style={{fontSize:10,background:`${linkedIRColor(linkedIR.status)}18`,color:linkedIRColor(linkedIR.status),border:`1px solid ${linkedIRColor(linkedIR.status)}44`,borderRadius:4,padding:"2px 8px",fontWeight:600}}>
-                                  // @ts-ignore
-                                  IR → {linkedIR.dept}: {linkedIR.status}
-                                </span>
-                              )}
-                              {linkedTask&&(
-                                <span style={{fontSize:10,background:`${C.green}18`,color:C.green,border:`1px solid ${C.green}44`,borderRadius:4,padding:"2px 8px",fontWeight:600}}>
-                                  Task: {linkedTask.status}
-                                </span>
-                              )}
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                );
-              })()}
-
-              {/* Follow-up & next meeting */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12,marginBottom:14}}>
-                <div>
-                  <div style={{fontSize:10,color:C.blue,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>📞 Follow-up Date</div>
-                  {meetingEditMode
-                    ? <input type="date" min="2020-01-01" max="2099-12-31" value={ef.followUpDate||""} onChange={e=>setEf({followUpDate:e.target.value})} style={{width:"100%",fontSize:12}} />
-                    : vm.followUpDate
-                        ? <div style={{fontSize:13,fontWeight:600,color:C.text,background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:6,padding:"8px 12px"}}>{vm.followUpDate}</div>
-                        : <div style={{fontSize:11,color:C.muted}}>Not set</div>
-                  }
-                </div>
-                <div>
-                  <div style={{fontSize:10,color:C.green,fontWeight:700,textTransform:"uppercase",letterSpacing:".06em",marginBottom:5}}>📅 Next Meeting Date</div>
-                  {meetingEditMode
-                    ? <input type="date" min="2020-01-01" max="2099-12-31" value={ef.nextMeetingDate||""} onChange={e=>setEf({nextMeetingDate:e.target.value})} style={{width:"100%",fontSize:12}} />
-                    : vm.nextMeetingDate
-                        ? <div style={{fontSize:13,fontWeight:600,color:C.text,background:`${C.green}11`,border:`1px solid ${C.green}33`,borderRadius:6,padding:"8px 12px"}}>{vm.nextMeetingDate}</div>
-                        : <div style={{fontSize:11,color:C.muted}}>Not set</div>
-                  }
-                </div>
-              </div>
-
-              {/* Notes */}
-              {meetingEditMode&&(
-                <div style={{marginBottom:12}}>
-                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Additional Notes</div>
-                  <textarea rows={2} value={ef.notes||""} onChange={e=>setEf({notes:e.target.value})} placeholder="Any other context or remarks..." style={{width:"100%",fontSize:12,resize:"vertical"}} />
-                </div>
-              )}
-              {!meetingEditMode&&vm.notes&&(
-                <div style={{marginBottom:12}}>
-                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:5}}>Notes</div>
-                  <div style={{fontSize:12,color:C.text,lineHeight:1.6,background:C.s2,borderRadius:6,padding:"10px 12px"}}>{vm.notes}</div>
-                </div>
-              )}
-
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:8,paddingTop:12,borderTop:`1px solid ${C.border}`}}>
-                <div>
-                  {meetingEditMode&&<span style={{fontSize:10,color:C.muted}}>Fields marked * are required</span>}
-                </div>
-                <div style={{display:"flex",gap:8}}>
-                  {meetingEditMode
-                    ? <>
-                        <button className="btn btn-ghost" style={{fontSize:12}} onClick={()=>{setMeetingEditMode(false);setMeetingEditForm({});}}>Cancel</button>
-                        <button className="btn btn-primary" style={{fontSize:12}} onClick={saveEdit}>Save Changes</button>
-                      </>
-                    : <>
-                        {canEdit&&<button className="btn btn-ghost" style={{fontSize:12}} onClick={startEdit}>✏️ Edit</button>}
-                        <button className="btn btn-ghost" onClick={closeMeetingModal}>Close</button>
-                      </>
-                  }
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-
+      {/* MEETING DETAIL MODAL */}
+      <MeetingDetailModal
+        C={C} viewMeetingId={viewMeetingId} setViewMeetingId={setViewMeetingId}
+        meetings={meetings} setMeetings={setMeetings}
+        meetingEditMode={meetingEditMode} setMeetingEditMode={setMeetingEditMode}
+        meetingEditForm={meetingEditForm} setMeetingEditForm={setMeetingEditForm}
+        isRep={isRep} user_role={user_role}
+        internalReqs={internalReqs} tasks={tasks} showToast={showToast}
+      />
       {/* EDIT INTERNAL REQUEST MODAL */}
       {editIrId && (
-        <div className="overlay" onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}}>
-          <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:520}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16}}>
-              <div className="sans" style={{fontSize:15,fontWeight:700}}>Edit Request</div>
-              <button onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}} style={{background:"transparent",border:"none",color:C.dim,fontSize:18,cursor:"pointer",lineHeight:1}}>×</button>
-            </div>
-            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
-              <div>
-                <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Request Type *</div>
-                <select value={irForm.type} onChange={e=>setIrForm(f=>({...f,type:e.target.value}))}
-                  style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                  {["Send Proposal","Send FCT Grid","Send Revised Rate Card","Send Sponsorship Deck","Get Budget Approval","Arrange Senior Meeting","Get Rate Approval","Follow Up with Client","Share Digital Plan","Content / Script Needed","Legal / Contract Review","Get PO / Release","Other"].map(t=><option key={t}>{t}</option>)}
-                </select>
-              </div>
-              <div>
-                <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Who do you need it from? *</div>
-                <select value={irForm.dept} onChange={e=>setIrForm(f=>({...f,dept:e.target.value}))}
-                  style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"6px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                  {["Region Head","NSH","CXO","Sales Strategy","Digital","Branding Team","Content Team","Finance","Legal","HR"].map(d=><option key={d}>{d}</option>)}
-                </select>
-              </div>
-            </div>
-            <div style={{marginBottom:10}}>
-              <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Subject / What do you need? *</div>
-              <input value={irForm.subject} onChange={e=>setIrForm(f=>({...f,subject:e.target.value}))}
-                placeholder="e.g. Discount approval — 10% off rate card for Havells"
-                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}/>
-            </div>
-            <div style={{marginBottom:10}}>
-              <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Client / Account (optional)</div>
-              <select value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
-                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}>
-                <option value="">— Select client —</option>
-                {[...new Set(deals.filter((d:any)=>user_role?.repId?d.repId===user_role.repId:true).map((d:any)=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
-              </select>
-            </div>
-            <div style={{marginBottom:16}}>
-              <div style={{fontSize:10,color:C.dim,marginBottom:4}}>Details / Context</div>
-              <textarea value={irForm.details} onChange={e=>setIrForm(f=>({...f,details:e.target.value}))}
-                rows={4} placeholder="Provide context — client budget, ask, deadline, any relevant background…"
-                style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",resize:"vertical",boxSizing:"border-box"}}/>
-            </div>
-            <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-              <button onClick={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 16px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-              <button onClick={()=>{
-                if(!irForm.subject.trim()){showToast("Subject is required","err");return;}
-                // @ts-ignore
-                setInternalReqs(p=>p.map(r=>r.id===editIrId?{...r,type:irForm.type,dept:irForm.dept,subject:irForm.subject.trim(),details:irForm.details.trim(),clientCompany:irForm.clientCompany.trim()}:r));
-                setEditIrId(null);setIrForm(BLANK_IR_FORM);
-                showToast("Request updated ✓");
-              }} style={{background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                Save Changes
-              </button>
-            </div>
-          </div>
-        </div>
+        <EditIRModal
+          C={C} editIrId={editIrId} irForm={irForm} setIrForm={setIrForm}
+          deals={deals} user_role={user_role} setInternalReqs={setInternalReqs}
+          BLANK_IR_FORM={BLANK_IR_FORM} showToast={showToast}
+          onClose={()=>{setEditIrId(null);setIrForm(BLANK_IR_FORM);}}
+        />
       )}
-
-          {/* EXCEPTION REQUEST MODAL — Rep submits chain request */}
-      {excReqOpen && excReqRecord && (
-        <div className="overlay" onClick={()=>setExcReqOpen(false)}>
-          <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:480}}>
-            <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:4}}>
-              <div className="sans" style={{fontSize:16,fontWeight:700}}>Request Attendance Exception</div>
-            </div>
-            <div style={{fontSize:12,color:C.dim,marginBottom:16}}>Date: <strong style={{color:C.text}}>{excReqRecord.date}</strong> · Status: <span style={{color:excReqRecord.status==="absent"?C.red:C.orange,fontWeight:600,textTransform:"capitalize"}}>{excReqRecord.status}</span></div>
-            <div style={{padding:"10px 14px",background:`${C.blue}11`,border:`1px solid ${C.blue}33`,borderRadius:5,marginBottom:16,fontSize:12,color:C.blue}}>
-              Your request will be routed through: <strong>RH → NSH → CRO → Admin</strong>. Provide a clear reason so approvers can act quickly.
-            </div>
-            <div style={{marginBottom:12}}>
-              <label style={{display:"block",fontSize:11,fontWeight:600,color:C.dim,marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Reason *</label>
-              <select value={excReqForm.reason} onChange={e=>setExcReqForm(f=>({...f,reason:e.target.value}))} style={{width:"100%",padding:"7px 10px",borderRadius:5,border:`1px solid ${C.border}`,fontSize:12,background:C.surface,color:C.text}}>
-                <option value="">— Select reason —</option>
-                {["Client Visit / Field Work","WFH (Work From Home)","Approved Leave","Travel / No Network","Medical Emergency","System / App Issue","Other"].map(r=><option key={r} value={r}>{r}</option>)}
-              </select>
-            </div>
-            <div style={{marginBottom:12}}>
-              <label style={{display:"block",fontSize:11,fontWeight:600,color:C.dim,marginBottom:4,textTransform:"uppercase",letterSpacing:".06em"}}>Additional Notes</label>
-              <textarea rows={3} value={excReqForm.notes} onChange={e=>setExcReqForm(f=>({...f,notes:e.target.value}))} placeholder="e.g. Was at site visit with XYZ client from 9am–7pm. Mentioned to RH via WhatsApp." style={{resize:"vertical",width:"100%",boxSizing:"border-box"}} />
-            </div>
-            <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
-              <button className="btn btn-ghost" onClick={()=>setExcReqOpen(false)} disabled={excReqSubmitting}>Cancel</button>
-              <button className="btn btn-primary" disabled={!excReqForm.reason||excReqSubmitting} onClick={()=>{
-                if(!excReqForm.reason){showToast("Select a reason","err");return;}
-                setExcReqSubmitting(true);
-                attendSvc.createException({date:excReqRecord.date,reason:excReqForm.reason,notes:excReqForm.notes,attendanceRecordId:excReqRecord.id})
-                  .then(()=>{showToast("Exception request submitted — pending RH approval ✓");setExcReqOpen(false);fetchAttendanceData();})
-                  .catch((err:any)=>showToast(err?.body?.error||"Failed to submit","err"))
-                  .finally(()=>setExcReqSubmitting(false));
-              }}>{excReqSubmitting?"Submitting…":"Submit to RH →"}</button>
-            </div>
-          </div>
-        </div>
+      {/* EXCEPTION REQUEST MODAL */}
+      {excReqOpen && (
+        <ExceptionRequestModal
+          C={C} excReqRecord={excReqRecord} excReqForm={excReqForm} setExcReqForm={setExcReqForm}
+          excReqSubmitting={excReqSubmitting} setExcReqSubmitting={setExcReqSubmitting}
+          showToast={showToast} fetchAttendanceData={fetchAttendanceData}
+          onClose={()=>setExcReqOpen(false)}
+        />
       )}
-
-          {/* EXCEPTION MODAL — Litisha only */}
-      {exceptionModal && (
-        <div className="overlay" onClick={()=>setExceptionModal(null)}>
-          <div className="modal fin" onClick={e=>e.stopPropagation()} style={{width:460}}>
-            <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:4}}>
-              <span style={{fontSize:20}}>✦</span>
-              <div className="sans" style={{fontSize:16,fontWeight:700}}>Grant Exception</div>
-            </div>
-            <div style={{fontSize:12,color:C.dim,marginBottom:4}}>For: <strong style={{color:C.text}}>{exceptionModal.repName}</strong></div>
-            <div style={{padding:"10px 14px",background:`${C.orange}11`,border:`1px solid ${C.orange}33`,borderRadius:5,marginBottom:16,fontSize:12,color:C.orange}}>
-              This will override the absence record in HR and mark this rep as Present. This action is logged permanently with your name, role, and reason. Only Admin or CXO can do this.
-            </div>
-            <div>
-              <label>Reason for exception *</label>
-              <textarea rows={3} placeholder="e.g. Client emergency — rep was at site visit with no network access. Verified by CRO." value={exceptionReason} onChange={e=>setExceptionReason(e.target.value)} style={{resize:"none"}} />
-            </div>
-            <div style={{display:"flex",gap:8,marginTop:16,justifyContent:"flex-end"}}>
-              <button className="btn btn-ghost" onClick={()=>setExceptionModal(null)}>Cancel</button>
-              <button className="btn btn-primary" onClick={grantException}>GRANT EXCEPTION</button>
-            </div>
-            <div style={{marginTop:12,fontSize:10,color:C.muted,textAlign:"center"}}>Logged as: {user_role?.name||"Admin"} ({user_role?.role}) · {new Date().toLocaleString("en-IN")} · Sent to HR</div>
-          </div>
-        </div>
+      {/* EXCEPTION MODAL */}
+      <ExceptionModal
+        C={C} exceptionModal={exceptionModal} exceptionReason={exceptionReason}
+        setExceptionReason={setExceptionReason} user_role={user_role}
+        grantException={grantException} onClose={()=>setExceptionModal(null)}
+      />
+      {/* ═══ CLIENT ACCOUNT THREAD MODAL ═══ */}
+      {accountThreadOpen && accountThreadClient && (
+        <AccountThreadModal
+          C={C} accountThreadClient={accountThreadClient}
+          deals={deals} touchpoints={touchpoints} clientAccounts={clientAccounts}
+          revenueEntries={revenueEntries} meetings={meetings} reps={reps}
+          tasks={tasks} internalReqs={internalReqs} setInternalReqs={setInternalReqs}
+          setTasks={setTasks} setLogForm={setLogForm} setLogOpen={setLogOpen}
+          BLANK_LOG={BLANK_LOG} user_role={user_role} activeUser={activeUser}
+          TODAY={TODAY} TOMORROW={TOMORROW}
+          threadAIForm={threadAIForm} setThreadAIForm={setThreadAIForm}
+          dealStage={dealStage} oColor={oColor} daysSince={daysSince}
+          fmtR={fmtR} stackedBar={stackedBar} showToast={showToast}
+          onClose={()=>{setAccountThreadOpen(false);setAccountThreadClient(null);}}
+        />
       )}
-
-      {/* ═══ PART 6: CLIENT ACCOUNT THREAD MODAL ═══ */}
-      {accountThreadOpen && accountThreadClient && (()=>{
-        const clientName = accountThreadClient;
-        // @ts-ignore
-        const clientDeals: any[] = (deals as any[]).filter((d:any) => d.clientCompany === clientName);
-        // @ts-ignore
-        const clientTPs   = touchpoints.filter(t => clientDeals.some(d => d.id === t.dealId) || t.clientAccountId === clientDeals[0]?.clientAccountId);
-        // Revenue matching: prefer zohoAccountId over name string; fall back for legacy entries
-        // @ts-ignore
-        const accountZohoId = clientAccounts.find(a=>a.clientName===clientName)?.zohoAccountId || deals.find(d=>d.clientCompany===clientName)?.zohoAccountId || "";
-        const clientRevs  = revenueEntries.filter(e =>
-          // @ts-ignore
-          accountZohoId && e.zohoAccountId
-            ? e.zohoAccountId === accountZohoId
-            // @ts-ignore
-            : e.clientCompany === clientName
-        );
-        // @ts-ignore
-        const account     = clientAccounts.find(a => a.clientName === clientName) || clientDeals[0];
-        // @ts-ignore
-        const currentStage = account?.currentStage || dealStage(clientDeals[0]||{});
-        // @ts-ignore
-        const repObj: any  = (reps as any[]).find((r:any) => r.id === (clientDeals[0]?.repId));
-        // 4-number metrics for this client
-        // @ts-ignore
-        const cTarget     = clientDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
-        // @ts-ignore
-        const cAchieved   = clientRevs.reduce((s,e)=>s+(e.amount||0),0);
-        // @ts-ignore
-        const cCommitted  = clientDeals.filter(d=>dealStage(d)==="Mail Confirmed").reduce((s,d)=>s+(d.pipelineAmount||parseCurrency(d.amount||"0")||0),0);
-        // @ts-ignore
-        const cInPlay     = clientDeals.filter(d=>["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s,d)=>s+(d.pipelineAmount||parseCurrency(d.amount||"0")||0),0);
-        const cShortfall  = Math.max(0, cTarget - cAchieved - cCommitted - cInPlay);
-        // Merge meetings + touchpoints into thread (touchpoints preferred)
-        const legacyMeetings = meetings.filter(m => m.clientCompany === clientName && !clientTPs.some(t => t.meetingLogId === m.id));
-        const allEntries  = [
-          ...clientTPs.map(t => ({...t, _type:"tp"})),
-          ...legacyMeetings.map(m => ({...m, _type:"meeting"})),
-          // @ts-ignore
-          ...clientRevs.map(r => ({...r, _type:"revenue"})),
-        ].sort((a,b) => ((b.date||"") > (a.date||"") ? 1 : -1));
-        // Pending action items from tasks
-        // @ts-ignore
-        const pendingAIs  = tasks.filter(t => t.clientCompany === clientName && t.status !== "Done" && t.status !== "Closed");
-        return (
-          <div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.7)",zIndex:9500,display:"flex",alignItems:"flex-start",justifyContent:"center",padding:"20px 16px",overflowY:"auto"}}
-            onClick={e=>{if(e.target===e.currentTarget){setAccountThreadOpen(false);setAccountThreadClient(null);}}}>
-            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:12,width:"100%",maxWidth:660,boxShadow:"0 24px 60px rgba(0,0,0,.5)",padding:"24px 28px"}}>
-              {/* Header */}
-              <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16}}>
-                <div>
-                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:4}}>
-                    <div className="sans" style={{fontSize:18,fontWeight:800,letterSpacing:1}}>{clientName}</div>
-                    <span style={{background:`${oColor(currentStage)}18`,color:oColor(currentStage),padding:"3px 10px",borderRadius:6,fontSize:10,fontWeight:700}}>{currentStage}</span>
-                  </div>
-                  <div style={{fontSize:11,color:C.dim}}>
-                    {repObj?.name} · {clientDeals[0]?.region}
-                    {(()=>{const idleClock=account?.lastDealMeetingDate||clientDeals[0]?.lastDealMeetingDate||clientDeals[0]?.lastContact; const idle=daysSince(idleClock); return idleClock ? <span style={{color:idle>=7?C.red:idle>=3?C.orange:C.green,fontWeight:600,marginLeft:8}}>{idle===0?"Deal meeting today":`Last deal meeting: ${idle}d ago`}</span> : null;})()}
-                  </div>
-                </div>
-                <button onClick={()=>{setAccountThreadOpen(false);setAccountThreadClient(null);}}
-                  style={{background:"none",border:"none",color:C.dim,fontSize:20,cursor:"pointer",lineHeight:1}}>✕</button>
-              </div>
-              {/* 4-number metrics row */}
-              <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:8}}>
-                {[["TARGET",fmtR(cTarget),C.dim],["ACHIEVED",fmtR(cAchieved),C.green],["COMMITTED",fmtR(cCommitted),C.blue],["IN PLAY",fmtR(cInPlay),"#d97706"],["SHORTFALL",fmtR(cShortfall),cShortfall===0?C.green:C.red]].map(([l,v,c])=>(
-                  <div key={l} style={{background:C.s2,borderRadius:7,padding:"8px 10px",textAlign:"center"}}>
-                    <div style={{fontSize:8,color:C.muted,letterSpacing:".07em",marginBottom:3,textTransform:"uppercase"}}>{l}</div>
-                    <div className="sans" style={{fontSize:15,fontWeight:800,color:c as string}}>{v}</div>
-                  </div>
-                ))}
-              </div>
-              {stackedBar(cTarget, cAchieved, cCommitted, cInPlay, cShortfall, 8)}
-              <div style={{marginBottom:10}} />
-              {/* Pending action items */}
-              {pendingAIs.length>0&&(
-                <div style={{background:`${C.orange}10`,border:`1px solid ${C.orange}33`,borderRadius:8,padding:"10px 14px",marginBottom:14}}>
-                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".07em",marginBottom:6}}>PENDING ACTION ITEMS ({pendingAIs.length})</div>
-                  {pendingAIs.slice(0,3).map(ai=>(
-                    <div key={ai.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:4}}>
-                      <span style={{fontSize:11,color:C.text,flex:1}}>{ai.title}</span>
-                      <span style={{fontSize:10,color:C.dim}}>→ {ai.assignedDept||"Self"}</span>
-                      <span style={{background:`${C.orange}18`,color:C.orange,padding:"1px 7px",borderRadius:4,fontSize:10,fontWeight:600}}>{ai.status}</span>
-                    </div>
-                  ))}
-                  {pendingAIs.length>3&&<div style={{fontSize:10,color:C.muted,marginTop:4}}>+{pendingAIs.length-3} more</div>}
-                </div>
-              )}
-              {/* Thread entries */}
-              <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".07em",marginBottom:10,textTransform:"uppercase"}}>Activity Thread · {allEntries.length} entries</div>
-              {allEntries.length===0&&<div style={{textAlign:"center",padding:32,color:C.muted,fontSize:12}}>No activity logged yet for this client.</div>}
-              <div style={{display:"flex",flexDirection:"column",gap:10}}>
-                {allEntries.map((entry,i)=>{
-                  if(entry._type==="revenue") return (
-                    <div key={entry.id||i} style={{background:`${C.green}08`,border:`1px solid ${C.green}22`,borderRadius:8,padding:"10px 14px",display:"flex",alignItems:"center",gap:12}}>
-                      <span style={{fontSize:16}}>💰</span>
-                      <div style={{flex:1}}>
-                        <div style={{fontSize:12,fontWeight:700,color:C.green}}>₹{((entry.amount||0)/100000).toFixed(1)}L revenue logged</div>
-                        <div style={{fontSize:10,color:C.dim,marginTop:2}}>{entry.date} · Ref: {entry.invoiceRef||"—"} · {entry.dealType}</div>
-                        {entry.notes&&<div style={{fontSize:11,color:C.dim,marginTop:3}}>{entry.notes}</div>}
-                      </div>
-                    </div>
-                  );
-                  const isTp = entry._type==="tp";
-                  const tpBadgeColor = entry.touchpointType==="Relationship"?C.blue:C.accent;
-                  const stageChangeText = isTp && entry.stageUpdate ? `Stage: ${entry.stageUpdate}` : entry.outcome ? `Stage: ${entry.outcome}` : null;
-                  return (
-                    <div key={entry.id||i} style={{background:C.s2,borderRadius:8,padding:"12px 14px",borderLeft:`3px solid ${tpBadgeColor}`}}>
-                      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
-                        <span style={{fontSize:10,color:C.dim,fontWeight:600}}>{entry.date}</span>
-                        {entry.time&&<span style={{fontSize:10,color:C.muted}}>{entry.time}</span>}
-                        <span style={{background:`${tpBadgeColor}18`,color:tpBadgeColor,padding:"1px 7px",borderRadius:5,fontSize:10,fontWeight:700}}>{entry.touchpointType||"Deal Meeting"}</span>
-                        {entry.meetingType&&<span style={{fontSize:10,color:C.muted,background:C.s3,padding:"1px 6px",borderRadius:4}}>{entry.meetingType}</span>}
-                        {stageChangeText&&<span style={{fontSize:10,color:C.accent,fontWeight:600,background:`${C.accent}12`,padding:"1px 7px",borderRadius:4}}>{stageChangeText}</span>}
-                      </div>
-                      {(entry.contactName||entry.contactDesignation)&&(
-                        <div style={{fontSize:11,color:C.dim,marginBottom:4}}>
-                          Contact: <span style={{color:C.text,fontWeight:600}}>{entry.contactName}</span>
-                          {entry.contactDesignation&&<span style={{color:C.muted}}> · {entry.contactDesignation}</span>}
-                          {(entry.contactLevel||entry.designation)&&<span style={{color:C.muted}}> · {entry.contactLevel||entry.designation}</span>}
-                        </div>
-                      )}
-                      {(entry.whatHappened||entry.discussion)&&(
-                        <div style={{fontSize:12,color:C.text,marginBottom:4,lineHeight:1.5}}>{entry.whatHappened||entry.discussion}</div>
-                      )}
-                      {entry.clientFeedback&&(
-                        <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:5,padding:"4px 8px",fontSize:11,color:C.blue,marginTop:4}}>
-                          💬 {entry.clientFeedback}
-                        </div>
-                      )}
-                      {entry.nextSteps&&<div style={{fontSize:10,color:C.dim,marginTop:4}}>Next: {entry.nextSteps}</div>}
-                      {/* Part 6: + Add Action Item on each thread entry — proper inline form */}
-                      {isTp&&(
-                        <div style={{marginTop:8}}>
-                          {threadAIForm?.entryId===entry.id ? (
-                            <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"12px 14px",marginTop:4}}>
-                              <div style={{fontSize:10,color:C.accent,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>Add Action Item to this Touchpoint</div>
-                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                                <div>
-                                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Action Type *</div>
-                                  <select value={threadAIForm?.actionType} onChange={e=>setThreadAIForm(p=>p?({...p,actionType:e.target.value}):null)}>
-                                    <option value="">Select type…</option>
-                                    {ACTION_TYPES.map(t=><option key={t} value={t}>{t}</option>)}
-                                  </select>
-                                </div>
-                                <div>
-                                  <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Who *</div>
-                                  <select value={threadAIForm?.neededFrom} onChange={e=>setThreadAIForm(p=>p?({...p,neededFrom:e.target.value}):null)}>
-                                    <option value="">Needed from…</option>
-                                    {APPROVAL_TARGETS.map(t=><option key={t} value={t}>{t}</option>)}
-                                    <option value="Self">Myself</option>
-                                  </select>
-                                </div>
-                              </div>
-                              <div style={{marginBottom:8}}>
-                                <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>Details <span style={{fontWeight:400}}>(max 150 chars)</span></div>
-                                <input maxLength={150} placeholder="What exactly is needed…" value={threadAIForm?.details} onChange={e=>setThreadAIForm(p=>p?({...p,details:e.target.value}):null)} />
-                              </div>
-                              <div style={{marginBottom:10}}>
-                                <div style={{fontSize:9,color:C.muted,fontWeight:700,letterSpacing:".06em",textTransform:"uppercase",marginBottom:3}}>By When *</div>
-                                <input type="date" min="2020-01-01" max="2099-12-31" value={threadAIForm?.dueDate} onChange={e=>setThreadAIForm(p=>p?({...p,dueDate:e.target.value}):null)} />
-                              </div>
-                              {threadAIForm?.actionType&&threadAIForm?.neededFrom&&(
-                                <div style={{fontSize:10,color:C.blue,fontWeight:600,marginBottom:8}}>
-                                  {threadAIForm?.actionType==="Approval needed"&&`→ Approvals tab of ${threadAIForm?.neededFrom}`}
-                                  {threadAIForm?.actionType==="Attend a meeting"&&`→ My Plan of ${threadAIForm?.neededFrom}`}
-                                  {["Document needed","Introduction needed","Flag for follow-up"].includes(threadAIForm?.actionType)&&`→ My Tasks of ${threadAIForm?.neededFrom}`}
-                                  {threadAIForm?.neededFrom==="Self"&&" (personal reminder — no one else notified)"}
-                                </div>
-                              )}
-                              <div style={{display:"flex",gap:8}}>
-                                <button onClick={()=>setThreadAIForm(null)} style={{flex:1,background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                                <button onClick={()=>{
-                                  if(!threadAIForm?.actionType||!threadAIForm?.neededFrom||!threadAIForm?.dueDate){showToast("Fill all required fields");return;}
-                                  const aType=threadAIForm?.actionType;
-                                  const neededFrom=threadAIForm?.neededFrom;
-                                  const details=threadAIForm?.details;
-                                  const dueDate=threadAIForm?.dueDate;
-                                  const repName=user_role?.name||"Rep";
-                                  const ts=`ai_tp_${Date.now()}`;
-                                  // @ts-ignore
-                                  const baseTask:any={id:ts,assignedTo:null,assignedToUserId:null,assignedDept:neededFrom==="Self"?"Self":neededFrom,repId:clientDeals[0]?.repId||null,clientCompany:clientName,title:`${aType} — ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),description:details,priority:"High",status:"Open",dueDate,createdAt:TODAY,assignedBy:activeUser,assignedByName:repName,fromMeetingLog:true,actionType:aType};
-                                  setTasks(p=>[baseTask,...p]);
-                                  if(aType==="Approval needed"&&neededFrom!=="Self"){
-                                    // @ts-ignore
-                                    setInternalReqs(p=>[{id:`ir_tp_${Date.now()}`,type:"Approval",dept:neededFrom,subject:`[Approval needed] ${clientName}${details?` — ${details}`:""} — by ${dueDate} — from ${repName}`.slice(0,160),details,raisedBy:activeUser,raisedByName:repName,repId:clientDeals[0]?.repId||null,dealId:clientDeals[0]?.id||null,clientCompany:clientName,status:"Pending",raisedAt:TODAY,slaHours:48,resolvedAt:null,resolverNote:""},...p]);
-                                  }
-                                  setThreadAIForm(null);
-                                  showToast(`Action item → ${neededFrom} ✓`);
-                                }} style={{flex:2,background:C.accent,border:"none",color:"#fff",borderRadius:5,padding:"6px 0",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Add Item</button>
-                              </div>
-                            </div>
-                          ):(
-                            <button onClick={()=>setThreadAIForm({entryId:entry.id,actionType:"",details:"",neededFrom:"",dueDate:TOMORROW})}
-                              style={{background:`${C.blue}10`,border:`1px solid ${C.blue}33`,color:C.blue,borderRadius:5,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                              + Add Action Item
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{marginTop:16,paddingTop:14,borderTop:`1px solid ${C.border}`,display:"flex",justifyContent:"flex-end"}}>
-                <button onClick={()=>{setLogForm(p=>({...BLANK_LOG,clientAgencyName:clientName,repId:String(clientDeals[0]?.repId||"")}));setLogOpen(true);setAccountThreadOpen(false);}}
-                  style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:6,padding:"7px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                  + Log New Meeting
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
 
       {/* NOTE MODAL */}
       {noteModal && (
