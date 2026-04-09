@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useCROAppContext } from "../../contexts/CROAppContext";
+import { useCROAppContext, Deal, Rep, InternalReq, RevenueEntry, TargetSub, Property, MasterClient } from "../../contexts/CROAppContext";
 import { apiFetch } from "../../services/api/_client";
 import { externalPost } from "../../services/api/external";
 
@@ -15,16 +15,6 @@ function loadXLSX(): Promise<any> {
     s.onerror = rej; document.head.appendChild(s);
   });
   return _xlsxPromise;
-}
-
-interface MasterClient {
-  id: string;
-  company: string;
-  industry: string;
-  contact: string;
-  phone: string;
-  email: string;
-  region: string;
 }
 
 interface SystemConfigViewProps {
@@ -60,14 +50,14 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
   const [importTab, setImportTab] = useState("targets");
   const [dmTab, setDmTab] = useState<"reps" | "clients" | "bulk">("reps");
   const [repEditId, setRepEditId] = useState<number | null>(null);
-  const [repEditForm, setRepEditForm] = useState<any>({});
+  const [repEditForm, setRepEditForm] = useState<Partial<Rep>>({});
   const [repAddMode, setRepAddMode] = useState(false);
   const [repAddForm, setRepAddForm] = useState({ name: "", region: "North", role: "Sales Executive", target: 10000000, active: true });
   const [clientEditId, setClientEditId] = useState<string | null>(null);
-  const [clientEditForm, setClientEditForm] = useState<any>({});
+  const [clientEditForm, setClientEditForm] = useState<Partial<MasterClient>>({});
   const [clientAddMode, setClientAddMode] = useState(false);
   const [clientAddForm, setClientAddForm] = useState({ company: "", industry: "", contact: "", phone: "", email: "", region: "National" });
-  const [importData, setImportData] = useState<any>(null);
+  const [importData, setImportData] = useState<{filename:string;rows:Record<string,unknown>[];type:string}|null>(null);
 
   return (
     <>
@@ -93,7 +83,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <span style={{fontSize:11,color:C.dim}}>₹</span>
                   <input type="number" value={adminConfig.approvalThresholds?.[key]!=null?adminConfig.approvalThresholds[key]/100000:0}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: any)=>({...p,approvalThresholds:{...p.approvalThresholds,[key]:parseFloat(e.target.value||"0")*100000}}))}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: Record<string, any>)=>({...p,approvalThresholds:{...p.approvalThresholds,[key]:parseFloat(e.target.value||"0")*100000}}))}
                     style={{width:80,padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"right"}}/>
                   <span style={{fontSize:11,color:C.dim}}>L</span>
                 </div>
@@ -113,7 +103,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                 <div style={{flex:1,fontSize:12,fontWeight:600}}>{label}</div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <input type="number" value={adminConfig[key]||0}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: any)=>({...p,[key]:parseInt(e.target.value||"0")}))}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: Record<string, any>)=>({...p,[key]:parseInt(e.target.value||"0")}))}
                     style={{width:56,padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
                   <span style={{fontSize:11,color:C.dim}}>{suffix}</span>
                 </div>
@@ -130,7 +120,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                   <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:6}}>{k.toUpperCase()}</div>
                   <div style={{display:"flex",alignItems:"center",gap:4}}>
                     <input type="number" value={v as number}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: any)=>({...p,slaHours:{...p.slaHours,[k]:parseInt(e.target.value||"48")}}))}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: Record<string, any>)=>({...p,slaHours:{...p.slaHours,[k]:parseInt(e.target.value||"48")}}))}
                       style={{width:50,padding:"4px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
                     <span style={{fontSize:10,color:C.dim}}>hrs</span>
                   </div>
@@ -162,7 +152,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                 <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:5}}>PLATFORM STATE</div>
                 <div style={{display:"flex",gap:6}}>
                   {["Pre-launch","Live"].map((s: string)=>(
-                    <button key={s} onClick={()=>setAdminConfig((p: any)=>({...p,platformLive:s==="Live"}))}
+                    <button key={s} onClick={()=>setAdminConfig((p: Record<string, any>)=>({...p,platformLive:s==="Live"}))}
                       style={{padding:"7px 16px",fontSize:11,fontWeight:700,borderRadius:5,border:`1px solid ${((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?s==="Live"?C.green:C.orange:C.border}`,background:((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?`${s==="Live"?C.green:C.orange}18`:C.s2,color:((s==="Live"&&adminConfig.platformLive!==false)||(s==="Pre-launch"&&adminConfig.platformLive===false))?s==="Live"?C.green:C.orange:C.dim,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
                       {s==="Live"?"✓ Go Live":"🚀 Pre-launch"}
                     </button>
@@ -172,7 +162,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
               {adminConfig.platformLive===false&&(
                 <div>
                   <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:5}}>LAUNCH DATE (shown to reps)</div>
-                  <input type="date" value={adminConfig.launchDate||""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: any)=>({...p,launchDate:e.target.value}))}
+                  <input type="date" value={adminConfig.launchDate||""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: Record<string, any>)=>({...p,launchDate:e.target.value}))}
                     style={{padding:"6px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                 </div>
               )}
@@ -195,7 +185,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <span style={{fontSize:11,color:C.dim}}>₹</span>
                   <input type="number" value={adminConfig.approvalThresholds[key]/100000}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: any)=>({...p,approvalThresholds:{...p.approvalThresholds,[key]:parseFloat(e.target.value||"0")*100000}}))}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: Record<string, any>)=>({...p,approvalThresholds:{...p.approvalThresholds,[key]:parseFloat(e.target.value||"0")*100000}}))}
                     style={{width:80,padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"right"}}/>
                   <span style={{fontSize:11,color:C.dim}}>L</span>
                 </div>
@@ -213,7 +203,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                   <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",marginBottom:6}}>{k.toUpperCase()}</div>
                   <div style={{display:"flex",alignItems:"center",gap:4}}>
                     <input type="number" value={v as number}
-                      onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: any)=>({...p,slaHours:{...p.slaHours,[k]:parseInt(e.target.value||"48")}}))}
+                      onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: Record<string, any>)=>({...p,slaHours:{...p.slaHours,[k]:parseInt(e.target.value||"48")}}))}
                       style={{width:50,padding:"4px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
                     <span style={{fontSize:10,color:C.dim}}>hrs</span>
                   </div>
@@ -232,7 +222,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                 <div style={{flex:1,fontSize:12,fontWeight:600}}>{label}</div>
                 <div style={{display:"flex",alignItems:"center",gap:6}}>
                   <input type="number" value={adminConfig[key]}
-                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: any)=>({...p,[key]:parseInt(e.target.value||"7")}))}
+                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: Record<string, any>)=>({...p,[key]:parseInt(e.target.value||"7")}))}
                     style={{width:55,padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",textAlign:"center"}}/>
                   <span style={{fontSize:11,color:C.dim}}>{suffix}</span>
                 </div>
@@ -247,7 +237,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
               <input
                 type="url"
                 value={adminConfig.webhookUrl||""}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: any)=>({...p,webhookUrl:e.target.value}))}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setAdminConfig((p: Record<string, any>)=>({...p,webhookUrl:e.target.value}))}
                 placeholder="https://hooks.zapier.com/hooks/catch/..."
                 style={{flex:1,minWidth:260,padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}
               />
@@ -308,7 +298,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                     const url=zohoSearchQ.trim().length>=2
                       ?`/api/zoho/accounts?search=${encodeURIComponent(zohoSearchQ.trim())}`
                       :"/api/zoho/accounts";
-                    const j=await apiFetch(url) as any;
+                    const j=await apiFetch(url) as {ok?:boolean;accounts?:string[];error?:string};
                     if(j.ok){setZohoAccounts(j.accounts||[]);if(!j.accounts?.length)setZohoError("No accounts found in Zoho CRM.");}
                     else setZohoError(j.error||"Failed to fetch from Zoho CRM.");
                   }catch(e: unknown){setZohoError(e instanceof Error?e.message:"Network error");}
@@ -355,7 +345,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
             </div>
 
             {(()=>{
-              const existingClients=[...new Set(deals.map((d: any)=>d.clientCompany).filter(Boolean))].sort() as string[];
+              const existingClients=[...new Set(deals.map((d: Deal)=>d.clientCompany).filter(Boolean))].sort() as string[];
               const notYetAdded=existingClients.filter((c: string)=>!clientMasterList.some((m: string)=>m.toLowerCase()===c.toLowerCase()));
               if(!notYetAdded.length)return null;
               return (
@@ -397,21 +387,22 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
           <div className="card" style={{padding:"18px 20px"}}>
             <div className="sans" style={{fontWeight:700,marginBottom:12}}>Recent Approval Activity</div>
             {(()=>{
-              const allLogs = deals.flatMap((d: any)=>(d.auditLog||[]).map((l: any)=>({...l,dealId:d.id,clientCompany:d.clientCompany,amount:d.amount})));
-              const sorted  = allLogs.sort((a: any,b: any)=>b.at?.localeCompare(a.at||"")||0).slice(0,20);
+              const allLogs = deals.flatMap((d: Deal)=>(d.auditLog||[]).map((l: Record<string,unknown>)=>({...l,dealId:d.id,clientCompany:d.clientCompany,amount:d.amount})));
+              const sorted  = allLogs.sort((a: Record<string,unknown>,b: Record<string,unknown>)=>String(b.at||"").localeCompare(String(a.at||""))).slice(0,20);
               if(!sorted.length) return <div style={{textAlign:"center",padding:20,color:C.muted}}>No approval actions yet.</div>;
               return (
                 <div style={{display:"flex",flexDirection:"column",gap:5}}>
-                  {sorted.map((l: any,i: number)=>{
+                  {sorted.map((l: Record<string,unknown>,i: number)=>{
                     const ac = l.action==="Approved"?C.green:l.action==="Rejected"?C.red:C.orange;
+                    const sL = (k: string) => String(l[k]||"");
                     return (
                       <div key={i} style={{display:"flex",alignItems:"center",gap:10,padding:"7px 10px",background:C.s2,borderRadius:5,flexWrap:"wrap"}}>
-                        <span style={{background:`${ac}22`,color:ac,padding:"1px 8px",borderRadius:6,fontSize:10,fontWeight:700}}>{l.action}</span>
-                        <span style={{fontSize:11,fontWeight:600}}>{l.clientCompany}</span>
-                        <span style={{fontSize:10,color:C.dim}}>by {l.by} ({l.role})</span>
-                        <span style={{fontSize:10,color:C.dim}}>→ {l.to||"Cleared"}</span>
-                        {l.note&&<span style={{fontSize:10,color:C.dim,fontStyle:"italic"}}>"{l.note}"</span>}
-                        <span style={{fontSize:10,color:C.muted,marginLeft:"auto"}}>{l.at}</span>
+                        <span style={{background:`${ac}22`,color:ac,padding:"1px 8px",borderRadius:6,fontSize:10,fontWeight:700}}>{sL("action")}</span>
+                        <span style={{fontSize:11,fontWeight:600}}>{sL("clientCompany")}</span>
+                        <span style={{fontSize:10,color:C.dim}}>by {sL("by")} ({sL("role")})</span>
+                        <span style={{fontSize:10,color:C.dim}}>→ {sL("to")||"Cleared"}</span>
+                        {sL("note")&&<span style={{fontSize:10,color:C.dim,fontStyle:"italic"}}>"{sL("note")}"</span>}
+                        <span style={{fontSize:10,color:C.muted,marginLeft:"auto"}}>{sL("at")}</span>
                       </div>
                     );
                   })}
@@ -446,14 +437,14 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
             const ROLES   = ["Sales Executive","Senior Sales","Business Development"];
             const saveRep = () => {
               if (!repEditForm.name?.trim()){showToast("Name required","err");return;}
-              setReps((p: any[])=>p.map((r: any)=>r.id===repEditId?{...r,...repEditForm}:r));
+              setReps((p: Rep[])=>p.map((r: Rep)=>r.id===repEditId?{...r,...repEditForm}:r));
               setRepEditId(null); setRepEditForm({});
               showToast("Rep updated");
             };
             const addRep = () => {
               if (!repAddForm.name.trim()){showToast("Name required","err");return;}
-              const newId = Math.max(0,...(reps as any[]).map((r: any)=>r.id))+1;
-              setReps((p: any[])=>[...p,{id:newId,...repAddForm,active:true}]);
+              const newId = Math.max(0,...reps.map((r: Rep)=>r.id))+1;
+              setReps((p: Rep[])=>[...p,{id:newId,...repAddForm,active:true}]);
               setRepAddMode(false);
               setRepAddForm({name:"",region:"North",role:"Sales Executive",target:10000000,active:true});
               showToast(`${repAddForm.name} added`);
@@ -461,7 +452,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
             return (
               <div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                  <div style={{fontSize:12,color:C.dim}}>{(reps as any[]).filter((r: any)=>r.active!==false).length} active · {(reps as any[]).filter((r: any)=>r.active===false).length} inactive</div>
+                  <div style={{fontSize:12,color:C.dim}}>{reps.filter((r: Rep)=>r.active!==false).length} active · {reps.filter((r: Rep)=>r.active===false).length} inactive</div>
                   <button onClick={()=>{setRepAddMode(true);setRepEditId(null);}}
                     style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                     + Add Rep
@@ -473,20 +464,20 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                     <div className="sans" style={{fontWeight:700,marginBottom:12,fontSize:13}}>New Sales Rep</div>
                     <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr 1fr",gap:10,marginBottom:12}}>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>FULL NAME *</div>
-                        <input value={repAddForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRepAddForm((p: any)=>({...p,name:e.target.value}))} placeholder="e.g. Sunita Patra"
+                        <input value={repAddForm.name} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRepAddForm((p)=>({...p,name:e.target.value}))} placeholder="e.g. Sunita Patra"
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>REGION *</div>
-                        <select value={repAddForm.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setRepAddForm((p: any)=>({...p,region:e.target.value}))}
+                        <select value={repAddForm.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setRepAddForm((p)=>({...p,region:e.target.value}))}
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12}}>
                           {REP_REGIONS.map((r: string)=><option key={r}>{r}</option>)}
                         </select></div>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>ROLE</div>
-                        <select value={repAddForm.role} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setRepAddForm((p: any)=>({...p,role:e.target.value}))}
+                        <select value={repAddForm.role} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setRepAddForm((p)=>({...p,role:e.target.value}))}
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12}}>
                           {ROLES.map((r: string)=><option key={r}>{r}</option>)}
                         </select></div>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>TARGET (₹L)</div>
-                        <input type="number" value={repAddForm.target/100000} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRepAddForm((p: any)=>({...p,target:parseFloat(e.target.value||"0")*100000}))}
+                        <input type="number" value={repAddForm.target/100000} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRepAddForm((p)=>({...p,target:parseFloat(e.target.value||"0")*100000}))}
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}} /></div>
                     </div>
                     <div style={{display:"flex",gap:8}}>
@@ -506,7 +497,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                       </tr>
                     </thead>
                     <tbody>
-                      {(reps as any[]).map((rep: any)=>{
+                      {reps.map((rep: Rep)=>{
                         const isEditing = repEditId===rep.id;
                         const inactive  = rep.active===false;
                         return (
@@ -514,13 +505,13 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                             <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",color:C.muted,fontSize:11}}>{rep.id}</td>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
-                                ? <input value={repEditForm.name||rep.name} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRepEditForm((p: any)=>({...p,name:e.target.value}))}
+                                ? <input value={repEditForm.name||rep.name} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRepEditForm((p)=>({...p,name:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:140}} />
                                 : <span style={{fontWeight:600,color:inactive?C.muted:C.text}}>{rep.name}</span>}
                             </td>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
-                                ? <select value={repEditForm.region||rep.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setRepEditForm((p: any)=>({...p,region:e.target.value}))}
+                                ? <select value={repEditForm.region||rep.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setRepEditForm((p)=>({...p,region:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12}}>
                                     {REP_REGIONS.map((r: string)=><option key={r}>{r}</option>)}
                                   </select>
@@ -528,7 +519,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                             </td>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
-                                ? <select value={repEditForm.role||rep.role} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setRepEditForm((p: any)=>({...p,role:e.target.value}))}
+                                ? <select value={repEditForm.role||rep.role} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setRepEditForm((p)=>({...p,role:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12}}>
                                     {ROLES.map((r: string)=><option key={r}>{r}</option>)}
                                   </select>
@@ -537,7 +528,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                             <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace"}}>
                               {isEditing
                                 ? <input type="number" value={(repEditForm.target??rep.target)/100000}
-                                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRepEditForm((p: any)=>({...p,target:parseFloat(e.target.value||"0")*100000}))}
+                                    onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setRepEditForm((p)=>({...p,target:parseFloat(e.target.value||"0")*100000}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:70,fontFamily:"'DM Mono',monospace"}} />
                                 : <span style={{color:C.accent}}>₹{((rep.target||0)/100000).toFixed(0)}L</span>}
                             </td>
@@ -561,7 +552,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                                   <>
                                     <button onClick={()=>{setRepEditId(rep.id);setRepEditForm({...rep});setRepAddMode(false);}}
                                       style={{background:`${C.blue}15`,border:"none",color:C.blue,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Edit</button>
-                                    <button onClick={()=>{setReps((p: any[])=>p.map((r: any)=>r.id===rep.id?{...r,active:!inactive}:r));showToast(inactive?"Rep activated":"Rep deactivated");}}
+                                    <button onClick={()=>{setReps((p: Rep[])=>p.map((r: Rep)=>r.id===rep.id?{...r,active:!inactive}:r));showToast(inactive?"Rep activated":"Rep deactivated");}}
                                       style={{background:inactive?`${C.green}15`:`${C.red}12`,border:"none",color:inactive?C.green:C.red,borderRadius:4,padding:"4px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
                                       {inactive?"Activate":"Deactivate"}
                                     </button>
@@ -592,7 +583,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
             const addClient = () => {
               if (!clientAddForm.company.trim()){showToast("Company name required","err");return;}
               const newId = `cl_${Date.now()}`;
-              setMasterClients((p: any[])=>[...p,{id:newId,...clientAddForm}]);
+              setMasterClients((p)=>[...p,{id:newId,...clientAddForm}]);
               setClientAddMode(false);
               setClientAddForm({company:"",industry:"",contact:"",phone:"",email:"",region:"National"});
               showToast(`${clientAddForm.company} added`);
@@ -600,7 +591,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
             return (
               <div>
                 <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
-                  <div style={{fontSize:12,color:C.dim}}>{(masterClients as any[]).length} clients in master list</div>
+                  <div style={{fontSize:12,color:C.dim}}>{masterClients.length} clients in master list</div>
                   <button onClick={()=>{setClientAddMode(true);setClientEditId(null);}}
                     style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:5,padding:"7px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
                     + Add Client
@@ -612,29 +603,29 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                     <div className="sans" style={{fontWeight:700,marginBottom:12,fontSize:13}}>New Client</div>
                     <div style={{display:"grid",gridTemplateColumns:"2fr 1fr 1fr",gap:10,marginBottom:10}}>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>COMPANY NAME *</div>
-                        <input value={clientAddForm.company} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientAddForm((p: any)=>({...p,company:e.target.value}))} placeholder="e.g. Havells India"
+                        <input value={clientAddForm.company} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientAddForm((p)=>({...p,company:e.target.value}))} placeholder="e.g. Havells India"
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>INDUSTRY</div>
-                        <select value={clientAddForm.industry} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientAddForm((p: any)=>({...p,industry:e.target.value}))}
+                        <select value={clientAddForm.industry} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientAddForm((p)=>({...p,industry:e.target.value}))}
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12}}>
                           <option value="">Select…</option>
                           {INDUSTRIES.map((i: string)=><option key={i}>{i}</option>)}
                         </select></div>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>REGION</div>
-                        <select value={clientAddForm.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientAddForm((p: any)=>({...p,region:e.target.value}))}
+                        <select value={clientAddForm.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientAddForm((p)=>({...p,region:e.target.value}))}
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12}}>
                           {CL_REGIONS.map((r: string)=><option key={r}>{r}</option>)}
                         </select></div>
                     </div>
                     <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:10,marginBottom:12}}>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>PRIMARY CONTACT</div>
-                        <input value={clientAddForm.contact} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientAddForm((p: any)=>({...p,contact:e.target.value}))} placeholder="Name"
+                        <input value={clientAddForm.contact} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientAddForm((p)=>({...p,contact:e.target.value}))} placeholder="Name"
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>PHONE</div>
-                        <input value={clientAddForm.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientAddForm((p: any)=>({...p,phone:e.target.value}))} placeholder="9XXXXXXXXX"
+                        <input value={clientAddForm.phone} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientAddForm((p)=>({...p,phone:e.target.value}))} placeholder="9XXXXXXXXX"
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
                       <div><div style={{fontSize:10,color:C.dim,marginBottom:4}}>EMAIL</div>
-                        <input value={clientAddForm.email} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientAddForm((p: any)=>({...p,email:e.target.value}))} placeholder="contact@company.com"
+                        <input value={clientAddForm.email} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientAddForm((p)=>({...p,email:e.target.value}))} placeholder="contact@company.com"
                           style={{width:"100%",padding:"6px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,boxSizing:"border-box"}} /></div>
                     </div>
                     <div style={{display:"flex",gap:8}}>
@@ -660,13 +651,13 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                           <tr key={cl.id} style={{borderTop:`1px solid ${C.s2}`}}>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
-                                ? <input value={clientEditForm.company||cl.company} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientEditForm((p: any)=>({...p,company:e.target.value}))}
+                                ? <input value={clientEditForm.company||cl.company} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientEditForm((p)=>({...p,company:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:140}} />
                                 : <span style={{fontWeight:600}}>{cl.company}</span>}
                             </td>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
-                                ? <select value={clientEditForm.industry||cl.industry} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientEditForm((p: any)=>({...p,industry:e.target.value}))}
+                                ? <select value={clientEditForm.industry||cl.industry} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientEditForm((p)=>({...p,industry:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11}}>
                                     {INDUSTRIES.map((i: string)=><option key={i}>{i}</option>)}
                                   </select>
@@ -674,20 +665,20 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                             </td>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
-                                ? <input value={clientEditForm.contact||cl.contact} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientEditForm((p: any)=>({...p,contact:e.target.value}))}
+                                ? <input value={clientEditForm.contact||cl.contact} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientEditForm((p)=>({...p,contact:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:120}} />
                                 : <span style={{fontSize:11}}>{cl.contact}</span>}
                             </td>
                             <td style={{padding:"9px 12px",fontFamily:"'DM Mono',monospace",fontSize:11,color:C.dim}}>{cl.phone}</td>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
-                                ? <input value={clientEditForm.email||cl.email||""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientEditForm((p: any)=>({...p,email:e.target.value}))}
+                                ? <input value={clientEditForm.email||cl.email||""} onChange={(e: React.ChangeEvent<HTMLInputElement>)=>setClientEditForm((p)=>({...p,email:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:12,width:150}} />
                                 : <span style={{fontSize:11,color:C.dim,fontFamily:"'DM Mono',monospace"}}>{cl.email||"—"}</span>}
                             </td>
                             <td style={{padding:"9px 12px"}}>
                               {isEditing
-                                ? <select value={clientEditForm.region||cl.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientEditForm((p: any)=>({...p,region:e.target.value}))}
+                                ? <select value={clientEditForm.region||cl.region} onChange={(e: React.ChangeEvent<HTMLSelectElement>)=>setClientEditForm((p)=>({...p,region:e.target.value}))}
                                     style={{padding:"4px 6px",background:C.s2,border:`1px solid ${C.accent}44`,borderRadius:4,color:C.text,fontSize:11}}>
                                     {CL_REGIONS.map((r: string)=><option key={r}>{r}</option>)}
                                   </select>
@@ -767,7 +758,7 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                   const ws   = wb.Sheets[wb.SheetNames[0]];
                   const rows = XLSX.utils.sheet_to_json(ws);
                   setImportData({filename:file.name, rows, type});
-                } catch(err: any) { showToast("Could not read file: "+err.message, "err"); }
+                } catch(err: unknown) { showToast("Could not read file: "+(err instanceof Error?err.message:String(err)), "err"); }
               };
               reader.readAsArrayBuffer(file);
             };
@@ -775,32 +766,32 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
             const commitImport = () => {
               if (!importData) return;
               const {rows, type} = importData;
-              const parseCur = (v: any) => { if(!v)return 0; const s=String(v).replace(/[,₹]/g,"").trim(); if(/[0-9]+[Cc][Rr]$/.test(s))return parseFloat(s)*10000000; if(/[0-9]+[Ll]$/.test(s))return parseFloat(s)*100000; return parseFloat(s)||0; };
+              const parseCur = (v: unknown): number => { if(!v)return 0; const s=String(v).replace(/[,₹]/g,"").trim(); if(/[0-9]+[Cc][Rr]$/.test(s))return parseFloat(s)*10000000; if(/[0-9]+[Ll]$/.test(s))return parseFloat(s)*100000; return parseFloat(s)||0; };
 
               if (type==="revenue") {
-                const repLookup = (r: string) => (reps as any[]).find((rep: any)=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
-                const entries = rows.map((row: any,i: number)=>{
-                  const rep = repLookup(row["Rep Name"]);
-                  return {id:`re_imp_${Date.now()}_${i}`,repId:rep?.id||null,clientCompany:row["Client Company"]||"",dealType:row["Deal Type"]||"Linear TV",amount:parseCur(row["Amount"]),invoiceRef:row["Invoice Ref"]||"",date:row["Date"]||TODAY,quarter:row["Quarter"]||"Q1 FY26",notes:row["Notes"]||""};
+                const repLookup = (r: string) => reps.find((rep: Rep)=>rep.name.toLowerCase().includes((r||"").toLowerCase().slice(0,5)));
+                const entries = rows.map((row: Record<string,unknown>,i: number)=>{
+                  const rep = repLookup(String(row["Rep Name"]||""));
+                  return {id:`re_imp_${Date.now()}_${i}`,repId:rep?.id??0,clientCompany:String(row["Client Company"]||""),dealType:String(row["Deal Type"]||"Linear TV"),amount:parseCur(row["Amount"]),invoiceRef:String(row["Invoice Ref"]||""),date:String(row["Date"]||TODAY),quarter:String(row["Quarter"]||"Q1 FY26"),notes:String(row["Notes"]||"")} as RevenueEntry;
                 });
-                setRevenueEntries((p: any[])=>[...p,...entries]);
+                setRevenueEntries((p: RevenueEntry[])=>[...p,...entries]);
                 showToast(`✓ ${entries.length} revenue entries imported`);
               } else if (type==="targets") {
-                const repGroups: Record<string, any> = {};
-                rows.forEach((row: any) => {
-                  const repName = (row["Rep Name"]||"").trim();
-                  const rep = (reps as any[]).find((r: any)=>r.name.toLowerCase()===repName.toLowerCase())
-                           || (reps as any[]).find((r: any)=>r.name.toLowerCase().includes(repName.toLowerCase().slice(0,6)));
-                  const key = rep?.id || repName;
+                const repGroups: Record<string, {rep: Rep|undefined; repName: string; region: string; rows: Record<string,unknown>[]}> = {};
+                rows.forEach((row: Record<string,unknown>) => {
+                  const repName = String(row["Rep Name"]||"").trim();
+                  const rep = reps.find((r: Rep)=>r.name.toLowerCase()===repName.toLowerCase())
+                           || reps.find((r: Rep)=>r.name.toLowerCase().includes(repName.toLowerCase().slice(0,6)));
+                  const key = String(rep?.id || repName);
                   if (!repGroups[key]) repGroups[key] = {rep, repName, region: rep?.region||row["Region"]||"", rows:[]};
                   repGroups[key].rows.push(row);
                 });
                 const now = Date.now();
-                const newSubs = Object.values(repGroups).map((g: any, i: number) => {
-                  const clients = g.rows.map((row: any) => ({
-                    clientCompany: (row["Client Company"]||"").trim(),
-                    channel:       (row["Channel"]||"OTV").trim(),
-                    dealType:      (row["Deal Type"]||"Linear TV").trim(),
+                const newSubs = Object.values(repGroups).map((g, i: number) => {
+                  const clients = g.rows.map((row: Record<string,unknown>) => ({
+                    clientCompany: String(row["Client Company"]||"").trim(),
+                    channel:       String(row["Channel"]||"OTV").trim(),
+                    dealType:      String(row["Deal Type"]||"Linear TV").trim(),
                     targetAmount:  parseCur(row["Annual Target Amount"]),
                     clientStatus:  "Pending",
                   }));
@@ -811,23 +802,23 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                     region:     g.region,
                     quarter:    "FY26 Annual",
                     clients,
-                    totalTarget: clients.reduce((s: number,c: any)=>s+c.targetAmount,0),
+                    totalTarget: clients.reduce((s: number,c: {targetAmount:number})=>s+c.targetAmount,0),
                     status:     "Pending RH",
                     submittedAt: TODAY,
                     approvalLog: [],
                   };
                 });
-                setTargetSubs((p: any[])=>[...p,...newSubs]);
-                const totalClients = newSubs.reduce((s: number,sub: any)=>s+sub.clients.length,0);
+                setTargetSubs((p: TargetSub[])=>[...p,...(newSubs as TargetSub[])]);
+                const totalClients = newSubs.reduce((s: number,sub: {clients:unknown[]})=>s+sub.clients.length,0);
                 showToast(`✓ ${totalClients} client targets imported for ${newSubs.length} rep${newSubs.length!==1?"s":""} → pending RH approval`);
               } else if (type==="properties") {
-                const grouped: Record<string, any> = {};
-                rows.forEach((row: any)=>{
-                  const name = row["Property Name"]||"";
+                const grouped: Record<string, Property> = {};
+                rows.forEach((row: Record<string,unknown>)=>{
+                  const name = String(row["Property Name"]||"");
                   if(!grouped[name]) grouped[name]={id:`pr_imp_${Date.now()}`,name,type:row["Type"]||"",channel:row["Channel"]||"",quarter:row["Quarter"]||"Q1 FY26",totalValue:parseCur(row["Total Value"]),slots:[]};
                   grouped[name].slots.push({id:`s_imp_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,label:row["Slot Label"]||"Slot",value:parseCur(row["Slot Value"]),status:row["Status"]||"Available",clientCompany:row["Client Company"]||"",repId:null});
                 });
-                setProperties((p: any[])=>[...p,...Object.values(grouped)]);
+                setProperties((p: Property[])=>[...p,...Object.values(grouped)]);
                 showToast(`✓ ${Object.values(grouped).length} properties imported`);
               } else {
                 showToast(`${type} import noted — connect to your DB to persist`, "ok");
@@ -905,9 +896,9 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
                               {Object.keys(importData.rows[0]||{}).length>7&&<th style={{padding:"6px 10px",background:C.s2,color:C.muted,fontSize:10}}>+{Object.keys(importData.rows[0]).length-7} more</th>}
                             </tr></thead>
                             <tbody>
-                              {importData.rows.slice(0,5).map((row: any,i: number)=>(
+                              {importData.rows.slice(0,5).map((row: Record<string,unknown>,i: number)=>(
                                 <tr key={i} style={{borderBottom:`1px solid ${C.s2}`}}>
-                                  {Object.values(row).slice(0,7).map((v: any,j: number)=>(
+                                  {Object.values(row).slice(0,7).map((v,j: number)=>(
                                     <td key={j} style={{padding:"7px 10px",color:C.text,maxWidth:120,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{String(v)}</td>
                                   ))}
                                   {Object.values(row).length>7&&<td style={{padding:"7px 10px",color:C.muted}}>…</td>}
@@ -924,13 +915,13 @@ export function SystemConfigView({ view }: SystemConfigViewProps) {
 
                 <div style={{marginTop:20,display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:8}}>
                   {[
-                    {label:"Deals in system",    val:(deals as any[]).length,               color:C.accent},
-                    {label:"Revenue entries",    val:(revenueEntries as any[]).length,       color:C.green},
-                    {label:"Target submissions", val:(targetSubs as any[]).length,           color:C.blue},
-                    {label:"Properties/IPs",     val:((properties||[]) as any[]).length,    color:C.purple},
-                    {label:"Tasks",              val:(tasks as any[]).length,               color:C.orange},
-                    {label:"Meetings logged",    val:(meetings as any[]).length,            color:C.dim},
-                  ].map((s: any)=>(
+                    {label:"Deals in system",    val:deals.length,               color:C.accent},
+                    {label:"Revenue entries",    val:revenueEntries.length,       color:C.green},
+                    {label:"Target submissions", val:targetSubs.length,           color:C.blue},
+                    {label:"Properties/IPs",     val:(properties||[]).length,    color:C.purple},
+                    {label:"Tasks",              val:tasks.length,               color:C.orange},
+                    {label:"Meetings logged",    val:meetings.length,            color:C.dim},
+                  ].map((s)=>(
                     <div key={s.label} style={{background:C.surface,border:`1px solid ${s.color}33`,borderRadius:7,padding:"10px 14px"}}>
                       <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:4}}>{s.label}</div>
                       <div className="sans" style={{fontSize:20,fontWeight:800,color:s.color}}>{s.val}</div>

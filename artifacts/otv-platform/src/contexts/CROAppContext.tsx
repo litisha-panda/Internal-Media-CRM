@@ -13,6 +13,8 @@ export type Touchpoint     = Record<string, any> & { id: string; repId: number }
 export type InternalReq    = Record<string, any> & { id: string };
 export type Rep            = Record<string, any> & { id: number; name: string };
 export type UserRole       = Record<string, any> & { id: string; name: string; role: string };
+export type Property       = Record<string, any> & { id: string };
+export type MasterClient   = { id: string; company: string; industry: string; contact: string; phone: string; email: string; region: string };
 
 // ── Context interface — Tier 2 state only ─────────────────────────────────────
 // Tier 1 (view, filterRegion, filterQ, activeUser, isMobile) stays in CROApp as props.
@@ -35,17 +37,17 @@ export interface CROAppContextValue {
 
   // Persisted blob state
   reps: Rep[];                     setReps: React.Dispatch<React.SetStateAction<Rep[]>>;
-  masterClients: any[];            setMasterClients: React.Dispatch<React.SetStateAction<any[]>>;
+  masterClients: MasterClient[];   setMasterClients: React.Dispatch<React.SetStateAction<MasterClient[]>>;
   clientMasterList: string[];      setClientMasterList: React.Dispatch<React.SetStateAction<string[]>>;
   adminConfig: Record<string, any>; setAdminConfig: React.Dispatch<React.SetStateAction<Record<string, any>>>;
-  savedROs: any[];                 setSavedROs: React.Dispatch<React.SetStateAction<any[]>>;
+  savedROs: Record<string, any>[]; setSavedROs: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
 
   // Deferred blob state (no DB table yet)
   att: Record<string, any>;        setAtt: React.Dispatch<React.SetStateAction<Record<string, any>>>;
-  absenceReports: any[];           setAbsenceReports: React.Dispatch<React.SetStateAction<any[]>>;
-  weeklyPlans: any[];              setWeeklyPlans: React.Dispatch<React.SetStateAction<any[]>>;
-  properties: any[];               setProperties: React.Dispatch<React.SetStateAction<any[]>>;
-  ipProposals: any[];              setIpProposals: React.Dispatch<React.SetStateAction<any[]>>;
+  absenceReports: Record<string, any>[]; setAbsenceReports: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
+  weeklyPlans: Record<string, any>[]; setWeeklyPlans: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
+  properties: Property[];          setProperties: React.Dispatch<React.SetStateAction<Property[]>>;
+  ipProposals: Record<string, any>[]; setIpProposals: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
 
   // Attendance hook
   attDbRecords: any[];

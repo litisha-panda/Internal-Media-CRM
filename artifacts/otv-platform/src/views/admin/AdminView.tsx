@@ -1,5 +1,5 @@
 import React from "react";
-import { useCROAppContext } from "../../contexts/CROAppContext";
+import { useCROAppContext, Deal, Rep, InternalReq } from "../../contexts/CROAppContext";
 import { apiFetch } from "../../services/api/_client";
 import * as adminSvc from "../../services/api/admin";
 
@@ -58,7 +58,7 @@ export function AdminView({
       {/* Pre-launch demo data banner */}
       {(()=>{
         const DEMO_CLIENTS = ["Havells India","Berger Paints","Asian Paints"];
-        const demoFound = deals.some((d: any)=>DEMO_CLIENTS.includes(d.clientCompany));
+        const demoFound = deals.some((d: Deal)=>DEMO_CLIENTS.includes(d.clientCompany));
         if (!demoFound) return null;
         return (
           <div style={{background:`${C.red}12`,border:`2px solid ${C.red}`,borderRadius:10,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
@@ -73,7 +73,7 @@ export function AdminView({
                 if(typed===null)return;
                 if(typed.trim()!=="RESET"){showToast("Reset cancelled — type RESET exactly","err");return;}
                 try{
-                  const j=await apiFetch("/api/state/reset-all",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirmText:"RESET",triggeredBy:user?.email||"admin",role:"ADMIN"})}) as any;
+                  const j=await apiFetch("/api/state/reset-all",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirmText:"RESET",triggeredBy:user?.email||"admin",role:"ADMIN"})}) as { ok: boolean; error?: string };
                   if(j.ok){Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));showToast("Demo data cleared — reloading…");setTimeout(()=>window.location.reload(),800);}
                   else showToast("Reset failed: "+j.error,"err");
                 }catch{showToast("Reset failed","err");}
@@ -136,8 +136,8 @@ export function AdminView({
                       try {
                         await adminSvc.approveUser(pu._apiId, role, region);
                         if (role === "SALES REP") {
-                          setReps((prev: any[]) => {
-                            const nextId = prev.length > 0 ? Math.max(...prev.map((r: any)=>r.id)) + 1 : 1;
+                          setReps((prev: Rep[]) => {
+                            const nextId = prev.length > 0 ? Math.max(...prev.map((r: Rep)=>r.id)) + 1 : 1;
                             return [...prev, {id:nextId, name:pu.name, region, role:"Sales Executive", target:0}];
                           });
                         }
@@ -208,7 +208,7 @@ export function AdminView({
                   method:"POST",
                   headers:{"Content-Type":"application/json"},
                   body: JSON.stringify({ confirmText:"RESET", triggeredBy: user?.email||"admin", role:"ADMIN" })
-                }) as any;
+                }) as { ok: boolean; error?: string };
                 if (j.ok) {
                   Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));
                   showToast("All data cleared — reloading…");
@@ -230,8 +230,8 @@ export function AdminView({
       {view==="admin-approvals" && (
         <div>
           <div style={{fontSize:11,color:C.dim,marginBottom:16}}>All pending approvals across teams.</div>
-          {internalReqs.filter((r: any)=>r.status!=="Done").length===0&&<div style={{textAlign:"center",padding:50,color:C.muted}}>No pending approvals.</div>}
-          {internalReqs.filter((r: any)=>r.status!=="Done").map((req: any)=>{
+          {internalReqs.filter((r: InternalReq)=>r.status!=="Done").length===0&&<div style={{textAlign:"center",padding:50,color:C.muted}}>No pending approvals.</div>}
+          {internalReqs.filter((r: InternalReq)=>r.status!=="Done").map((req: InternalReq)=>{
             const daysOld=daysSince(req.raisedAt);
             const overdue=daysOld>=(req.slaHours/24);
             const sc=overdue?C.red:req.status==="In Progress"?C.blue:C.orange;
@@ -248,8 +248,8 @@ export function AdminView({
                 <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
                 {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8}}>{req.details}</div>}
                 <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                  <button onClick={()=>setInternalReqs((p: any[])=>p.map((r: any)=>r.id===req.id?{...r,status:"In Progress"}:r))} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
-                  <button onClick={()=>{openNoteModal("Resolution Note", "Resolved by admin", (note: string) => setInternalReqs((p: any[])=>p.map((r: any)=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
+                  <button onClick={()=>setInternalReqs((p: InternalReq[])=>p.map((r: InternalReq)=>r.id===req.id?{...r,status:"In Progress"}:r))} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
+                  <button onClick={()=>{openNoteModal("Resolution Note", "Resolved by admin", (note: string) => setInternalReqs((p: InternalReq[])=>p.map((r: InternalReq)=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
                 </div>
               </div>
             );
