@@ -9,6 +9,33 @@ import {
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 
+interface TargetsViewProps {
+  view: string;
+  setView: React.Dispatch<React.SetStateAction<string>>;
+  targetSubTab: string;
+  setTargetSubTab: React.Dispatch<React.SetStateAction<string>>;
+  editSubId: string | null;
+  setEditSubId: React.Dispatch<React.SetStateAction<string | null>>;
+  editSubClients: Record<string, any>[];
+  setEditSubClients: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
+  planUploadOpen: boolean;
+  setPlanUploadOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  planUploadForm: Record<string, any>;
+  setPlanUploadForm: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+  newClients: Record<string, any>[];
+  setNewClients: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
+  addClientModalOpen: boolean;
+  setAddClientModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  addClientForm: Record<string, any>;
+  setAddClientForm: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+  rhRepDrill: string | null;
+  setRhRepDrill: React.Dispatch<React.SetStateAction<string | null>>;
+  targetDrilldown: { key: string; label: string } | null;
+  setTargetDrilldown: React.Dispatch<React.SetStateAction<{ key: string; label: string } | null>>;
+  nshRepDrill: string | null;
+  setNshRepDrill: React.Dispatch<React.SetStateAction<string | null>>;
+}
+
 export function TargetsView({
   view, setView,
   targetSubTab, setTargetSubTab,
@@ -22,7 +49,7 @@ export function TargetsView({
   rhRepDrill, setRhRepDrill,
   targetDrilldown, setTargetDrilldown,
   nshRepDrill, setNshRepDrill,
-}: any) {
+}: TargetsViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -67,10 +94,10 @@ export function TargetsView({
             const clientRows: any[] = (rhDeals as any[])
               .filter(d=>d.outcome!=="Not Interested")
               .map(d=>{
-                const ach = revenueEntries.filter(e=>e.repId===d.repId&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                const ach = revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                 const gap = Math.max(0,(d.targetAmount||0)-ach);
                 const pct = d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
-                const rep = reps.find(r=>r.id===d.repId);
+                const rep = reps.find(r=>String(r.id)===String(d.repId));
                 return {...d, ach, gap, pct, rep};
               })
               .sort((a,b)=>b.gap-a.gap); // worst gap first
@@ -171,7 +198,7 @@ export function TargetsView({
 
               {isRep ? (() => {
                 const myRepId = user_role?.repId;
-                const myDeals = deals.filter(d=>d.repId===myRepId&&qMatch(d.quarter));
+                const myDeals = deals.filter(d=>String(d.repId)===String(myRepId)&&qMatch(d.quarter));
                 const mT=myDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
                 // Part 5: 4-number dashboard
                 const mC=getAchieved(myRepId);
@@ -199,7 +226,7 @@ export function TargetsView({
                           {myDeals.length===0&&<tr><td colSpan={7} style={{padding:28,textAlign:"center",color:C.muted,fontSize:12}}>No deals for {filterQ} yet.</td></tr>}
                           {myDeals.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
                             const ds=dealStage(d);
-                            const ach=revenueEntries.filter(e=>e.clientCompany===d.clientCompany&&(isRep?e.repId===myRepId:true)).reduce((s,e)=>s+(e.amount||0),0);
+                            const ach=revenueEntries.filter(e=>e.clientCompany===d.clientCompany&&(isRep?String(e.repId)===String(myRepId):true)).reduce((s,e)=>s+(e.amount||0),0);
                             const pip=d.pipelineAmount||parseCurrency(d.amount||"0")||0;
                             const sf=Math.max(0,(d.targetAmount||0)-ach);
                             const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
@@ -227,7 +254,7 @@ export function TargetsView({
                 if (rhRepDrill) {
                   // Client detail for selected rep
                   const repObj = reps.find(r=>r.id===rhRepDrill);
-                  const repDeals = visibleDeals.filter(d=>d.repId===rhRepDrill);
+                  const repDeals = visibleDeals.filter(d=>String(d.repId)===String(rhRepDrill));
                   const rT=repDeals.reduce((s,d)=>s+(d.targetAmount||0),0);
                   // Part 5: 4-number dashboard for rep drill
                   const rC=getAchieved(rhRepDrill);
@@ -258,7 +285,7 @@ export function TargetsView({
                           <tbody>
                             {repDeals.length===0&&<tr><td colSpan={7} style={{padding:24,textAlign:"center",color:C.muted}}>No deals for {filterQ}.</td></tr>}
                             {repDeals.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
-                              const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                              const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                               const pip=!["Mail Confirmed","Not Interested"].includes(d.outcome)?d.amount:0;
                               const sf=Math.max(0,(d.targetAmount||0)-ach);
                               const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
@@ -303,15 +330,15 @@ export function TargetsView({
                     <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>Your Sales Reps — click to view clients</div>
                     <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(280px,1fr))",gap:10}}>
                       {myReps.map(rep=>{
-                        const rd=visibleDeals.filter(d=>d.repId===rep.id);
+                        const rd=visibleDeals.filter(d=>String(d.repId)===String(rep.id));
                         const rT2=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                        const rC2=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                        const rC2=revenueEntries.filter(e=>String(e.repId)===String(rep.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                         const rP2=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+(d.amount||0),0);
                         const rPct2=rT2>0?Math.round((rC2/rT2)*100):0;
                         const sc2=rPct2>=80?C.green:rPct2>=50?C.accent:C.red;
                         const rAtRisk=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
                         return (
-                          <div key={rep.id} onClick={()=>setRhRepDrill(rep.id)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px",cursor:"pointer",transition:"border-color .15s,transform .1s"}} onMouseOver={e=>{e.currentTarget.style.borderColor=sc2;e.currentTarget.style.transform="translateY(-2px)";}} onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)";}}>
+                          <div key={rep.id} onClick={()=>setRhRepDrill(String(rep.id))} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px",cursor:"pointer",transition:"border-color .15s,transform .1s"}} onMouseOver={e=>{e.currentTarget.style.borderColor=sc2;e.currentTarget.style.transform="translateY(-2px)";}} onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)";}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:10}}>
                               <div>
                                 <div className="sans" style={{fontWeight:700,fontSize:14,marginBottom:2}}>{rep.name}</div>
@@ -432,9 +459,9 @@ export function TargetsView({
                     {targetDrilldown && nshRepDrill && (()=>{
                       const tile    = TILES.find(t=>t.key===targetDrilldown.key);
                       const repObj  = reps.find(r=>r.id===nshRepDrill);
-                      const rd      = getTileDeals(targetDrilldown.key).filter(d=>d.repId===nshRepDrill);
+                      const rd      = getTileDeals(targetDrilldown.key).filter(d=>String(d.repId)===String(nshRepDrill));
                       const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                      const rC=revenueEntries.filter(e=>e.repId===nshRepDrill&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                      const rC=revenueEntries.filter(e=>String(e.repId)===String(nshRepDrill)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const rG=Math.max(0,rT-rC);
                       const rPct=rT>0?Math.round((rC/rT)*100):0;
                       const rsc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
@@ -472,11 +499,11 @@ export function TargetsView({
                               <tbody>
                                 {rd.length===0&&<tr><td colSpan={6} style={{padding:24,textAlign:"center",color:C.muted}}>No clients.</td></tr>}
                                 {rd.sort((a,b)=>{
-                                  const achA=revenueEntries.filter(e=>e.repId===a.repId&&(a.zohoAccountId&&e.zohoAccountId?a.zohoAccountId===e.zohoAccountId:e.clientCompany===a.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-                                  const achB=revenueEntries.filter(e=>e.repId===b.repId&&(b.zohoAccountId&&e.zohoAccountId?b.zohoAccountId===e.zohoAccountId:e.clientCompany===b.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const achA=revenueEntries.filter(e=>String(e.repId)===String(a.repId)&&(a.zohoAccountId&&e.zohoAccountId?a.zohoAccountId===e.zohoAccountId:e.clientCompany===a.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const achB=revenueEntries.filter(e=>String(e.repId)===String(b.repId)&&(b.zohoAccountId&&e.zohoAccountId?b.zohoAccountId===e.zohoAccountId:e.clientCompany===b.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                   return Math.max(0,(b.targetAmount||0)-achB)-Math.max(0,(a.targetAmount||0)-achA);
                                 }).map(d=>{
-                                  const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                   const sf=Math.max(0,(d.targetAmount||0)-ach);
                                   const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                   return (
@@ -557,8 +584,8 @@ export function TargetsView({
                                 <tbody>
                                   {td.length===0&&<tr><td colSpan={colSpan} style={{padding:24,textAlign:"center",color:C.muted}}>No target set for this category this fiscal year.</td></tr>}
                                   {td.sort((a,b)=>b.targetAmount-a.targetAmount).map(d=>{
-                                    const rep=reps.find(r=>r.id===d.repId);
-                                    const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                    const rep=reps.find(r=>String(r.id)===String(d.repId));
+                                    const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                     const sf=Math.max(0,(d.targetAmount||0)-ach);
                                     const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                     return (
@@ -590,7 +617,7 @@ export function TargetsView({
           {/* ═══ TARGET SUBMISSION (REP) ═══ */}
           {view==="target-submit" && isRep && (()=>{
             const myRepId = user_role?.repId;
-            const mySubs  = targetSubs.filter(t=>t.repId===myRepId);
+            const mySubs  = targetSubs.filter(t=>String(t.repId)===String(myRepId));
             const dealTypes = ["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"];
             const statusColor = s => s==="Approved"?C.green:s==="Pending RH"||s==="Pending NSH"||s==="Pending Strategy"||s==="Pending CRO"?C.orange:s==="Rejected"?C.red:C.dim;
 
@@ -603,7 +630,7 @@ export function TargetsView({
             // Target = frozenTarget if CRO has locked it, else live totalTarget — never changes after freeze
             const totalTarget   = approvedSubs.reduce((s,sub)=>s+(sub.frozenTarget??sub.totalTarget),0);
             // Achievement = ALL revenue entries for rep in current quarter (matches War Room CLOSED QTD)
-            const totalAchieved = revenueEntries.filter(e=>e.repId===myRepId&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+            const totalAchieved = revenueEntries.filter(e=>String(e.repId)===String(myRepId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const pct = totalTarget>0 ? Math.round((totalAchieved/totalTarget)*100) : 0;
             const pctColor = pct>=80?C.green:pct>=50?C.accent:C.red;
 
@@ -817,7 +844,7 @@ export function TargetsView({
                           <tbody>
                             {allClients.map((cl,i)=>{
                               const achieved = revenueEntries
-                                .filter(e=>e.repId===myRepId&&e.clientCompany===cl.clientCompany&&qMatch(e.quarter))
+                                .filter(e=>String(e.repId)===String(myRepId)&&e.clientCompany===cl.clientCompany&&qMatch(e.quarter))
                                 .reduce((s,e)=>s+(e.amount||0),0);
                               const pct = cl.targetAmount>0?Math.min(100,Math.round((achieved/cl.targetAmount)*100)):0;
                               const pc = pct>=100?C.green:pct>=60?C.accent:C.red;
@@ -1163,11 +1190,11 @@ export function TargetsView({
                               if(nextStep==="Approved"){
                                 const newDeals: any[] = [];
                                 approvedOnly.forEach(cl=>{
-                                  const existing = deals.find(d=>d.repId===sub.repId&&d.clientCompany===cl.clientCompany&&d.quarter===sub.quarter);
+                                  const existing = deals.find(d=>String(d.repId)===String(sub.repId)&&d.clientCompany===cl.clientCompany&&d.quarter===sub.quarter);
                                   if(existing){
                                     setDeals(p=>p.map(d=>d.id===existing.id?{...d,targetAmount:cl.targetAmount}:d));
                                   } else {
-                                    const rep = reps.find(r=>r.id===sub.repId);
+                                    const rep = reps.find(r=>String(r.id)===String(sub.repId));
                                     newDeals.push({
                                       id:`d_ts_${Date.now()}_${Math.random().toString(36).slice(2,6)}`,
                                       repId:sub.repId, repName:sub.repName||rep?.name||"",

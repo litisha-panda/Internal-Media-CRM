@@ -2197,9 +2197,6 @@ export function CROApp({ user, onLogout }) {
             newClients={newClients} setNewClients={setNewClients}
             addClientModalOpen={addClientModalOpen} setAddClientModalOpen={setAddClientModalOpen}
             addClientForm={addClientForm} setAddClientForm={setAddClientForm}
-            rhRepDrill={rhRepDrill} setRhRepDrill={setRhRepDrill}
-            targetDrilldown={targetDrilldown} setTargetDrilldown={setTargetDrilldown}
-            nshRepDrill={nshRepDrill} setNshRepDrill={setNshRepDrill}
           />
           {/* ═══ REP DASHBOARD ═══ */}
           {view==="rep-dashboard" && isRep && (()=>{
@@ -2330,6 +2327,9 @@ export function CROApp({ user, onLogout }) {
             newClients={newClients} setNewClients={setNewClients}
             addClientModalOpen={addClientModalOpen} setAddClientModalOpen={setAddClientModalOpen}
             addClientForm={addClientForm} setAddClientForm={setAddClientForm}
+            rhRepDrill={rhRepDrill} setRhRepDrill={setRhRepDrill}
+            targetDrilldown={targetDrilldown} setTargetDrilldown={setTargetDrilldown}
+            nshRepDrill={nshRepDrill} setNshRepDrill={setNshRepDrill}
           />
           {/* ═══ RH ESCALATIONS + TEAM ═══ */}
           <RHView

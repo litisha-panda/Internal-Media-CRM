@@ -10,7 +10,8 @@ import {
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 
-export function LeaderboardView({ view, setView, lbTab, setLbTab }: any) {
+interface LeaderboardViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; lbTab: string; setLbTab: React.Dispatch<React.SetStateAction<string>>; }
+export function LeaderboardView({ view, setView, lbTab, setLbTab }: LeaderboardViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -49,9 +50,9 @@ export function LeaderboardView({ view, setView, lbTab, setLbTab }: any) {
 
             // ── Always rank ALL reps for the leaderboard (activity + target% only, no revenue amounts) ──
             const lbAllReps = reps.map(rep => {
-              const rd      = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
-              const closed  = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-              const rm      = meetings.filter(m=>m.repId===rep.id);
+              const rd      = deals.filter(d=>String(d.repId)===String(rep.id)&&qMatch(d.quarter));
+              const closed  = revenueEntries.filter(e=>String(e.repId)===String(rep.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+              const rm      = meetings.filter(m=>String(m.repId)===String(rep.id));
               const seniorM = rm.filter(m=>["C-Suite / Owner","VP / GM","Marketing Head","Brand Manager"].includes(m.contactLevel)).length;
               const risk    = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
               const attOk   = att[TODAY]?.[rep.id];
@@ -212,7 +213,8 @@ export function LeaderboardView({ view, setView, lbTab, setLbTab }: any) {
   );
 }
 
-export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen, irForm, setIrForm, editIrId, setEditIrId, irStatusFilter, setIrStatusFilter }: any) {
+interface InternalRequestsViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; irFormOpen: boolean; setIrFormOpen: React.Dispatch<React.SetStateAction<boolean>>; irForm: Record<string,any>; setIrForm: React.Dispatch<React.SetStateAction<Record<string,any>>>; editIrId: string | null; setEditIrId: React.Dispatch<React.SetStateAction<string | null>>; irStatusFilter: string; setIrStatusFilter: React.Dispatch<React.SetStateAction<string>>; }
+export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen, irForm, setIrForm, editIrId, setEditIrId, irStatusFilter, setIrStatusFilter }: InternalRequestsViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -307,7 +309,7 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                         <select value={irForm.clientCompany} onChange={e=>setIrForm(f=>({...f,clientCompany:e.target.value}))}
                           style={{width:"100%",background:C.s3,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",color:irForm.clientCompany?C.text:C.dim,fontSize:12,fontFamily:"'DM Mono',monospace",boxSizing:"border-box"}}>
                           <option value="">— Select client —</option>
-                          {[...new Set(deals.filter(d=>user_role?.repId?d.repId===user_role.repId:true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
+                          {[...new Set(deals.filter(d=>user_role?.repId?String(d.repId)===String(user_role.repId):true).map(d=>d.clientCompany))].sort().map(c=><option key={c} value={c}>{c}</option>)}
                         </select>
                       </div>
                     </div>
@@ -513,7 +515,8 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
   );
 }
 
-export function TeamView({ view, setView }: any) {
+interface TeamViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; }
+export function TeamView({ view, setView }: TeamViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -553,18 +556,18 @@ export function TeamView({ view, setView }: any) {
                 <div style={{fontSize:11,color:C.dim,marginBottom:16}}>Revenue, pipeline, contact quality and compliance — your reps only</div>
 
                 {myReps.map((rep,rank)=>{
-                  const rd   = rhDeals.filter(d=>d.repId===rep.id);
-                  const rC   = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                  const rd   = rhDeals.filter(d=>String(d.repId)===String(rep.id));
+                  const rC   = revenueEntries.filter(e=>String(e.repId)===String(rep.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const rT   = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
                   const rP   = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
                   const rPct = rT>0?Math.round((rC/rT)*100):0;
                   const rRisk= rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
                   const rOver= rd.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Mail Confirmed").length;
-                  const rTasks = tasks.filter(t=>t.repId===rep.id&&t.status!=="Done").length;
+                  const rTasks = tasks.filter(t=>String(t.repId)===String(rep.id)&&t.status!=="Done").length;
                   const rBlocked= rd.filter(d=>d.awaitingApproval&&d.outcome!=="Mail Confirmed").length;
                   const sc  = rPct>=80?C.green:rPct>=50?C.accent:C.red;
-                  const tL  = meetings.some(m=>m.repId===rep.id&&m.date===TODAY);
-                  const tP  = (weeklyPlans||[]).some(p=>p.repId===rep.id&&p.date===TOMORROW);
+                  const tL  = meetings.some(m=>String(m.repId)===String(rep.id)&&m.date===TODAY);
+                  const tP  = (weeklyPlans||[]).some(p=>String(p.repId)===String(rep.id)&&p.date===TOMORROW);
                   const rankColor = rank===0?C.accent:rank===1?C.blue:C.dim;
                   return (
                     <div key={rep.id} className="card" style={{padding:16,marginBottom:10}}>
@@ -662,7 +665,8 @@ export function TeamView({ view, setView }: any) {
   );
 }
 
-export function ActivityView({ view, setView }: any) {
+interface ActivityViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; }
+export function ActivityView({ view, setView }: ActivityViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -706,7 +710,7 @@ export function ActivityView({ view, setView }: any) {
               {(()=>{
                 const myRepId = user_role?.repId;
                 const visM = isRep
-                  ? meetings.filter(m=>m.repId===myRepId)
+                  ? meetings.filter(m=>String(m.repId)===String(myRepId))
                   : meetings;
                 return (
               <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:18}}>
@@ -781,14 +785,14 @@ export function ActivityView({ view, setView }: any) {
                 const fuPlans = (weeklyPlans||[]).filter(p =>
                   (p.autoCreatedFrom === "follow-up" || p.autoCreatedFrom === "next-meeting") &&
                   p.status !== "Done" && p.status !== "Cancelled" &&
-                  (user_role.canView==="all" ? true : user_role.canView==="region" ? reps.find(r=>r.id===p.repId)?.region===user_role.region : p.repId===user_role.repId)
+                  (user_role.canView==="all" ? true : user_role.canView==="region" ? reps.find(r=>String(r.id)===String(p.repId))?.region===user_role.region : String(p.repId)===String(user_role.repId))
                 ).sort((a,b)=>a.date>b.date?1:-1).slice(0,10);
                 if (!fuPlans.length) return null;
                 return (
                   <div style={{background:`${C.blue}08`,border:`1px solid ${C.blue}22`,borderRadius:8,padding:"12px 16px",marginBottom:18}}>
                     <div style={{fontSize:10,color:C.blue,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>📞 Follow-ups & Next Meetings ({fuPlans.length})</div>
                     {fuPlans.map(p=>{
-                      const rep = reps.find(r=>r.id===p.repId);
+                      const rep = reps.find(r=>String(r.id)===String(p.repId));
                       const isOverdue = p.date < TODAY;
                       const isToday   = p.date === TODAY;
                       return (
@@ -815,7 +819,7 @@ export function ActivityView({ view, setView }: any) {
 
               {/* ACTION ITEM DUE DATE ALERTS */}
               {(()=>{
-                const visReps = (user_role.canView==="all" ? reps : user_role.canView==="region" ? reps.filter(r=>r.region===user_role.region) : reps.filter(r=>r.id===user_role.repId)).map(r=>r.id);
+                const visReps = (user_role.canView==="all" ? reps : user_role.canView==="region" ? reps.filter(r=>r.region===user_role.region) : reps.filter(r=>String(r.id)===String(user_role.repId))).map(r=>r.id);
                 const dueTasks = tasks.filter(t => visReps.includes(t.repId) && t.status!=="Done" && t.dueDate);
                 const stepDuePlansWR = (weeklyPlans||[]).filter(p => visReps.includes(p.repId) && p.autoCreatedFrom==="next-step" && p.status!=="Done");
                 const all = [
@@ -864,7 +868,7 @@ export function ActivityView({ view, setView }: any) {
 
               {[TODAY,D1,D3,D7].map(date=>{
                 const dm = meetings.filter(m => m.date===date &&
-                  (user_role.canView==="all" ? true : user_role.canView==="region" ? reps.find(r=>r.id===m.repId)?.region===user_role.region : m.repId===user_role.repId)
+                  (user_role.canView==="all" ? true : user_role.canView==="region" ? reps.find(r=>String(r.id)===String(m.repId))?.region===user_role.region : String(m.repId)===String(user_role.repId))
                 );
                 if (!dm.length) return null;
                 const label = date===TODAY?"TODAY":date===D1?"YESTERDAY":date===D3?"3 DAYS AGO":"LAST WEEK";
@@ -953,7 +957,8 @@ export function ActivityView({ view, setView }: any) {
   );
 }
 
-export function EscalationsView({ view, setView }: any) {
+interface EscalationsViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; }
+export function EscalationsView({ view, setView }: EscalationsViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -1001,21 +1006,21 @@ export function EscalationsView({ view, setView }: any) {
                   daysSince(d.awaitingApprovalSince) >= APPROVAL_SLA_DAYS &&
                   d.outcome !== "Mail Confirmed" &&
                   d.outcome !== "Not Interested" &&
-                  (user_role.canView!=="self" || d.repId===myRepId)
+                  (user_role.canView!=="self" || String(d.repId)===String(myRepId))
                 );
 
                 // 2. Internal department requests overdue (legacy deal reqs)
                 const reqEsc = deals.flatMap((d,_) =>
                   (d.reqs||[])
                     .map((r,i) => ({...r, dealId:d.id, reqIdx:i, clientCompany:d.clientCompany, repId:d.repId, amount:d.amount}))
-                    .filter(r => r.status==="Overdue" && (user_role.canView!=="self" || d.repId===myRepId))
+                    .filter(r => r.status==="Overdue" && (user_role.canView!=="self" || String(d.repId)===String(myRepId)))
                 );
 
                 // 2b. SLA-breached Internal Requests (internalReqs pending 48h+)
                 const irSLABreached = internalReqs.filter(ir =>
                   ir.status === "Pending" &&
                   daysSince(ir.raisedAt) >= APPROVAL_SLA_DAYS &&
-                  (user_role.canView!=="self" ? true : ir.repId===myRepId || ir.raisedBy===activeUser)
+                  (user_role.canView!=="self" ? true : String(ir.repId)===String(myRepId) || ir.raisedBy===activeUser)
                 );
 
                 // 3. Tasks overdue and tagged to this user's deals or assigned to them
@@ -1067,7 +1072,7 @@ export function EscalationsView({ view, setView }: any) {
                             </tr></thead>
                             <tbody>
                               {approvalEsc.map(d=>{
-                                const rep=reps.find(r=>r.id===d.repId);
+                                const rep=reps.find(r=>String(r.id)===String(d.repId));
                                 const dw=daysSince(d.awaitingApprovalSince);
                                 return (
                                   <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,background:`${C.red}04`}}
@@ -1223,7 +1228,8 @@ export function EscalationsView({ view, setView }: any) {
   );
 }
 
-export function ComplianceView({ view, setView }: any) {
+interface ComplianceViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; }
+export function ComplianceView({ view, setView }: ComplianceViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -1267,9 +1273,9 @@ export function ComplianceView({ view, setView }: any) {
                       <table>
                         <thead><tr><th>Rep</th><th>Region</th><th>Role</th><th>Logged</th><th>Meetings</th><th>Status</th></tr></thead>
                         <tbody>
-                          {reps.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId).map(rep=>{
+                          {reps.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:String(r.id)===String(user_role.repId)).map(rep=>{
                             const logged=a[rep.id];
-                            const rm=meetings.filter(m=>m.repId===rep.id&&m.date===date);
+                            const rm=meetings.filter(m=>String(m.repId)===String(rep.id)&&m.date===date);
                             const hasLate=rm.some(m=>m.late);
                             return (
                               <tr key={rep.id}>
@@ -1299,7 +1305,8 @@ export function ComplianceView({ view, setView }: any) {
   );
 }
 
-export function HRView({ view, setView, exceptionModal, setExceptionModal, exceptionReason, setExceptionReason, excReqOpen, setExcReqOpen, excReqRecord, setExcReqRecord, excReqForm, setExcReqForm, excReqSubmitting, setExcReqSubmitting }: any) {
+interface HRViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; exceptionModal: { reportId: string; repName: string } | null; setExceptionModal: React.Dispatch<React.SetStateAction<{ reportId: string; repName: string } | null>>; exceptionReason: string; setExceptionReason: React.Dispatch<React.SetStateAction<string>>; excReqOpen: boolean; setExcReqOpen: React.Dispatch<React.SetStateAction<boolean>>; excReqRecord: Record<string,any> | null; setExcReqRecord: React.Dispatch<React.SetStateAction<Record<string,any> | null>>; excReqForm: Record<string,any>; setExcReqForm: React.Dispatch<React.SetStateAction<Record<string,any>>>; excReqSubmitting: boolean; setExcReqSubmitting: React.Dispatch<React.SetStateAction<boolean>>; }
+export function HRView({ view, setView, exceptionModal, setExceptionModal, exceptionReason, setExceptionReason, excReqOpen, setExcReqOpen, excReqRecord, setExcReqRecord, excReqForm, setExcReqForm, excReqSubmitting, setExcReqSubmitting }: HRViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -1525,7 +1532,8 @@ export function HRView({ view, setView, exceptionModal, setExceptionModal, excep
   );
 }
 
-export function TasksView({ view, setView }: any) {
+interface TasksViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; }
+export function TasksView({ view, setView }: TasksViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -1649,7 +1657,8 @@ export function TasksView({ view, setView }: any) {
 
 function roFmtMoney(n: any) { return n?"Rs."+Number(n).toLocaleString("en-IN"):"---"; }
 
-export function ROManagementView({ view, setView, roMgmtChannel, setRoMgmtChannel, roMgmtStatus, setRoMgmtStatus, roMgmtViewRO, setRoMgmtViewRO, roMgmtConfirmDelete, setRoMgmtConfirmDelete, ROCard, roExportSingle }: any) {
+interface ROManagementViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; roMgmtChannel: string; setRoMgmtChannel: React.Dispatch<React.SetStateAction<string>>; roMgmtStatus: string; setRoMgmtStatus: React.Dispatch<React.SetStateAction<string>>; roMgmtViewRO: Record<string,any> | null; setRoMgmtViewRO: React.Dispatch<React.SetStateAction<Record<string,any> | null>>; roMgmtConfirmDelete: string | null; setRoMgmtConfirmDelete: React.Dispatch<React.SetStateAction<string | null>>; ROCard: React.FC<any>; roExportSingle: (ro: any) => void; }
+export function ROManagementView({ view, setView, roMgmtChannel, setRoMgmtChannel, roMgmtStatus, setRoMgmtStatus, roMgmtViewRO, setRoMgmtViewRO, roMgmtConfirmDelete, setRoMgmtConfirmDelete, ROCard, roExportSingle }: ROManagementViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -1788,7 +1797,8 @@ export function ROManagementView({ view, setView, roMgmtChannel, setRoMgmtChanne
   );
 }
 
-export function RHXScoreView({ view, setView }: any) {
+interface RHXScoreViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; }
+export function RHXScoreView({ view, setView }: RHXScoreViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -1872,7 +1882,8 @@ export function RHXScoreView({ view, setView }: any) {
   );
 }
 
-export function RepAllRepsView({ view, setView }: any) {
+interface RepAllRepsViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; }
+export function RepAllRepsView({ view, setView }: RepAllRepsViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -1905,9 +1916,9 @@ export function RepAllRepsView({ view, setView }: any) {
           {view==="rep-allreps" && isRep && (()=>{
             const myRepId  = user_role?.repId;
             const allReps: any[] = reps.map((rep:any)=>{
-              const rd   = deals.filter(d=>d.repId===rep.id&&qMatch(d.quarter));
+              const rd   = deals.filter(d=>String(d.repId)===String(rep.id)&&qMatch(d.quarter));
               const rT   = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-              const rC   = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+              const rC   = revenueEntries.filter(e=>String(e.repId)===String(rep.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
               const rPct = rT>0?Math.round((rC/rT)*100):0;
               const isMe = rep.id===myRepId;
               return {...rep, rPct, isMe};
@@ -1969,7 +1980,8 @@ export function RepAllRepsView({ view, setView }: any) {
   );
 }
 
-export function RepTeamView({ view, setView }: any) {
+interface RepTeamViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; }
+export function RepTeamView({ view, setView }: RepTeamViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,

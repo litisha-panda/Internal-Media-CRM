@@ -8,7 +8,12 @@ import {
   getToday, getTomorrow,
 } from "../../constants";
 
-export function DigiOpsView({ view, setView }: any) {
+interface DigiOpsViewProps {
+  view: string;
+  setView: React.Dispatch<React.SetStateAction<string>>;
+}
+
+export function DigiOpsView({ view, setView }: DigiOpsViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,

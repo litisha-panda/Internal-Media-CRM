@@ -10,6 +10,25 @@ import {
   getToday, getTomorrow,
 } from "../../constants";
 
+interface SetupWizardViewProps {
+  view: string;
+  setView: React.Dispatch<React.SetStateAction<string>>;
+  wizardStep: number;
+  setWizardStep: React.Dispatch<React.SetStateAction<number>>;
+  wizardClients: Record<string, any>[];
+  setWizardClients: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
+  wizardRegion: string;
+  setWizardRegion: React.Dispatch<React.SetStateAction<string>>;
+  wizardRM: string;
+  setWizardRM: React.Dispatch<React.SetStateAction<string>>;
+  newClients: Record<string, any>[];
+  setNewClients: React.Dispatch<React.SetStateAction<Record<string, any>[]>>;
+  addClientModalOpen: boolean;
+  setAddClientModalOpen: React.Dispatch<React.SetStateAction<boolean>>;
+  addClientForm: Record<string, any>;
+  setAddClientForm: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+}
+
 export function SetupWizardView({
   view, setView,
   wizardStep, setWizardStep,
@@ -19,7 +38,7 @@ export function SetupWizardView({
   newClients, setNewClients,
   addClientModalOpen, setAddClientModalOpen,
   addClientForm, setAddClientForm,
-}: any) {
+}: SetupWizardViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -53,7 +72,7 @@ export function SetupWizardView({
           {view==="setup-wizard" && isRep && (()=>{
             const myRepId   = user_role?.repId;
             const myRep     = reps.find(r=>r.id===myRepId);
-            const mySubs    = targetSubs.filter(t=>t.repId===myRepId);
+            const mySubs    = targetSubs.filter(t=>String(t.repId)===String(myRepId));
             const alreadySubmitted = mySubs.length > 0;
 
             const wStep    = wizardStep;
@@ -161,7 +180,7 @@ export function SetupWizardView({
                     adminSvc.patchRepProfile(repIdNum, {region:wRegion,reportingManager:wRM})
                       .then(()=>{
                         // Sync local reps blob so myRep reflects new values immediately
-                        setReps((p:any[])=>p.map((r:any)=>r.id===repIdNum||r.repId===repIdNum?{...r,region:wRegion,reportingManager:wRM}:r));
+                        setReps((p:any[])=>p.map((r:any)=>r.id===repIdNum||String(r.repId)===String(repIdNum)?{...r,region:wRegion,reportingManager:wRM}:r));
                         setWStep(2);
                       })
                       .catch((err:any)=>showToast(err?.body?.error||"Network error — please try again","err"));

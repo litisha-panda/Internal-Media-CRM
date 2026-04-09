@@ -9,6 +9,24 @@ import {
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 
+interface RHViewProps {
+  view: string;
+  setView: React.Dispatch<React.SetStateAction<string>>;
+  isMobile: boolean;
+  rhRepDrill: string | null;
+  setRhRepDrill: React.Dispatch<React.SetStateAction<string | null>>;
+  rhDrillPlan: Record<string, any> | null;
+  setRhDrillPlan: React.Dispatch<React.SetStateAction<Record<string, any> | null>>;
+  rhTeamFilter: { rep: string; dateRange: string; client: string; status: string };
+  setRhTeamFilter: React.Dispatch<React.SetStateAction<{ rep: string; dateRange: string; client: string; status: string }>>;
+  rhWarroomClient: string;
+  setRhWarroomClient: React.Dispatch<React.SetStateAction<string>>;
+  rhWarroomRep: string;
+  setRhWarroomRep: React.Dispatch<React.SetStateAction<string>>;
+  rhTeamReportRep: string | null;
+  setRhTeamReportRep: React.Dispatch<React.SetStateAction<string | null>>;
+}
+
 export function RHView({
   view, setView, isMobile,
   rhRepDrill, setRhRepDrill,
@@ -17,7 +35,7 @@ export function RHView({
   rhWarroomClient, setRhWarroomClient,
   rhWarroomRep, setRhWarroomRep,
   rhTeamReportRep, setRhTeamReportRep,
-}: any) {
+}: RHViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -184,7 +202,7 @@ export function RHView({
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
                             <tbody>{stalledDeals.map(d=>{
-                              const rep=reps.find(r=>r.id===d.repId);
+                              const rep=reps.find(r=>String(r.id)===String(d.repId));
                               return (
                                 <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=""}>
                                   <td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td>
@@ -211,7 +229,7 @@ export function RHView({
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
                             <tbody>{overdueRepTasks.map(t=>{
-                              const rep=reps.find(r=>r.id===t.repId);
+                              const rep=reps.find(r=>String(r.id)===String(t.repId));
                               return (
                                 <tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=""}>
                                   <td style={{padding:"10px 14px",fontWeight:600}}>{t.title}</td>
@@ -239,7 +257,7 @@ export function RHView({
                               <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                             ))}</tr></thead>
                             <tbody>{blockedDeals.map(d=>{
-                              const rep=reps.find(r=>r.id===d.repId);
+                              const rep=reps.find(r=>String(r.id)===String(d.repId));
                               return (
                                 <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=""}>
                                   <td style={{padding:"10px 14px",fontWeight:700}}>{d.clientCompany}</td>
@@ -269,8 +287,8 @@ export function RHView({
             const regionAchieved = revenueEntries.filter(e=>myRepIds2.includes(String(e.repId))&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const regionShortfall= Math.max(0,regionTarget-regionAchieved);
             const regionPipeline = visibleDeals.filter(d=>myRepIds2.includes(String(d.repId))&&!["Lost","RO Received"].includes(d.outcome||"")).reduce((s,d)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
-            const notLoggedToday  = myReps.filter(u=>!(meetings||[]).some(m=>m.repId===u.repId&&m.date===TODAY));
-            const notPlannedTmrw  = myReps.filter(u=>!(weeklyPlans||[]).some(p=>p.repId===u.repId&&p.date===TOMORROW));
+            const notLoggedToday  = myReps.filter(u=>!(meetings||[]).some(m=>String(m.repId)===String(u.repId)&&m.date===TODAY));
+            const notPlannedTmrw  = myReps.filter(u=>!(weeklyPlans||[]).some(p=>String(p.repId)===String(u.repId)&&p.date===TOMORROW));
             const pendingApprovals= targetSubs.filter(t=>t.region===rhRegion&&t.status==="Pending RH");
             const pendingIRs      = internalReqs.filter(r=>r.dept==="Region Head"&&r.status==="Pending"&&r.type==="Approval");
             const overdueActions  = tasks.filter(t=>myRepIds2.includes(String(t.repId))&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY);
@@ -366,11 +384,11 @@ export function RHView({
                 <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(180px,1fr))",gap:8}}>
                   {myReps.map(rep=>{
                     const repId=rep.repId;
-                    const loggedT  =(meetings||[]).some(m=>m.repId===repId&&m.date===TODAY);
-                    const plannedT =(weeklyPlans||[]).some(p=>p.repId===repId&&p.date===TOMORROW);
-                    const openT    =tasks.filter(t=>t.repId===repId&&t.status!=="Done").length;
-                    const achT     =revenueEntries.filter(e=>e.repId===repId&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-                    const tgtT     =targetSubs.filter(s=>s.repId===repId&&s.status==="Approved").reduce((s,t)=>s+t.totalTarget,0);
+                    const loggedT  =(meetings||[]).some(m=>String(m.repId)===String(repId)&&m.date===TODAY);
+                    const plannedT =(weeklyPlans||[]).some(p=>String(p.repId)===String(repId)&&p.date===TOMORROW);
+                    const openT    =tasks.filter(t=>String(t.repId)===String(repId)&&t.status!=="Done").length;
+                    const achT     =revenueEntries.filter(e=>String(e.repId)===String(repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                    const tgtT     =targetSubs.filter(s=>String(s.repId)===String(repId)&&s.status==="Approved").reduce((s,t)=>s+t.totalTarget,0);
                     const pctT     =tgtT>0?Math.round(achT/tgtT*100):0;
                     return (
                       <div key={rep.id}
@@ -418,7 +436,7 @@ export function RHView({
             const tmrwTP  = allTeamPlans.filter(p=>p.date===TOMORROW);
             // Drill detail panel
             const drill = rhDrillPlan;
-            const drillRep = drill ? (USER_ROLES.find(u=>u.repId===drill.repId)||reps.find(r=>r.id===drill.repId)) : null;
+            const drillRep = drill ? (USER_ROLES.find(u=>String(u.repId)===String(drill.repId))||reps.find(r=>String(r.id)===String(drill.repId))) : null;
             const drillMtg = drill ? (meetings||[]).find(m=>m.id===drill.loggedMeetingId) : null;
             return (
               <div className="fin">
@@ -460,7 +478,7 @@ export function RHView({
                       <div style={{padding:"10px 14px",minHeight:52}}>
                         {dp.length===0&&<div style={{fontSize:11,color:C.muted,textAlign:"center",padding:10}}>Nothing planned</div>}
                         {dp.slice(0,5).map(p=>{
-                          const rep=USER_ROLES.find(u=>u.repId===p.repId)||reps.find(r=>r.id===p.repId);
+                          const rep=USER_ROLES.find(u=>String(u.repId)===String(p.repId))||reps.find(r=>String(r.id)===String(p.repId));
                           return (
                             <div key={p.id} onClick={()=>setRhDrillPlan(p)} style={{display:"flex",alignItems:"center",gap:8,marginBottom:5,padding:"6px 10px",background:C.s2,borderRadius:5,cursor:"pointer"}}
                               onMouseOver={e=>e.currentTarget.style.background=C.s3} onMouseOut={e=>e.currentTarget.style.background=C.s2}>
@@ -511,7 +529,7 @@ export function RHView({
                     <tbody>
                       {filtered.length===0&&<tr><td colSpan={9} style={{padding:24,textAlign:"center",color:C.muted}}>No meetings match your filter</td></tr>}
                       {filtered.map(p=>{
-                        const rep=USER_ROLES.find(u=>u.repId===p.repId)||reps.find(r=>r.id===p.repId);
+                        const rep=USER_ROLES.find(u=>String(u.repId)===String(p.repId))||reps.find(r=>String(r.id)===String(p.repId));
                         const isToday=p.date===TODAY;
                         const isSel = drill?.id===p.id;
                         return (
@@ -677,9 +695,9 @@ export function RHView({
                   <div><div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>TEAM PIPELINE</div><div style={{fontSize:11,color:C.dim,marginTop:2}}>{rhRegion} Region · All rep deals</div></div>
                 </div>
                 {myReps.map(rep=>{
-                  const rd=visibleDeals.filter(d=>d.repId===rep.id&&d.outcome!=="Not Interested");
+                  const rd=visibleDeals.filter(d=>String(d.repId)===String(rep.id)&&d.outcome!=="Not Interested");
                   if(!rd.length) return null;
-                  const rC=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                  const rC=revenueEntries.filter(e=>String(e.repId)===String(rep.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                   const rP=rd.filter(d=>d.outcome!=="Mail Confirmed").reduce((s,d)=>s+d.amount,0);
                   return (
                     <div key={rep.id} style={{marginBottom:16}}>
@@ -737,7 +755,7 @@ export function RHView({
                 </div>
                 {rhRepDrill ? (()=>{
                   const rep=reps.find(r=>r.id===rhRepDrill);
-                  const rd=visibleDeals.filter(d=>d.repId===rhRepDrill);
+                  const rd=visibleDeals.filter(d=>String(d.repId)===String(rhRepDrill));
                   return (
                     <div>
                       <button onClick={()=>setRhRepDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginBottom:12}}>← Back to Reps</button>
@@ -745,7 +763,7 @@ export function RHView({
                       <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
                         <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                           <thead><tr>{["Client","Target","Achieved","Pipeline","Shortfall","Stage"].map(h=><th key={h} style={{padding:"7px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
-                          <tbody>{rd.map(d=>{const ach=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const sf=Math.max(0,(d.targetAmount||0)-ach);return(
+                          <tbody>{rd.map(d=>{const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);const sf=Math.max(0,(d.targetAmount||0)-ach);return(
                             <tr key={d.id} style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}} onClick={()=>{setAccountThreadClient(d.clientCompany);setAccountThreadOpen(true);}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background="transparent"}>
                               <td style={{padding:"9px 12px",fontWeight:700}}>{d.clientCompany}</td>
                               <td style={{padding:"9px 12px"}}>{fmtR(d.targetAmount)}</td>
@@ -762,13 +780,13 @@ export function RHView({
                 })() : (
                   <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:10}}>
                     {myReps.map(rep=>{
-                      const rd=visibleDeals.filter(d=>d.repId===rep.id);
+                      const rd=visibleDeals.filter(d=>String(d.repId)===String(rep.id));
                       const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                      const rC=revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                      const rC=revenueEntries.filter(e=>String(e.repId)===String(rep.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                       const rPct=rT>0?Math.round((rC/rT)*100):0;
                       const rsc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
                       return (
-                        <div key={rep.id} onClick={()=>setRhRepDrill(rep.id)} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px",cursor:"pointer",transition:"border-color .15s,transform .1s"}}
+                        <div key={rep.id} onClick={()=>setRhRepDrill(String(rep.id))} style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,padding:"14px 16px",cursor:"pointer",transition:"border-color .15s,transform .1s"}}
                           onMouseOver={e=>{e.currentTarget.style.borderColor=C.accent;e.currentTarget.style.transform="translateY(-2px)";}}
                           onMouseOut={e=>{e.currentTarget.style.borderColor=C.border;e.currentTarget.style.transform="translateY(0)";}}>
                           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -817,7 +835,7 @@ export function RHView({
                     <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                       <thead><tr>{["Rep","Task","Client","Priority","Status","Due","Action"].map(h=><th key={h} style={{padding:"8px 12px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                       <tbody>{teamTasks.sort((a,b)=>a.dueDate>b.dueDate?1:-1).map(t=>{
-                        const rep=reps.find(r=>r.id===t.repId);const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
+                        const rep=reps.find(r=>String(r.id)===String(t.repId));const overdue=t.dueDate<TODAY&&t.status!=="Done";const sc=t.status==="Done"?C.green:overdue?C.red:t.status==="In Progress"?C.blue:C.accent;
                         return (<tr key={t.id} style={{borderBottom:`1px solid ${C.s2}`,background:overdue?`${C.red}04`:"transparent"}} onMouseOver={e=>e.currentTarget.style.background=C.s2} onMouseOut={e=>e.currentTarget.style.background=overdue?`${C.red}04`:"transparent"}>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{rep?.name||"—"}</div></td>
                           <td style={{padding:"9px 12px"}}><div style={{fontWeight:600}}>{t.title}</div>{t.description&&<div style={{fontSize:10,color:C.dim,marginTop:2,maxWidth:200,whiteSpace:"normal"}}>{t.description}</div>}</td>
@@ -875,13 +893,13 @@ export function RHView({
           {view==="rh-my-hr" && isRH && (()=>{
             // RH has no repId — use userId (activeUser) as their identifier throughout
             const myPlanRepId = user_role?.id; // "rh_north", "rh_south", etc.
-            const myAbs       = absenceReports.filter((r:any)=>r.userId===activeUser||(r.repId!=null&&r.repId===user_role?.repId));
+            const myAbs       = absenceReports.filter((r:any)=>r.userId===activeUser||(r.repId!=null&&String(r.repId)===String(user_role?.repId)));
             const absentDays  = myAbs.filter((r:any)=>r.markedAs==="Absent").length;
             const exceptions  = myAbs.filter((r:any)=>r.exception==="Overridden").length;
             const sentToHR    = myAbs.filter((r:any)=>r.status==="Sent to HR").length;
             // RH logs meetings with loggedByUserId; weeklyPlans stored with repId = their userId string
             const loggedToday = (meetings||[]).some(m=>m.loggedByUserId===activeUser&&m.date===TODAY);
-            const plannedTmrw = (weeklyPlans||[]).some(p=>p.repId===myPlanRepId&&p.date===TOMORROW);
+            const plannedTmrw = (weeklyPlans||[]).some(p=>String(p.repId)===String(myPlanRepId)&&p.date===TOMORROW);
             return (
               <div className="fin">
                 <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>MY HR REPORTS</div>
@@ -915,7 +933,7 @@ export function RHView({
                 {(()=>{
                   // Build a 30-day compliance history for RH from meeting logs
                   const rhMeetings = (meetings||[]).filter(m=>m.loggedByUserId===activeUser||m.loggedByUserId===myPlanRepId);
-                  const rhPlans    = (weeklyPlans||[]).filter(p=>p.repId===myPlanRepId);
+                  const rhPlans    = (weeklyPlans||[]).filter(p=>String(p.repId)===String(myPlanRepId));
                   const checkDays: string[] = [];
                   for (let d = 0; d < 30; d++) {
                     const dt = new Date(Date.now() - d * 86400000);
@@ -1002,17 +1020,17 @@ export function RHView({
             const myReps   = USER_ROLES.filter(u=>u.role==="SALES REP"&&u.region===rhRegion);
             const rows = myReps.map(rep=>{
               const repId       = rep.repId;
-              const target      = targetSubs.filter(s=>s.repId===repId&&s.status==="Approved").reduce((s:number,t:any)=>s+t.totalTarget,0);
-              const achieved    = revenueEntries.filter(e=>e.repId===repId&&qMatch(e.quarter)).reduce((s:number,e:any)=>s+(e.amount||0),0);
+              const target      = targetSubs.filter(s=>String(s.repId)===String(repId)&&s.status==="Approved").reduce((s:number,t:any)=>s+t.totalTarget,0);
+              const achieved    = revenueEntries.filter(e=>String(e.repId)===String(repId)&&qMatch(e.quarter)).reduce((s:number,e:any)=>s+(e.amount||0),0);
               const shortfall   = Math.max(0,target-achieved);
               const pct         = target>0?Math.round(achieved/target*100):0;
-              const pipeline    = visibleDeals.filter(d=>d.repId===repId&&!["Lost","RO Received"].includes(d.outcome||"")).reduce((s:number,d:any)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
-              const mtgsThisWk  = (meetings||[]).filter(m=>m.repId===repId&&m.date>=MONDAY&&m.date<=TODAY).length;
-              const loggedToday = (meetings||[]).some(m=>m.repId===repId&&m.date===TODAY);
-              const plannedTmrw = (weeklyPlans||[]).some(p=>p.repId===repId&&p.date===TOMORROW);
-              const openTasks   = tasks.filter(t=>t.repId===repId&&t.status!=="Done").length;
-              const overdueTasks= tasks.filter(t=>t.repId===repId&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY).length;
-              const escCount    = internalReqs.filter(r=>r.repId===repId&&r.status!=="Done"&&r.status!=="Withdrawn"&&(r.escLevel>0||r.status==="Overdue")).length;
+              const pipeline    = visibleDeals.filter(d=>String(d.repId)===String(repId)&&!["Lost","RO Received"].includes(d.outcome||"")).reduce((s:number,d:any)=>s+(d.amount||0)*(STAGE_PROB[d.outcome]||0)/100,0);
+              const mtgsThisWk  = (meetings||[]).filter(m=>String(m.repId)===String(repId)&&m.date>=MONDAY&&m.date<=TODAY).length;
+              const loggedToday = (meetings||[]).some(m=>String(m.repId)===String(repId)&&m.date===TODAY);
+              const plannedTmrw = (weeklyPlans||[]).some(p=>String(p.repId)===String(repId)&&p.date===TOMORROW);
+              const openTasks   = tasks.filter(t=>String(t.repId)===String(repId)&&t.status!=="Done").length;
+              const overdueTasks= tasks.filter(t=>String(t.repId)===String(repId)&&t.status!=="Done"&&t.dueDate&&t.dueDate<TODAY).length;
+              const escCount    = internalReqs.filter(r=>String(r.repId)===String(repId)&&r.status!=="Done"&&r.status!=="Withdrawn"&&(r.escLevel>0||r.status==="Overdue")).length;
               return {rep,repId,target,achieved,shortfall,pct,pipeline,mtgsThisWk,loggedToday,plannedTmrw,openTasks,overdueTasks,escCount};
             });
             const totTarget   = rows.reduce((s,r)=>s+r.target,0);

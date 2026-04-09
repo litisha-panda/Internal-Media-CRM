@@ -10,7 +10,20 @@ import {
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 import * as revSvc from "../../services/api/revenue";
 
-export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setRevForm, editingRevId, setEditingRevId, editRevData, setEditRevData }: any) {
+interface RevenueLogViewProps {
+  view: string;
+  setView: React.Dispatch<React.SetStateAction<string>>;
+  revTab: string;
+  setRevTab: React.Dispatch<React.SetStateAction<string>>;
+  revForm: Record<string, any>;
+  setRevForm: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+  editingRevId: string | null;
+  setEditingRevId: React.Dispatch<React.SetStateAction<string | null>>;
+  editRevData: Record<string, any>;
+  setEditRevData: React.Dispatch<React.SetStateAction<Record<string, any>>>;
+}
+
+export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setRevForm, editingRevId, setEditingRevId, editRevData, setEditRevData }: RevenueLogViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -44,7 +57,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
           {/* ═══ REVENUE LOG ═══ */}
           {view==="revenue-log" && (()=>{
             const myRepId   = user_role?.repId;
-            const myEntries = isRep ? revenueEntries.filter(e=>e.repId===myRepId) : revenueEntries;
+            const myEntries = isRep ? revenueEntries.filter(e=>String(e.repId)===String(myRepId)) : revenueEntries;
             const totalRev  = myEntries.filter(e=>qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
             const dealTypes = ["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"];
 
@@ -67,7 +80,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                   const FY_START_MS  = new Date("2025-04-01").getTime();
                   const monthsElapsed = Math.max(1, (Date.now() - FY_START_MS) / (1000 * 60 * 60 * 24 * 30.44));
                   const myApprovedSubs = (isRep
-                    ? targetSubs.filter(s=>s.repId===myRepId&&s.status==="Approved")
+                    ? targetSubs.filter(s=>String(s.repId)===String(myRepId)&&s.status==="Approved")
                     : targetSubs.filter(s=>s.status==="Approved")
                   );
                   const annualTarget = myApprovedSubs.reduce((s,sub)=>s+sub.totalTarget,0);
@@ -105,7 +118,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                           // Collect all client names from approved targetSubs for this rep
                           const approvedNames = new Set<string>(
                             targetSubs
-                              .filter(s=>s.repId===myRepId&&s.status==="Approved")
+                              .filter(s=>String(s.repId)===String(myRepId)&&s.status==="Approved")
                               .flatMap(s=>(s.clients||[])
                                 .filter(cl=>!cl.clientStatus||cl.clientStatus==="Approved")
                                 .map((cl:any)=>cl.clientCompany||cl.clientName||"")
@@ -113,7 +126,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                               .filter(Boolean)
                           );
                           // Match to clientAccounts (for zohoAccountId, etc.)
-                          const fromAccts = clientAccounts.filter(a=>a.repId===myRepId&&approvedNames.has(a.clientName));
+                          const fromAccts = clientAccounts.filter(a=>String(a.repId)===String(myRepId)&&approvedNames.has(a.clientName));
                           const matched   = new Set(fromAccts.map(a=>a.clientName));
                           // For approved names not yet in clientAccounts, create minimal stubs
                           const stubs = [...approvedNames]
@@ -187,13 +200,13 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                           }).catch((err:any)=>{showToast(err?.body?.error||"Network error — entry may not be saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));});
                           // Fix 6: IP slot committed — notify other reps with pending proposals for the same slot
                           if (rf.dealType==="IPs") {
-                            const linkedDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&d.dealType==="IPs"&&d.clientCompany===client&&d.ipId&&d.elemId);
+                            const linkedDeal = deals.find(d=>(isRep?String(d.repId)===String(myRepId):true)&&d.dealType==="IPs"&&d.clientCompany===client&&d.ipId&&d.elemId);
                             if (linkedDeal) {
                               const otherPending = ipProposals.filter(p=>p.ipId===linkedDeal.ipId&&p.elemId===linkedDeal.elemId&&p.repId!==myRepId&&p.status==="Pending");
                               if (otherPending.length) {
                                 const notifTasks = otherPending.map(p=>({
                                   id:`t_ipnotify_${Date.now()}_${p.repId}`,
-                                  assignedTo:p.repId, assignedToUserId:USER_ROLES.find(u=>u.repId===p.repId)?.id||null,
+                                  assignedTo:p.repId, assignedToUserId:USER_ROLES.find(u=>String(u.repId)===String(p.repId))?.id||null,
                                   assignedDept:"Sales Rep", repId:p.repId, clientCompany:p.client,
                                   title:`[IP Slot Committed] ${linkedDeal.ipId} · ${linkedDeal.elemId} has been committed to ${client} — your proposal for ${p.client} has been released.`,
                                   description:`The slot you pitched for ${p.client} is now committed. You can explore other elements in this IP.`,
@@ -208,7 +221,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                             }
                           }
                           // Part 3+9: Auto-set deal stage to "RO Received" when revenue is logged
-                          const matchDeal = deals.find(d=>(isRep?d.repId===myRepId:true)&&(rf.zohoAccountId&&d.zohoAccountId?d.zohoAccountId===rf.zohoAccountId:d.clientCompany===client)&&qMatch(d.quarter));
+                          const matchDeal = deals.find(d=>(isRep?String(d.repId)===String(myRepId):true)&&(rf.zohoAccountId&&d.zohoAccountId?d.zohoAccountId===rf.zohoAccountId:d.clientCompany===client)&&qMatch(d.quarter));
                           if(matchDeal){
                             setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,stage:"RO Received",outcome:"RO Received",lastContact:TODAY}:d));
                             // Update client account stage too
@@ -217,7 +230,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                             }
                           }
                           setRf({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
-                          const totalFY = [...revenueEntries.filter(e=>(isRep?e.repId===myRepId:true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
+                          const totalFY = [...revenueEntries.filter(e=>(isRep?String(e.repId)===String(myRepId):true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
                           // Part 9: Check if annual target reached
                           const annualTarget = isRep ? (getAnnualTarget(myRepId)?.amount||0) : 0;
                           if (annualTarget>0 && totalFY>=annualTarget) {

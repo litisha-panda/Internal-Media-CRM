@@ -9,7 +9,17 @@ import {
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
 
-export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWarroomClient, rhWarroomRep, setRhWarroomRep }: any) {
+interface WarroomViewProps {
+  view: string;
+  setView: React.Dispatch<React.SetStateAction<string>>;
+  isMobile: boolean;
+  rhWarroomClient: string;
+  setRhWarroomClient: React.Dispatch<React.SetStateAction<string>>;
+  rhWarroomRep: string;
+  setRhWarroomRep: React.Dispatch<React.SetStateAction<string>>;
+}
+
+export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWarroomClient, rhWarroomRep, setRhWarroomRep }: WarroomViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -89,7 +99,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   const stages=new Set(tps.map(t=>t.stageUpdate).filter(Boolean));
                   const noMovement=stages.size<=1;
                   if(noMovement){
-                    const rep=reps.find(r=>r.id===deal.repId);
+                    const rep=reps.find(r=>String(r.id)===String(deal.repId));
                     trigger2A.push({repName:rep?.name||"Unknown",clientCompany:deal.clientCompany,count:tps.length,stageNow:dealStage(deal)});
                   }
                 }
@@ -101,7 +111,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
             const trigger2B: {repName:string,count:number,repId:string|number}[] = [];
             {
               myReps.forEach(r=>{
-                const monthTPs=touchpoints.filter(t=>t.repId===r.id&&(t.date||"")>=monthStart).length;
+                const monthTPs=touchpoints.filter(t=>String(t.repId)===String(r.id)&&(t.date||"")>=monthStart).length;
                 if(monthTPs<15) trigger2B.push({repName:r.name,count:monthTPs,repId:r.id});
               });
             }
@@ -176,7 +186,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                       {regionSRs.slice(0,4).map(sr=>{
                         const pColor = sr.priority==="Urgent"?C.red:sr.priority==="High"?C.orange:C.blue;
                         const sc = sr.status==="Accepted"?C.green:sr.status==="In Progress"?C.blue:C.orange;
-                        const rep = reps.find(r=>r.id===sr.repId);
+                        const rep = reps.find(r=>String(r.id)===String(sr.repId));
                         return (
                           <div key={sr.id} style={{display:"flex",alignItems:"center",gap:8,background:C.surface,border:`1px solid ${C.border}`,borderRadius:5,padding:"7px 10px",marginBottom:5,borderLeft:`3px solid ${sc}`}}>
                             <div style={{flex:1,minWidth:0}}>
@@ -205,7 +215,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
 
                   {/* Approvals pending RH sign-off */}
                   {myApprovals.map(d=>{
-                    const rep = reps.find(r=>r.id===d.repId);
+                    const rep = reps.find(r=>String(r.id)===String(d.repId));
                     const dw  = daysSince(d.awaitingApprovalSince||TODAY);
                     return (
                       <div key={d.id} style={{background:`${C.orange}06`,border:`1px solid ${C.orange}33`,borderRadius:7,padding:"11px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -224,7 +234,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
 
                   {/* Tasks created by reps needing NSH */}
                   {myTasks_rh.map(t=>{
-                    const rep = reps.find(r=>r.id===t.repId);
+                    const rep = reps.find(r=>String(r.id)===String(t.repId));
                     return (
                       <div key={t.id} style={{background:`${C.blue}06`,border:`1px solid ${C.blue}33`,borderRadius:7,padding:"11px 16px",marginBottom:8,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                         <span style={{color:C.blue,fontSize:13}}>📋</span>
@@ -246,9 +256,9 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   const overdueSteps = rhDeals.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Mail Confirmed");
                   const highRiskBig  = rhDeals.filter(d=>d.amount>=5000000&&!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=5);
                   const repPcts      = myReps.map(r=>{
-                    const rd=rhDeals.filter(d=>d.repId===r.id);
+                    const rd=rhDeals.filter(d=>String(d.repId)===String(r.id));
                     const t=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                    const c=revenueEntries.filter(e=>e.repId===r.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                    const c=revenueEntries.filter(e=>String(e.repId)===String(r.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                     return {name:r.name,pct:t>0?Math.round((c/t)*100):null};
                   }).filter(r=>r.pct!==null);
                   const laggingReps  = repPcts.filter((r:any)=>r.pct<40);
@@ -315,8 +325,8 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                     </tr></thead>
                     <tbody>
                       {myReps.map(rep=>{
-                        const rd  = rhDeals.filter(d=>d.repId===rep.id);
-                        const rC  = revenueEntries.filter(e=>e.repId===rep.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                        const rd  = rhDeals.filter(d=>String(d.repId)===String(rep.id));
+                        const rC  = revenueEntries.filter(e=>String(e.repId)===String(rep.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                         const rP  = rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
                         const rT  = rd.reduce((s,d)=>s+(d.targetAmount||0),0);
                         const rPct= rT>0?Math.round((rC/rT)*100):0;
@@ -346,7 +356,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>⚠ INTERVENE REQUIRED — 14+ DAYS NO DEAL MEETING</div>
                     {rh14d.filter(d=>(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).map(d=>{
-                      const rep=reps.find(r=>r.id===d.repId);
+                      const rep=reps.find(r=>String(r.id)===String(d.repId));
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       const taskId=`rh14-${d.id}`;
                       const alreadyTasked=tasks.some(t=>t.id===taskId);
@@ -374,7 +384,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>ℹ 10+ DAYS NO DEAL MEETING — MONITOR CLOSELY</div>
                     {rh10d.filter(d=>!rh14d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).map(d=>{
-                      const rep=reps.find(r=>r.id===d.repId);
+                      const rep=reps.find(r=>String(r.id)===String(d.repId));
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       return (
                         <div key={d.id} style={{background:`${C.orange}06`,border:`1px solid ${C.orange}33`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -391,7 +401,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   <div style={{marginBottom:10}}>
                     <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NO DEAL MEETING 7+ DAYS — TEAM AT RISK</div>
                     {rhAtRisk.filter(d=>!rh10d.includes(d)&&(!rhWarroomClient||d.clientCompany===rhWarroomClient)&&(!rhWarroomRep||String(d.repId)===rhWarroomRep)).map(d=>{
-                      const rep=reps.find(r=>r.id===d.repId);
+                      const rep=reps.find(r=>String(r.id)===String(d.repId));
                       const idle=daysSince(d.lastDealMeetingDate||d.lastContact);
                       return (
                         <div key={d.id} style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
@@ -442,7 +452,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                     <div style={{marginTop:14}}>
                       <div style={{fontSize:10,color:C.green,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:8}}>NEW CLIENTS ADDED TODAY</div>
                       {newDeals.map(d=>{
-                        const rep=reps.find(r=>r.id===d.repId);
+                        const rep=reps.find(r=>String(r.id)===String(d.repId));
                         return (
                           <div key={d.id} style={{background:`${C.green}06`,border:`1px solid ${C.green}22`,borderRadius:6,padding:"9px 14px",marginBottom:6,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                             <span style={{flex:1}}><strong>{d.clientCompany}</strong><span style={{color:C.dim,fontSize:11}}> · {rep?.name} · {d.dealType}</span></span>
@@ -461,7 +471,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   const rhTmrwPlans  = (weeklyPlans||[]).filter(p=>myRepIds.includes(String(p.repId))&&p.date===TOMORROW);
                   if(!rhTodayPlans.length&&!rhTmrwPlans.length) return null;
                   const renderPlanRow = (p) => {
-                    const rep=reps.find(r=>r.id===p.repId);
+                    const rep=reps.find(r=>String(r.id)===String(p.repId));
                     return (
                       <div key={p.id} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:C.s2,borderRadius:5,marginBottom:5}}>
                         <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,border:`1px solid ${C.accent}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent,flexShrink:0}}>{(rep?.name||"?")[0]}</div>
@@ -526,7 +536,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
             const highRisk = allD
               .filter(d=>d.outcome!=="Mail Confirmed"&&d.outcome!=="Not Interested")
               .map(d=>{
-                const achieved=revenueEntries.filter(e=>e.repId===d.repId&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                const achieved=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                 const pct = d.targetAmount>0?Math.round((achieved/d.targetAmount)*100):0;
                 return {...d, pct};
               })
@@ -558,7 +568,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                         ...blocked.slice(0,5).map(d=>`  • ${d.clientCompany} — ${fmtR(d.amount)} → ${d.awaitingApproval} (${daysSince(d.awaitingApprovalSince||TODAY)}d)`),
                         ``,
                         atRiskD.length ? `🔴 ${atRiskD.length} deal(s) at risk (7+ days no contact):` : `✅ No at-risk deals`,
-                        ...atRiskD.slice(0,5).map(d=>{const r=reps.find(x=>x.id===d.repId);return`  • ${d.clientCompany} — ${r?.name||""} (${daysSince(d.lastContact)}d idle)`;}),
+                        ...atRiskD.slice(0,5).map(d=>{const r=reps.find(x=>String(x.id)===String(d.repId));return`  • ${d.clientCompany} — ${r?.name||""} (${daysSince(d.lastContact)}d idle)`;}),
                         ``,
                         nonCompliant.length ? `⚠️ Not logged today: ${nonCompliant.map(r=>r.name).join(", ")}` : `✅ All reps logged`,
                       ].join("\n");
@@ -665,13 +675,13 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                       {[
                         {label:"Region Heads", rows: (() => {
                           const rhs = USER_ROLES.filter(u=>u.role==="REGION HEAD");
-                          const todayLogged  = rhs.filter(r=>meetings.some(m=>m.repId===r.repId&&m.date===TODAY)).length;
-                          const tmrwPlanned  = rhs.filter(r=>(weeklyPlans||[]).some(p=>p.repId===r.repId&&p.date===TOMORROW&&p.status==="Planned")).length;
+                          const todayLogged  = rhs.filter(r=>meetings.some(m=>String(m.repId)===String(r.repId)&&m.date===TODAY)).length;
+                          const tmrwPlanned  = rhs.filter(r=>(weeklyPlans||[]).some(p=>String(p.repId)===String(r.repId)&&p.date===TOMORROW&&p.status==="Planned")).length;
                           return {logged:todayLogged, planned:tmrwPlanned, total:rhs.length};
                         })()},
                         {label:"Sales Executives", rows: (() => {
-                          const todayLogged  = reps.filter(r=>meetings.some(m=>m.repId===r.id&&m.date===TODAY)).length;
-                          const tmrwPlanned  = reps.filter(r=>(weeklyPlans||[]).some(p=>p.repId===r.id&&p.date===TOMORROW&&p.status==="Planned")).length;
+                          const todayLogged  = reps.filter(r=>meetings.some(m=>String(m.repId)===String(r.id)&&m.date===TODAY)).length;
+                          const tmrwPlanned  = reps.filter(r=>(weeklyPlans||[]).some(p=>String(p.repId)===String(r.id)&&p.date===TOMORROW&&p.status==="Planned")).length;
                           return {logged:todayLogged, planned:tmrwPlanned, total:reps.length};
                         })()},
                       ].map(({label,rows})=>(
@@ -825,9 +835,9 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
 
                   // Rep-level signals
                   const repPcts = reps.map(r=>{
-                    const rd=allD.filter(d=>d.repId===r.id);
+                    const rd=allD.filter(d=>String(d.repId)===String(r.id));
                     const t=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                    const c=revenueEntries.filter(e=>e.repId===r.id&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                    const c=revenueEntries.filter(e=>String(e.repId)===String(r.id)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                     return {name:r.name,region:r.region,pct:t>0?Math.round((c/t)*100):null};
                   }).filter(r=>r.pct!==null);
                   const laggingReps = repPcts.filter((r:any)=>r.pct<30);
@@ -954,7 +964,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
               {/* REP ACTION ITEMS — only for sales reps */}
               {isRep && (()=>{
                 const myRepId = user_role?.repId;
-                const myDeals = visibleDeals.filter(d=>d.repId===myRepId);
+                const myDeals = visibleDeals.filter(d=>String(d.repId)===String(myRepId));
                 const myOverdue = myDeals.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Mail Confirmed");
                 const myAtRisk  = myDeals.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&(d.atRisk||daysSince(d.lastContact)>=7));
                 const myBlocked = myDeals.filter(d=>d.awaitingApproval&&d.outcome!=="Mail Confirmed");
@@ -1007,14 +1017,14 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
               {/* KPIs — rep: 4 calcNumbers cards + 2 count tiles; management: 5 cards */}
               {isRep ? (()=>{
                 const wrRepId  = user_role?.repId;
-                const wrTarget = targetSubs.filter(t=>t.repId===wrRepId&&t.status==="Approved").reduce((s,t)=>s+(t.totalTarget||t.clients?.reduce((ss,c)=>ss+(c.targetAmount||0),0)||0),0);
+                const wrTarget = targetSubs.filter(t=>String(t.repId)===String(wrRepId)&&t.status==="Approved").reduce((s,t)=>s+(t.totalTarget||t.clients?.reduce((ss,c)=>ss+(c.targetAmount||0),0)||0),0);
                 const wrAch    = getAchieved(wrRepId);
                 const wrCmt    = getCommitted(wrRepId);
                 const wrInp    = getInPlay(wrRepId);
                 const wrSf     = getShortfall(wrTarget,wrRepId);
                 const wrPct    = wrTarget>0?Math.round((wrAch/wrTarget)*100):0;
                 const wrOpenAI = tasks.filter(t=>(t.assignedTo===wrRepId||t.assignedToUserId===activeUser)&&t.status!=="Done").length;
-                const wrAtRisk = visibleDeals.filter(d=>d.repId===wrRepId&&!["Mail Confirmed","Not Interested"].includes(dealStage(d))&&daysSince(d.lastContact||d.lastDealMeetingDate)>=7).length;
+                const wrAtRisk = visibleDeals.filter(d=>String(d.repId)===String(wrRepId)&&!["Mail Confirmed","Not Interested"].includes(dealStage(d))&&daysSince(d.lastContact||d.lastDealMeetingDate)>=7).length;
                 return (<>
                   <div style={{display:"grid",gridTemplateColumns:"repeat(4,1fr)",gap:10,marginBottom:10}}>
                     {[
@@ -1072,7 +1082,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   {atRisk.length>0&&(
                     <div style={{marginBottom:14}}>
                       <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".1em",marginBottom:7}}>NO CONTACT 7+ DAYS</div>
-                      {atRisk.map(a=>{const rep=reps.find(r=>r.id===a.repId);return(
+                      {atRisk.map(a=>{const rep=reps.find(r=>String(r.id)===String(a.repId));return(
                         <div key={a.id} style={{background:`${C.red}06`,border:`1px solid ${C.red}22`,borderRadius:5,padding:"9px 14px",marginBottom:5,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                           <div style={{flex:1}}><span className="sans" style={{fontWeight:700}}>{a.clientName}</span><span style={{color:C.dim,fontSize:11}}> · {rep?.name}</span><span className="pill" style={{background:`${oColor(a.currentStage)}22`,color:oColor(a.currentStage),marginLeft:8,fontSize:10}}>{a.currentStage}</span></div>
                           <span style={{color:C.red,fontSize:11,whiteSpace:"nowrap"}}>{daysSince(a.lastDealMeetingDate||a.lastContactDate)}d idle</span>
@@ -1086,7 +1096,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                   {overdueNext.length>0&&(
                     <div style={{marginBottom:14}}>
                       <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".1em",marginBottom:7}}>OVERDUE NEXT STEPS</div>
-                      {overdueNext.map(d=>{const rep=reps.find(r=>r.id===d.repId);return(
+                      {overdueNext.map(d=>{const rep=reps.find(r=>String(r.id)===String(d.repId));return(
                         <div key={d.id} style={{background:`${C.orange}06`,border:`1px solid ${C.orange}22`,borderRadius:5,padding:"9px 14px",marginBottom:5,display:"flex",alignItems:"center",gap:10,flexWrap:"wrap"}}>
                           <div style={{flex:1}}><span className="sans" style={{fontWeight:700}}>{d.clientCompany}</span><span style={{color:C.dim,fontSize:11}}> · {rep?.name} · {d.nextStep}</span></div>
                           <span style={{color:C.orange,fontSize:11,whiteSpace:"nowrap"}}>was due {d.nextStepDate}</span>
@@ -1100,7 +1110,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                     <div className="card" style={{padding:14}}>
                       <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:9}}>HIGH PROBABILITY — PUSH TO CLOSE</div>
                       {visibleDeals.filter(d=>["Very Interested","Mail Confirmed"].includes(d.outcome)).sort((a,b)=>b.amount-a.amount).slice(0,4).map(d=>{
-                        const rep=reps.find(r=>r.id===d.repId);
+                        const rep=reps.find(r=>String(r.id)===String(d.repId));
                         return(
                           <div key={d.id} style={{marginBottom:8,paddingBottom:8,borderBottom:`1px solid ${C.s2}`}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:3}}>
@@ -1117,9 +1127,9 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
                     </div>
                     <div className="card" style={{padding:14}}>
                       <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",marginBottom:9}}>COMPLIANCE — TODAY · 11:30 PM</div>
-                      {reps.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:r.id===user_role.repId).map(r=>{
-                        const tL=meetings.some(m=>m.repId===r.id&&m.date===TODAY&&m.status==="logged");
-                        const tP=meetings.some(m=>m.repId===r.id&&m.date===TOMORROW&&m.status==="planned");
+                      {reps.filter(r=>user_role.canView==="all"?true:user_role.canView==="region"?r.region===user_role.region:String(r.id)===String(user_role.repId)).map(r=>{
+                        const tL=meetings.some(m=>String(m.repId)===String(r.id)&&m.date===TODAY&&m.status==="logged");
+                        const tP=meetings.some(m=>String(m.repId)===String(r.id)&&m.date===TOMORROW&&m.status==="planned");
                         const ok=tL&&tP;
                         return(
                           <div key={r.id} style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
