@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState } from "react";
 import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
@@ -9,6 +8,7 @@ import {
   getToday, getTomorrow,
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
+import * as revSvc from "../../services/api/revenue";
 
 export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setRevForm, editingRevId, setEditingRevId, editRevData, setEditRevData }) {
   const {
@@ -37,6 +37,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
     threadAIForm, setThreadAIForm,
     DEAL_STAGES, STAGE_PROB, DEAL_TYPES, REGIONS, ALL_ROLES, QUARTERS, C, TODAY, TOMORROW, CURRENT_FY,
   } = useCROAppContext();
+  const isAnnual = filterQ === "FY26 Annual";
 
   return (
     <>

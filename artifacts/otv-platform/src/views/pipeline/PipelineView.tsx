@@ -1,11 +1,10 @@
-// @ts-nocheck
 import React, { useState, useMemo } from "react";
 import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
   USER_ROLES, APPROVAL_SLA_DAYS, APPROVAL_TARGETS, TARGET_APPROVAL_CHAIN,
   MEETING_STATUS, MEETING_TYPES, CLIENT_OR_AGENCY, TASK_PRIORITIES, TASK_STATUSES,
   SLA, REQ_STATUS, DEPARTMENTS, PLAN_STATUS, PLAN_DEADLINE, HR_EMAIL,
-  ALL_CHANNELS, D1, D3, D7, D14, THIS_WEEK_START, IP_CATALOG, PITCH_TYPES,
+  ALL_CHANNELS, D1, D3, D7, D14, THIS_WEEK_START, IP_CATALOG, PITCH_TYPES, OUTCOMES,
   getToday, getTomorrow,
 } from "../../constants";
 import ZohoSearchInput from "../../components/ZohoSearchInput";
@@ -37,6 +36,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }) {
     threadAIForm, setThreadAIForm,
     DEAL_STAGES, STAGE_PROB, DEAL_TYPES, REGIONS, ALL_ROLES, QUARTERS, C, TODAY, TOMORROW, CURRENT_FY,
   } = useCROAppContext();
+  const visibleRepIdsSet = new Set(visibleDeals.map(d => d.repId));
 
   // Derived computations (previously inline in CROApp)
   const closedDeals  = visibleDeals.filter(d=>d.outcome==="Mail Confirmed");

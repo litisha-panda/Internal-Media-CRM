@@ -1,4 +1,3 @@
-// @ts-nocheck
 import React, { useState } from "react";
 import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
@@ -37,6 +36,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
     threadAIForm, setThreadAIForm,
     DEAL_STAGES, STAGE_PROB, DEAL_TYPES, REGIONS, ALL_ROLES, QUARTERS, C, TODAY, TOMORROW, CURRENT_FY,
   } = useCROAppContext();
+  const visibleRepIdsSet = new Set(visibleDeals.map(d => d.repId));
   return (
     <>
           {/* ═══ RH WAR ROOM (Region Head) ═══ */}
