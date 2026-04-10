@@ -1,0 +1,456 @@
+# Replit Agent Fix Prompt — OTV Sales CRM
+# 5 Bugs, Fixed In Order, With Diffs Before Each Step
+
+---
+
+You are fixing 5 confirmed bugs in the OTV Sales CRM codebase. All file paths, function names, constant names, and line references below are exact — do not guess or substitute. Fix the bugs strictly in the numbered order below. After completing each fix, **print a before/after diff** of every changed file before proceeding to the next fix. Do not deploy anything. Do not run any database migrations — where a migration script is needed, write it as a `.sql` file and save it without executing it.
+
+---
+
+## FIX 1 of 5 — Zoho live search hits Sandbox instead of Production
+
+**File:** `artifacts/api-server/src/routes/zoho.ts`
+
+**Problem:** The two live-search endpoint handlers call `searchAccounts()` and `searchAgencies()` with the `ZOHO_SANDBOX` constant instead of `ZOHO_API_BASE`. This means every client and agency lookup in the rep meeting form returns sandbox test data, not real Zoho CRM accounts.
+
+**Lines to change:**
+
+Line 124 (inside the `/api/zoho/clients` handler):
+```typescript
+// BEFORE:
+const results = await searchAccounts(ZOHO_SANDBOX, token, q);
+
+// AFTER:
+const results = await searchAccounts(ZOHO_API_BASE, token, q);
+```
+
+Line 137 (inside the `/api/zoho/agencies` handler):
+```typescript
+// BEFORE:
+const results = await searchAgencies(ZOHO_SANDBOX, token, q);
+
+// AFTER:
+const results = await searchAgencies(ZOHO_API_BASE, token, q);
+```
+
+**Do not change anything else in this file.** `ZOHO_SANDBOX` should remain defined (it may be used for other purposes or future use); only its usage in these two handler calls should be replaced.
+
+**After making this change, print a full unified diff of `artifacts/api-server/src/routes/zoho.ts` before proceeding to Fix 2.**
+
+---
+
+## FIX 2 of 5 — logActivity() called with wrong signature in meetings.ts (silent audit trail failure)
+
+**File:** `artifacts/api-server/src/routes/meetings.ts`
+
+**Problem:** `logActivity` is defined in `artifacts/api-server/src/lib/activityLog.ts` with this exact signature:
+
+```typescript
+export async function logActivity(params: ActivityParams): Promise<void>
+```
+
+where `ActivityParams` is:
+```typescript
+export interface ActivityParams {
+  userId?:     string | null;
+  userName?:   string | null;
+  userRole?:   string | null;
+  region?:     string | null;
+  action:      string;
+  entityType?: string | null;
+  entityId?:   string | null;
+  meta?:       Record<string, unknown>;
+}
+```
+
+But in `meetings.ts`, it is called 4 times with positional arguments — a runtime type mismatch that silently drops all meeting activity from the audit log.
+
+The authenticated user object in each handler is `const u = req.user!` which has the shape:
+```typescript
+{ id: string; name: string; email: string; role: string; region: string | null; repId: number | null; status: string; }
+```
+
+**Make these 4 changes — use `void logActivity(...)` (fire-and-forget, no await) as noted in the activityLog.ts header comment:**
+
+**Change 1 — Line 190** (POST /api/meetings — create meeting):
+```typescript
+// BEFORE:
+await logActivity(u.id, "create", "meeting", row.id, {
+  clientName: row.clientName,
+  date: row.date,
+  meetingKind: row.meetingKind,
+});
+
+// AFTER:
+void logActivity({
+  userId:     u.id,
+  userName:   u.name,
+  userRole:   u.role,
+  region:     u.region,
+  action:     "create",
+  entityType: "meeting",
+  entityId:   row.id,
+  meta:       { clientName: row.clientName, date: row.date, meetingKind: row.meetingKind },
+});
+```
+
+**Change 2 — Line 257** (PATCH /api/meetings/:id — update meeting):
+```typescript
+// BEFORE:
+await logActivity(u.id, "update", "meeting", meetingId, updates);
+
+// AFTER:
+void logActivity({
+  userId:     u.id,
+  userName:   u.name,
+  userRole:   u.role,
+  region:     u.region,
+  action:     "update",
+  entityType: "meeting",
+  entityId:   meetingId,
+  meta:       updates as Record<string, unknown>,
+});
+```
+
+**Change 3 — Line 335** (POST /api/meetings/:id/log — log touchpoint from scheduled meeting):
+```typescript
+// BEFORE:
+await logActivity(u.id, "log", "meeting", meetingId, {
+  touchpointId: tpRow.id,
+  clientName: mtg.clientName,
+});
+
+// AFTER:
+void logActivity({
+  userId:     u.id,
+  userName:   u.name,
+  userRole:   u.role,
+  region:     u.region,
+  action:     "log",
+  entityType: "meeting",
+  entityId:   meetingId,
+  meta:       { touchpointId: tpRow.id, clientName: mtg.clientName },
+});
+```
+
+**Change 4 — Line 416** (POST /api/meetings/impromptu — log impromptu meeting):
+```typescript
+// BEFORE:
+await logActivity(u.id, "log", "meeting", meetingRow.id, {
+  impromptu: true,
+  clientName: meetingRow.clientName,
+});
+
+// AFTER:
+void logActivity({
+  userId:     u.id,
+  userName:   u.name,
+  userRole:   u.role,
+  region:     u.region,
+  action:     "log",
+  entityType: "meeting",
+  entityId:   meetingRow.id,
+  meta:       { impromptu: true, clientName: meetingRow.clientName },
+});
+```
+
+**Do not change anything else in this file.**
+
+**After making all 4 changes, print a full unified diff of `artifacts/api-server/src/routes/meetings.ts` before proceeding to Fix 3.**
+
+---
+
+## FIX 3 of 5 — Frontend DEAL_STAGES diverged from DB canonical list
+
+**Context:** There are two constants files — the canonical DB source of truth and a frontend copy. Both must be corrected.
+
+**File A:** `artifacts/otv-platform/src/constants.ts`
+
+**Problem at line 8:** `DEAL_STAGES` contains `["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"]` — this is a stale, manually-maintained list that is missing 7 stages from the canonical DB definition.
+
+**Problem at line 9:** `OUTCOMES` is set to `DEAL_STAGES` — it was used as an alias for outcome/stage in legacy code.
+
+**The canonical list from `lib/db/src/constants.ts` is:**
+```typescript
+["Prospect", "Qualified", "Proposal Sent", "Negotiation", "Verbal Commit", "PO Received", "RO Received", "Won", "Lost", "Cancelled", "Archived", "On Hold"]
+```
+
+**Change line 8 in `artifacts/otv-platform/src/constants.ts`:**
+```typescript
+// BEFORE:
+export const DEAL_STAGES = ["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"];
+
+// AFTER:
+export const DEAL_STAGES = ["Prospect", "Qualified", "Proposal Sent", "Negotiation", "Verbal Commit", "PO Received", "RO Received", "Won", "Lost", "Cancelled", "Archived", "On Hold"];
+```
+
+**Change line 9 in `artifacts/otv-platform/src/constants.ts`:**
+```typescript
+// BEFORE:
+export const OUTCOMES = DEAL_STAGES;
+
+// AFTER:
+// OUTCOMES kept as alias; legacy meeting outcome values may still arrive from the DB.
+// Map them through mapLegacyOutcome() before display. Do not expand this list.
+export const OUTCOMES = DEAL_STAGES;
+```
+(No code change to OUTCOMES — leave it as `= DEAL_STAGES`. Just confirm it remains correct now that DEAL_STAGES is updated.)
+
+**Also update the `STAGE_PROB` map at line 13 in the same file** to add probability entries for the new stages:
+```typescript
+// BEFORE:
+export const STAGE_PROB: Record<string,number> = {
+  "Prospect": 10, "In Discussion": 40, "Negotiation": 70, "Mail Confirmed": 90, "RO Received": 100, "Lost": 0,
+  "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 10, "Not Interested": 0
+};
+
+// AFTER:
+export const STAGE_PROB: Record<string,number> = {
+  "Prospect": 10, "Qualified": 20, "Proposal Sent": 40,
+  "Negotiation": 70, "Verbal Commit": 85, "PO Received": 95,
+  "RO Received": 100, "Won": 100, "Lost": 0,
+  "Cancelled": 0, "Archived": 0, "On Hold": 10,
+  // Legacy outcome labels — kept for backward compat with existing DB rows
+  "In Discussion": 40, "Mail Confirmed": 90,
+  "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30,
+  "Needs Callback": 10, "Not Interested": 0,
+};
+```
+
+**Also update the `oColor` function** further down in the same file to add color entries for the new stages (find the `oColor` function and add these entries to the existing object):
+```typescript
+"Qualified": C.blue, "Proposal Sent": C.blue, "Verbal Commit": C.green,
+"PO Received": "#0f6b2f", "Won": "#0f6b2f", "Cancelled": C.red,
+"Archived": C.muted, "On Hold": C.accent,
+```
+
+**File B:** `artifacts/otv-platform/src/views/rep/LogMeeting.tsx`
+
+**Problem at line 23:** `DEAL_STAGES` is redeclared as a local constant, overriding anything the file might import. Delete this line entirely — the file already uses the module-level constants from `artifacts/otv-platform/src/constants.ts` for other things; it should import `DEAL_STAGES` from there instead of redeclaring it locally.
+
+Step 1 — Delete line 23:
+```typescript
+// BEFORE (line 23 — DELETE THIS LINE ENTIRELY):
+const DEAL_STAGES    = ["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"];
+```
+
+Step 2 — Add `DEAL_STAGES` to the import at the top of `LogMeeting.tsx`. Find the existing import line that already imports from `../../utils/palette` or from `../../constants` and add `DEAL_STAGES` to it. If there is no import from `../../constants`, add:
+```typescript
+import { DEAL_STAGES } from "../../constants";
+```
+Place this import directly after the last existing import line.
+
+**After making all changes to both files, print a full unified diff of both `artifacts/otv-platform/src/constants.ts` and `artifacts/otv-platform/src/views/rep/LogMeeting.tsx` before proceeding to Fix 4.**
+
+---
+
+## FIX 4 of 5 — tasks.createdAt stored as text instead of timestamp
+
+**File:** `lib/db/src/schema/tasks.ts`
+
+**Problem at line 15:** The `tasks` table defines `createdAt` as `text("created_at")` with no default. Every other table in this file uses `timestamp("...", { withTimezone: true }).defaultNow()`. The text column breaks any date-based sorting, overdue calculation, or query that filters tasks by creation time.
+
+**Do NOT run a migration. Write the migration SQL as a file instead.**
+
+**Step 1 — Change line 15 in `lib/db/src/schema/tasks.ts`:**
+```typescript
+// BEFORE:
+createdAt:        text("created_at"),
+
+// AFTER:
+createdAt:        timestamp("created_at", { withTimezone: true }).defaultNow(),
+```
+
+The `timestamp` import is already present at the top of this file (line 1: `import { pgTable, text, integer, boolean, jsonb, timestamp } from "drizzle-orm/pg-core";`) — no import change needed.
+
+**Step 2 — Create migration file `migrations/fix_004_tasks_created_at_to_timestamp.sql` with this content:**
+
+```sql
+-- Migration: fix_004_tasks_created_at_to_timestamp.sql
+-- Purpose: Convert tasks.created_at from TEXT to TIMESTAMPTZ
+-- Safe for rows that have valid ISO-8601 strings; nulls will remain null.
+-- HUMAN REVIEW REQUIRED before running: verify no application code
+-- writes non-ISO-8601 strings into this column before executing.
+
+BEGIN;
+
+ALTER TABLE tasks
+  ALTER COLUMN created_at TYPE TIMESTAMPTZ
+  USING CASE
+    WHEN created_at IS NULL THEN NULL
+    WHEN created_at ~ '^\d{4}-\d{2}-\d{2}' THEN created_at::TIMESTAMPTZ
+    ELSE NULL
+  END;
+
+ALTER TABLE tasks
+  ALTER COLUMN created_at SET DEFAULT now();
+
+COMMIT;
+```
+
+Save this file at the path `migrations/fix_004_tasks_created_at_to_timestamp.sql`. Do not execute it.
+
+**After completing both steps, print a full unified diff of `lib/db/src/schema/tasks.ts` and confirm the migration file was written before proceeding to Fix 5.**
+
+---
+
+## FIX 5 of 5 — revenueEntries.quarter is nullable with no server-side default
+
+**File:** `lib/db/src/schema/revenue.ts`
+
+**Problem at line 22:** `quarter: text("quarter")` has no `.notNull()` and no default. The API route in `artifacts/api-server/src/routes/revenue.ts` sets `quarter: quarter ?? null` (line 147), meaning if the client does not send a `quarter` field, the entry is stored with `quarter = NULL`. Quarterly rollup queries that filter `WHERE quarter = 'Q1 FY26'` will silently miss these entries.
+
+**The fix has two parts:**
+
+**Part A — Derive quarter server-side when not provided.**
+
+In `artifacts/api-server/src/routes/revenue.ts`, find the POST handler (around line 87) where the body is destructured:
+
+```typescript
+const {
+  id, clientCompany, zohoAccountId, dealType,
+  amount, invoiceRef, date, quarter, fiscalYear,
+  notes, reversalOf, dealId, idempotencyKey,
+} = req.body;
+```
+
+**Add a quarter derivation function and apply it.** Insert the following helper function at the top of the file (after the imports, before the first `router.get`):
+
+```typescript
+/**
+ * Derives an OTV fiscal quarter string from a date string (YYYY-MM-DD).
+ * OTV fiscal year runs April–March (FY26 = Apr 2025 – Mar 2026).
+ * Returns null if date is not provided or unparseable.
+ */
+function deriveQuarter(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  const month = d.getMonth() + 1; // 1-indexed
+  const calYear = d.getFullYear();
+  // OTV fiscal year starts April; FY26 = Apr 2025 – Mar 2026
+  const fyYear = month >= 4 ? calYear + 1 : calYear;
+  const fy = `FY${String(fyYear).slice(-2)}`;
+  let q: string;
+  if (month >= 4 && month <= 6)  q = "Q1";
+  else if (month >= 7 && month <= 9)  q = "Q2";
+  else if (month >= 10 && month <= 12) q = "Q3";
+  else q = "Q4"; // Jan–Mar
+  return `${q} ${fy}`;
+}
+```
+
+Then, just before the `const row = await db.insert(revenueEntries).values({...})` block, add:
+
+```typescript
+// Derive quarter from date if not explicitly provided by client
+const resolvedQuarter = quarter ?? deriveQuarter(date);
+```
+
+Then change line 147 from:
+```typescript
+quarter:        quarter ?? null,
+```
+to:
+```typescript
+quarter:        resolvedQuarter,
+```
+
+**Part B — Write the migration SQL for historical null rows.**
+
+Create file `migrations/fix_005_backfill_revenue_quarter.sql`:
+
+```sql
+-- Migration: fix_005_backfill_revenue_quarter.sql
+-- Purpose: Backfill quarter for existing revenue entries where quarter IS NULL
+--          and a date value is present. Uses OTV fiscal calendar (April start).
+-- HUMAN REVIEW REQUIRED: verify fiscal year logic matches OTV's calendar
+--   before running. Do not run if quarter data was intentionally omitted.
+
+BEGIN;
+
+UPDATE revenue_entries
+SET quarter = CASE
+  WHEN EXTRACT(MONTH FROM date::DATE) BETWEEN 4 AND 6  THEN 'Q1 FY' || RIGHT((EXTRACT(YEAR FROM date::DATE)::INT + 1)::TEXT, 2)
+  WHEN EXTRACT(MONTH FROM date::DATE) BETWEEN 7 AND 9  THEN 'Q2 FY' || RIGHT((EXTRACT(YEAR FROM date::DATE)::INT + 1)::TEXT, 2)
+  WHEN EXTRACT(MONTH FROM date::DATE) BETWEEN 10 AND 12 THEN 'Q3 FY' || RIGHT((EXTRACT(YEAR FROM date::DATE)::INT + 1)::TEXT, 2)
+  ELSE                                                       'Q4 FY' || RIGHT((EXTRACT(YEAR FROM date::DATE)::INT)::TEXT, 2)
+END
+WHERE quarter IS NULL
+  AND date IS NOT NULL
+  AND date ~ '^\d{4}-\d{2}-\d{2}';
+
+COMMIT;
+```
+
+Save this file at `migrations/fix_005_backfill_revenue_quarter.sql`. Do not execute it.
+
+**After completing Part A and Part B, print a full unified diff of `artifacts/api-server/src/routes/revenue.ts` and confirm the migration file was written.**
+
+---
+
+## FINAL STEP — Summary Report
+
+After all 5 fixes are complete, print a summary in this exact format:
+
+```
+═══════════════════════════════════════════════════
+OTV CRM — BUG FIX SUMMARY
+═══════════════════════════════════════════════════
+
+FILES CHANGED (source code):
+1. artifacts/api-server/src/routes/zoho.ts
+   – Lines 124, 137: ZOHO_SANDBOX → ZOHO_API_BASE in two search calls
+
+2. artifacts/api-server/src/routes/meetings.ts
+   – Lines 190, 257, 335, 416: logActivity() positional args → ActivityParams object
+   – All 4 calls converted from await to void (fire-and-forget per activityLog.ts contract)
+
+3. artifacts/otv-platform/src/constants.ts
+   – Line 8: DEAL_STAGES expanded from 6 → 12 stages to match lib/db/src/constants.ts
+   – STAGE_PROB updated to include all 12 stages + legacy compat entries
+   – oColor() updated with color entries for 8 new stages
+
+4. artifacts/otv-platform/src/views/rep/LogMeeting.tsx
+   – Line 23: Local DEAL_STAGES redeclaration removed
+   – Import added: DEAL_STAGES from ../../constants
+
+5. lib/db/src/schema/tasks.ts
+   – Line 15: createdAt column type changed from text() to timestamp({ withTimezone: true }).defaultNow()
+
+6. artifacts/api-server/src/routes/revenue.ts
+   – deriveQuarter() helper added
+   – resolvedQuarter variable introduced; replaces hard-coded quarter ?? null at line 147
+
+MIGRATION SCRIPTS WRITTEN (NOT executed — requires human review before running):
+- migrations/fix_004_tasks_created_at_to_timestamp.sql
+- migrations/fix_005_backfill_revenue_quarter.sql
+
+DECISIONS FLAGGED FOR HUMAN REVIEW:
+1. [MIGRATION] fix_004: Before running tasks created_at migration, confirm no
+   application code writes non-ISO-8601 strings into tasks.created_at. If any
+   legacy rows contain free-text values, the USING CASE clause will null them out.
+
+2. [MIGRATION] fix_005: Before running revenue quarter backfill, confirm OTV
+   fiscal year starts April 1. The SQL uses month >= 4 as Q1 start. If the
+   fiscal calendar differs, update the CASE boundaries.
+
+3. [FRONTEND] Fix 3 changes DEAL_STAGES in constants.ts which is imported by
+   CROApp.tsx, SharedViews.tsx, and CROAppContext.tsx. After deploying, test
+   that all dropdowns, filters, and pipeline views that reference DEAL_STAGES
+   render the full 12-stage list correctly and do not break existing saved
+   deal records that carry legacy stage values like "In Discussion" or
+   "Mail Confirmed". The mapLegacyOutcome() function handles display-layer
+   normalisation and should not need changes.
+
+4. [GOVERNANCE] The governance engine (artifacts/api-server/src/governance.ts)
+   uses setInterval for the 11:30 PM attendance check. This is not fixed in
+   this sprint — it will silently stop working if the Express server restarts
+   at night. A future fix should replace it with a persistent cron job or
+   a Replit-native scheduled task.
+
+NO DEPLOYMENTS WERE MADE. NO MIGRATIONS WERE EXECUTED.
+═══════════════════════════════════════════════════
+```
+
+Stop here. Do not make any other changes.
