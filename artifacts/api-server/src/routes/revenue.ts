@@ -11,13 +11,20 @@ const router = Router();
  * Derives an OTV fiscal quarter string from a date string (YYYY-MM-DD).
  * OTV fiscal year runs April–March (FY26 = Apr 2025 – Mar 2026).
  * Returns null if date is not provided or unparseable.
+ *
+ * Parses year/month directly from the string to avoid JS Date timezone
+ * ambiguity — `new Date("YYYY-MM-DD")` parses as UTC midnight and
+ * `.getMonth()` returns local time, which can shift the month on non-UTC
+ * hosts and produce the wrong fiscal quarter.
  */
 function deriveQuarter(dateStr: string | null | undefined): string | null {
   if (!dateStr) return null;
-  const d = new Date(dateStr);
-  if (isNaN(d.getTime())) return null;
-  const month = d.getMonth() + 1; // 1-indexed
-  const calYear = d.getFullYear();
+  // Match YYYY-MM-DD (or YYYY-MM-DDT...) — extract year and month numerically
+  const m = /^(\d{4})-(\d{2})/.exec(dateStr);
+  if (!m) return null;
+  const calYear = parseInt(m[1]!, 10);
+  const month   = parseInt(m[2]!, 10); // 1-indexed
+  if (month < 1 || month > 12) return null;
   // OTV fiscal year starts April; FY26 = Apr 2025 – Mar 2026
   const fyYear = month >= 4 ? calYear + 1 : calYear;
   const fy = `FY${String(fyYear).slice(-2)}`;
@@ -209,7 +216,7 @@ router.post("/revenue", requireAuth, async (req, res) => {
         action:     "revenue.entry_created",
         entityType: "revenue_entry",
         entityId:   id,
-        meta:       { amount: Number(amount), clientCompany, quarter, fiscalYear },
+        meta:       { amount: Number(amount), clientCompany, quarter: resolvedQuarter, fiscalYear },
       });
     }
 
