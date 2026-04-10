@@ -1,0 +1,174 @@
+# Replit Agent Fix Prompt — TypeScript Error Sprint
+# 8 Pre-existing TS Errors, 3 Root Causes, Fixed In Order
+
+---
+
+You are fixing 8 pre-existing TypeScript errors in the OTV Sales CRM `api-server` package. All errors were confirmed pre-existing before the previous bug-fix sprint. There are exactly **3 root causes** — fix them in the numbered order below. After each root cause is fixed, run `pnpm --filter api-server typecheck` and show the output before proceeding. Do not deploy anything. Do not touch any other file.
+
+---
+
+## Background: Why these errors exist
+
+`lib/db` and `lib/integrations-anthropic-ai` are TypeScript composite projects (`"composite": true` in their `tsconfig.json`). This means `api-server` resolves them through their compiled declaration files in `dist/`, not their `src/` directly. Both `dist/` folders are **stale** — they were compiled at an earlier point in time before several schema tables were added. This is the cause of 6 of the 8 errors. The remaining 2 errors are source-code type annotation issues.
+
+---
+
+## ROOT CAUSE 1 of 3 — Stale `lib/db` dist declarations (fixes 5 errors)
+
+**What's wrong:** `lib/db/dist/schema/index.d.ts` is missing `export * from "./meetings"`. And `lib/db/dist/schema/tasks.d.ts` is missing the `attendanceExceptions` table declaration. Both were added to `lib/db/src/` after the dist was last compiled. As a result, `api-server` routes that import `meetings` or `attendanceExceptions` from `@workspace/db` get a TS error because the declarations don't exist in the compiled output.
+
+**Errors this fixes:**
+- `attendance.ts(2,33)`: Module `@workspace/db` has no exported member `attendanceExceptions`
+- `attendance.ts(370,14)`: Follow-on error from the missing export
+- `meetings.ts(2,14)`: Module `@workspace/db` has no exported member `meetings`
+
+**Fix:** Rebuild the `lib/db` composite project to regenerate its dist declarations.
+
+Run this command from the workspace root:
+```bash
+pnpm --filter @workspace/db exec tsc --build tsconfig.json
+```
+
+If that fails due to missing node_modules, try:
+```bash
+cd lib/db && npx tsc --build tsconfig.json
+```
+
+After running, verify that `lib/db/dist/schema/` now contains `meetings.d.ts` and that `lib/db/dist/schema/index.d.ts` contains `export * from "./meetings"`. Also verify that `lib/db/dist/schema/tasks.d.ts` now exports `attendanceExceptions`.
+
+**Do not manually edit any `.d.ts` files** — they must be generated from source.
+
+**Run `pnpm --filter api-server typecheck` after this step and show the output before proceeding.**
+
+---
+
+## ROOT CAUSE 2 of 3 — Missing `lib/integrations-anthropic-ai` dist (fixes 1 error)
+
+**What's wrong:** `lib/integrations-anthropic-ai` has `"composite": true` and `"outDir": "dist"` in its `tsconfig.json`, but its `dist/` folder does not exist at all — it was never built in the downloaded snapshot. `claude-proxy.ts` imports `{ anthropic }` from `@workspace/integrations-anthropic-ai`, and without the dist declarations TS cannot resolve the module.
+
+**Error this fixes:**
+- `claude-proxy.ts(2,27)`: Cannot find module `@workspace/integrations-anthropic-ai` or its corresponding type declarations
+
+**Fix:** Build the `lib/integrations-anthropic-ai` composite project.
+
+Run this command from the workspace root:
+```bash
+pnpm --filter @workspace/integrations-anthropic-ai exec tsc --build tsconfig.json
+```
+
+If that fails:
+```bash
+cd lib/integrations-anthropic-ai && npx tsc --build tsconfig.json
+```
+
+After running, verify that `lib/integrations-anthropic-ai/dist/` now exists and contains `client.d.ts` and `index.d.ts`.
+
+**Run `pnpm --filter api-server typecheck` after this step and show the output before proceeding.**
+
+---
+
+## ROOT CAUSE 3 of 3 — Two source-code type annotation bugs (fixes 2 errors)
+
+These two errors are actual source code mistakes — not build artifacts. Fix them in the order listed.
+
+---
+
+### Fix A — `deals.ts` line 238: local type annotation narrower than actual return type
+
+**File:** `artifacts/api-server/src/routes/deals.ts`
+
+**Error:** `deals.ts(240,7)`: Type `'{ repId: number | null; ... }'` is not assignable to type `'{ repId: number; ... }'`
+
+**Root cause:** Around line 238 (inside the `POST /api/client-accounts` handler), `owner` is declared with a manually-written narrow type:
+```typescript
+let owner: { repId: number; region: string; name: string };
+```
+
+But `resolveOwnership()` returns `ResolvedOwner` which has `repId: number | null`. The first POST handler in the same file (around line 70) correctly uses `Awaited<ReturnType<typeof resolveOwnership>>` — the second handler does not.
+
+**Fix:** Change the type annotation at line 238 to match the first handler:
+```typescript
+// BEFORE:
+let owner: { repId: number; region: string; name: string };
+
+// AFTER:
+let owner: Awaited<ReturnType<typeof resolveOwnership>>;
+```
+
+Do not change anything else in this block. The `resolveOwnership` function is already imported at the top of the file — no import change needed.
+
+---
+
+### Fix B — `meetings.ts` lines 269 and 356: Express 5 `req.params` typing
+
+**File:** `artifacts/api-server/src/routes/meetings.ts`
+
+**Error at lines ~269 and ~356:** Type `'string | string[]'` is not assignable to type `'string | null | undefined'`
+
+**Root cause:** `api-server` uses Express 5 with `@types/express@5`. In Express 5's type definitions, `req.params["key"]` returns `string | string[]` rather than `string`. The variable `meetingId` is declared as `const meetingId = req.params["id"]!` in two handlers. This value is then passed to `entityId` in the `void logActivity({...})` call, but `ActivityParams.entityId` expects `string | null | undefined` — not `string | string[]`.
+
+There are exactly two affected `meetingId` declarations — find them by looking for `const meetingId = req.params["id"]!` in the file. There are two of them (one in the PATCH handler, one in the POST /:id/log handler).
+
+**Fix — change both declarations to add a `String()` cast:**
+```typescript
+// BEFORE (appears twice in the file):
+const meetingId = req.params["id"]!;
+
+// AFTER (apply to both occurrences):
+const meetingId = String(req.params["id"]);
+```
+
+`String()` safely coerces `string | string[]` to `string`. If the param is an array, it will comma-join — but Express route params are never arrays for named segments like `:id`, so this is safe. Do not change any other `req.params` usage in the file.
+
+---
+
+### After both fixes, run the final typecheck:
+
+```bash
+pnpm --filter api-server typecheck
+```
+
+The expected result is **0 errors** (or only errors that were present in a separate package — the `api-server` package itself should be clean).
+
+---
+
+## FINAL STEP — Summary Report
+
+After all 3 root causes are fixed, print a summary in this exact format:
+
+```
+═══════════════════════════════════════════════════
+OTV CRM — TS ERROR FIX SUMMARY
+═══════════════════════════════════════════════════
+
+ROOT CAUSE 1 — lib/db stale dist rebuilt:
+  lib/db/dist/schema/meetings.d.ts          GENERATED
+  lib/db/dist/schema/tasks.d.ts             REGENERATED (now includes attendanceExceptions)
+  lib/db/dist/schema/index.d.ts             REGENERATED (now includes export * from ./meetings)
+  Errors fixed: attendance.ts(2,33), attendance.ts(370,14), meetings.ts(2,14)
+
+ROOT CAUSE 2 — lib/integrations-anthropic-ai dist built:
+  lib/integrations-anthropic-ai/dist/       GENERATED
+  Error fixed: claude-proxy.ts(2,27)
+
+ROOT CAUSE 3A — deals.ts type annotation:
+  artifacts/api-server/src/routes/deals.ts  EDITED (line ~238: manual type → ReturnType)
+  Error fixed: deals.ts(240,7)
+
+ROOT CAUSE 3B — meetings.ts Express 5 params:
+  artifacts/api-server/src/routes/meetings.ts  EDITED (2 occurrences: req.params["id"]! → String(...))
+  Errors fixed: meetings.ts(269,...), meetings.ts(356,...)
+
+FINAL TYPECHECK RESULT: [paste actual output here]
+
+FILES CHANGED:
+  artifacts/api-server/src/routes/deals.ts       — 1 line changed
+  artifacts/api-server/src/routes/meetings.ts    — 2 lines changed
+  lib/db/dist/                                   — regenerated by tsc build
+  lib/integrations-anthropic-ai/dist/            — generated by tsc build
+
+NO DEPLOYMENTS MADE. NO MIGRATIONS TOUCHED.
+═══════════════════════════════════════════════════
+```
+
+Stop here. Do not make any other changes.
