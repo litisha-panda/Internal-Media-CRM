@@ -132,7 +132,7 @@ router.get("/meetings/:id", requireAuth, async (req, res) => {
     const rows = await db
       .select()
       .from(meetings)
-      .where(eq(meetings.id, req.params["id"]!))
+      .where(eq(meetings.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
@@ -210,7 +210,7 @@ router.post("/meetings", requireAuth, async (req, res) => {
 router.patch("/meetings/:id", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    const meetingId = req.params["id"]!;
+    const meetingId = String(req.params["id"]);
 
     const existing = await db
       .select()
@@ -283,7 +283,7 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
 router.post("/meetings/:id/log", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    const meetingId = req.params["id"]!;
+    const meetingId = String(req.params["id"]);
 
     const existing = await db
       .select()

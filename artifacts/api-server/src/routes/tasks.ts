@@ -104,7 +104,7 @@ router.post("/tasks", requireAuth, async (req, res) => {
         priority:         body.priority          ?? "Medium",
         status:           "Open",               // always starts Open — never trust client status
         dueDate:          body.dueDate           ?? null,
-        createdAt:        new Date().toISOString(),
+        createdAt:        new Date(),
         assignedBy:       u.name,               // always from session
         assignedByName:   u.name,               // always from session
         fromMeetingLog:   body.fromMeetingLog    ?? false,

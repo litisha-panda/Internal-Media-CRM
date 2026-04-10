@@ -235,11 +235,17 @@ router.post("/client-accounts", requireAuth, async (req, res) => {
       return void res.status(400).json({ ok: false, error: "id and clientName required" });
     }
 
-    let owner: { repId: number; region: string; name: string };
+    let owner: Awaited<ReturnType<typeof resolveOwnership>>;
     try {
       owner = await resolveOwnership(u, { repId: body.repId, region: body.region });
     } catch (e: any) {
       return void res.status(e.status ?? 400).json({ ok: false, error: e.error ?? String(e) });
+    }
+    if (!owner.repId) {
+      return void res.status(400).json({
+        ok:    false,
+        error: `Client accounts must be attributed to a rep. Your role (${u.role}) has no assigned rep ID — provide body.repId.`,
+      });
     }
 
     const row = await db

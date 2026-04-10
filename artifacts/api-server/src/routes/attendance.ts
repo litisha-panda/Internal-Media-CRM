@@ -260,7 +260,7 @@ router.patch("/attendance-exceptions/:id/action", requireAuth, async (req, res) 
     const rows = await db
       .select()
       .from(attendanceExceptions)
-      .where(eq(attendanceExceptions.id, req.params["id"]!))
+      .where(eq(attendanceExceptions.id, String(req.params["id"])))
       .limit(1);
 
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
@@ -367,7 +367,7 @@ router.post("/attendance-records/:id/grant-exception", requireAuth, async (req, 
     const rows = await db
       .select()
       .from(attendanceRecords)
-      .where(eq(attendanceRecords.id, req.params["id"]!))
+      .where(eq(attendanceRecords.id, String(req.params["id"])))
       .limit(1);
 
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
