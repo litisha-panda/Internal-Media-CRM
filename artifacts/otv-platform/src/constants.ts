@@ -5,15 +5,21 @@ export const REGIONS   = ["North", "South", "East", "West", "National", "Central
 export const ALL_ROLES = ["SALES REP","REGION HEAD","SALES HEAD","CRO","SALES STRATEGY","DIGI OPS","ADMIN"];
 export const DEAL_TYPES = ["Linear TV", "IPs", "Digital", "Media Solutions", "Integrated Packages"];
 export const CONTACT_LEVELS = ["C-Suite / Owner", "VP / GM", "Marketing Head", "Brand Manager", "Agency Lead", "Junior/Exec"];
-export const DEAL_STAGES = ["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"];
+export const DEAL_STAGES = ["Prospect", "Qualified", "Proposal Sent", "Negotiation", "Verbal Commit", "PO Received", "RO Received", "Won", "Lost", "Cancelled", "Archived", "On Hold"];
 export const OUTCOMES = DEAL_STAGES;
 export const DEPARTMENTS = ["Sales Strategy", "Digital", "Production", "National Head", "Finance", "Legal"];
 export const REQ_STATUS = ["Pending", "In Progress", "Done", "Overdue"];
 export const SLA: Record<string,number> = { "Sales Strategy": 24, "Digital": 24, "Production": 48, "National Head": 12, "Finance": 48, "Legal": 72 };
 export const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26", "FY26 Annual"];
 export const STAGE_PROB: Record<string,number> = {
-  "Prospect": 10, "In Discussion": 40, "Negotiation": 70, "Mail Confirmed": 90, "RO Received": 100, "Lost": 0,
-  "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30, "Needs Callback": 10, "Not Interested": 0
+  "Prospect": 10, "Qualified": 20, "Proposal Sent": 40,
+  "Negotiation": 70, "Verbal Commit": 85, "PO Received": 95,
+  "RO Received": 100, "Won": 100, "Lost": 0,
+  "Cancelled": 0, "Archived": 0, "On Hold": 15,
+  // Legacy outcome labels — kept for backward compat with existing DB rows
+  "In Discussion": 40, "Mail Confirmed": 90,
+  "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30,
+  "Needs Callback": 10, "Not Interested": 0,
 };
 export const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
 export const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "RO Received"];
@@ -124,8 +130,12 @@ export const daysSince = (d: string | null | undefined): number => {
 export const dealStage = (d: { stage?: string; outcome?: string }): string =>
   d.stage || d.outcome || "Prospect";
 export const oColor = (o: string): string => (({
-  "Prospect": C.muted, "In Discussion": C.blue, "Negotiation": C.accent,
-  "Mail Confirmed": C.green, "RO Received": "#0f6b2f", "Lost": C.red,
+  "Prospect": C.muted, "Qualified": C.blue, "Proposal Sent": C.blue,
+  "Negotiation": C.accent, "Verbal Commit": C.green, "PO Received": "#0f6b2f",
+  "RO Received": "#0f6b2f", "Won": "#0f6b2f", "Lost": C.red,
+  "Cancelled": C.red, "Archived": C.muted, "On Hold": C.accent,
+  // Legacy compat
+  "In Discussion": C.blue, "Mail Confirmed": C.green,
   "Very Interested": C.blue, "Interested – Needs Revision": C.accent,
   "Price Concern": C.orange, "Needs Callback": C.blue, "Not Interested": C.muted,
 } as Record<string, string>)[o] || C.dim);

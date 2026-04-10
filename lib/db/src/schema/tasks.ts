@@ -12,7 +12,7 @@ export const tasks = pgTable("tasks", {
   priority:         text("priority").default("Medium"),
   status:           text("status").default("Open"),
   dueDate:          text("due_date"),
-  createdAt:        text("created_at"),
+  createdAt:        timestamp("created_at", { withTimezone: true }).defaultNow(),
   assignedBy:       text("assigned_by"),
   assignedByName:   text("assigned_by_name"),
   fromMeetingLog:   boolean("from_meeting_log").default(false),

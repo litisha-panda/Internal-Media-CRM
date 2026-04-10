@@ -187,10 +187,15 @@ router.post("/meetings", requireAuth, async (req, res) => {
 
     await db.insert(meetings).values(row);
 
-    await logActivity(u.id, "create", "meeting", row.id, {
-      clientName: row.clientName,
-      date: row.date,
-      meetingKind: row.meetingKind,
+    void logActivity({
+      userId:     u.id,
+      userName:   u.name,
+      userRole:   u.role,
+      region:     u.region,
+      action:     "create",
+      entityType: "meeting",
+      entityId:   row.id,
+      meta:       { clientName: row.clientName, date: row.date, meetingKind: row.meetingKind },
     });
 
     res.json({ ok: true, data: row });
@@ -254,7 +259,16 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
 
     await db.update(meetings).set(updates).where(eq(meetings.id, meetingId));
 
-    await logActivity(u.id, "update", "meeting", meetingId, updates);
+    void logActivity({
+      userId:     u.id,
+      userName:   u.name,
+      userRole:   u.role,
+      region:     u.region,
+      action:     "update",
+      entityType: "meeting",
+      entityId:   meetingId,
+      meta:       updates as Record<string, unknown>,
+    });
 
     res.json({ ok: true, data: { ...mtg, ...updates } });
   } catch (err: any) {
@@ -332,9 +346,15 @@ router.post("/meetings/:id/log", requireAuth, async (req, res) => {
       .set({ status: "logged", touchpointId: tpRow.id, updatedAt: new Date() })
       .where(eq(meetings.id, meetingId));
 
-    await logActivity(u.id, "log", "meeting", meetingId, {
-      touchpointId: tpRow.id,
-      clientName: mtg.clientName,
+    void logActivity({
+      userId:     u.id,
+      userName:   u.name,
+      userRole:   u.role,
+      region:     u.region,
+      action:     "log",
+      entityType: "meeting",
+      entityId:   meetingId,
+      meta:       { touchpointId: tpRow.id, clientName: mtg.clientName },
     });
 
     res.json({ ok: true, data: { touchpoint: tpRow, meeting: { ...mtg, status: "logged", touchpointId: tpRow.id } } });
@@ -413,9 +433,15 @@ router.post("/meetings/impromptu-log", requireAuth, async (req, res) => {
     await db.insert(meetings).values(meetingRow);
     await db.insert(touchpoints).values(tpRow);
 
-    await logActivity(u.id, "log", "meeting", meetingRow.id, {
-      impromptu: true,
-      clientName: meetingRow.clientName,
+    void logActivity({
+      userId:     u.id,
+      userName:   u.name,
+      userRole:   u.role,
+      region:     u.region,
+      action:     "log",
+      entityType: "meeting",
+      entityId:   meetingRow.id,
+      meta:       { impromptu: true, clientName: meetingRow.clientName },
     });
 
     res.json({ ok: true, data: { meeting: meetingRow, touchpoint: tpRow } });

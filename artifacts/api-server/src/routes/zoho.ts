@@ -121,7 +121,7 @@ router.get("/zoho/clients", async (req, res) => {
   try {
     const token = await getAccessToken();
     const q     = ((req.query.q as string) ?? "").trim();
-    const results = await searchAccounts(ZOHO_SANDBOX, token, q);
+    const results = await searchAccounts(ZOHO_API_BASE, token, q);
     return res.json({ ok: true, results });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);
@@ -134,7 +134,7 @@ router.get("/zoho/agencies", async (req, res) => {
   try {
     const token = await getAccessToken();
     const q     = ((req.query.q as string) ?? "").trim();
-    const results = await searchAgencies(ZOHO_SANDBOX, token, q);
+    const results = await searchAgencies(ZOHO_API_BASE, token, q);
     return res.json({ ok: true, results });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : String(err);

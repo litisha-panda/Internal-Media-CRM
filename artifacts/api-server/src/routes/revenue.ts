@@ -7,6 +7,28 @@ import { resolveOwnership } from "../lib/ownership";
 
 const router = Router();
 
+/**
+ * Derives an OTV fiscal quarter string from a date string (YYYY-MM-DD).
+ * OTV fiscal year runs April–March (FY26 = Apr 2025 – Mar 2026).
+ * Returns null if date is not provided or unparseable.
+ */
+function deriveQuarter(dateStr: string | null | undefined): string | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return null;
+  const month = d.getMonth() + 1; // 1-indexed
+  const calYear = d.getFullYear();
+  // OTV fiscal year starts April; FY26 = Apr 2025 – Mar 2026
+  const fyYear = month >= 4 ? calYear + 1 : calYear;
+  const fy = `FY${String(fyYear).slice(-2)}`;
+  let q: string;
+  if (month >= 4 && month <= 6)        q = "Q1";
+  else if (month >= 7 && month <= 9)   q = "Q2";
+  else if (month >= 10 && month <= 12) q = "Q3";
+  else                                  q = "Q4"; // Jan–Mar
+  return `${q} ${fy}`;
+}
+
 // ── RH scope is by region, not by repId ─────────────────────────────────────
 function scopeCondition(user: any) {
   const role = user.role;
@@ -131,6 +153,9 @@ router.post("/revenue", requireAuth, async (req, res) => {
 
     const isReversal = !!reversalOf;
 
+    // Derive quarter from date if not explicitly provided by client
+    const resolvedQuarter = quarter ?? deriveQuarter(date);
+
     const row = await db
       .insert(revenueEntries)
       .values({
@@ -144,7 +169,7 @@ router.post("/revenue", requireAuth, async (req, res) => {
         amount:         Number(amount),
         invoiceRef:     invoiceRef ?? null,
         date:           date ?? null,
-        quarter:        quarter ?? null,
+        quarter:        resolvedQuarter,
         fiscalYear:     fiscalYear ?? "FY26",
         notes:          notes ?? null,
         isReversed:     false,

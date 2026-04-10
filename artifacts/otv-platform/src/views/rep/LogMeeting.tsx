@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect } from "react";
 import { C, TODAY } from "../../utils/palette";
+import { DEAL_STAGES } from "../../constants";
 import { useTouchpoints } from "../../hooks/useTouchpoints";
 import { useMeetings } from "../../hooks/useMeetings";
 import { useTasks } from "../../hooks/useTasks";
@@ -20,7 +21,6 @@ import type { Touchpoint } from "../../services/api/touchpoints";
 type RepId = number | string | null | undefined;
 
 /* ── Constants ──────────────────────────────────────────────────────────── */
-const DEAL_STAGES    = ["Prospect", "In Discussion", "Negotiation", "Mail Confirmed", "RO Received", "Lost"];
 const PITCH_TYPES    = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
 const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "RO Received"];
 const MEETING_TYPES  = ["Physical", "Online", "Phone Call"];
