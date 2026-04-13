@@ -5,21 +5,18 @@ export const REGIONS   = ["North", "South", "East", "West", "National", "Central
 export const ALL_ROLES = ["SALES REP","REGION HEAD","SALES HEAD","CRO","SALES STRATEGY","DIGI OPS","ADMIN"];
 export const DEAL_TYPES = ["Linear TV", "IPs", "Digital", "Media Solutions", "Integrated Packages"];
 export const CONTACT_LEVELS = ["C-Suite / Owner", "VP / GM", "Marketing Head", "Brand Manager", "Agency Lead", "Junior/Exec"];
-export const DEAL_STAGES = ["Prospect", "Qualified", "Proposal Sent", "Negotiation", "Verbal Commit", "PO Received", "RO Received", "Won", "Lost", "Cancelled", "Archived", "On Hold"];
+export const DEAL_STAGES = ["Quotation", "Rate Card", "Negotiation", "Some Other Solution", "Meeting with Senior", "Follow Up", "Proposal"];
 export const OUTCOMES = DEAL_STAGES;
 export const DEPARTMENTS = ["Sales Strategy", "Digital", "Production", "National Head", "Finance", "Legal"];
 export const REQ_STATUS = ["Pending", "In Progress", "Done", "Overdue"];
 export const SLA: Record<string,number> = { "Sales Strategy": 24, "Digital": 24, "Production": 48, "National Head": 12, "Finance": 48, "Legal": 72 };
 export const QUARTERS = ["Q1 FY26", "Q2 FY26", "Q3 FY26", "Q4 FY26", "FY26 Annual"];
 export const STAGE_PROB: Record<string,number> = {
-  "Prospect": 10, "Qualified": 20, "Proposal Sent": 40,
-  "Negotiation": 70, "Verbal Commit": 85, "PO Received": 95,
-  "RO Received": 100, "Won": 100, "Lost": 0,
-  "Cancelled": 0, "Archived": 0, "On Hold": 15,
-  // Legacy outcome labels — kept for backward compat with existing DB rows
+  "Quotation": 10, "Rate Card": 25, "Negotiation": 65,
+  "Some Other Solution": 30, "Meeting with Senior": 50,
+  "Follow Up": 35, "Proposal": 40,
+  // Legacy labels — kept for backward compat with existing DB rows
   "In Discussion": 40, "Mail Confirmed": 90,
-  "Very Interested": 40, "Interested – Needs Revision": 50, "Price Concern": 30,
-  "Needs Callback": 10, "Not Interested": 0,
 };
 export const PITCH_TYPES = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
 export const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "RO Received"];
@@ -35,7 +32,7 @@ export const APPROVAL_SLA_DAYS = 2;
 export const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
 export const PLAN_DEADLINE = "23:30";
 export const HR_EMAIL = "hr@odishatv.com";
-export const TARGET_APPROVAL_CHAIN = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO","Approved"];
+export const TARGET_APPROVAL_CHAIN = ["Pending RH","Pending NSH","Pending CRO","Approved"];
 export const ALL_CHANNELS = ["Odisha TV","Tarang","Tarang Music","Alankar","Prarthana"];
 export const IP_CATALOG: any[] = [];
 

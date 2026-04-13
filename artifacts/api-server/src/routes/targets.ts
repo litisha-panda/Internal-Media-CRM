@@ -136,34 +136,113 @@ router.get("/targets/:id/allocations", requireAuth, async (req, res) => {
 });
 
 // POST /api/targets — submit new target plan
+// Supports two payload shapes:
+//   Annual (new):  { id, year, clients: [{ agencyName, clientName, brandName, q1Target, q2Target, q3Target, q4Target }] }
+//   Quarterly (legacy): { id, quarter, clients: [{ clientName, allocatedAmount, ... }], totalTarget }
 router.post("/targets", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    const { id, quarter, clients, totalTarget } = req.body;
-    if (!id || !quarter) return void res.status(400).json({ ok: false, error: "id and quarter required" });
 
-    // ── Validate client allocations structure ─────────────────────────────────
-    const clientList: ClientAllocation[] = Array.isArray(clients) ? clients : [];
-    if (clientList.length > 0) {
-      const structureErrors = validateClientAllocations(clientList);
-      if (structureErrors.length > 0) {
-        return void res.status(400).json({ ok: false, error: "Invalid client allocations", details: structureErrors });
-      }
-      // Cross-check sum against declared total (only when both are provided)
-      if (totalTarget !== undefined && totalTarget !== null) {
-        const mismatch = crossCheckTotal(clientList, Number(totalTarget));
-        if (mismatch) {
-          return void res.status(400).json({ ok: false, error: mismatch });
-        }
-      }
-    }
+    // ── Detect annual vs legacy quarterly payload ─────────────────────────────
+    const isAnnual = req.body.year !== undefined || req.body.q1Target !== undefined;
 
     // ── Never trust client-supplied ownership for SALES REP ──────────────────
     const authorRepId  = u.role === "SALES REP" ? u.repId!   : (req.body.repId   ?? u.repId ?? 0);
     const authorRegion = u.role === "SALES REP" ? u.region!  : (req.body.region  ?? u.region ?? "");
     const authorName   = u.role === "SALES REP" ? u.name     : (req.body.repName ?? u.name);
 
-    // ── Idempotency: reject if an active (non-rejected) submission exists for same rep+quarter ──
+    if (isAnnual) {
+      // ── Annual schema ───────────────────────────────────────────────────────
+      const { id, year } = req.body;
+      if (!id || !year) return void res.status(400).json({ ok: false, error: "id and year required" });
+
+      // clients array: each entry has agencyName, clientName, brandName, q1Target..q4Target
+      const rawClients: any[] = Array.isArray(req.body.clients) ? req.body.clients : [];
+      if (!rawClients.length) {
+        return void res.status(400).json({ ok: false, error: "At least one client entry required" });
+      }
+
+      const annualClients = rawClients.map((c: any) => ({
+        agencyName:   c.agencyName  ?? null,
+        clientName:   c.clientName  ?? null,
+        brandName:    c.brandName   ?? null,
+        q1Target:     Number(c.q1Target ?? 0),
+        q2Target:     Number(c.q2Target ?? 0),
+        q3Target:     Number(c.q3Target ?? 0),
+        q4Target:     Number(c.q4Target ?? 0),
+        annualTarget: Number(c.q1Target ?? 0) + Number(c.q2Target ?? 0) +
+                      Number(c.q3Target ?? 0) + Number(c.q4Target ?? 0),
+      }));
+
+      const totalAnnual = annualClients.reduce((s, c) => s + c.annualTarget, 0);
+      const annualQuarter = `Annual-${year}`;
+
+      // Idempotency: one active annual submission per rep per year
+      const existing = await db
+        .select({ id: targetSubmissions.id, status: targetSubmissions.status })
+        .from(targetSubmissions)
+        .where(and(eq(targetSubmissions.repId, authorRepId), eq(targetSubmissions.quarter, annualQuarter)))
+        .limit(10);
+
+      const activeExisting = existing.filter((r) => !["Rejected"].includes(r.status ?? ""));
+      if (activeExisting.length > 0) {
+        return void res.status(409).json({
+          ok: false,
+          error: `An active annual target submission already exists for ${year} (id: ${activeExisting[0].id}, status: ${activeExisting[0].status}). Edit or withdraw it first.`,
+          existingId: activeExisting[0].id,
+        });
+      }
+
+      const now = new Date().toISOString();
+      const row = await db
+        .insert(targetSubmissions)
+        .values({
+          id,
+          repId:           authorRepId,
+          repName:         authorName,
+          region:          authorRegion,
+          quarter:         annualQuarter,
+          clients:         annualClients as any[],
+          totalTarget:     Math.round(totalAnnual),
+          status:          "Pending RH",
+          submittedAt:     now,
+          submittedByName: u.name,
+          submittedByRole: u.role,
+          approvalLog:     [],
+        })
+        .onConflictDoNothing()
+        .returning();
+
+      void logActivity({
+        userId:     u.id,
+        userName:   u.name,
+        userRole:   u.role,
+        region:     authorRegion,
+        action:     "target.submitted",
+        entityType: "target_submission",
+        entityId:   id,
+        meta:       { year, totalAnnual, clientCount: annualClients.length },
+      });
+
+      return void res.status(201).json({ ok: true, data: row[0], annualTotal: totalAnnual });
+    }
+
+    // ── Legacy quarterly schema ───────────────────────────────────────────────
+    const { id, quarter, clients, totalTarget } = req.body;
+    if (!id || !quarter) return void res.status(400).json({ ok: false, error: "id and quarter required" });
+
+    const clientList: ClientAllocation[] = Array.isArray(clients) ? clients : [];
+    if (clientList.length > 0) {
+      const structureErrors = validateClientAllocations(clientList);
+      if (structureErrors.length > 0) {
+        return void res.status(400).json({ ok: false, error: "Invalid client allocations", details: structureErrors });
+      }
+      if (totalTarget !== undefined && totalTarget !== null) {
+        const mismatch = crossCheckTotal(clientList, Number(totalTarget));
+        if (mismatch) return void res.status(400).json({ ok: false, error: mismatch });
+      }
+    }
+
     const existing = await db
       .select({ id: targetSubmissions.id, status: targetSubmissions.status })
       .from(targetSubmissions)
@@ -188,7 +267,7 @@ router.post("/targets", requireAuth, async (req, res) => {
         repName:         authorName,
         region:          authorRegion,
         quarter,
-        clients:         clientList,          // keep JSONB copy for backward compat
+        clients:         clientList,
         totalTarget:     totalTarget ?? 0,
         status:          "Pending RH",
         submittedAt:     now,
@@ -199,7 +278,6 @@ router.post("/targets", requireAuth, async (req, res) => {
       .onConflictDoNothing()
       .returning();
 
-    // ── Write normalized allocation line items ────────────────────────────────
     if (clientList.length > 0) {
       const allocationRows = clientList.map((c, i) => ({
         id:              `${id}_alloc_${i}`,

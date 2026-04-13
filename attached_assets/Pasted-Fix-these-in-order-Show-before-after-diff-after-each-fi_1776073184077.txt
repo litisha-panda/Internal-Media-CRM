@@ -1,0 +1,50 @@
+Fix these in order. Show before/after diff after each fix. Do not deploy. Flag anything that needs a database migration separately.
+
+FIX 1 — Deal Stage Vocabulary
+In lib/db/src/constants.ts (or wherever DEAL_STAGES is defined), replace the current stage list entirely with:
+["Quotation", "Rate Card", "Negotiation", "Some Other Solution", "Meeting with Senior", "Follow Up", "Proposal"]
+Then find every place in the codebase that references the old stage names (Prospect, Qualified, Proposal Sent, Verbal Commit, PO Received, RO Received, Won, Lost) and update them to match the new list. If any old stage name maps cleanly to a new one, show me the mapping. If it doesn't map, flag it for me.
+Also update LogMeeting.tsx — remove the hardcoded local stage array and import from the updated constants.
+
+FIX 2 — Target Import: Annual Sheet with Q1–Q4 Columns
+The current schema stores one targetSubmissions record per quarter. Change this to store one annual record per rep with columns for Q1, Q2, Q3, Q4 targets and an auto-calculated Annual total.
+New schema for targetSubmissions should include:
+
+repId (foreign key)
+agencyName (text)
+clientName (text)
+brandName (text)
+q1Target (numeric)
+q2Target (numeric)
+q3Target (numeric)
+q4Target (numeric)
+annualTarget (computed: q1+q2+q3+q4)
+status (approval status)
+year (integer)
+
+Write the migration script as migrations/annual_target_schema.sql. Do not run it. Show it to me first.
+Update the import UI and any route that reads or writes targetSubmissions to use the new structure.
+
+FIX 3 — Remove 4th Approval Level (Admin)
+The approval chain must be exactly 3 levels: Region Head → National Sales Head → CRO.
+Find where the approval levels are defined in code. Remove the Admin level entirely. Update the status progression so after CRO approves, the target is immediately locked (frozenTarget set, status = "Approved"). No further approval step should exist.
+Check src/routes/targets.ts (or equivalent) and any frontend approval UI components. Update both.
+
+FIX 4 — Meeting Log → Auto-create Task + Internal Request
+In POST /meetings/:id/log (or the equivalent log submission endpoint), add a post-save hook:
+After the meeting log is saved, check if the whoDoYouNeedItFrom field is populated. If yes:
+
+Auto-create a Task assigned to that user with due date from whenDoYouNeedItBy
+Auto-create an Internal Request in the submitting rep's IR tab with the same details
+
+Both records should reference the originating meeting log ID. Show me the new code before adding it.
+
+FIX 5 — Meeting Type Label
+In the Schedule a Meeting form, the type currently uses "ACTIONABLE" as the internal value but the UI should show "Deal". Find where meeting types are defined and update the label from "ACTIONABLE" to "Deal" in the frontend display. Keep the DB value as-is if changing it requires a migration — just fix the display label for now.
+
+After all fixes, give me:
+
+Every file changed
+The two migration scripts (annual target schema + any others needed) listed separately
+Any stage name mappings you flagged in Fix 1 that need my confirmation
+

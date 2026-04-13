@@ -39,37 +39,32 @@ export type Region = (typeof REGIONS)[number];
 
 // ─── Deal stages & probabilities ─────────────────────────────────────────────
 export const DEAL_STAGES = [
-  "Prospect",
-  "Qualified",
-  "Proposal Sent",
+  "Quotation",
+  "Rate Card",
   "Negotiation",
-  "Verbal Commit",
-  "PO Received",
-  "RO Received",
-  "Won",
-  "Lost",
-  "Cancelled",
-  "Archived",
-  "On Hold",
+  "Some Other Solution",
+  "Meeting with Senior",
+  "Follow Up",
+  "Proposal",
 ] as const;
 export type DealStage = (typeof DEAL_STAGES)[number];
 
 export const STAGE_PROB: Record<string, number> = {
-  Prospect:         10,
-  Qualified:        25,
-  "Proposal Sent":  40,
-  Negotiation:      65,
-  "Verbal Commit":  80,
-  "PO Received":    90,
-  "RO Received":    90,
-  Won:             100,
-  Lost:              0,
-  Cancelled:         0,
-  Archived:          0,
-  "On Hold":        20,
+  "Quotation":             10,
+  "Rate Card":             25,
+  "Negotiation":           65,
+  "Some Other Solution":   30,
+  "Meeting with Senior":   50,
+  "Follow Up":             35,
+  "Proposal":              40,
+  // Legacy labels — kept for backward compat with existing DB rows
+  "In Discussion":         40,
+  "Mail Confirmed":        90,
 };
 
-export const CLOSED_STAGES = new Set<string>(["Lost", "Cancelled", "Archived", "Won", "RO Received"]);
+// No closed/won stages in the new vocabulary.
+// Flag: existing rows with "Won", "Lost", "RO Received", etc. will score 0 pipeline weight.
+export const CLOSED_STAGES = new Set<string>([]);
 
 // ─── Deal types ───────────────────────────────────────────────────────────────
 export const DEAL_TYPES = [
@@ -157,18 +152,17 @@ export const IR_STATUSES = [
 export type IRStatus = (typeof IR_STATUSES)[number];
 
 // ─── Target approval chain ────────────────────────────────────────────────────
+// 3-level chain: Region Head → National Sales Head → CRO
 export const TARGET_APPROVAL_CHAIN: Record<string, string> = {
-  "Pending RH":       "REGION HEAD",
-  "Pending NSH":      "SALES HEAD",
-  "Pending Strategy": "SALES STRATEGY",
-  "Pending CRO":      "CRO",
+  "Pending RH":  "REGION HEAD",
+  "Pending NSH": "SALES HEAD",
+  "Pending CRO": "CRO",
 };
 
 export const TARGET_NEXT_STATUS: Record<string, string> = {
-  "Pending RH":       "Pending NSH",
-  "Pending NSH":      "Pending Strategy",
-  "Pending Strategy": "Pending CRO",
-  "Pending CRO":      "Approved",
+  "Pending RH":  "Pending NSH",
+  "Pending NSH": "Pending CRO",
+  "Pending CRO": "Approved",
 };
 
 // ─── Fiscal quarters ─────────────────────────────────────────────────────────

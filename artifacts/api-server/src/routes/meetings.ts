@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, meetings, touchpoints, users } from "@workspace/db";
+import { db, meetings, touchpoints, users, tasks, internalRequests } from "@workspace/db";
 import { eq, and, desc, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activityLog";
@@ -317,6 +317,9 @@ router.post("/meetings/:id/log", requireAuth, async (req, res) => {
       nextMeetingDate,
       dealId,
       contactLevel,
+      whoDoYouNeedItFrom,
+      whenDoYouNeedItBy,
+      whatDoYouNeed,
     } = req.body;
 
     const nowIST = new Date().toLocaleString("en-IN", { timeZone: "Asia/Kolkata" });
@@ -363,7 +366,67 @@ router.post("/meetings/:id/log", requireAuth, async (req, res) => {
       meta:       { touchpointId: tpRow.id, clientName: mtg.clientName },
     });
 
-    res.json({ ok: true, data: { touchpoint: tpRow, meeting: { ...mtg, status: "logged", touchpointId: tpRow.id } } });
+    // ── FIX 4: Auto-create Task + InternalRequest when escalation fields filled ──
+    // If the rep flagged "I need something from someone by a date", we:
+    //   • Insert a task so it appears in the rep's task list
+    //   • Insert an internal request so the inbox of the target role/person is populated
+    const needsFrom = whoDoYouNeedItFrom ? String(whoDoYouNeedItFrom).trim() : "";
+    const needsBy   = whenDoYouNeedItBy  ? String(whenDoYouNeedItBy).trim()  : "";
+    if (needsFrom) {
+      const taskId = `task_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const irId   = `ir_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+      const taskTitle = `Follow-up for ${mtg.clientName ?? "client"} — from ${needsFrom}`;
+      const irSubject = `Action required: ${mtg.clientName ?? "client meeting"} — ${u.name ?? "Rep"}`;
+      const irBody    = whatDoYouNeed
+        ? String(whatDoYouNeed).trim()
+        : `Rep ${u.name ?? ""} needs action from you for client ${mtg.clientName ?? ""} (meeting logged ${tpRow.date}).`;
+
+      try {
+        await db.insert(tasks).values({
+          id:            taskId,
+          repId:         mtg.repId ?? u.repId ?? 0,
+          dealId:        dealId ? String(dealId) : null,
+          title:         taskTitle,
+          description:   irBody,
+          dueDate:       needsBy || null,
+          priority:      "High",
+          status:        "Open",
+          assignedTo:    needsFrom,
+          assignedBy:    u.role ?? "",
+          assignedByName: u.name ?? "",
+          clientCompany: mtg.clientName ?? null,
+          fromMeetingLog: true,
+          notes:         whatDoYouNeed ? String(whatDoYouNeed) : null,
+        });
+
+        await db.insert(internalRequests).values({
+          id:           irId,
+          repId:        mtg.repId ?? u.repId ?? 0,
+          dealId:       dealId ? String(dealId) : null,
+          type:         "Meeting Follow-Up",
+          subject:      irSubject,
+          details:      irBody,
+          raisedBy:     u.id,
+          raisedByName: u.name ?? "",
+          clientCompany: mtg.clientName ?? null,
+          raisedAt:     new Date().toISOString(),
+          status:       "Pending",
+        } as any);
+      } catch (autoErr) {
+        // Non-fatal: log but don't fail the meeting-log response
+        console.error("[meetings/log] auto-task/IR creation failed:", autoErr);
+      }
+    }
+
+    res.json({
+      ok: true,
+      data: {
+        touchpoint: tpRow,
+        meeting: { ...mtg, status: "logged", touchpointId: tpRow.id },
+        autoTaskCreated: !!needsFrom,
+        autoIRCreated:   !!needsFrom,
+      },
+    });
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ ok: false, error: "An internal error occurred" });

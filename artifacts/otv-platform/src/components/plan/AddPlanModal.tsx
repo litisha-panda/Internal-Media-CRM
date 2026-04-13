@@ -56,7 +56,7 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
             {([ ["ACTIONABLE", "🎯", "Sales call · full details", "#1d5db4"], ["PR", "🤝", "Relationship · quick visit", "#15803d"] ] as [string, string, string, string][]).map(([mk, icon, sub, col]) => (
               <button key={mk} onClick={() => setPf(p => ({ ...p, meetingKind: mk, touchpointType: mk === "PR" ? "Relationship" : p.touchpointType }))}
                 style={{ flex: 1, padding: "7px 10px", borderRadius: 7, border: `1.5px solid ${pf.meetingKind === mk ? col : C.border}`, background: pf.meetingKind === mk ? `${col}14` : "transparent", cursor: "pointer", textAlign: "left" }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: pf.meetingKind === mk ? col : C.text }}>{icon} {mk === "ACTIONABLE" ? "Actionable" : "PR"}</div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: pf.meetingKind === mk ? col : C.text }}>{icon} {mk === "ACTIONABLE" ? "Deal" : "PR"}</div>
                 <div style={{ fontSize: 10, color: C.dim, marginTop: 1 }}>{sub}</div>
               </button>
             ))}

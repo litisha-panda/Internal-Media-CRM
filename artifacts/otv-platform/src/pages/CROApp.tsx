@@ -1107,7 +1107,7 @@ export function CROApp({ user, onLogout }) {
   const [accountThreadClient, setAccountThreadClient]   = useState<string|null>(null);
   const [threadAIForm, setThreadAIForm]                 = useState<{entryId:string,actionType:string,details:string,neededFrom:string,dueDate:string}|null>(null);
   const [planUploadOpen, setPlanUploadOpen]             = useState(false);
-  const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,quarter:string,clients:{clientCompany:string,dealType:string,targetAmount:string}[]}>({repId:"",quarter:"Q1 FY26",clients:[{clientCompany:"",dealType:"Linear TV",targetAmount:""}]});
+  const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,year:string,annualClients:{agencyName:string,clientName:string,brandName:string,q1Target:string,q2Target:string,q3Target:string,q4Target:string}[]}>({repId:"",year:String(new Date().getFullYear()),annualClients:[{agencyName:"",clientName:"",brandName:"",q1Target:"",q2Target:"",q3Target:"",q4Target:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState<any[]>([]);
   const [revForm, setRevForm]                           = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
@@ -1683,8 +1683,8 @@ export function CROApp({ user, onLogout }) {
     // When a manager adds a deal for a rep, also submit a target plan entry so it
     // appears in the rep's My Targets view once the plan clears the approval chain.
     if (!isRep) {
-      const initStatus = isRH?"Pending NSH":isNSH?"Pending Strategy":isStrategy?"Pending CRO":isCRORole?"Approved":"Pending NSH";
-      const steps = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO"];
+      const initStatus = isRH?"Pending NSH":isNSH?"Pending CRO":isCRORole?"Approved":"Pending NSH";
+      const steps = ["Pending RH","Pending NSH","Pending CRO"];
       const startIdx = steps.indexOf(initStatus);
       const skipLog  = steps.slice(0,startIdx).map(step=>({step,by:user_role?.name||"",at:TODAY,note:`Submitted by ${user_role?.role}`}));
       const newEntry = {clientCompany:dealForm.clientCompany.trim(),dealType:dealForm.dealType||"Linear TV",targetAmount:tgtAmt};
@@ -1898,7 +1898,7 @@ export function CROApp({ user, onLogout }) {
         N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
         N("pipeline","Revenue Tracker","◈"),
         N("targets","Targets","◎"),
-        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending Strategy").length||undefined),
+        N("target-approvals","Approvals","◎"),
         N("escalations","Escalations","▲",escBadge),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
         N("compliance","Compliance","✦"),

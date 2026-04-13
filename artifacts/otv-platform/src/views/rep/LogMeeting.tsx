@@ -30,12 +30,13 @@ const APPROVAL_TARGETS = ["Region Head", "NSH", "Branding Team", "Content Team",
 const BLANK_ACTION = { what: "", from: "", description: "", byWhen: "" };
 
 const oColor = (s: string): string => ({
-  "Prospect":       "#7d8590",
-  "In Discussion":  "#4285F4",
-  "Negotiation":    "#f4b400",
-  "Mail Confirmed": "#9c27b0",
-  "RO Received":    "#34a853",
-  "Lost":           "#ea4335",
+  "Quotation":           "#7d8590",
+  "Rate Card":           "#4285F4",
+  "Negotiation":         "#f4b400",
+  "Some Other Solution": "#9c27b0",
+  "Meeting with Senior": "#00acc1",
+  "Follow Up":           "#ff6d00",
+  "Proposal":            "#34a853",
 } as Record<string, string>)[s] ?? "#7d8590";
 
 /* ── Local form type ────────────────────────────────────────────────────── */

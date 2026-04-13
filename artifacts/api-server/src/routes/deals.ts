@@ -12,7 +12,7 @@ const router = Router();
  * NEVER stored. Always derived at read time.
  */
 function derivePipeline(deal: any) {
-  const prob = STAGE_PROB[deal.stage ?? "Prospect"] ?? 10;
+  const prob = STAGE_PROB[deal.stage ?? "Quotation"] ?? 10;
   return { ...deal, pipelineAmount: Math.round((deal.amount ?? 0) * prob / 100) };
 }
 
@@ -86,7 +86,7 @@ router.post("/deals", requireAuth, async (req, res) => {
       });
     }
 
-    const stage = body.stage ?? "Prospect";
+    const stage = body.stage ?? "Quotation";
 
     const row = await db
       .insert(deals)
@@ -279,7 +279,7 @@ router.post("/client-accounts", requireAuth, async (req, res) => {
         region:              owner.region,
         fiscalYear:          body.fiscalYear         ?? "FY26",
         annualTarget:        body.annualTarget        ?? 0,
-        currentStage:        body.currentStage        ?? "Prospect",
+        currentStage:        body.currentStage        ?? "Quotation",
         lastContactDate:     body.lastContactDate     ?? null,
         lastDealMeetingDate: body.lastDealMeetingDate ?? null,
       })
