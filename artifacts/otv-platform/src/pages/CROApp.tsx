@@ -2289,7 +2289,7 @@ export function CROApp({ user, onLogout }) {
               BLANK_DEAL={BLANK_DEAL}
               onNavigate={setView}
               onNavigateRevenue={(prefill)=>{
-                if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,agencyName:prefill.agency||p.agencyName,amount:prefill.amount?String(prefill.amount):p.amount}))}
+                if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,agencyName:prefill.agency||p.agencyName,amount:prefill.amount!==undefined?String(prefill.amount):p.amount}))}
                 setView("revenue-log");
               }}
             />
@@ -2549,7 +2549,7 @@ export function CROApp({ user, onLogout }) {
           userRole={user_role}
           deals={deals}
           showToast={showToast}
-          onNavigateRevenue={(prefill) => { setLogOpen(false); if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,agencyName:prefill.agency||p.agencyName,amount:prefill.amount?String(prefill.amount):p.amount}))} setView('revenue-log'); }}
+          onNavigateRevenue={(prefill) => { setLogOpen(false); if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,agencyName:prefill.agency||p.agencyName,amount:prefill.amount!==undefined?String(prefill.amount):p.amount}))} setView('revenue-log'); }}
         />
       )}
       {/* MEETING DETAIL MODAL */}
