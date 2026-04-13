@@ -1,0 +1,45 @@
+Tell Replit Agent:
+
+> The api-server crashes on startup in production with `error=signal: terminated`. The cause is `lib/integrations-anthropic-ai/src/client.ts` — it throws at module import time if `AI_INTEGRATIONS_ANTHROPIC_BASE_URL` or `AI_INTEGRATIONS_ANTHROPIC_API_KEY` are not set. This kills the entire server before it can start.
+>
+> Fix: make the Anthropic client lazy — don't validate env vars or instantiate the client at import time. Only instantiate when a request is actually made.
+>
+> In `lib/integrations-anthropic-ai/src/client.ts`, replace the current code with a lazy getter pattern:
+>
+> ```typescript
+> import Anthropic from "@anthropic-ai/sdk";
+>
+> let _client: Anthropic | null = null;
+>
+> export function getAnthropicClient(): Anthropic {
+>   if (!_client) {
+>     if (!process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL) {
+>       throw new Error("AI_INTEGRATIONS_ANTHROPIC_BASE_URL must be set.");
+>     }
+>     if (!process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY) {
+>       throw new Error("AI_INTEGRATIONS_ANTHROPIC_API_KEY must be set.");
+>     }
+>     _client = new Anthropic({
+>       apiKey: process.env.AI_INTEGRATIONS_ANTHROPIC_API_KEY,
+>       baseURL: process.env.AI_INTEGRATIONS_ANTHROPIC_BASE_URL,
+>     });
+>   }
+>   return _client;
+> }
+>
+> // Backwards-compatible named export — lazily resolved on first access
+> export const anthropic = new Proxy({} as Anthropic, {
+>   get(_target, prop) {
+>     return (getAnthropicClient() as any)[prop];
+>   }
+> });
+> ```
+>
+> This keeps the existing `export const anthropic` name so no other imports need to change. The env var check only runs when a route actually calls the Anthropic API — not at server startup. The server will start cleanly even without those secrets set.
+>
+> After the change, rebuild `lib/integrations-anthropic-ai` dist:
+> ```bash
+> pnpm --filter @workspace/integrations-anthropic-ai exec tsc --build tsconfig.json
+> ```
+>
+> Then republish. Do not touch any other file. Do not touch anything related to RO parsing.
