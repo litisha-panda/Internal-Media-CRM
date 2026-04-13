@@ -1,6 +1,5 @@
 import React from "react";
 import { DEAL_TYPES, CONTACT_LEVELS, QUARTERS } from "../constants";
-import ZohoSearchInput from "./ZohoSearchInput";
 
 interface AddDealModalProps {
   C: any;
@@ -79,23 +78,11 @@ export function AddDealModal({
         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
           <div>
             <label>Client Company *</label>
-            <ZohoSearchInput
-              value={dealForm.clientCompany||""}
-              zohoId={dealForm.zohoAccountId||""}
-              onChange={(name:string,id:string)=>setDealForm((p:any)=>({...p,clientCompany:name,zohoAccountId:id}))}
-              endpoint="/api/zoho/clients"
-              placeholder="Type to search Zoho…"
-            />
+            <input type="text" value={dealForm.clientCompany||""} onChange={e=>setDealForm((p:any)=>({...p,clientCompany:e.target.value}))} placeholder="Type client company name" />
           </div>
           <div>
             <label>Agency Name (optional)</label>
-            <ZohoSearchInput
-              value={dealForm.agencyName||""}
-              zohoId={dealForm.zohoAgencyId||""}
-              onChange={(name:string,id:string)=>setDealForm((p:any)=>({...p,agencyName:name,zohoAgencyId:id}))}
-              endpoint="/api/zoho/agencies"
-              placeholder="e.g. Madison, Wavemaker…"
-            />
+            <input type="text" value={dealForm.agencyName||""} onChange={e=>setDealForm((p:any)=>({...p,agencyName:e.target.value}))} placeholder="e.g. Madison, Wavemaker…" />
           </div>
           {fields.map(f=>(
             <div key={f.key}><label>{f.label}</label><input type={f.type} placeholder={f.ph} value={dealForm[f.key]||""} onChange={e=>setDealForm((p:any)=>({...p,[f.key]:e.target.value}))} /></div>

@@ -18,21 +18,27 @@ export interface AddPlanModalProps {
   form: PlanForm;
   deals: Deal[];
   loginProvider: string;
+  approvedTargetRows?: { agency: string; client: string; brand: string }[];
   onFormChange: React.Dispatch<React.SetStateAction<PlanForm>>;
   onSubmit: (date: string) => void;
   onClose: () => void;
 }
 
 export const AddPlanModal: React.FC<AddPlanModalProps> = ({
-  forDate, form: pf, deals, loginProvider,
+  forDate, form: pf, deals, loginProvider, approvedTargetRows,
   onFormChange: setPf, onSubmit: doAddPlan, onClose,
 }) => {
-  const allAgencies    = [...new Set(deals.map(d => d.agencyName || d.agency || "").filter(Boolean))].sort();
-  const clientsForAgency = pf.agency
-    ? deals.filter(d => (d.agencyName || d.agency || "").toLowerCase() === pf.agency.toLowerCase()).map(d => d.clientCompany)
-    : deals.map(d => d.clientCompany);
+  const rows = (approvedTargetRows && approvedTargetRows.length > 0) ? approvedTargetRows : null;
+  const allAgencies = rows
+    ? [...new Set(rows.map(r => r.agency).filter(Boolean))].sort()
+    : [...new Set(deals.map(d => d.agencyName || d.agency || "").filter(Boolean))].sort();
+  const clientsForAgency = rows
+    ? (pf.agency ? rows.filter(r => r.agency.toLowerCase() === pf.agency.toLowerCase()).map(r => r.client) : rows.map(r => r.client))
+    : (pf.agency ? deals.filter(d => (d.agencyName || d.agency || "").toLowerCase() === pf.agency.toLowerCase()).map(d => d.clientCompany) : deals.map(d => d.clientCompany));
   const clientOptions  = [...new Set(clientsForAgency)].sort();
-  const brandsForClient = deals.filter(d => d.clientCompany.toLowerCase() === (pf.client || "").toLowerCase()).flatMap(d => [d.brand].filter((b): b is string => Boolean(b)));
+  const brandsForClient = rows
+    ? rows.filter(r => r.client.toLowerCase() === (pf.client || "").toLowerCase()).map(r => r.brand).filter(Boolean)
+    : deals.filter(d => d.clientCompany.toLowerCase() === (pf.client || "").toLowerCase()).flatMap(d => [d.brand].filter((b): b is string => Boolean(b)));
   const brandOptions   = [...new Set(brandsForClient)].sort();
 
   const dateLabel = new Date(forDate + "T12:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "short" });
@@ -96,14 +102,23 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         {/* Client */}
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Client *</label>
-          {clientOptions.length > 0
-            ? <select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+          {rows
+            ? (<select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${clientOptions.length===0?C.muted:C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
                 <option value="">— Select client —</option>
-                {clientOptions.map(c => <option key={c}>{c}</option>)}
-              </select>
-            : <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *"
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+                {clientOptions.length === 0
+                  ? <option value="" disabled>No approved targets yet — contact your Region Head</option>
+                  : clientOptions.map(c => <option key={c}>{c}</option>)
+                }
+              </select>)
+            : clientOptions.length > 0
+              ? <select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                  <option value="">— Select client —</option>
+                  {clientOptions.map(c => <option key={c}>{c}</option>)}
+                </select>
+              : <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *"
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
           }
         </div>
 

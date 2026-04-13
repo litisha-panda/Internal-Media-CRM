@@ -2022,7 +2022,7 @@ export function RepTeamView({ view, setView }: RepTeamViewProps) {
               .map(rep => {
                 const rd  = deals.filter(d => d.repId === rep.id && d.quarter === filterQ);
                 const rT  = rd.reduce((s,d) => s + (d.targetAmount||0), 0);
-                const rC  = rd.filter(d => d.outcome === "Mail Confirmed").reduce((s,d) => s + d.amount, 0);
+                const rC  = revenueEntries.filter(e => String(e.repId) === String(rep.id) && e.quarter === filterQ).reduce((s,e) => s + (e.amount||0), 0);
                 const rPct = rT > 0 ? Math.round((rC / rT) * 100) : 0;
                 const isMe = rep.id === myRepId;
                 return { ...rep, rPct, isMe };

@@ -61,6 +61,8 @@ interface LogForm {
   pitchType: string;
   agenda: string;
   clientFeedback: string;
+  feedbackNote: string;
+  pricingOption: string;
   stageUpdate: string;
   status: string;
   lossReason: string;
@@ -84,6 +86,7 @@ const BLANK_FORM: LogForm = {
   touchpointType: "Deal Meeting", clientAgencyName: "", agency: "", client: "", brand: "",
   contactName: "", mobile: "", designation: "", contactLevel: "",
   meetingType: "Physical", pitchType: "", agenda: "", clientFeedback: "",
+  feedbackNote: "", pricingOption: "",
   stageUpdate: "", status: "", lossReason: "", discussion: "", nextStep: "", followUpDate: "",
   nextMeetingDate: "", nextMeetingTime: "", nextAgenda: "", attendeeEmails: "",
   scheduleNext: false, calendarPlatform: "none", meetLink: "", calendarStatus: "",
@@ -109,8 +112,8 @@ export interface LogMeetingProps {
   userRole: { repId?: RepId; region?: string } | null;
   deals: Deal[];
   showToast: (msg: string, type?: string) => void;
-  /** Optional: navigate to revenue log when user clicks "→ Go to Revenue Log". */
-  onNavigateRevenue?: () => void;
+  /** Optional: navigate to revenue log. Receives optional prefill data. */
+  onNavigateRevenue?: (prefill?: { clientCompany?: string; amount?: number }) => void;
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */
@@ -124,6 +127,15 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
 
   const [form, setForm] = useState<LogForm>({ ...BLANK_FORM });
   const [submitting, setSubmitting] = useState(false);
+
+  const handleROReceived = () => {
+    const deal = deals.find(d => d.id === form.dealId);
+    onNavigateRevenue?.({
+      clientCompany: form.client || form.clientAgencyName || deal?.clientCompany || "",
+      amount: deal?.amount,
+    });
+    onClose();
+  };
 
   const setF = (updater: Partial<LogForm> | ((prev: LogForm) => LogForm)) => {
     setForm(prev =>
@@ -488,7 +500,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
             {/* RO Received → navigate immediately, not a stored feedback value */}
             <button
               type="button"
-              onClick={() => { onNavigateRevenue?.(); onClose(); }}
+              onClick={handleROReceived}
               style={{
                 padding: "6px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
                 border: `1.5px solid ${C.green}`,
@@ -498,6 +510,30 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
               }}
             >🟢 RO Received → Log Revenue</button>
           </div>
+          {/* FIX 3: Conditional sub-fields based on feedback type */}
+          {form.clientFeedback === "Pricing Concern" && (
+            <div style={{ marginTop: 8 }}>
+              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Pricing Objection Type</label>
+              <select value={form.pricingOption} onChange={e => setF({ pricingOption: e.target.value })}
+                style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: "var(--surface)", border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+                <option value="">Select…</option>
+                <option>Rate too high vs. reach</option>
+                <option>Competitor pricing cheaper</option>
+                <option>Category rate card issue</option>
+                <option>Asked for discount / value-add</option>
+                <option>Budget revised down</option>
+                <option>Other pricing issue</option>
+              </select>
+            </div>
+          )}
+          {form.clientFeedback === "Other" && (
+            <div style={{ marginTop: 8 }}>
+              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Feedback Details</label>
+              <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
+                placeholder="Describe the client's feedback…"
+                style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: "var(--surface)", border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
+            </div>
+          )}
         </div>
 
         {/* SECTION 4 — Blockers / Help Needed */}
@@ -575,7 +611,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
             </button>
             <div>
               <div style={{ fontSize: 12, fontWeight: 600, color: C.text }}>Schedule Next Meeting <span style={{ fontWeight: 400, color: C.dim, fontSize: 11 }}>— formal calendar invite</span></div>
-              <div style={{ fontSize: 10, color: C.dim }}>Pick a date + time → creates Google/Zoho calendar event with a Meet link</div>
+              <div style={{ fontSize: 10, color: C.dim }}>Pick a date + time → creates a Google Calendar event with a Meet link</div>
             </div>
           </div>
           {form.scheduleNext && (
@@ -643,7 +679,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 <div style={{ fontSize: 12, fontWeight: 700, color: C.green, marginBottom: 4 }}>🎉 RO Received — great work!</div>
                 <div style={{ fontSize: 11, color: C.dim, marginBottom: 8 }}>Log your revenue entry so it reflects in your pipeline right away.</div>
                 {onNavigateRevenue && (
-                  <button onClick={onNavigateRevenue} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 5, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>→ Go to Revenue Log</button>
+                  <button onClick={handleROReceived} style={{ background: C.green, color: "#fff", border: "none", borderRadius: 5, padding: "6px 16px", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>→ Go to Revenue Log</button>
                 )}
                 <span style={{ fontSize: 10, color: C.dim, marginLeft: 8 }}>or finish logging touchpoint first, then add revenue after</span>
               </div>

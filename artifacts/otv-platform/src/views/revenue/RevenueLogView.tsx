@@ -126,7 +126,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                           // For approved names not yet in clientAccounts, create minimal stubs
                           const stubs = [...approvedNames]
                             .filter(n=>!matched.has(n))
-                            .map(n=>({id:`stub_${n}`,clientName:n,repId:myRepId,zohoAccountId:""}));
+                            .map(n=>({id:`stub_${n}`,clientName:n,repId:myRepId}));
                           return [...fromAccts,...stubs];
                         })()
                       : clientAccounts; // Managers/admins see all accounts
@@ -139,7 +139,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                               const sel = e.target.value;
                               // Auto-populate from clientAccount (the canonical source)
                               const matchAcct = myApprovedAccts.find((a:any)=>a.clientName===sel) as any;
-                              setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",zohoAccountId:matchAcct?.zohoAccountId||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
+                              setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
                             }}
                               style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.clientCompany?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
                               <option value="">Select from approved targets…</option>
@@ -185,10 +185,10 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                           if(!amt){showToast("Invalid amount","err");return;}
                           const newId  = `re${Date.now()}`;
                           const ikey   = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-                          const entry = {id:newId,repId:isRep?myRepId:null,clientCompany:client,zohoAccountId:rf.zohoAccountId||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
+                          const entry = {id:newId,repId:isRep?myRepId:null,clientCompany:client,dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
                           setRevenueEntries(p=>[entry,...p]);
                           revSvc.createRevenueEntry({
-                            id:newId, repId:isRep?myRepId:undefined, clientCompany:client, zohoAccountId:rf.zohoAccountId||undefined,
+                            id:newId, repId:isRep?myRepId:undefined, clientCompany:client,
                             dealType:rf.dealType, amount:amt, invoiceRef:rf.invoiceRef, date:rf.date||TODAY,
                             quarter:entryQ, fiscalYear:CURRENT_FY, notes:rf.notes||undefined, idempotencyKey:ikey,
                           }).catch((err:any)=>{showToast(err?.body?.error||"Network error — entry may not be saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));});
@@ -215,7 +215,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                             }
                           }
                           // Part 3+9: Auto-set deal stage to "RO Received" when revenue is logged
-                          const matchDeal = deals.find(d=>(isRep?String(d.repId)===String(myRepId):true)&&(rf.zohoAccountId&&d.zohoAccountId?d.zohoAccountId===rf.zohoAccountId:d.clientCompany===client)&&qMatch(d.quarter));
+                          const matchDeal = deals.find(d=>(isRep?String(d.repId)===String(myRepId):true)&&d.clientCompany===client&&qMatch(d.quarter));
                           if(matchDeal){
                             setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,stage:"RO Received",outcome:"RO Received",lastContact:TODAY}:d));
                             // Update client account stage too
@@ -223,7 +223,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                               setClientAccounts(p=>p.map(a=>a.id===matchDeal.clientAccountId?{...a,currentStage:"RO Received",lastContactDate:TODAY,updatedAt:TODAY}:a));
                             }
                           }
-                          setRf({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
+                          setRf({clientCompany:"",clientAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
                           const totalFY = [...revenueEntries.filter(e=>(isRep?String(e.repId)===String(myRepId):true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
                           // Part 9: Check if annual target reached
                           const annualTarget = isRep ? (getAnnualTarget(myRepId)?.amount||0) : 0;

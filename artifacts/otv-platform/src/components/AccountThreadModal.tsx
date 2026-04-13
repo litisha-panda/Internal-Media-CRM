@@ -41,10 +41,7 @@ export function AccountThreadModal({
   const clientName = accountThreadClient;
   const clientDeals: any[] = (deals as any[]).filter((d:any) => d.clientCompany === clientName);
   const clientTPs = (touchpoints as any[]).filter((t:any) => clientDeals.some((d:any) => d.id === t.dealId) || t.clientAccountId === clientDeals[0]?.clientAccountId);
-  const accountZohoId = (clientAccounts as any[]).find((a:any) => a.clientName===clientName)?.zohoAccountId || (deals as any[]).find((d:any) => d.clientCompany===clientName)?.zohoAccountId || "";
-  const clientRevs = (revenueEntries as any[]).filter((e:any) =>
-    accountZohoId && e.zohoAccountId ? e.zohoAccountId === accountZohoId : e.clientCompany === clientName
-  );
+  const clientRevs = (revenueEntries as any[]).filter((e:any) => e.clientCompany === clientName);
   const account: any = (clientAccounts as any[]).find((a:any) => a.clientName === clientName) || clientDeals[0];
   const currentStage = account?.currentStage || dealStage(clientDeals[0]||{});
   const repObj: any = (reps as any[]).find((r:any) => r.id === (clientDeals[0]?.repId));
@@ -52,7 +49,7 @@ export function AccountThreadModal({
   const cAchieved  = clientRevs.reduce((s:number,e:any) => s+(e.amount||0), 0);
   const cCommitted = clientDeals.filter((d:any) => dealStage(d)==="Mail Confirmed").reduce((s:number,d:any) => s+(d.pipelineAmount||0), 0);
   const cInPlay    = clientDeals.filter((d:any) => ["In Discussion","Negotiation"].includes(dealStage(d))).reduce((s:number,d:any) => s+(d.pipelineAmount||0), 0);
-  const cShortfall = Math.max(0, cTarget - cAchieved - cCommitted - cInPlay);
+  const cShortfall = Math.max(0, cTarget - cAchieved);
   const legacyMeetings = (meetings as any[]).filter((m:any) => m.clientCompany === clientName && !clientTPs.some((t:any) => t.meetingLogId === m.id));
   const allEntries = [
     ...clientTPs.map((t:any) => ({...t, _type:"tp"})),

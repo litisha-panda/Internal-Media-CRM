@@ -812,7 +812,7 @@ export function CROApp({ user, onLogout }) {
   const [rtTab, setRtTab] = useState("accounts"); // Revenue Tracker tab
 
   // Part 1+3: `stage` is the canonical field; `outcome` kept for legacy compat
-  const BLANK_DEAL = { clientCompany:"", zohoAccountId:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", zohoAgencyId:"", reqs:[], auditLog:[] };
+  const BLANK_DEAL = { clientCompany:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", reqs:[], auditLog:[] };
   const BLANK_NEXT_STEP_ITEM = {action:"", actionType:"", details:"", neededFrom:"", remarks:"", dueDate:""};
   const ACTION_TYPES = ["Approval needed","Document needed","Attend a meeting","Introduction needed","Flag for follow-up"];
   const BLANK_ACTION_REQUIRED = {what:"", from:"", description:"", byWhen:""};
@@ -1029,7 +1029,7 @@ export function CROApp({ user, onLogout }) {
   // IN PLAY = clientAccounts at In Discussion or Negotiation stage
   const getInPlay     = (repId?: string | null) =>
     clientAccounts.filter(a => (repId == null || String(a.repId)===String(repId)) && ["In Discussion","Negotiation"].includes(a.currentStage||"")).reduce((s, a) => s + (a.annualTarget||0), 0);
-  const getShortfall  = (target: number, repId?: string | null) => Math.max(0, target - getAchieved(repId) - getCommitted(repId) - getInPlay(repId));
+  const getShortfall  = (target: number, repId?: string | null) => Math.max(0, target - getAchieved(repId));
 
   // Part 5: Stacked bar — proportions of annual target: Achieved (green) / Committed (blue) / In Play (amber) / Shortfall (red)
   // When shortfall reaches zero the entire bar turns solid green.
@@ -1094,7 +1094,7 @@ export function CROApp({ user, onLogout }) {
   const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", []);
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
-  const [addClientForm, setAddClientForm]               = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",targetAmount:""});
+  const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
   // S9: Setup Wizard state
   const [wizardStep, setWizardStep]                     = useState(0);
   const [wizardClients, setWizardClients]               = useState<{agency:string,client:string,brand:string,q1:string,q2:string,q3:string,q4:string}[]>([{agency:"",client:"",brand:"",q1:"",q2:"",q3:"",q4:""}]);
@@ -1110,7 +1110,7 @@ export function CROApp({ user, onLogout }) {
   const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,year:string,annualClients:{agencyName:string,clientName:string,brandName:string,q1Target:string,q2Target:string,q3Target:string,q4Target:string}[]}>({repId:"",year:String(new Date().getFullYear()),annualClients:[{agencyName:"",clientName:"",brandName:"",q1Target:"",q2Target:"",q3Target:"",q4Target:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState<any[]>([]);
-  const [revForm, setRevForm]                           = useState({clientCompany:"",zohoAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
+  const [revForm, setRevForm]                           = useState({clientCompany:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [editingRevId, setEditingRevId]                 = useState<string|null>(null);
   const [editRevData, setEditRevData]                   = useState<any>({});
   const [importTab, setImportTab]                       = useState("targets");
@@ -1479,15 +1479,18 @@ export function CROApp({ user, onLogout }) {
     const c = rtClientMap[d.clientCompany];
     c.deals.push(d);
     c.target += (d.targetAmount||0);
-    if(d.outcome==="Mail Confirmed"){
-      if(d.dealType==="Linear TV") c.fct += (d.amount||0);
-      else if(d.dealType==="Digital") c.digital += (d.amount||0);
-      else if(d.dealType==="Integrated Packages") c.integrated += (d.amount||0);
-      else if(d.dealType==="IPs") c.sponsorship += (d.amount||0);
-      else if(d.dealType==="Media Solutions") c.branded += (d.amount||0);
-      c.total += (d.amount||0);
-    }
     if(!c.lastContact||d.lastContact>c.lastContact) c.lastContact=d.lastContact;
+  });
+  // Formula Fix B: achievement totals from revenueEntries, not deal.amount
+  (revenueEntries as any[]).forEach((e: any) => {
+    const c = rtClientMap[e.clientCompany];
+    if (!c) return;
+    if (e.dealType==="Linear TV")              c.fct          += (e.amount||0);
+    else if (e.dealType==="Digital")            c.digital      += (e.amount||0);
+    else if (e.dealType==="Integrated Packages") c.integrated  += (e.amount||0);
+    else if (e.dealType==="IPs")                c.sponsorship  += (e.amount||0);
+    else if (e.dealType==="Media Solutions")    c.branded      += (e.amount||0);
+    c.total += (e.amount||0);
   });
   const rtClients = Object.values(rtClientMap).sort((a: any, b: any)=>daysSince(b.lastContact)-daysSince(a.lastContact));
 
@@ -2292,7 +2295,10 @@ export function CROApp({ user, onLogout }) {
               qMatch={qMatch}
               BLANK_DEAL={BLANK_DEAL}
               onNavigate={setView}
-              onNavigateRevenue={()=>{setView("revenue-log");}}
+              onNavigateRevenue={(prefill)=>{
+                if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||"",amount:prefill.amount?String(prefill.amount):""}))}
+                setView("revenue-log");
+              }}
             />
           )}
 
@@ -2550,7 +2556,7 @@ export function CROApp({ user, onLogout }) {
           userRole={user_role}
           deals={deals}
           showToast={showToast}
-          onNavigateRevenue={() => { setLogOpen(false); setView('revenue-log'); }}
+          onNavigateRevenue={(prefill) => { setLogOpen(false); if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||"",amount:prefill.amount?String(prefill.amount):""}))} setView('revenue-log'); }}
         />
       )}
       {/* MEETING DETAIL MODAL */}

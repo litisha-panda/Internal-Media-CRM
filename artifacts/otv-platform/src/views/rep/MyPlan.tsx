@@ -6,7 +6,8 @@
  * context and computed helpers are received as props.
  */
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { apiFetch } from "../../services/api/_client";
 import { C, TODAY, TOMORROW } from "../../utils/palette";
 import { useMeetings } from "../../hooks/useMeetings";
 import type { Meeting } from "../../services/api/meetings";
@@ -98,7 +99,7 @@ export interface MyPlanProps {
   qMatch:         (q: string) => boolean;
   BLANK_DEAL:     Record<string, unknown>;
   onNavigate:     (view: string) => void;
-  onNavigateRevenue: () => void;
+  onNavigateRevenue: (prefill?: { clientCompany?: string; amount?: number }) => void;
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */
@@ -126,6 +127,21 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
   const [planForm,      setPlanForm]      = useState<PlanForm>(BLANK_PLAN_FORM);
   const [logOpen,       setLogOpen]       = useState(false);
   const [logMeeting,    setLogMeeting]    = useState<Meeting | null>(null);
+  const [approvedTargetRows, setApprovedTargetRows] = useState<{agency:string;client:string;brand:string}[]>([]);
+
+  useEffect(() => {
+    apiFetch("/api/targets?status=Approved")
+      .then((res: any) => {
+        const rows: {agency:string;client:string;brand:string}[] = [];
+        (res?.data ?? res ?? []).forEach((sub: any) => {
+          (sub.clients ?? []).forEach((c: any) => {
+            rows.push({ agency: c.agencyName || "", client: c.clientCompany || "", brand: c.brand || "" });
+          });
+        });
+        setApprovedTargetRows(rows);
+      })
+      .catch(() => {/* silently ignore — reps without approved targets see empty state */});
+  }, []);
 
   const openLog = (m: Meeting | null) => { setLogMeeting(m); setLogOpen(true); };
   const closeLog = () => { setLogOpen(false); setLogMeeting(null); };
@@ -190,22 +206,6 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
         const startDT = `${dateParts}T${startH}${endM}00`;
         const endDT   = `${dateParts}T${endH}${endM}00`;
         window.open(`https://calendar.google.com/calendar/render?action=TEMPLATE&text=${title}&dates=${startDT}/${endDT}&details=${details}`, "_blank");
-      } else if (pf.calPlatform === "zoho") {
-        const ics = [
-          "BEGIN:VCALENDAR", "VERSION:2.0", "PRODID:-//OTV CRM//EN", "CALSCALE:GREGORIAN", "METHOD:REQUEST",
-          "BEGIN:VEVENT",
-          `DTSTART:${dateParts}T${startH}${endM}00`,
-          `DTEND:${dateParts}T${endH}${endM}00`,
-          `SUMMARY:[OTV] Meeting: ${clientName}`,
-          `DESCRIPTION:Contact: ${pf.contactName.trim()}${pf.agenda ? "\\nAgenda: " + pf.agenda : ""}`,
-          `UID:otv-${Date.now()}@odishatv.com`,
-          "STATUS:CONFIRMED", "END:VEVENT", "END:VCALENDAR",
-        ].join("\r\n");
-        const blob = new Blob([ics], { type: "text/calendar;charset=utf-8" });
-        const a = document.createElement("a");
-        a.href = URL.createObjectURL(blob);
-        a.download = `OTV-${clientName.replace(/\s+/g, "-")}.ics`;
-        a.click();
       } else if (pf.calPlatform === "outlook") {
         const startISO = `${date}T${startH}:${endM}:00`;
         const endISO   = `${date}T${endH}:${endM}:00`;
@@ -512,6 +512,7 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
           form={planForm}
           deals={myDeals}
           loginProvider={loginProvider}
+          approvedTargetRows={approvedTargetRows}
           onFormChange={setPlanForm}
           onSubmit={(date) => doAddPlan(date, () => setAddPlanFor(null))}
           onClose={() => setAddPlanFor(null)}
