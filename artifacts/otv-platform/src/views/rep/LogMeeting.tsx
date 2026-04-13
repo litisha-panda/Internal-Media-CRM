@@ -128,24 +128,27 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
   const [form, setForm] = useState<LogForm>({ ...BLANK_FORM });
   const [submitting, setSubmitting] = useState(false);
 
-  const handleROReceived = () => {
+  const handleROReceived = async () => {
     const deal = deals.find(d => d.id === form.dealId);
     const clientCompany = form.client || form.clientAgencyName || deal?.clientCompany || "";
     const agency = form.agency || deal?.agency || "";
-    // Fire-and-forget: log a minimal touchpoint with RO Received stage
-    createTouchpoint({
-      repId:          parseInt(form.repId) || null,
-      region:         userRole?.region || "",
-      date:           TODAY,
-      touchpointType: form.touchpointType || "Deal Meeting",
-      stageUpdate:    "RO Received",
-      clientCompany,
-      dealId:         form.dealId || null,
-      contactName:    form.contactName || null,
-      meetingKind:    form.meetingKind || null,
-      actionItems:    [],
-      notes:          null,
-    }).catch(() => { /* fire-and-forget — non-fatal */ });
+    try {
+      // Create touchpoint with RO Received stage; call onSubmit so meeting status patches to "logged"
+      const tp = await createTouchpoint({
+        repId:          parseInt(form.repId) || null,
+        region:         userRole?.region || "",
+        date:           TODAY,
+        touchpointType: form.touchpointType || "Deal Meeting",
+        stageUpdate:    "RO Received",
+        clientCompany,
+        dealId:         form.dealId || null,
+        contactName:    form.contactName || null,
+        meetingKind:    form.meetingKind || null,
+        actionItems:    [],
+        notes:          null,
+      });
+      onSubmit(tp); // patches planned meeting status to "logged" in MyPlan
+    } catch (_) { /* non-fatal — navigate anyway */ }
     onNavigateRevenue?.({ clientCompany, agency, amount: deal?.amount });
     onClose();
   };

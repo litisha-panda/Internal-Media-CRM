@@ -28,7 +28,8 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
   forDate, form: pf, deals, loginProvider, approvedTargetRows,
   onFormChange: setPf, onSubmit: doAddPlan, onClose,
 }) => {
-  const rows = (approvedTargetRows && approvedTargetRows.length > 0) ? approvedTargetRows : null;
+  // rows is non-null whenever approvedTargetRows was explicitly passed in (even if empty)
+  const rows = approvedTargetRows !== undefined ? approvedTargetRows : null;
   const allAgencies = rows
     ? [...new Set(rows.map(r => r.agency).filter(Boolean))].sort()
     : [...new Set(deals.map(d => d.agencyName || d.agency || "").filter(Boolean))].sort();
