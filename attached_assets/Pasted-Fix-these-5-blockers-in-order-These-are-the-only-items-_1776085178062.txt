@@ -1,0 +1,48 @@
+Fix these 5 blockers in order. These are the only items standing between the app and GO. Show before/after diff after each. Do not deploy.
+
+FIX 1 — Remove Zoho dead code causing console errors
+Zoho routes were removed but dead frontend code remains and is throwing console errors. Find all remaining Zoho references in the frontend (components, imports, display text, field references like zohoAccountId, zohoAgencyId). Remove them entirely. The goal is zero console errors related to Zoho on any page load.
+
+FIX 2 — RO Received: auto-submit touchpoint + pre-fill Revenue Log
+Currently when a rep taps RO Received, the app navigates to Revenue Log but the touchpoint is never submitted and the form opens blank.
+Fix both:
+
+When RO Received is triggered, auto-submit a minimal touchpoint record in the background before navigating — do not make the rep manually submit the form
+When navigating to Revenue Log, pre-fill Agency, Client, and Amount from the deal data
+
+The rep should land on a pre-filled Revenue Log form with zero extra steps.
+
+FIX 3 — Log Meeting: add 6th feedback type + conditional sub-fields
+Currently only 5 feedback types exist. The 6th — "Other" — is missing. Add it with a "Specify" free-text sub-field.
+Also confirm all 5 existing types have their correct conditional sub-fields rendering:
+
+Interested → "What does client need?" text input + deal stage
+Not Interested → "Why?" text input
+No Budget → "Why?" text input
+Pricing Concern → pricing options dropdown
+RO Received → triggers FIX 2 flow, no sub-fields
+Other → "Specify" text input (add this)
+
+
+FIX 4 — Schedule Meeting: Agency/Client/Brand from approved target allocations
+Agency, Client, and Brand dropdowns in the Schedule Meeting form currently pull from the wrong data source. Replace with a fetch from /api/targets?status=Approved&repId=me. Build cascading dropdowns: selecting Agency filters Clients, selecting Client filters Brands. No free text fallback.
+
+FIX 5 — Invite link gate on signup
+POST /auth/signup currently accepts anyone. Gate it:
+
+POST /auth/invite — Admin only. Generates UUID token stored in invite_tokens table (token, email, createdBy, usedAt, expiresAt 72hrs). Returns invite URL.
+GET /auth/invite/:token — Validates token, returns { valid: true, email } for form pre-fill.
+Update POST /auth/signup — Require valid inviteToken. Return 403 if missing or invalid. Mark token used on success.
+
+The migration migrations/invite_tokens.sql was written in a previous session — check if it exists. If yes, use it. If not, write it fresh with IF NOT EXISTS guards.
+
+Also fix these 2 formula issues while you're in the KPI code:
+SHORTFALL formula: getCommitted() and getInPlay() are still being called and subtracted in the shortfall calculation even though they currently return 0. Remove those function calls from the shortfall formula entirely. Shortfall = Target − Achieved only. Nothing else subtracted.
+Achievement in manager views: The 8+ locations in NSH view, CRO view, and leaderboard that use deal.amount instead of revenueEntries — find and fix all of them. Show every location changed.
+
+After all fixes:
+
+Every file changed
+Confirm zero Zoho console errors
+Confirm shortfall formula has no subtractions beyond Target − Achieved
+List all locations where deal.amount was replaced with revenueEntries
