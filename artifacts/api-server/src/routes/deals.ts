@@ -40,21 +40,27 @@ router.get("/deals", requireAuth, async (req, res) => {
       : await db.select().from(deals).orderBy(desc(deals.updatedAt));
     res.json({ ok: true, data: rows.map(derivePipeline) });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
 router.get("/deals/:id", requireAuth, async (req, res) => {
   try {
+    const u = req.user!;
     const rows = await db
       .select()
       .from(deals)
       .where(eq(deals.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
-    res.json({ ok: true, data: derivePipeline(rows[0]) });
+    const record = rows[0];
+    if (u.role === "SALES REP"   && record.repId  !== u.repId)  return void res.status(403).json({ ok: false, error: "Forbidden" });
+    if (u.role === "REGION HEAD" && record.region !== u.region) return void res.status(403).json({ ok: false, error: "Forbidden" });
+    res.json({ ok: true, data: derivePipeline(record) });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -138,7 +144,8 @@ router.post("/deals", requireAuth, async (req, res) => {
 
     res.status(201).json({ ok: true, data: derivePipeline(row[0]) });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -147,30 +154,37 @@ router.patch("/deals/:id", requireAuth, async (req, res) => {
     const u = req.user!;
     const body = req.body;
 
-    // ── Strip all governance-owned, derived, and stale fields ─────────────────
-    const {
-      id: _id, createdAt: _ca,
-      pipelineAmount: _pa,
-      targetAmount: _ta,          // stale — governance and business logic never use this
-      atRisk: _ar,                // governance engine only
-      awaitingApproval: _aa,      // governance engine only
-      awaitingApprovalSince: _as, // governance engine only
-      auditLog: _al,              // replaced by central activityLog
-      repId: _ri, repName: _rn, region: _reg, // ownership immutable after creation
-      ...rest
-    } = body;
-
-    // ── Sync outcome whenever stage changes ────────────────────────────────────
-    if (rest.stage !== undefined && rest.outcome === undefined) {
-      rest.outcome = rest.stage;
+    // ── Explicit allowlist — only named fields may be updated ─────────────────
+    // Ownership (repId, repName, region), governance (atRisk, awaitingApproval*,
+    // auditLog), derived (pipelineAmount), and stale (targetAmount) fields are
+    // never accepted from the client.
+    const ALLOWED_DEAL_PATCH: ReadonlySet<string> = new Set([
+      "clientCompany", "contactName", "designation", "contactLevel",
+      "phone", "email", "dealType", "zohoAccountId", "clientAccountId",
+      "stage", "outcome", "amount", "lossReason", "priority", "quarter",
+      "notes", "nextStep", "nextStepDate",
+      "agencyName", "zohoAgencyId", "lastContact", "lastDealMeetingDate", "reqs",
+    ]);
+    const rest: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(body)) {
+      if (ALLOWED_DEAL_PATCH.has(k)) rest[k] = v;
     }
 
-    // Fetch existing to detect meaningful changes for activity log
+    // ── Sync outcome whenever stage changes ────────────────────────────────────
+    if (rest["stage"] !== undefined && rest["outcome"] === undefined) {
+      rest["outcome"] = rest["stage"];
+    }
+
+    // Fetch existing — for ownership check + activity log change detection
     const existing = await db
-      .select({ stage: deals.stage, amount: deals.amount })
+      .select({ stage: deals.stage, amount: deals.amount, repId: deals.repId, region: deals.region })
       .from(deals)
       .where(eq(deals.id, String(req.params["id"])))
       .limit(1);
+
+    if (!existing.length) return void res.status(404).json({ ok: false, error: "Not found" });
+    if (u.role === "SALES REP"   && existing[0].repId  !== u.repId)  return void res.status(403).json({ ok: false, error: "Forbidden" });
+    if (u.role === "REGION HEAD" && existing[0].region !== u.region) return void res.status(403).json({ ok: false, error: "Forbidden" });
 
     const updated = await db
       .update(deals)
@@ -195,7 +209,8 @@ router.patch("/deals/:id", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: derivePipeline(updated[0]) });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -209,21 +224,27 @@ router.get("/client-accounts", requireAuth, async (req, res) => {
       : await db.select().from(clientAccounts).orderBy(desc(clientAccounts.updatedAt));
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
 router.get("/client-accounts/:id", requireAuth, async (req, res) => {
   try {
+    const u = req.user!;
     const rows = await db
       .select()
       .from(clientAccounts)
       .where(eq(clientAccounts.id, String(req.params["id"])))
       .limit(1);
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
-    res.json({ ok: true, data: rows[0] });
+    const record = rows[0];
+    if (u.role === "SALES REP"   && record.repId  !== u.repId)  return void res.status(403).json({ ok: false, error: "Forbidden" });
+    if (u.role === "REGION HEAD" && record.region !== u.region) return void res.status(403).json({ ok: false, error: "Forbidden" });
+    res.json({ ok: true, data: record });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -271,23 +292,46 @@ router.post("/client-accounts", requireAuth, async (req, res) => {
 
     res.status(201).json({ ok: true, data: row[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
 router.patch("/client-accounts/:id", requireAuth, async (req, res) => {
   try {
-    const { id: _id, createdAt: _ca, repId: _ri, region: _reg, ...rest } = req.body;
+    const u = req.user!;
+    const accountId = String(req.params["id"]);
+
+    // Ownership check — fetch before mutating
+    const existing = await db
+      .select({ repId: clientAccounts.repId, region: clientAccounts.region })
+      .from(clientAccounts)
+      .where(eq(clientAccounts.id, accountId))
+      .limit(1);
+
+    if (!existing.length) return void res.status(404).json({ ok: false, error: "Not found" });
+    if (u.role === "SALES REP"   && existing[0].repId  !== u.repId)  return void res.status(403).json({ ok: false, error: "Forbidden" });
+    if (u.role === "REGION HEAD" && existing[0].region !== u.region) return void res.status(403).json({ ok: false, error: "Forbidden" });
+
+    const ALLOWED_CA_PATCH: ReadonlySet<string> = new Set([
+      "clientName", "zohoAccountId", "fiscalYear", "annualTarget",
+      "currentStage", "lastContactDate", "lastDealMeetingDate",
+    ]);
+    const patch: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(req.body as Record<string, unknown>)) {
+      if (ALLOWED_CA_PATCH.has(k)) patch[k] = v;
+    }
     const updated = await db
       .update(clientAccounts)
-      .set({ ...rest, updatedAt: new Date() })
-      .where(eq(clientAccounts.id, String(req.params["id"])))
+      .set({ ...patch, updatedAt: new Date() })
+      .where(eq(clientAccounts.id, accountId))
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

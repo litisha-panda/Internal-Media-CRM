@@ -64,7 +64,8 @@ router.get("/tasks", requireAuth, async (req, res) => {
       : await db.select().from(tasks).orderBy(desc(tasks.updatedAt));
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -78,7 +79,8 @@ router.get("/tasks/:id", requireAuth, async (req, res) => {
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -142,7 +144,8 @@ router.post("/tasks", requireAuth, async (req, res) => {
 
     res.status(201).json({ ok: true, data: row[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -198,7 +201,8 @@ router.patch("/tasks/:id/status", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -241,7 +245,8 @@ router.patch("/tasks/:id/reschedule", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -298,7 +303,8 @@ router.patch("/tasks/:id/reassign", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -319,7 +325,8 @@ router.patch("/tasks/:id/note", requireAuth, async (req, res) => {
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -333,7 +340,8 @@ router.get("/internal-requests", requireAuth, async (req, res) => {
       : await db.select().from(internalRequests).orderBy(desc(internalRequests.createdAt));
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -347,7 +355,8 @@ router.get("/internal-requests/:id", requireAuth, async (req, res) => {
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -432,7 +441,8 @@ router.post("/internal-requests", requireAuth, async (req, res) => {
 
     res.status(201).json({ ok: true, data: row[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -474,7 +484,7 @@ router.post("/internal-requests/:id/accept", requireAuth, async (req, res) => {
       });
     }
     res.json({ ok: true, data: updated[0] });
-  } catch (err: any) { res.status(500).json({ ok: false, error: err.message }); }
+  } catch (err: any) { console.error(err); res.status(500).json({ ok: false, error: "An internal error occurred" }); }
 });
 
 // ── POST /api/internal-requests/:id/resolve ───────────────────────────────────
@@ -512,7 +522,7 @@ router.post("/internal-requests/:id/resolve", requireAuth, async (req, res) => {
       });
     }
     res.json({ ok: true, data: updated[0] });
-  } catch (err: any) { res.status(500).json({ ok: false, error: err.message }); }
+  } catch (err: any) { console.error(err); res.status(500).json({ ok: false, error: "An internal error occurred" }); }
 });
 
 // ── POST /api/internal-requests/:id/reject ────────────────────────────────────
@@ -550,7 +560,7 @@ router.post("/internal-requests/:id/reject", requireAuth, async (req, res) => {
       });
     }
     res.json({ ok: true, data: updated[0] });
-  } catch (err: any) { res.status(500).json({ ok: false, error: err.message }); }
+  } catch (err: any) { console.error(err); res.status(500).json({ ok: false, error: "An internal error occurred" }); }
 });
 
 // ── POST /api/internal-requests/:id/withdraw — raiser only ────────────────────
@@ -583,7 +593,7 @@ router.post("/internal-requests/:id/withdraw", requireAuth, async (req, res) => 
     void logActivity({ userId: u.id, userName: u.name, userRole: u.role, action: "ir.withdrawn", entityType: "internal_request", entityId: ir.id });
 
     res.json({ ok: true, data: updated[0] });
-  } catch (err: any) { res.status(500).json({ ok: false, error: err.message }); }
+  } catch (err: any) { console.error(err); res.status(500).json({ ok: false, error: "An internal error occurred" }); }
 });
 
 // ── PATCH /api/internal-requests/:id/note — any party may add notes ───────────
@@ -600,7 +610,7 @@ router.patch("/internal-requests/:id/note", requireAuth, async (req, res) => {
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: updated[0] });
-  } catch (err: any) { res.status(500).json({ ok: false, error: err.message }); }
+  } catch (err: any) { console.error(err); res.status(500).json({ ok: false, error: "An internal error occurred" }); }
 });
 
 // NOTE: Generic PATCH for both tasks and internal-requests has been intentionally removed.

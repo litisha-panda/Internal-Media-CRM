@@ -29,7 +29,7 @@ app.use(
 
 app.use(
   cors({
-    origin: true,
+    origin: ["https://crm.otv.in", "https://sales.otv.in"],
     credentials: true,
   }),
 );

@@ -76,7 +76,8 @@ router.get("/meetings", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -97,7 +98,8 @@ router.get("/meetings/today", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows, date: today });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -121,7 +123,8 @@ router.get("/meetings/tomorrow", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows, date: tomorrowStr });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -137,7 +140,8 @@ router.get("/meetings/:id", requireAuth, async (req, res) => {
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -200,7 +204,8 @@ router.post("/meetings", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: row });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -272,7 +277,8 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: { ...mtg, ...updates } });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -359,7 +365,8 @@ router.post("/meetings/:id/log", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: { touchpoint: tpRow, meeting: { ...mtg, status: "logged", touchpointId: tpRow.id } } });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -446,7 +453,8 @@ router.post("/meetings/impromptu-log", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: { meeting: meetingRow, touchpoint: tpRow } });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

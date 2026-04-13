@@ -64,7 +64,8 @@ router.get("/attendance-records", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -90,7 +91,8 @@ router.post("/attendance/simulate-eod", requireAuth, async (req, res) => {
 
     res.json({ ok: true, message: "EOD attendance check completed and written to DB" });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -122,7 +124,8 @@ router.get("/attendance-exceptions", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -230,7 +233,8 @@ router.post("/attendance-exceptions", requireAuth, async (req, res) => {
 
     res.status(201).json({ ok: true, data: row });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -344,7 +348,8 @@ router.patch("/attendance-exceptions/:id/action", requireAuth, async (req, res) 
 
     res.json({ ok: true, data: { ...exc, ...updates } });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -420,7 +425,8 @@ router.post("/attendance-records/:id/grant-exception", requireAuth, async (req, 
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

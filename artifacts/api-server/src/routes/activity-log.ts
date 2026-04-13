@@ -37,7 +37,8 @@ router.get("/activity-log", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

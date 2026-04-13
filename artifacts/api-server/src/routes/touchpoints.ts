@@ -61,7 +61,8 @@ router.get("/touchpoints", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -76,7 +77,8 @@ router.get("/touchpoints/:id", requireAuth, async (req, res) => {
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -167,7 +169,8 @@ router.post("/touchpoints", requireAuth, async (req, res) => {
 
     res.status(201).json({ ok: true, data: tp });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -188,7 +191,8 @@ router.patch("/touchpoints/:id/action-items", requireAuth, async (req, res) => {
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -236,7 +240,8 @@ router.patch("/touchpoints/:id", requireAuth, async (req, res) => {
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found or access denied" });
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

@@ -115,7 +115,8 @@ router.get("/rh/team-feed", requireAuth, async (req, res) => {
       },
     });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

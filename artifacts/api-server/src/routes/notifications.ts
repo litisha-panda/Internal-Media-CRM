@@ -17,7 +17,8 @@ router.get("/notifications", requireAuth, async (req, res) => {
       .limit(50);
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -31,7 +32,8 @@ router.get("/notifications/unread-count", requireAuth, async (req, res) => {
       .where(and(eq(notifications.userId, u.id), eq(notifications.read, false)));
     res.json({ ok: true, count: rows.length });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -52,7 +54,8 @@ router.patch("/notifications/:id/read", requireAuth, async (req, res) => {
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -66,7 +69,8 @@ router.patch("/notifications/mark-all-read", requireAuth, async (req, res) => {
       .where(and(eq(notifications.userId, u.id), eq(notifications.read, false)));
     res.json({ ok: true });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

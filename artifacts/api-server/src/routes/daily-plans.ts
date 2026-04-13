@@ -32,7 +32,8 @@ router.get("/daily-plans", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -61,7 +62,8 @@ router.get("/daily-plans/team", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows, date });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -113,7 +115,8 @@ router.post("/daily-plans", requireAuth, async (req, res) => {
 
     res.status(201).json({ ok: true, data: row[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

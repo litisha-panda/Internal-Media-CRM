@@ -111,8 +111,8 @@ router.get("/zoho/accounts", async (req, res) => {
     const accounts = (data.data ?? []).map((a) => a.Account_Name).filter(Boolean);
     return res.json({ ok: true, accounts, more: data.info?.more_records ?? false });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ ok: false, error: message });
+    console.error(err);
+    return res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -124,8 +124,8 @@ router.get("/zoho/clients", async (req, res) => {
     const results = await searchAccounts(ZOHO_API_BASE, token, q);
     return res.json({ ok: true, results });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ ok: false, error: message, results: [] });
+    console.error(err);
+    return res.status(500).json({ ok: false, error: "An internal error occurred", results: [] });
   }
 });
 
@@ -137,8 +137,8 @@ router.get("/zoho/agencies", async (req, res) => {
     const results = await searchAgencies(ZOHO_API_BASE, token, q);
     return res.json({ ok: true, results });
   } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : String(err);
-    return res.status(500).json({ ok: false, error: message, results: [] });
+    console.error(err);
+    return res.status(500).json({ ok: false, error: "An internal error occurred", results: [] });
   }
 });
 

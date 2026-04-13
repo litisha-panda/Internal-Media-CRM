@@ -504,7 +504,8 @@ router.patch("/admin/reps/:id", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: repsArray[repIdx >= 0 ? repIdx : repsArray.length - 1] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

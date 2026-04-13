@@ -96,7 +96,8 @@ router.get("/targets", requireAuth, async (req, res) => {
       : await db.select().from(targetSubmissions).orderBy(desc(targetSubmissions.createdAt));
     res.json({ ok: true, data: rows });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -111,7 +112,8 @@ router.get("/targets/:id", requireAuth, async (req, res) => {
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
     res.json({ ok: true, data: rows[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -128,7 +130,8 @@ router.get("/targets/:id/allocations", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: rows, total });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -227,7 +230,8 @@ router.post("/targets", requireAuth, async (req, res) => {
 
     res.status(201).json({ ok: true, data: row[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -297,7 +301,8 @@ router.post("/targets/:id/approve", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -360,7 +365,8 @@ router.post("/targets/:id/reject", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -398,7 +404,8 @@ router.patch("/targets/:id", requireAuth, async (req, res) => {
 
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

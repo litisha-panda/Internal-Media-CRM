@@ -140,7 +140,8 @@ router.get("/kpi/rep", requireAuth, async (req, res) => {
     const kpi = await computeKPI({ quarter, fiscalYear, repId: u.repId! });
     res.json({ ok: true, repId: u.repId, repName: u.name, ...kpi });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -159,7 +160,8 @@ router.get("/kpi/rep/:repId", requireAuth, async (req, res) => {
     const kpi = await computeKPI({ quarter, fiscalYear, repId });
     res.json({ ok: true, repId, ...kpi });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -179,7 +181,8 @@ router.get("/kpi/region/:region", requireAuth, async (req, res) => {
     const kpi = await computeKPI({ quarter, fiscalYear, region });
     res.json({ ok: true, region, ...kpi });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
@@ -195,7 +198,8 @@ router.get("/kpi/system", requireAuth, async (req, res) => {
     const kpi = await computeKPI({ quarter, fiscalYear });
     res.json({ ok: true, ...kpi });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 

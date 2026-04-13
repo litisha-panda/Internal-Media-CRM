@@ -1,12 +1,22 @@
 import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
+import rateLimit from "express-rate-limit";
 import { db, users, sessions } from "@workspace/db";
 import { eq, lt } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireRole";
 
 const router = Router();
+
+// ─── RATE LIMITER — login + signup ───────────────────────────────────────────
+const authLimiter = rateLimit({
+  windowMs:       15 * 60 * 1000, // 15 minutes
+  max:            10,              // max 10 requests per window per IP
+  standardHeaders: true,
+  legacyHeaders:  false,
+  message:        { ok: false, error: "Too many attempts. Please try again in 15 minutes." },
+});
 
 const BCRYPT_ROUNDS     = 10;
 const SESSION_TTL_MS    = 24 * 60 * 60 * 1000; // 24 h
@@ -50,7 +60,7 @@ async function createSession(userId: string): Promise<{ token: string; expiresAt
 
 // ─── POST /api/auth/signup ───────────────────────────────────────────────────
 // Creates a pending user (requires admin approval before they can log in)
-router.post("/auth/signup", async (req, res) => {
+router.post("/auth/signup", authLimiter, async (req, res) => {
   const { name, email, password, phone, designation, intendedRole, preferredRegion } =
     req.body as Record<string, string>;
 
@@ -111,7 +121,7 @@ router.post("/auth/signup", async (req, res) => {
 });
 
 // ─── POST /api/auth/login ────────────────────────────────────────────────────
-router.post("/auth/login", async (req, res) => {
+router.post("/auth/login", authLimiter, async (req, res) => {
   const { email, password } = req.body as { email?: string; password?: string };
 
   if (!email?.trim() || !password?.trim()) {
@@ -145,25 +155,8 @@ router.post("/auth/login", async (req, res) => {
       return;
     }
 
-    // SHA-256 bridge: legacy localStorage passwords were SHA-256 hashed.
-    // On first login after migration, accept SHA-256 match, then re-hash with bcrypt.
-    let passwordOk = false;
-
-    if (user.needsPwReset) {
-      // Try SHA-256 bridge first
-      const sha256 = crypto.createHash("sha256").update(password).digest("hex");
-      if (sha256 === user.passwordHash) {
-        // Upgrade to bcrypt
-        const newHash = await bcrypt.hash(password, BCRYPT_ROUNDS);
-        await db
-          .update(users)
-          .set({ passwordHash: newHash, needsPwReset: false, updatedAt: new Date() })
-          .where(eq(users.id, user.id));
-        passwordOk = true;
-      }
-    } else {
-      passwordOk = await bcrypt.compare(password, user.passwordHash);
-    }
+    // SHA-256 bridge removed — affected users must reset password.
+    const passwordOk = await bcrypt.compare(password, user.passwordHash);
 
     if (!passwordOk) {
       res.status(401).json({ ok: false, error: "Incorrect password" });
@@ -222,6 +215,7 @@ router.get("/auth/me", requireAuth, (req, res) => {
 // Safe to call multiple times — upserts on email.
 // Only callable if: no users exist yet OR by an already-authenticated ADMIN.
 router.post("/auth/seed-demo", async (req, res) => {
+  if (process.env.NODE_ENV === "production") return void res.status(404).end();
   try {
     const existing = await db
       .select({ count: users.id })
@@ -347,7 +341,8 @@ router.patch("/users/me", requireAuth, async (req, res) => {
     if (!updated) return void res.status(404).json({ ok: false, error: "User not found" });
     res.json({ ok: true, user: updated });
   } catch (err: any) {
-    res.status(500).json({ ok: false, error: err.message });
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
   }
 });
 
