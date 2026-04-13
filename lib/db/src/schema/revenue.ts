@@ -14,7 +14,6 @@ export const revenueEntries = pgTable("revenue_entries", {
   repId:         integer("rep_id").notNull(),
   region:        text("region"),
   clientCompany: text("client_company").notNull(),
-  zohoAccountId: text("zoho_account_id"),
   dealType:      text("deal_type"),
   amount:        integer("amount").notNull().default(0),
   invoiceRef:    text("invoice_ref"),

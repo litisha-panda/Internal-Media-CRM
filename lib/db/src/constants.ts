@@ -192,7 +192,6 @@ export const TASK_REMINDER_HOURS = 24; // hours before due → send reminder not
  */
 export interface ClientAllocation {
   clientName:      string;
-  zohoAccountId?:  string | null;
   allocatedAmount: number;
   channel?:        string | null;    // e.g. "TV Spot", "Sponsorship", "Digital"
   dealType?:       string | null;    // from DEAL_TYPES

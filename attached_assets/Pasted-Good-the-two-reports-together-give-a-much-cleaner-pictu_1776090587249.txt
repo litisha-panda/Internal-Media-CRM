@@ -1,0 +1,42 @@
+Good — the two reports together give a much cleaner picture. Real blockers are down to just 2, plus one minor gap:
+
+**BLK-01** — Invite link frontend broken (backend correct, frontend never sends the token)
+**BLK-02** — Zoho OAuth on LoginScreen is live, not a stub — plus 6 locations still active
+**Minor** — Interested sub-field missing deal stage selector
+
+Send this to Replit:
+
+---
+
+Two genuine blockers plus one minor fix. Do these in order. Show before/after diff. No deploy.
+
+**FIX 1 — Invite token frontend wiring (BLK-01)**
+
+The backend invite system is correct. The frontend is broken — `LoginScreen.tsx` never reads `?invite=TOKEN` from the URL, never passes `inviteToken` to the signup form, and `SignupPayload` has no `inviteToken` field.
+
+Fix:
+1. On `LoginScreen.tsx` signup form mount, read `inviteToken` from `window.location.search` (`?invite=TOKEN`) and store in local state. Pre-fill the email field if the token resolves via `GET /api/auth/invite/:token`.
+2. Add `inviteToken: string` to `SignupPayload` type.
+3. Include `inviteToken` in the `POST /auth/signup` request body.
+4. If no invite token is present in the URL, show a message: "Sign-up is by invitation only. Contact your admin." — disable the signup form entirely.
+
+**FIX 2 — Complete Zoho removal (BLK-02)**
+
+Previous sessions removed some Zoho code but the following remain. Remove all of them:
+
+1. `LoginScreen.tsx` — active Zoho OAuth popup: remove `handleZohoClick()`, the "Continue with Zoho" button, and `ZOHO_CLIENT_ID`
+2. `CROApp.tsx` — remove `ZohoSearchInput`, `ZohoHierarchy`, Zoho export button, `zohoImporting` state, `zohoAccounts` state
+3. `SystemConfigView.tsx` — remove the "IMPORT FROM ZOHO CRM" button that calls a 404 endpoint
+4. `types.ts` — remove `zohoAccountId` and `zohoAgencyId` from all interfaces
+5. `constants.ts` — remove `zohoAccountId` from `ClientAllocation` interface
+6. DB schema — `zohoAccountId` columns exist in `deals`, `revenue_entries`, and `target_allocations` tables. Write a migration `migrations/remove_zoho_columns.sql` to drop these columns. Do not run it — show it for review.
+
+After all removals, run `grep -ri 'zoho'` across the full codebase and show the output. Must return zero hits (excluding any comments documenting the removal).
+
+**FIX 3 — Interested sub-field: add deal stage selector**
+
+In `LogMeeting.tsx`, the Interested feedback type shows a "What does the client need?" textarea but is missing the deal stage dropdown. Add a deal stage `<select>` below the textarea, populated from `DEAL_STAGES` (the 7 confirmed stages). Wire its value to `form.stageUpdate`.
+
+---
+
+After all 3 fixes, run TypeScript check and confirm 0 errors. Then show the `grep -ri 'zoho'` output.

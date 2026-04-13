@@ -66,7 +66,7 @@ export function HomeScreen({ user, onSelect, onLogout }: HomeScreenProps) {
             </div>
             <div>
               <div style={{ fontFamily:"'DM Sans',sans-serif", fontSize:20, fontWeight:800, color:"#18243a", marginBottom:6, letterSpacing:-.3 }}>RO Management</div>
-              <div style={{ fontSize:12, color:"#4d5e78", lineHeight:1.6 }}>Parse Release Orders from any agency format. Export Zoho-ready Deal + Breakup sheets. View and manage all saved ROs.</div>
+              <div style={{ fontSize:12, color:"#4d5e78", lineHeight:1.6 }}>Parse Release Orders from any agency format. Export Deal + Breakup sheets. View and manage all saved ROs.</div>
             </div>
             <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginTop:4 }}>
               {["PDF","Excel","Images","CSV"].map(f => (

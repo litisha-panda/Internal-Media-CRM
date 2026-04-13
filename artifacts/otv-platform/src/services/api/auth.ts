@@ -48,6 +48,24 @@ export interface SignupPayload {
   designation?: string;
   intendedRole?: string;
   preferredRegion?: string;
+  inviteToken?: string;
+}
+
+export interface InviteResolveResponse {
+  ok: boolean;
+  valid?: boolean;
+  email?: string;
+  error?: string;
+}
+
+/** GET /api/auth/invite/:token — validate an invite link and return the pre-filled email. */
+export async function resolveInvite(token: string): Promise<InviteResolveResponse> {
+  try {
+    const r = await fetch(`/api/auth/invite/${encodeURIComponent(token)}`, { credentials: "include" });
+    return r.json();
+  } catch {
+    return { ok: false, error: "Network error" };
+  }
 }
 
 export interface SignupResponse {

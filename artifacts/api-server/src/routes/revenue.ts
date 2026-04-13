@@ -120,7 +120,7 @@ router.post("/revenue", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
     const {
-      id, clientCompany, zohoAccountId, dealType,
+      id, clientCompany, dealType,
       amount, invoiceRef, date, quarter, fiscalYear,
       notes, reversalOf, dealId, idempotencyKey,
     } = req.body;
@@ -174,7 +174,6 @@ router.post("/revenue", requireAuth, async (req, res) => {
         repId:          authorRepId,
         region:         authorRegion,
         clientCompany,
-        zohoAccountId:  zohoAccountId ?? null,
         dealType:       dealType ?? null,
         amount:         Number(amount),
         invoiceRef:     invoiceRef ?? null,

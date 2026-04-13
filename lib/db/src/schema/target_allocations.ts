@@ -21,7 +21,6 @@ export const targetAllocations = pgTable("target_allocations", {
   quarter:         text("quarter"),
 
   clientName:      text("client_name").notNull(),
-  zohoAccountId:   text("zoho_account_id"),
   allocatedAmount: integer("allocated_amount").notNull().default(0),
   channel:         text("channel"),          // e.g. "TV Spot", "Sponsorship", "Digital"
   dealType:        text("deal_type"),        // from DEAL_TYPES

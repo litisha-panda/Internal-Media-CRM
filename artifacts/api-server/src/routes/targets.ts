@@ -286,7 +286,6 @@ router.post("/targets", requireAuth, async (req, res) => {
         region:          authorRegion,
         quarter,
         clientName:      c.clientName,
-        zohoAccountId:   c.zohoAccountId ?? null,
         allocatedAmount: Math.round(c.allocatedAmount),
         channel:         c.channel ?? null,
         dealType:        c.dealType ?? null,

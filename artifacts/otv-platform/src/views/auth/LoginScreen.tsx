@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import * as authSvc from "../../services/api/auth";
 import type { ApiUser } from "../../services/api/auth";
 import { setSessionToken as setSessionTokenLib } from "../../services/api/_client";
+import { resolveInvite } from "../../services/api/auth";
 
 const GOOGLE_CLIENT_ID = "773380743026-i87vjdrj5n699von60sa3plqqv95mlem.apps.googleusercontent.com";
 
@@ -41,6 +42,31 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
   const [err, setErr]             = useState("");
   const [loading, setLoading]     = useState(false);
   const [pendingApproval, setPendingApproval] = useState<PendingApproval | null>(null);
+
+  const [inviteToken, setInviteToken]   = useState<string>("");
+  const [inviteEmail, setInviteEmail]   = useState<string>("");
+  const [inviteErr, setInviteErr]       = useState<string>("");
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const token  = params.get("invite")?.trim() ?? "";
+    if (!token) return;
+    setInviteToken(token);
+    setInviteLoading(true);
+    resolveInvite(token).then(res => {
+      setInviteLoading(false);
+      if (res.ok && res.email) {
+        setInviteEmail(res.email);
+        setEmail(res.email);
+        setIsNew(true);
+        setMode("email");
+      } else {
+        setInviteErr(res.error ?? "Invalid or expired invite link.");
+      }
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const googleReady    = useRef(false);
   const hiddenGoogleBtn = useRef<HTMLDivElement>(null);
@@ -106,6 +132,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
     if (!isNew && !password.trim()) { setErr("Password is required"); return; }
     if (isNew && !name.trim()) { setErr("Full name is required"); return; }
     if (isNew && !phone.trim()) { setErr("Phone number is required"); return; }
+    if (isNew && !inviteToken) { setErr("A valid invite link is required to sign up. Contact an admin."); return; }
     setLoading(true);
     try {
       if (isNew) {
@@ -113,6 +140,7 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
           name: name.trim(), email: email.toLowerCase().trim(), password,
           phone: phone.trim(), designation: designation.trim(),
           intendedRole, preferredRegion,
+          inviteToken: inviteToken || undefined,
         });
         if (data.ok) {
           setPendingApproval({ name: name.trim(), email: email.toLowerCase().trim(), phone: phone.trim(), designation: designation.trim(), intendedRole, preferredRegion });
@@ -270,6 +298,16 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   ⚙ Admin access
                 </button>
 
+                {inviteLoading && (
+                  <div style={{ marginTop:12, background:"#f0f9ff", border:"1px solid #bae6fd", borderRadius:5, padding:"8px 12px", fontSize:12, color:"#0369a1" }}>
+                    Validating your invite link…
+                  </div>
+                )}
+                {inviteErr && (
+                  <div style={{ marginTop:12, background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:5, padding:"8px 12px", fontSize:12, color:"#c92828" }}>
+                    ⚠ {inviteErr}
+                  </div>
+                )}
                 {err && <div style={{ marginTop:12, background:"#fef2f2", border:"1px solid #fca5a5", borderRadius:5, padding:"8px 12px", fontSize:12, color:"#c92828" }}>{err}</div>}
               </>
             )}
@@ -314,7 +352,8 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   )}
                   <div>
                     <label style={{ fontSize:10, color:"#4d5e78", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em" }}>Email</label>
-                    <input className="login-input" type="email" placeholder="you@odishatv.com" value={email} onChange={e=>setEmail(e.target.value)} autoFocus={!isNew} />
+                    <input className="login-input" type="email" placeholder="you@odishatv.com" value={email} onChange={e=>{ if(!inviteEmail) setEmail(e.target.value); }} autoFocus={!isNew} readOnly={!!inviteEmail} style={inviteEmail ? { opacity:.75, cursor:"default" } : undefined} />
+                    {inviteEmail && <div style={{ marginTop:3, fontSize:10, color:"#0369a1" }}>Email pre-filled from your invite link.</div>}
                   </div>
                   <div>
                     <label style={{ fontSize:10, color:"#4d5e78", display:"block", marginBottom:4, textTransform:"uppercase", letterSpacing:".06em" }}>Password</label>
@@ -330,7 +369,9 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   <div style={{ textAlign:"center", fontSize:12, color:"#4d5e78" }}>
                     {isNew
                       ? <span>Already have an account? <button type="button" onClick={()=>{setIsNew(false);setErr("");}} style={{ color:"#7920e8", background:"none", border:"none", cursor:"pointer", fontWeight:600, fontFamily:"'DM Mono',monospace" }}>Sign in</button></span>
-                      : <span>No account? <button type="button" onClick={()=>{setIsNew(true);setErr("");}} style={{ color:"#7920e8", background:"none", border:"none", cursor:"pointer", fontWeight:600, fontFamily:"'DM Mono',monospace" }}>Create one</button></span>
+                      : inviteToken
+                        ? <span>No account? <button type="button" onClick={()=>{setIsNew(true);setErr("");}} style={{ color:"#7920e8", background:"none", border:"none", cursor:"pointer", fontWeight:600, fontFamily:"'DM Mono',monospace" }}>Create one</button></span>
+                        : <span style={{ fontSize:11, color:"#8a97ae" }}>Sign-up is by invitation only. Contact your admin.</span>
                     }
                   </div>
 

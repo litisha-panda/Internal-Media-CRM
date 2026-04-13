@@ -96,7 +96,6 @@ router.post("/deals", requireAuth, async (req, res) => {
         repName:               owner.name,
         region:                owner.region,
         clientCompany:         body.clientCompany,
-        zohoAccountId:         body.zohoAccountId       ?? null,
         clientAccountId:       body.clientAccountId     ?? null,
         contactName:           body.contactName          ?? null,
         designation:           body.designation          ?? null,
@@ -115,7 +114,6 @@ router.post("/deals", requireAuth, async (req, res) => {
         nextStep:              body.nextStep             ?? null,
         nextStepDate:          body.nextStepDate         ?? null,
         agencyName:            body.agencyName           ?? null,
-        zohoAgencyId:          body.zohoAgencyId         ?? null,
         lastContact:           body.lastContact          ?? null,
         lastDealMeetingDate:   body.lastDealMeetingDate  ?? null,
         atRisk:                false,                    // governance engine only
@@ -160,10 +158,10 @@ router.patch("/deals/:id", requireAuth, async (req, res) => {
     // never accepted from the client.
     const ALLOWED_DEAL_PATCH: ReadonlySet<string> = new Set([
       "clientCompany", "contactName", "designation", "contactLevel",
-      "phone", "email", "dealType", "zohoAccountId", "clientAccountId",
+      "phone", "email", "dealType", "clientAccountId",
       "stage", "outcome", "amount", "lossReason", "priority", "quarter",
       "notes", "nextStep", "nextStepDate",
-      "agencyName", "zohoAgencyId", "lastContact", "lastDealMeetingDate", "reqs",
+      "agencyName", "lastContact", "lastDealMeetingDate", "reqs",
     ]);
     const rest: Record<string, unknown> = {};
     for (const [k, v] of Object.entries(body)) {
@@ -291,7 +289,6 @@ router.post("/client-accounts", requireAuth, async (req, res) => {
         id:                  body.id,
         clientName:          body.clientName,
         repId:               owner.repId,
-        zohoAccountId:       body.zohoAccountId      ?? null,
         region:              owner.region,
         fiscalYear:          body.fiscalYear         ?? "FY26",
         annualTarget:        body.annualTarget        ?? 0,
@@ -330,7 +327,7 @@ router.patch("/client-accounts/:id", requireAuth, async (req, res) => {
     if (u.role === "REGION HEAD" && existing[0].region !== u.region) return void res.status(403).json({ ok: false, error: "Forbidden" });
 
     const ALLOWED_CA_PATCH: ReadonlySet<string> = new Set([
-      "clientName", "zohoAccountId", "fiscalYear", "annualTarget",
+      "clientName", "fiscalYear", "annualTarget",
       "currentStage", "lastContactDate", "lastDealMeetingDate",
     ]);
     const patch: Record<string, unknown> = {};
