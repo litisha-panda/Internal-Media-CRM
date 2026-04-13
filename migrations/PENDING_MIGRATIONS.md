@@ -47,11 +47,15 @@
 
 ---
 
-## File Referenced But Not Yet Written
+### 6. `add_missing_columns.sql`
+**Purpose:** Adds three columns that are missing from the live schema:
+- `target_allocations.agency_name TEXT` — advertising agency for this allocation (nullable)
+- `target_allocations.brand_name TEXT` — specific brand within the client (nullable)
+- `users.reporting_manager TEXT` — display name of the user's direct manager (nullable, not a FK)
 
-### `add_missing_columns.sql`
-**Status: FILE DOES NOT EXIST YET.**
-This migration was referenced in the audit but has not been created. If specific columns are missing from the live database (e.g., fields that exist in the Drizzle schema but were never migrated), a DBA should run `SELECT column_name FROM information_schema.columns WHERE table_name = '<table>';` against each table to identify gaps, then write this migration accordingly.
+**Required for:** Agency/brand surfacing in target allocation views and the `reporting_manager` display in user profiles.
+**Risk:** Low. Every `ALTER TABLE` uses `IF NOT EXISTS`, so the script is safe to re-run and will no-op if the columns already exist. No data is modified.
+**DBA action required:** Apply at any time — no downtime required.
 
 ---
 
@@ -69,8 +73,9 @@ psql $DATABASE_URL < migrations/fix_004_tasks_created_at_to_timestamp.sql
 ```
 
 **Recommended order if applying all at once:**
-1. `fix_004_tasks_created_at_to_timestamp.sql` — low risk, no dependencies
-2. `fix_005_backfill_revenue_quarter.sql` — low risk, no dependencies
-3. `client_accounts_status.sql` — additive, low risk
-4. `annual_target_schema.sql` — schema change, review carefully
-5. `add_fk_constraints.sql` — run pre-flight checks first
+1. `add_missing_columns.sql` — additive, IF NOT EXISTS guards, safe to run first
+2. `fix_004_tasks_created_at_to_timestamp.sql` — low risk, no dependencies
+3. `fix_005_backfill_revenue_quarter.sql` — low risk, no dependencies
+4. `client_accounts_status.sql` — additive, low risk
+5. `annual_target_schema.sql` — schema change, review carefully
+6. `add_fk_constraints.sql` — run pre-flight checks first
