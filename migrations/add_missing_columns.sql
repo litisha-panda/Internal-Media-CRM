@@ -22,11 +22,11 @@ ALTER TABLE target_allocations
 COMMENT ON COLUMN target_allocations.brand_name
   IS 'Brand within the client company targeted by this allocation (nullable — omit when deal is at client level).';
 
--- ─── 3. users.reporting_manager ──────────────────────────────────────────────
+-- ─── 3. otv_users.reporting_manager ──────────────────────────────────────────
 -- Free-text name of the user's direct reporting manager.
 -- Used for display and escalation chain labelling only — not a FK.
-ALTER TABLE users
+ALTER TABLE otv_users
   ADD COLUMN IF NOT EXISTS reporting_manager TEXT DEFAULT NULL;
 
-COMMENT ON COLUMN users.reporting_manager
+COMMENT ON COLUMN otv_users.reporting_manager
   IS 'Display name of the direct reporting manager for this user. Not a foreign key — used for labelling only.';
