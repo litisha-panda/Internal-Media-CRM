@@ -121,6 +121,20 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
           </div>
         </div>
 
+        {/* FIX 9: Designation + Contact Email */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Designation</label>
+            <input value={(pf as any).designation ?? ""} onChange={e => setPf(p => ({ ...p, designation: e.target.value } as any))} placeholder="e.g. Marketing Head"
+              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Contact Email</label>
+            <input type="email" value={(pf as any).contactEmail ?? ""} onChange={e => setPf(p => ({ ...p, contactEmail: e.target.value } as any))} placeholder="contact@brand.com"
+              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+          </div>
+        </div>
+
         {/* Agenda */}
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Agenda</label>
@@ -132,19 +146,17 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 10, marginTop: 2 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             <button
-              onClick={() => setPf(p => ({ ...p, syncToCalendar: !p.syncToCalendar, calPlatform: p.calPlatform || (loginProvider === "zoho" ? "zoho" : "google") }))}
+              onClick={() => setPf(p => ({ ...p, syncToCalendar: !p.syncToCalendar, calPlatform: p.calPlatform || "google" }))}
               style={{ width: 16, height: 16, borderRadius: 3, border: `1px solid ${pf.syncToCalendar ? "#4285F4" : C.border}`, background: pf.syncToCalendar ? "#4285F4" : "transparent", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", color: "#fff", fontSize: 10, flexShrink: 0 }}>
               {pf.syncToCalendar ? "✓" : ""}
             </button>
             <span style={{ fontSize: 12, color: pf.syncToCalendar ? C.text : C.dim, fontWeight: 600 }}>Also add to my calendar</span>
-            {loginProvider === "google" && !pf.syncToCalendar && <span style={{ fontSize: 10, color: C.dim }}>(Google Calendar recommended)</span>}
-            {loginProvider === "zoho"   && !pf.syncToCalendar && <span style={{ fontSize: 10, color: C.dim }}>(Zoho Calendar recommended)</span>}
+            {!pf.syncToCalendar && <span style={{ fontSize: 10, color: C.dim }}>(Google Calendar recommended)</span>}
           </div>
           {pf.syncToCalendar && (
             <div style={{ marginTop: 8, display: "flex", gap: 6, flexWrap: "wrap" }}>
               {[
                 { id: "google",  label: "Google Calendar", icon: "📅", color: "#4285F4" },
-                { id: "zoho",    label: "Zoho Calendar",   icon: "📆", color: "#e42527" },
                 { id: "outlook", label: "Outlook",          icon: "📧", color: "#0078D4" },
               ].map(cp => (
                 <button key={cp.id} onClick={() => setPf(p => ({ ...p, calPlatform: cp.id }))}
@@ -152,7 +164,7 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
                   {cp.icon} {cp.label}
                 </button>
               ))}
-              <span style={{ fontSize: 10, color: C.muted, lineHeight: "28px", paddingLeft: 4 }}>{pf.calPlatform === "zoho" ? "Downloads .ics file" : "Opens in new tab"}</span>
+              <span style={{ fontSize: 10, color: C.muted, lineHeight: "28px", paddingLeft: 4 }}>Opens in new tab</span>
             </div>
           )}
         </div>

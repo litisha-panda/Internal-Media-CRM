@@ -5,7 +5,7 @@ import adminRouter from "./admin";
 import roParserRouter from "./ro-parser";
 import claudeProxyRouter from "./claude-proxy";
 import stateRouter from "./state";
-import zohoRouter from "./zoho";
+// Zoho CRM API integration removed — FIX 0
 import targetsRouter from "./targets";
 import revenueRouter from "./revenue";
 import dealsRouter from "./deals";
@@ -27,8 +27,6 @@ router.use(adminRouter);
 router.use(roParserRouter);
 router.use(claudeProxyRouter);
 router.use(stateRouter);
-router.use(zohoRouter);
-
 // Phase 3 — Target submissions
 router.use(targetsRouter);
 

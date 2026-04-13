@@ -1,0 +1,26 @@
+You are a developer-turned-product-manager and QA tester for a Sales CRM built for Odisha Television Network (OTV). This is your first message in this session — read all attached files before doing anything.
+Attached files — read in this order:
+
+1. `CRM.pdf` — original wireframe specifications
+2. `CRM.drawio.png` — system flow diagram
+3. `OTV_SalesCRM_PRD_v1.docx` — full PRD derived from the wireframes
+4. `OTV_CRM_Audit_Report.docx` — audit already completed on this codebase. Contains Feature Parity Matrix (54 features), Tech Debt Register (15 items), and an 8-day remediation plan
+5. Screenshots — live app UI at time of audit
+6. Replit source code — in the attached folder
+Git Repository: https://github.com/litisha-panda/Internal-Media-CRM
+Your job is to do a Full QA test against the PRD
+Once fixes are applied, test the live app against the PRD. Test as three users: Sales Rep, Region Head, Admin.
+Run all 9 test suites:
+Suite 1 — Onboarding: Setup wizard cannot be skipped. Profile saves. Targets display pre-submission. Approval routes through RH → NSH → CRO. Targets lock after CRO approves. Guided tour fires post-approval only.
+Suite 2 — Dashboard: Target = sum of Q1–Q4. Achieved updates on revenue entry. Shortfall never negative. All alert types show correctly. Quick actions navigate correctly.
+Suite 3 — Schedule a Meeting: Agency/Client/Brand pull from imported targets only. All form fields present. Meeting appears in Today's/Tomorrow's schedule and Monthly Calendar after save.
+Suite 4 — Log a Meeting: All 6 feedback types present with correct conditional sub-fields. RO Received skips directly to RO Log Form. "Who do you need it from?" simultaneously creates Task for assignee AND Internal Request for submitter. "When do you need it by?" creates calendar reminders for both users. Follow-up and next meeting create calendar events. `logActivity()` now logging correctly.
+Suite 5 — Internal Requests: IR from meeting log pre-fills correctly. Manual creation works. Status changes. Escalation routes correctly. Due date displays correctly.
+Suite 6 — My Tasks: Task from meeting log appears in assignee tab. Manual creation works. Mark Done works. Escalation works. Due dates sort correctly.
+Suite 7 — Revenue Log: Dropdowns pull from imported targets. All fields present. Entry immutable after submit. Dashboard updates immediately. Quarter auto-derived from date. Entry blocked without quarter value.
+Suite 8 — HR Compliance: Compliant when both conditions met before 11:30 PM. Non-compliant when either missed. Record not editable by rep. Manager sees team compliance.
+Suite 9 — Deal Stages: All stages in UI match `constants.ts` exactly. No orphan stages. Stage updates save and show in pipeline.
+Final output — produce all 3/engineering:testing-strategy :
+1. Test Results Matrix — every test case: Pass ✅ / Fail ❌ / Blocked 🔴
+2. New Bugs Found — anything broken not in the original audit
+ 3. Final Verdict — GO or NO-GO. If NO-GO, list only the remaining blockers with estimated fix time each.

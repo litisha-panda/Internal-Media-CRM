@@ -152,17 +152,19 @@ export const IR_STATUSES = [
 export type IRStatus = (typeof IR_STATUSES)[number];
 
 // ─── Target approval chain ────────────────────────────────────────────────────
-// 3-level chain: Region Head → National Sales Head → CRO
+// 4-level chain: Region Head → National Sales Head → Sales Strategy → CRO
 export const TARGET_APPROVAL_CHAIN: Record<string, string> = {
-  "Pending RH":  "REGION HEAD",
-  "Pending NSH": "SALES HEAD",
-  "Pending CRO": "CRO",
+  "Pending RH":       "REGION HEAD",
+  "Pending NSH":      "SALES HEAD",
+  "Pending Strategy": "SALES STRATEGY",
+  "Pending CRO":      "CRO",
 };
 
 export const TARGET_NEXT_STATUS: Record<string, string> = {
-  "Pending RH":  "Pending NSH",
-  "Pending NSH": "Pending CRO",
-  "Pending CRO": "Approved",
+  "Pending RH":       "Pending NSH",
+  "Pending NSH":      "Pending Strategy",
+  "Pending Strategy": "Pending CRO",
+  "Pending CRO":      "Approved",
 };
 
 // ─── Fiscal quarters ─────────────────────────────────────────────────────────

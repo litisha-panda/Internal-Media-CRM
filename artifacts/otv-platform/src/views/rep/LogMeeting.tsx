@@ -22,7 +22,7 @@ type RepId = number | string | null | undefined;
 
 /* ── Constants ──────────────────────────────────────────────────────────── */
 const PITCH_TYPES    = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
-const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation", "RO Received"];
+const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation"];
 const MEETING_TYPES  = ["Physical", "Online", "Phone Call"];
 const ACTION_TYPES   = ["Approval needed", "Document needed", "Attend a meeting", "Introduction needed", "Flag for follow-up"];
 const APPROVAL_TARGETS = ["Region Head", "NSH", "Branding Team", "Content Team", "Sales Strategy", "Digital", "Finance", "Legal", "CXO"];
@@ -250,13 +250,15 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 fromMeetingLog: true, touchpointId: tp.id,
               } as Parameters<typeof createTask>[0]).catch(() => { /* non-fatal */ })
             );
-            /* Fire-and-forget IR creation */
+            /* FIX 8: IR creation — surface failure as toast instead of silent drop */
             irSvc.createIR({
               title: irSubject, description: details, priority: "High",
               status: "Open", dueDate, assignedDept: i.from,
               repId: repIdInt ?? undefined, clientCompany,
               requestedBy: loggedByName,
-            }).catch(() => { /* non-fatal */ });
+            }).catch(() => {
+              showToast(`⚠️ Internal request to ${i.from} could not be created — follow up manually`, "err");
+            });
           }
         });
 
@@ -467,8 +469,30 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
           <textarea rows={3} placeholder="What did you discuss? Campaign ideas, budget conversations, client objections, brand insights..." value={form.discussion} onChange={e => setF({ discussion: e.target.value })} style={{ resize: "vertical" }} />
         </div>
         <div style={{ marginBottom: 14 }}>
-          <label>Client Feedback <span style={{ color: C.dim, fontWeight: 400 }}>(what did the client say/react?)</span></label>
-          <textarea rows={2} placeholder="Positive, hesitant, needs approval, competitor mentioned..." value={form.clientFeedback} onChange={e => setF({ clientFeedback: e.target.value })} style={{ resize: "vertical" }} />
+          <label>Client Feedback <span style={{ color: C.dim, fontWeight: 400 }}>(how did the client react?)</span></label>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+            {[
+              "Positive — keen to move forward",
+              "Hesitant — needs more information",
+              "Needs internal approval from client side",
+              "Competitor mentioned / under competitor pressure",
+              "Budget concerns raised",
+              "Not interested at this stage",
+            ].map(opt => (
+              <button
+                key={opt}
+                type="button"
+                onClick={() => setF({ clientFeedback: form.clientFeedback === opt ? "" : opt })}
+                style={{
+                  padding: "6px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
+                  border: `1.5px solid ${form.clientFeedback === opt ? C.accent : C.border}`,
+                  background: form.clientFeedback === opt ? `${C.accent}18` : "transparent",
+                  color: form.clientFeedback === opt ? C.accent : C.text,
+                  fontWeight: form.clientFeedback === opt ? 700 : 400,
+                }}
+              >{opt}</button>
+            ))}
+          </div>
         </div>
 
         {/* SECTION 4 — Blockers / Help Needed */}
@@ -562,7 +586,6 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 10 }}>
                   {[
                     { id: "google", label: "Google Calendar", icon: "📅", color: "#4285F4", desc: "Creates event + auto-generates Google Meet link" },
-                    { id: "zoho",   label: "Zoho Calendar",   icon: "📆", color: "#e42527", desc: "Downloads .ics file — open to add to Zoho Calendar" },
                     { id: "none",   label: "No Calendar",     icon: "⊘",  color: "#7d8590", desc: "Schedule internally only, no calendar invite" },
                   ].map(cp => (
                     <button key={cp.id} onClick={() => setF({ calendarPlatform: cp.id })}

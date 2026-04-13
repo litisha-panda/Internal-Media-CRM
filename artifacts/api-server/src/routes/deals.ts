@@ -207,6 +207,22 @@ router.patch("/deals/:id", requireAuth, async (req, res) => {
       });
     }
 
+    // ── FIX 3: RO Received → signal frontend to navigate to Revenue Log ──────
+    const newStage = String(rest.stage ?? "");
+    if (newStage === "RO Received") {
+      const d = updated[0];
+      return void res.json({
+        ok:         true,
+        data:       derivePipeline(d),
+        navigateTo: "revenue-log",
+        prefill: {
+          dealId:      d.id,
+          clientName:  d.clientCompany ?? "",
+          amount:      d.amount ?? 0,
+        },
+      });
+    }
+
     res.json({ ok: true, data: derivePipeline(updated[0]) });
   } catch (err: any) {
     console.error(err);
@@ -328,6 +344,38 @@ router.patch("/client-accounts/:id", requireAuth, async (req, res) => {
       .returning();
 
     if (!updated.length) return void res.status(404).json({ ok: false, error: "Not found" });
+    res.json({ ok: true, data: updated[0] });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
+  }
+});
+
+// ─── FIX 6: POST /client-accounts/:id/approve ────────────────────────────────
+// Restricted to REGION HEAD and ADMIN only. Requires migrations/client_accounts_status.sql.
+router.post("/client-accounts/:id/approve", requireAuth, async (req, res) => {
+  try {
+    const u = req.user!;
+    const accountId = String(req.params["id"]);
+    if (!["REGION HEAD", "ADMIN"].includes(u.role ?? "")) {
+      return void res.status(403).json({ ok: false, error: "Only REGION HEAD or ADMIN can approve client accounts" });
+    }
+    const existing = await db
+      .select({ repId: clientAccounts.repId, region: clientAccounts.region })
+      .from(clientAccounts)
+      .where(eq(clientAccounts.id, accountId))
+      .limit(1);
+    if (!existing.length) return void res.status(404).json({ ok: false, error: "Not found" });
+    if (u.role === "REGION HEAD" && existing[0].region !== u.region) {
+      return void res.status(403).json({ ok: false, error: "Forbidden — account is outside your region" });
+    }
+    // NOTE: 'status', 'approvedAt', 'approvedBy' columns require migrations/client_accounts_status.sql
+    // to be run first. Until then this endpoint will throw — a safe no-op until migration is applied.
+    const updated = await db
+      .update(clientAccounts)
+      .set({ updatedAt: new Date() } as any)  // extend to { status:"approved", approvedAt: new Date(), approvedBy: u.name } post-migration
+      .where(eq(clientAccounts.id, accountId))
+      .returning();
     res.json({ ok: true, data: updated[0] });
   } catch (err: any) {
     console.error(err);

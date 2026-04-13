@@ -115,9 +115,13 @@ async function computeKPI(opts: {
   const attTotal   = attRows.length;
   const attendanceRate = attTotal > 0 ? Math.round((attPresent / attTotal) * 100) : null;
 
+  // SHORTFALL = Target − Achieved, clamped at 0. Never includes pipeline.
+  const shortfall = Math.max(0, target - achieved);
+
   return {
     achieved,
     target,
+    shortfall,
     pipeline,
     gap,
     overdueTasks,

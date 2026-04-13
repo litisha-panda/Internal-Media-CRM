@@ -3,7 +3,6 @@ import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
   USER_ROLES,
 } from "../../constants";
-import ZohoSearchInput from "../../components/ZohoSearchInput";
 import * as revSvc from "../../services/api/revenue";
 
 interface RevenueLogViewProps {
@@ -142,11 +141,10 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                               const matchAcct = myApprovedAccts.find((a:any)=>a.clientName===sel) as any;
                               setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",zohoAccountId:matchAcct?.zohoAccountId||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
                             }}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.zohoAccountId?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.clientCompany?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
                               <option value="">Select from approved targets…</option>
                               {myApprovedAccts.sort((a,b)=>a.clientName.localeCompare(b.clientName)).map(a=><option key={a.id} value={a.clientName}>{a.clientName}</option>)}
                             </select>
-                            {rf.zohoAccountId&&<div style={{fontSize:9,color:C.green,marginTop:2}}>✓ Zoho ID linked — revenue will match correctly</div>}
                             {!rf.clientCompany&&<div style={{fontSize:9,color:C.dim,marginTop:2}}>Only approved target clients appear here.</div>}
                           </div>
                           <div>

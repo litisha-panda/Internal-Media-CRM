@@ -12,7 +12,6 @@ import {
   D3,
   D7,
 } from "../../constants";
-import ZohoSearchInput from "../../components/ZohoSearchInput";
 
 interface LeaderboardViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; lbTab: string; setLbTab: React.Dispatch<React.SetStateAction<string>>; }
 export function LeaderboardView({ view, setView, lbTab, setLbTab }: LeaderboardViewProps) {
@@ -937,7 +936,7 @@ export function ActivityView({ view, setView }: ActivityViewProps) {
                             <div style={{marginTop:8,background:`${C.green}10`,border:`1px solid ${C.green}22`,borderRadius:5,padding:"8px 12px"}}>
                               <div style={{display:"flex",alignItems:"center",gap:8,flexWrap:"wrap"}}>
                                 <span style={{fontSize:11,color:C.green,fontWeight:600}}>📅 Next: {m.nextMeetingDate}{m.nextMeetingTime?` @ ${m.nextMeetingTime}`:""}</span>
-                                {m.calendarStatus&&<span style={{background:`${C.green}22`,color:C.green,padding:"1px 7px",borderRadius:8,fontSize:10,fontWeight:700}}>{m.calendarPlatform==="google"?"Google Calendar":"Zoho Calendar"} ✓</span>}
+                                {m.calendarStatus&&<span style={{background:`${C.green}22`,color:C.green,padding:"1px 7px",borderRadius:8,fontSize:10,fontWeight:700}}>Calendar ✓</span>}
                                 {m.meetLink&&(
                                   <a href={m.meetLink} target="_blank" rel="noreferrer"
                                     style={{display:"inline-flex",alignItems:"center",gap:5,background:"#4285F422",color:"#4285F4",padding:"3px 10px",borderRadius:8,fontSize:11,fontWeight:600,textDecoration:"none",border:"1px solid #4285F444"}}>

@@ -31,9 +31,17 @@ export async function listDeals(): Promise<Deal[]> {
   return Array.isArray(r.data) ? r.data : [];
 }
 
+export interface PatchDealResponse {
+  ok: boolean;
+  data: Deal;
+  /** FIX 3: Present when stage was set to "RO Received" — signals frontend to navigate */
+  navigateTo?: "revenue-log";
+  prefill?: { dealId: string; clientName: string; amount: number };
+}
+
 /** PATCH /api/deals/:id */
-export async function patchDeal(id: string, patch: DealPatch): Promise<void> {
-  await apiFetch(`/api/deals/${id}`, {
+export async function patchDeal(id: string, patch: DealPatch): Promise<PatchDealResponse> {
+  return apiFetch<PatchDealResponse>(`/api/deals/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(patch),

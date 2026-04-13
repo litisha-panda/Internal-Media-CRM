@@ -1,0 +1,161 @@
+Here's the complete prompt to send to Replit right now:
+
+---
+
+You are continuing work on the OTV Sales CRM. A previous session made fixes — some were correct, one was wrong and needs immediate correction. Fix everything in order. Show before/after diff after each fix. Do not deploy. Write all schema changes as migration scripts — do not run them.
+
+---
+
+**FIX 0 — Remove Zoho dependency entirely**
+
+Remove all Zoho integration from the codebase:
+
+1. Delete or disable `src/routes/zoho.ts` and remove its registration in `app.ts`
+2. Remove all `import` references to Zoho functions across all files
+3. In `AddPlanModal.tsx`, `LogMeeting.tsx`, and the Revenue Log form — remove any Zoho client/agency lookup calls
+4. In `.env.example`, comment out Zoho variables with: `// Zoho removed — client data sourced from imported target allocations only`
+5. Do not delete credentials from Replit Secrets — only remove the code calling Zoho APIs
+
+Confirm: zero `zoho` imports remaining anywhere. Show every file changed.
+
+---
+
+**FIX 1 — CORRECT the approval chain (previous session got this wrong)**
+
+The previous session removed "Pending Strategy" from the approval chain. That was a mistake. Put it back.
+
+In `lib/db/src/constants.ts` AND `artifacts/otv-platform/src/constants.ts`, set `TARGET_APPROVAL_CHAIN` and `TARGET_NEXT_STATUS` to exactly 4 levels:
+
+`Pending RH → Pending NSH → Pending Strategy → Pending CRO`
+
+After CRO approves → `status = "Approved"` → targets lock immediately. No Admin level. Only the Strategy removal from the previous session needs to be reverted — everything else stays.
+
+Update `PlanUploadModal.tsx` and `CROApp.tsx` to reflect 4 levels in any UI that shows approval status.
+
+---
+
+**FIX 2 — Dashboard metrics: ACHIEVED and SHORTFALL only**
+
+The dashboard needs exactly these metrics:
+- **ACHIEVED** = sum of `revenueEntries` only (non-reversed). Never `deal.amount`
+- **SHORTFALL** = Target − Achieved. Clamp at 0. Never negative
+- Remove COMMITTED and IN PLAY entirely from dashboard and KPI routes
+
+Search the full codebase for any KPI or pipeline calculation using `deal.amount` or `deals.amount`. There are approximately 8 such locations. Replace every one with a query against `revenueEntries`. Show all changed files.
+
+---
+
+**FIX 3 — RO Received → auto-navigate to Revenue Log**
+
+"RO Received" is a deal outcome, not a pipeline stage. It should not appear in the `DEAL_STAGES` array. Instead:
+
+In `LogMeeting.tsx`, add a separate "Mark as RO Received" action button (outside the stage dropdown). When tapped: auto-submit a minimal background touchpoint record, then immediately call `onNavigateRevenue()` — no manual button click required from the rep.
+
+In `deals.ts` PATCH handler, when `stage = "RO Received"` is received, return `{ navigateTo: "revenue-log", prefill: { dealId, clientName, amount } }`.
+
+In `SalesCommandCenter.jsx`, handle this flag: navigate to Revenue Log and pre-fill the form with `dealId`, `clientName`, and `amount`.
+
+---
+
+**FIX 4 — Revenue log → real-time Achieved and Shortfall update**
+
+In `SalesCommandCenter.jsx`, after a successful `POST /revenue`, immediately refetch `GET /api/kpi/rep`. Achieved and Shortfall on the dashboard must update without a page reload.
+
+---
+
+**FIX 5 — Agency/Client/Brand dropdowns from approved target allocations**
+
+Now that Zoho is removed (FIX 0), all Agency, Client, and Brand dropdowns must pull from the rep's own approved target allocations.
+
+In `AddPlanModal.tsx`, `LogMeeting.tsx`, and the Revenue Log form: replace any existing agency/client/brand lookup with a fetch from `/api/targets?status=Approved&repId=me`.
+
+Build a cascading dropdown: Agency selection filters Clients, Client selection filters Brands — all from approved target allocations only. No free-text fallback.
+
+---
+
+**FIX 6 — Client account approval flow**
+
+Write migration `migrations/client_accounts_status.sql`:
+- Add `status` column to `clientAccounts`: values `"pending"` (default) and `"approved"`
+
+Add endpoint `POST /client-accounts/:id/approve` — restricted to REGION HEAD and ADMIN only.
+
+Update `GET /client-accounts` (when used by meeting dropdowns) to return only `status = "approved"` accounts.
+
+Add validation to `POST /meetings`: `clientAccountId` must resolve to an approved account — return 400 if not.
+
+Do not run migration — show it for review.
+
+---
+
+**FIX 7 — 6 structured feedback types in Log Meeting form**
+
+In `LogMeeting.tsx`, replace the free-text `clientFeedback` textarea with a 6-option radio group. Each option shows specific conditional sub-fields:
+
+1. **Interested** → sub-field: "What does the client need?" (text input) + deal stage dropdown
+2. **Not Interested** → sub-field: "Why?" (text input)
+3. **No Budget** → sub-field: "Why?" (text input)
+4. **Pricing Concern** → sub-field: dropdown with pricing options
+5. **RO Received** → skip all sub-fields, trigger FIX 3 flow immediately
+6. **Other** → sub-field: "Specify" (text input)
+
+Store the selected feedback type and sub-field values as structured data in the touchpoint record, not as free text.
+
+---
+
+**FIX 8 — Fix IR creation failure handling**
+
+In the meeting log post-save hook (added in the previous session), `irSvc.createIR()` is currently fire-and-forget with `.catch(() => {})` — failures are swallowed silently.
+
+Change this: `await` the IR creation. If it fails, surface the error to the rep with a toast notification. Do not let the meeting log submission fail because of the IR — but the rep must know if the IR wasn't created.
+
+---
+
+**FIX 9 — 5 missing fields in Schedule Meeting form**
+
+In `AddPlanModal.tsx`, add these 5 fields (they exist in `LogMeeting.tsx` — copy from there):
+1. Meeting Format (Physical / Online / Phone Call)
+2. Brand Name
+3. Designation
+4. Phone Number
+5. Email
+
+Update `PlanForm` type and `POST /api/meetings` body to include all 5.
+
+---
+
+**FIX 10 — Guided tour wired to target approval event**
+
+In `CROApp.tsx`, add a `useEffect` watching `targetApprovalStatus`. When it first transitions to `"approved"` (check `localStorage` flag `tour_shown`), automatically call `openWelcome()`. Set the flag on tour dismiss so it never fires twice.
+
+---
+
+**FIX 11 — FK constraints migration**
+
+Write `migrations/add_fk_constraints.sql` with FK constraints on:
+- `meetings.userId → users.id`
+- `revenueEntries.repId → users.id`
+- `deals.repId → users.id`
+- `tasks.assignedToUserId → users.id`
+- `targetAllocations.submissionId → targetSubmissions.id`
+
+Do not run. Show for review.
+
+---
+
+**FIX 12 — Confirm fix_004 and fix_005 migrations**
+
+Run these queries and show the output:
+```sql
+SELECT pg_typeof(created_at) FROM tasks LIMIT 1;
+SELECT COUNT(*) FROM revenue_entries WHERE quarter IS NULL;
+```
+If `created_at` is not `timestamp with time zone` or null quarter count > 0, flag it clearly — those migrations must be run manually by a human.
+
+---
+
+**After all fixes, give me:**
+1. Every file changed, grouped by fix number
+2. All migration scripts listed separately with filenames
+3. Confirmation that zero Zoho imports remain
+4. The stage name mapping from the previous session's FIX 1 — which old stages (Prospect, Qualified, Proposal Sent, Verbal Commit, PO Received, Won, Lost) were mapped to the new 7 stages, and which were flagged as unresolvable

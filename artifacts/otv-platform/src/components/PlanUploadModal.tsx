@@ -54,12 +54,14 @@ export function PlanUploadModal({
   targetSubs, setTargetSubs, TODAY, fmtR, showToast, onClose,
 }: PlanUploadModalProps) {
   const chainSteps = isRH
-    ? [{s:"RH",done:true},{s:"NSH",done:false},{s:"CRO → ✓",done:false}]
+    ? [{s:"RH",done:true},{s:"NSH",done:false},{s:"Strategy",done:false},{s:"CRO → ✓",done:false}]
     : isNSH
-    ? [{s:"RH",done:true},{s:"NSH",done:true},{s:"CRO → ✓",done:false}]
-    : [{s:"RH",done:true},{s:"NSH",done:true},{s:"CRO → ✓",done:true}];
+    ? [{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:false},{s:"CRO → ✓",done:false}]
+    : (planUploadForm as any).isStrategy
+    ? [{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:true},{s:"CRO → ✓",done:false}]
+    : [{s:"RH",done:true},{s:"NSH",done:true},{s:"Strategy",done:true},{s:"CRO → ✓",done:true}];
 
-  const chainLabel = isRH?"NSH level":isNSH?"CRO level":isCRORole?"final approval (auto-approved)":"NSH level";
+  const chainLabel = isRH?"NSH level":isNSH?"Sales Strategy level":isCRORole?"final approval (auto-approved)":"NSH level";
 
   const year: string  = planUploadForm.year ?? String(new Date().getFullYear());
   const clients: AnnualClient[] = Array.isArray(planUploadForm.annualClients) && planUploadForm.annualClients.length > 0
@@ -85,7 +87,7 @@ export function PlanUploadModal({
     if (!year || isNaN(parseInt(year))) { showToast("Enter a valid year", "err"); return; }
 
     const rep = reps.find((r: any) => r.id === parsedRepId);
-    const initStatus = isRH?"Pending NSH":isNSH?"Pending CRO":isCRORole?"Approved":"Pending NSH";
+    const initStatus = isRH?"Pending NSH":isNSH?"Pending Strategy":isCRORole?"Approved":"Pending NSH";
     const annualClients = validClients.map(c => ({
       agencyName: c.agencyName.trim() || null,
       clientName: c.clientName.trim(),

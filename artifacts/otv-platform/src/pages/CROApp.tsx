@@ -1683,8 +1683,8 @@ export function CROApp({ user, onLogout }) {
     // When a manager adds a deal for a rep, also submit a target plan entry so it
     // appears in the rep's My Targets view once the plan clears the approval chain.
     if (!isRep) {
-      const initStatus = isRH?"Pending NSH":isNSH?"Pending CRO":isCRORole?"Approved":"Pending NSH";
-      const steps = ["Pending RH","Pending NSH","Pending CRO"];
+      const initStatus = isRH?"Pending NSH":isNSH?"Pending Strategy":isStrategy?"Pending CRO":isCRORole?"Approved":"Pending NSH";
+      const steps = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO"];
       const startIdx = steps.indexOf(initStatus);
       const skipLog  = steps.slice(0,startIdx).map(step=>({step,by:user_role?.name||"",at:TODAY,note:`Submitted by ${user_role?.role}`}));
       const newEntry = {clientCompany:dealForm.clientCompany.trim(),dealType:dealForm.dealType||"Linear TV",targetAmount:tgtAmt};
@@ -1725,6 +1725,18 @@ export function CROApp({ user, onLogout }) {
   };
   const closeTour = () => { setTourActive(false); setTourStep(0); };
   const openWelcome = () => { setTourActive(false); setShowWelcomeModal(true); };
+
+  // FIX 10: Trigger guided tour for rep when their first target is approved
+  React.useEffect(() => {
+    if (!isRep) return;
+    const myRepId = user_role?.repId;
+    const hasApproved = targetSubs.some(s => String(s.repId) === String(myRepId) && s.status === "Approved");
+    const tourShownKey = `otv_target_approved_tour_${activeUser}`;
+    if (hasApproved && !localStorage.getItem(tourShownKey)) {
+      localStorage.setItem(tourShownKey, "1");
+      openWelcome();
+    }
+  }, [targetSubs, isRep, activeUser]);
 
   // ── APPROVAL HELPERS ──
   const APPROVAL_THRESHOLDS = {

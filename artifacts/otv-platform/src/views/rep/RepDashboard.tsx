@@ -122,9 +122,9 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
       {/* Progress bar */}
       {annualTgt > 0 && (
         <div style={{ marginBottom: 20 }}>
-          {stackedBar(annualTgt, ach, comm, inpl, sf, 0)}
+          {stackedBar(annualTgt, ach, 0, 0, sf, 0)}
           <div style={{ display: "flex", gap: 16, marginTop: 6, flexWrap: "wrap" }}>
-            {[["Achieved", C.green, ach], ["Committed", C.blue, comm], ["In Play", "#d97706", inpl], ["Shortfall", C.red + "99", sf]].map(([lbl, col, val]) => (
+            {[["Achieved", C.green, ach], ["Shortfall", C.red + "99", sf]].map(([lbl, col, val]) => (
               <div key={lbl as string} style={{ display: "flex", alignItems: "center", gap: 4 }}>
                 <div style={{ width: 8, height: 8, borderRadius: 2, background: col as string, flexShrink: 0 }} />
                 <span style={{ fontSize: 10, color: C.dim, fontFamily: "'DM Sans',sans-serif" }}>{lbl as string} {fmtR(val as number)}</span>
