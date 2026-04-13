@@ -62,9 +62,16 @@ export const STAGE_PROB: Record<string, number> = {
   "Mail Confirmed":        90,
 };
 
-// No closed/won stages in the new vocabulary.
-// Flag: existing rows with "Won", "Lost", "RO Received", etc. will score 0 pipeline weight.
-export const CLOSED_STAGES = new Set<string>([]);
+// Stages that score 0 pipeline weight. These are completed or dead deals — not in the active funnel.
+// Existing DB rows with these legacy values will be excluded from pipeline totals.
+export const CLOSED_STAGES = new Set<string>([
+  "RO Received",
+  "Won",
+  "Lost",
+  "Cancelled",
+  "Archived",
+  "On Hold",
+]);
 
 // ─── Deal types ───────────────────────────────────────────────────────────────
 export const DEAL_TYPES = [

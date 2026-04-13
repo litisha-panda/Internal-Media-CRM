@@ -32,7 +32,12 @@ export const APPROVAL_SLA_DAYS = 2;
 export const PLAN_STATUS = ["Planned", "Done", "Cancelled", "Rescheduled"];
 export const PLAN_DEADLINE = "23:30";
 export const HR_EMAIL = "hr@odishatv.com";
-export const TARGET_APPROVAL_CHAIN = ["Pending RH","Pending NSH","Pending Strategy","Pending CRO","Approved"];
+export const TARGET_APPROVAL_CHAIN: Record<string, string> = {
+  "Pending RH":       "REGION HEAD",
+  "Pending NSH":      "SALES HEAD",
+  "Pending Strategy": "SALES STRATEGY",
+  "Pending CRO":      "CRO",
+};
 export const ALL_CHANNELS = ["Odisha TV","Tarang","Tarang Music","Alankar","Prarthana"];
 export const IP_CATALOG: any[] = [];
 

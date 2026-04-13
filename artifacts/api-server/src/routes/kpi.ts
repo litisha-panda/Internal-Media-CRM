@@ -7,7 +7,6 @@
  * GOLDEN RULES:
  *   - ACHIEVED  = SUM(revenueEntries.amount) WHERE isReversed=false AND reversalOf IS NULL
  *   - PIPELINE  = SUM(deal.amount × STAGE_PROB[deal.stage] / 100) for open deals
- *   - GAP       = frozenTarget − achieved − pipeline  (can be negative = ahead of target)
  *   - ATTD RATE = present / (present + absent) for attendance_records in period
  */
 import { Router } from "express";
@@ -84,10 +83,7 @@ async function computeKPI(opts: {
 
   const pipeline = dealRows.reduce((sum, d) => sum + derivePipeline(d), 0);
 
-  // ── 4. Gap ───────────────────────────────────────────────────────────────────
-  const gap = target - achieved - pipeline;
-
-  // ── 5. Open tasks overdue ────────────────────────────────────────────────────
+  // ── 4. Open tasks overdue ────────────────────────────────────────────────────
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "Asia/Kolkata" }).format(new Date());
   const overdueTasksRows = await db
     .select({ id: tasks.id })
@@ -123,7 +119,6 @@ async function computeKPI(opts: {
     target,
     shortfall,
     pipeline,
-    gap,
     overdueTasks,
     attendanceRate,
     attPresent,
