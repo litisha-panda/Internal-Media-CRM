@@ -139,12 +139,12 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
             <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Designation</label>
-            <input value={(pf as any).designation ?? ""} onChange={e => setPf(p => ({ ...p, designation: e.target.value } as any))} placeholder="e.g. Marketing Head"
+            <input value={pf.designation} onChange={e => setPf(p => ({ ...p, designation: e.target.value }))} placeholder="e.g. Marketing Head"
               style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
           </div>
           <div style={{ flex: 1 }}>
             <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Contact Email</label>
-            <input type="email" value={(pf as any).contactEmail ?? ""} onChange={e => setPf(p => ({ ...p, contactEmail: e.target.value } as any))} placeholder="contact@brand.com"
+            <input type="email" value={pf.contactEmail} onChange={e => setPf(p => ({ ...p, contactEmail: e.target.value }))} placeholder="contact@brand.com"
               style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
           </div>
         </div>

@@ -47,7 +47,18 @@
 
 ---
 
-### 6. `add_missing_columns.sql`
+### 6. `add_meeting_contact_fields.sql`
+**Purpose:** Adds two columns to the `meetings` table:
+- `meetings.designation TEXT` — job title of the contact person (nullable)
+- `meetings.contact_email TEXT` — email address of the contact person (nullable)
+
+**Required for:** The Plan Touchpoint form now collects and submits both fields end-to-end. Until this migration runs, any submission including these values will be silently dropped by the DB (columns don't exist in live schema yet). Drizzle schema has been updated; backend `POST /PATCH /meetings` accepts and stores them.
+**Risk:** Low. Additive only, both `IF NOT EXISTS` guarded, nullable, no existing rows modified.
+**DBA action required:** Apply at any time — no downtime required.
+
+---
+
+### 7. `add_missing_columns.sql`
 **Purpose:** Adds three columns that are missing from the live schema:
 - `target_allocations.agency_name TEXT` — advertising agency for this allocation (nullable)
 - `target_allocations.brand_name TEXT` — specific brand within the client (nullable)

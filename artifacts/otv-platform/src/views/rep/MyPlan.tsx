@@ -50,6 +50,8 @@ export interface PlanForm {
   brand:          string;
   contactName:    string;
   phone:          string;
+  designation:    string;
+  contactEmail:   string;
   time:           string;
   agenda:         string;
   pitchType:      string;
@@ -63,6 +65,7 @@ export interface PlanForm {
 
 const BLANK_PLAN_FORM: PlanForm = {
   agency: "", client: "", brand: "", contactName: "", phone: "",
+  designation: "", contactEmail: "",
   time: "10:00", agenda: "", pitchType: "", meetingType: "Physical",
   touchpointType: "Deal Meeting", meetingKind: "ACTIONABLE",
   needsMeet: false, syncToCalendar: false, calPlatform: "none",
@@ -222,6 +225,8 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
         brandName:    pf.brand  || "",
         contactName:  pf.contactName || "",
         contactPhone: pf.phone || null,
+        designation:  pf.designation || null,
+        contactEmail: pf.contactEmail || null,
         mode:         pf.meetingType || "Physical",
         agenda:       pf.agenda || "",
         status:       "planned",

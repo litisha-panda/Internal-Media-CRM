@@ -160,6 +160,8 @@ router.post("/meetings", requireAuth, async (req, res) => {
       brandName,
       contactName,
       contactPhone,
+      designation,
+      contactEmail,
       mode,
       actionableType,
       agenda,
@@ -182,6 +184,8 @@ router.post("/meetings", requireAuth, async (req, res) => {
       brandName:      brandName ? String(brandName) : null,
       contactName:    contactName ? String(contactName) : null,
       contactPhone:   contactPhone ? String(contactPhone) : null,
+      designation:    designation ? String(designation) : null,
+      contactEmail:   contactEmail ? String(contactEmail) : null,
       mode:           mode ? String(mode) : null,
       actionableType: actionableType ? String(actionableType) : null,
       agenda:         agenda ? String(agenda) : null,
@@ -234,7 +238,8 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
 
     const {
       date, time, meetingKind, agencyName, clientName, brandName,
-      contactName, contactPhone, mode, actionableType, agenda, status, touchpointId,
+      contactName, contactPhone, designation, contactEmail,
+      mode, actionableType, agenda, status, touchpointId,
     } = req.body;
 
     const updates: Partial<typeof mtg> = { updatedAt: new Date() };
@@ -246,6 +251,8 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
     if (brandName !== undefined)      updates.brandName = brandName;
     if (contactName !== undefined)    updates.contactName = contactName;
     if (contactPhone !== undefined)   updates.contactPhone = contactPhone;
+    if (designation !== undefined)    updates.designation = designation;
+    if (contactEmail !== undefined)   updates.contactEmail = contactEmail;
     if (mode !== undefined)           updates.mode = mode;
     if (actionableType !== undefined) updates.actionableType = actionableType;
     if (agenda !== undefined)         updates.agenda = agenda;

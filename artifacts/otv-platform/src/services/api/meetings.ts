@@ -17,6 +17,8 @@ export interface Meeting {
   brandName: string;
   contactName: string;
   contactPhone?: string | null;
+  designation?: string | null;
+  contactEmail?: string | null;
   mode: string;
   agenda: string;
   status: "planned" | "logged" | "missed" | "cancelled";

@@ -28,6 +28,8 @@ export const meetings = pgTable("meetings", {
 
   contactName:    text("contact_name"),
   contactPhone:   text("contact_phone"),
+  designation:    text("designation"),
+  contactEmail:   text("contact_email"),
 
   mode:           text("mode"),                   // "Physical" | "Online" | "Phone Call"
   actionableType: text("actionable_type"),         // e.g. "Pitch / Introduction"
