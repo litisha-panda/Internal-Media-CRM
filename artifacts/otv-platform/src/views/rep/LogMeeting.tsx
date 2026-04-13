@@ -128,27 +128,25 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
   const [form, setForm] = useState<LogForm>({ ...BLANK_FORM });
   const [submitting, setSubmitting] = useState(false);
 
-  const handleROReceived = async () => {
+  const handleROReceived = () => {
     const deal = deals.find(d => d.id === form.dealId);
     const clientCompany = form.client || form.clientAgencyName || deal?.clientCompany || "";
     const agency = form.agency || deal?.agency || "";
-    try {
-      // Create touchpoint with RO Received stage; call onSubmit so meeting status patches to "logged"
-      const tp = await createTouchpoint({
-        repId:          parseInt(form.repId) || null,
-        region:         userRole?.region || "",
-        date:           TODAY,
-        touchpointType: form.touchpointType || "Deal Meeting",
-        stageUpdate:    "RO Received",
-        clientCompany,
-        dealId:         form.dealId || null,
-        contactName:    form.contactName || null,
-        meetingKind:    form.meetingKind || null,
-        actionItems:    [],
-        notes:          null,
-      });
-      onSubmit(tp); // patches planned meeting status to "logged" in MyPlan
-    } catch (_) { /* non-fatal — navigate anyway */ }
+    // Background: create touchpoint + patch meeting status — non-blocking
+    createTouchpoint({
+      repId:          parseInt(form.repId) || null,
+      region:         userRole?.region || "",
+      date:           TODAY,
+      touchpointType: form.touchpointType || "Deal Meeting",
+      stageUpdate:    "RO Received",
+      clientCompany,
+      dealId:         form.dealId || null,
+      contactName:    form.contactName || null,
+      meetingKind:    form.meetingKind || null,
+      actionItems:    [],
+      notes:          null,
+    }).then(tp => onSubmit(tp)).catch(() => { /* non-fatal */ });
+    // Navigate immediately without waiting for API
     onNavigateRevenue?.({ clientCompany, agency, amount: deal?.amount });
     onClose();
   };
@@ -550,18 +548,26 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
             </div>
           )}
           {form.clientFeedback === "Pricing Concern" && (
-            <div style={{ marginTop: 8 }}>
-              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Pricing Objection Type</label>
-              <select value={form.pricingOption} onChange={e => setF({ pricingOption: e.target.value })}
-                style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
-                <option value="">Select…</option>
-                <option>Rate too high vs. reach</option>
-                <option>Competitor pricing cheaper</option>
-                <option>Category rate card issue</option>
-                <option>Asked for discount / value-add</option>
-                <option>Budget revised down</option>
-                <option>Other pricing issue</option>
-              </select>
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
+              <div>
+                <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Pricing Objection Type</label>
+                <select value={form.pricingOption} onChange={e => setF({ pricingOption: e.target.value })}
+                  style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+                  <option value="">Select…</option>
+                  <option>Rate too high vs. reach</option>
+                  <option>Competitor pricing cheaper</option>
+                  <option>Category rate card issue</option>
+                  <option>Asked for discount / value-add</option>
+                  <option>Budget revised down</option>
+                  <option>Other pricing issue</option>
+                </select>
+              </div>
+              <div>
+                <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Additional Notes on Pricing</label>
+                <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
+                  placeholder="e.g. Client requested 15% discount, wants bonus spots…"
+                  style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
+              </div>
             </div>
           )}
           {form.clientFeedback === "Other" && (
