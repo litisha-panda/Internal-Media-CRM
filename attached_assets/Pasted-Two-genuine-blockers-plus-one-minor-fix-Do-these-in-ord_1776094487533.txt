@@ -1,0 +1,25 @@
+Two genuine blockers plus one minor fix. Do these in order. Show before/after diff. No deploy.
+FIX 1 — Invite token frontend wiring (BLK-01)
+The backend invite system is correct. The frontend is broken — LoginScreen.tsx never reads ?invite=TOKEN from the URL, never passes inviteToken to the signup form, and SignupPayload has no inviteToken field.
+Fix:
+
+On LoginScreen.tsx signup form mount, read inviteToken from window.location.search (?invite=TOKEN) and store in local state. Pre-fill the email field if the token resolves via GET /api/auth/invite/:token.
+Add inviteToken: string to SignupPayload type.
+Include inviteToken in the POST /auth/signup request body.
+If no invite token is present in the URL, show a message: "Sign-up is by invitation only. Contact your admin." — disable the signup form entirely.
+
+FIX 2 — Complete Zoho removal (BLK-02)
+Previous sessions removed some Zoho code but the following remain. Remove all of them:
+
+LoginScreen.tsx — active Zoho OAuth popup: remove handleZohoClick(), the "Continue with Zoho" button, and ZOHO_CLIENT_ID
+CROApp.tsx — remove ZohoSearchInput, ZohoHierarchy, Zoho export button, zohoImporting state, zohoAccounts state
+SystemConfigView.tsx — remove the "IMPORT FROM ZOHO CRM" button that calls a 404 endpoint
+types.ts — remove zohoAccountId and zohoAgencyId from all interfaces
+constants.ts — remove zohoAccountId from ClientAllocation interface
+DB schema — zohoAccountId columns exist in deals, revenue_entries, and target_allocations tables. Write a migration migrations/remove_zoho_columns.sql to drop these columns. Do not run it — show it for review.
+
+After all removals, run grep -ri 'zoho' across the full codebase and show the output. Must return zero hits (excluding any comments documenting the removal).
+FIX 3 — Interested sub-field: add deal stage selector
+In LogMeeting.tsx, the Interested feedback type shows a "What does the client need?" textarea but is missing the deal stage dropdown. Add a deal stage <select> below the textarea, populated from DEAL_STAGES (the 7 confirmed stages). Wire its value to form.stageUpdate.
+
+After all 3 fixes, run TypeScript check and confirm 0 errors. Then show the grep -ri 'zoho' output.
