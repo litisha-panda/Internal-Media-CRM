@@ -2,7 +2,7 @@ import { Router } from "express";
 import bcrypt from "bcryptjs";
 import crypto from "crypto";
 import rateLimit from "express-rate-limit";
-import { db, users, sessions } from "@workspace/db";
+import { db, users, sessions, inviteTokens } from "@workspace/db";
 import { eq, lt } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireAdmin } from "../middlewares/requireRole";
@@ -20,6 +20,7 @@ const authLimiter = rateLimit({
 
 const BCRYPT_ROUNDS     = 10;
 const SESSION_TTL_MS    = 24 * 60 * 60 * 1000; // 24 h
+const INVITE_TTL_MS     = 72 * 60 * 60 * 1000; // 72 h
 const COOKIE_NAME       = "otv_session";
 const DEMO_PASSWORD     = "demo123";
 
@@ -58,10 +59,89 @@ async function createSession(userId: string): Promise<{ token: string; expiresAt
   return { token, expiresAt };
 }
 
+/** Validate an invite token row. Returns the row if valid, or a rejection reason. */
+async function validateInviteToken(
+  token: string,
+): Promise<{ ok: true; row: typeof inviteTokens.$inferSelect } | { ok: false; status: number; error: string }> {
+  const rows = await db
+    .select()
+    .from(inviteTokens)
+    .where(eq(inviteTokens.token, token))
+    .limit(1);
+
+  if (!rows.length) {
+    return { ok: false, status: 403, error: "Invalid invite link. Please request a new one from an admin." };
+  }
+  const row = rows[0]!;
+  if (row.usedAt !== null) {
+    return { ok: false, status: 403, error: "This invite link has already been used." };
+  }
+  if (new Date() > row.expiresAt) {
+    return { ok: false, status: 403, error: "This invite link has expired. Please request a new one." };
+  }
+  return { ok: true, row };
+}
+
+// ─── POST /api/auth/invite ────────────────────────────────────────────────────
+// Admin-only. Generates a single-use invite link valid for 72 hours.
+// Body: { email: string }
+// Returns: { ok, token, inviteUrl, email, expiresAt }
+router.post("/auth/invite", requireAuth, requireAdmin, async (req, res) => {
+  const { email } = req.body as { email?: string };
+
+  if (!email?.trim()) {
+    return void res.status(400).json({ ok: false, error: "email is required" });
+  }
+
+  const lowerEmail = email.toLowerCase().trim();
+  const token      = crypto.randomUUID();
+  const expiresAt  = new Date(Date.now() + INVITE_TTL_MS);
+
+  try {
+    await db.insert(inviteTokens).values({
+      token,
+      email:     lowerEmail,
+      createdBy: req.user!.id,
+      expiresAt,
+    });
+
+    // Build invite URL from the request's origin header (set by the browser/proxy)
+    // Falls back to host header if origin is not present.
+    const origin     = (req.headers.origin as string | undefined) || `${req.protocol}://${req.get("host")}`;
+    const inviteUrl  = `${origin}/signup?invite=${token}`;
+
+    res.json({ ok: true, token, inviteUrl, email: lowerEmail, expiresAt });
+  } catch (err) {
+    req.log.error({ err }, "invite create error");
+    res.status(500).json({ ok: false, error: "Failed to create invite" });
+  }
+});
+
+// ─── GET /api/auth/invite/:token ─────────────────────────────────────────────
+// Public — no auth required. Called by the signup page to validate the token
+// and pre-fill the email field before the user fills in the rest of the form.
+// Returns: { ok: true, valid: true, email } or error JSON.
+router.get("/auth/invite/:token", async (req, res) => {
+  const token = String(req.params["token"]).trim();
+
+  try {
+    const result = await validateInviteToken(token);
+    if (!result.ok) {
+      return void res.status(result.status).json({ ok: false, error: result.error });
+    }
+    res.json({ ok: true, valid: true, email: result.row.email });
+  } catch (err) {
+    req.log.error({ err }, "invite validate error");
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
+  }
+});
+
 // ─── POST /api/auth/signup ───────────────────────────────────────────────────
-// Creates a pending user (requires admin approval before they can log in)
+// Requires a valid inviteToken in the request body (open self-signup is disabled).
+// Validates the token, creates a pending user, then marks the token as used.
+// Body: { name, email, password, inviteToken, phone?, designation?, intendedRole?, preferredRegion? }
 router.post("/auth/signup", authLimiter, async (req, res) => {
-  const { name, email, password, phone, designation, intendedRole, preferredRegion } =
+  const { name, email, password, phone, designation, intendedRole, preferredRegion, inviteToken } =
     req.body as Record<string, string>;
 
   if (!name?.trim() || !email?.trim() || !password?.trim()) {
@@ -69,9 +149,24 @@ router.post("/auth/signup", authLimiter, async (req, res) => {
     return;
   }
 
-  const lowerEmail = email.toLowerCase().trim();
+  // ── Require invite token ──────────────────────────────────────────────────
+  if (!inviteToken?.trim()) {
+    res.status(403).json({ ok: false, error: "A valid invite link is required to sign up. Contact an admin." });
+    return;
+  }
 
   try {
+    // ── Validate invite token ─────────────────────────────────────────────
+    const tokenResult = await validateInviteToken(inviteToken.trim());
+    if (!tokenResult.ok) {
+      res.status(tokenResult.status).json({ ok: false, error: tokenResult.error });
+      return;
+    }
+    const invite = tokenResult.row;
+
+    // ── Check for existing account ────────────────────────────────────────
+    const lowerEmail = email.toLowerCase().trim();
+
     const existing = await db
       .select({ id: users.id, status: users.status })
       .from(users)
@@ -79,7 +174,7 @@ router.post("/auth/signup", authLimiter, async (req, res) => {
       .limit(1);
 
     if (existing.length > 0) {
-      const u = existing[0];
+      const u = existing[0]!;
       if (u.status === "active") {
         res.status(409).json({ ok: false, error: "Email already registered. Please log in." });
       } else if (u.status === "pending") {
@@ -90,6 +185,7 @@ router.post("/auth/signup", authLimiter, async (req, res) => {
       return;
     }
 
+    // ── Create user ───────────────────────────────────────────────────────
     const role = intendedRole && (ALL_ROLES as readonly string[]).includes(intendedRole)
       ? intendedRole
       : "SALES REP";
@@ -108,6 +204,12 @@ router.post("/auth/signup", authLimiter, async (req, res) => {
         needsPwReset: false,
       })
       .returning({ id: users.id, name: users.name, email: users.email, status: users.status });
+
+    // ── Mark token as used ────────────────────────────────────────────────
+    await db
+      .update(inviteTokens)
+      .set({ usedAt: new Date() })
+      .where(eq(inviteTokens.token, invite.token));
 
     res.status(201).json({
       ok:      true,
@@ -143,7 +245,7 @@ router.post("/auth/login", authLimiter, async (req, res) => {
       return;
     }
 
-    const user = rows[0];
+    const user = rows[0]!;
 
     if (user.status === "pending") {
       res.status(403).json({ ok: false, error: "pending", message: "Account pending admin approval" });
