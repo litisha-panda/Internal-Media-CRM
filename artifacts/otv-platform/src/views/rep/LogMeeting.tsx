@@ -471,14 +471,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         <div style={{ marginBottom: 14 }}>
           <label>Client Feedback <span style={{ color: C.dim, fontWeight: 400 }}>(how did the client react?)</span></label>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
-            {[
-              "Positive — keen to move forward",
-              "Hesitant — needs more information",
-              "Needs internal approval from client side",
-              "Competitor mentioned / under competitor pressure",
-              "Budget concerns raised",
-              "Not interested at this stage",
-            ].map(opt => (
+            {(["Interested", "Not Interested", "No Budget", "Pricing Concern", "Other"] as const).map(opt => (
               <button
                 key={opt}
                 type="button"
@@ -492,6 +485,18 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 }}
               >{opt}</button>
             ))}
+            {/* RO Received → navigate immediately, not a stored feedback value */}
+            <button
+              type="button"
+              onClick={() => { onNavigateRevenue?.(); onClose(); }}
+              style={{
+                padding: "6px 12px", borderRadius: 20, fontSize: 11, cursor: "pointer",
+                border: `1.5px solid ${C.green}`,
+                background: `${C.green}18`,
+                color: C.green,
+                fontWeight: 700,
+              }}
+            >🟢 RO Received → Log Revenue</button>
           </div>
         </div>
 

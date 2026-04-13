@@ -107,9 +107,23 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
           }
         </div>
 
-        {/* Contact + Time */}
+        {/* Brand Name */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Brand Name</label>
+          {brandOptions.length > 0
+            ? <select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                <option value="">— Select brand —</option>
+                {brandOptions.map(b => <option key={b}>{b}</option>)}
+              </select>
+            : <input value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))} placeholder="Brand (optional)"
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+          }
+        </div>
+
+        {/* Contact Name + Time */}
         <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-          <div style={{ flex: 1 }}>
+          <div style={{ flex: 2 }}>
             <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Contact Name *</label>
             <input value={pf.contactName} onChange={e => setPf(p => ({ ...p, contactName: e.target.value }))} placeholder="Person you'll meet"
               style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
@@ -121,7 +135,7 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
           </div>
         </div>
 
-        {/* FIX 9: Designation + Contact Email */}
+        {/* Designation + Contact Email */}
         <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
             <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Designation</label>
@@ -132,6 +146,24 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
             <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Contact Email</label>
             <input type="email" value={(pf as any).contactEmail ?? ""} onChange={e => setPf(p => ({ ...p, contactEmail: e.target.value } as any))} placeholder="contact@brand.com"
               style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+          </div>
+        </div>
+
+        {/* Phone Number + Meeting Format */}
+        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+          <div style={{ flex: 1 }}>
+            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Phone Number</label>
+            <input type="tel" value={pf.phone} onChange={e => setPf(p => ({ ...p, phone: e.target.value }))} placeholder="+91 98765 43210"
+              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+          </div>
+          <div style={{ flex: 1 }}>
+            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Meeting Format</label>
+            <select value={pf.meetingType} onChange={e => setPf(p => ({ ...p, meetingType: e.target.value }))}
+              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+              <option>Physical</option>
+              <option>Online</option>
+              <option>Phone Call</option>
+            </select>
           </div>
         </div>
 
