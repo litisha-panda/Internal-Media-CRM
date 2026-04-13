@@ -88,14 +88,20 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         {/* Agency */}
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Agency</label>
-          {allAgencies.length > 0
-            ? <select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
+          {rows
+            ? (<select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
                 style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                <option value="">— No agency —</option>
+                <option value="">— No agency / Direct —</option>
                 {allAgencies.map(a => <option key={a}>{a}</option>)}
-              </select>
-            : <input value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value }))} placeholder="Agency name (optional)"
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+              </select>)
+            : allAgencies.length > 0
+              ? <select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                  <option value="">— No agency —</option>
+                  {allAgencies.map(a => <option key={a}>{a}</option>)}
+                </select>
+              : <input value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value }))} placeholder="Agency name (optional)"
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
           }
         </div>
 
@@ -125,14 +131,20 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         {/* Brand Name */}
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Brand Name</label>
-          {brandOptions.length > 0
-            ? <select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
+          {rows
+            ? (<select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
                 style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                <option value="">— Select brand —</option>
+                <option value="">— No specific brand —</option>
                 {brandOptions.map(b => <option key={b}>{b}</option>)}
-              </select>
-            : <input value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))} placeholder="Brand (optional)"
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+              </select>)
+            : brandOptions.length > 0
+              ? <select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                  <option value="">— Select brand —</option>
+                  {brandOptions.map(b => <option key={b}>{b}</option>)}
+                </select>
+              : <input value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))} placeholder="Brand (optional)"
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
           }
         </div>
 

@@ -99,7 +99,7 @@ export interface MyPlanProps {
   qMatch:         (q: string) => boolean;
   BLANK_DEAL:     Record<string, unknown>;
   onNavigate:     (view: string) => void;
-  onNavigateRevenue: (prefill?: { clientCompany?: string; amount?: number }) => void;
+  onNavigateRevenue: (prefill?: { clientCompany?: string; agency?: string; amount?: number }) => void;
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */

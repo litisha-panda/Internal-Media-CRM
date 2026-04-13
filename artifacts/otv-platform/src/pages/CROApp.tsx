@@ -946,7 +946,6 @@ export function CROApp({ user, onLogout }) {
         const rep = USER_ROLES.find(r => String(r.repId)===String(d.repId));
         accountMap[key] = {
           id: uid(), clientName: d.clientCompany, repId: d.repId,
-          zohoAccountId: d.zohoAccountId || "",
           region: rep?.region || d.region || "",
           fiscalYear: d.quarter?.slice(-3) === "FY26" ? "FY26" : "FY26",
           annualTarget: parseCurrency(d.targetAmount || "0") || 0,
@@ -1657,22 +1656,16 @@ export function CROApp({ user, onLogout }) {
     const newDealId = `d${Date.now()}`;
     // @ts-ignore
     setDeals(p=>[...p,{id:newDealId,...dealForm,repId:parsedRepId,repName:rep.name,region:rep.region,amount:parseCurrency(dealForm.amount||dealForm.targetAmount),targetAmount:tgtAmt,lastContact:TODAY,reqs:[]}]);
-    // Upsert clientAccount so the new deal has a linked account with its Zoho ID
+    // Upsert clientAccount so the new deal has a linked account
     // @ts-ignore
     setClientAccounts(prev => {
       // @ts-ignore
       const existing = prev.find(a => a.clientName === dealForm.clientCompany.trim() && String(a.repId)===String(parsedRepId));
       if (existing) {
-        // @ts-ignore
-        if (!existing.zohoAccountId && dealForm.zohoAccountId) {
-          // @ts-ignore
-          return prev.map(a => a.id === existing.id ? {...a, zohoAccountId: dealForm.zohoAccountId, updatedAt: TODAY} : a);
-        }
         return prev;
       }
       const newAcct = {
         id: uid(), clientName: dealForm.clientCompany.trim(), repId: parsedRepId,
-        zohoAccountId: dealForm.zohoAccountId || "",
         region: rep.region || "", fiscalYear: CURRENT_FY,
         annualTarget: tgtAmt, currentStage: mapLegacyOutcome(dealForm.outcome||"Prospect"),
         lastContactDate: TODAY, lastDealMeetingDate: TODAY,
@@ -2252,7 +2245,7 @@ export function CROApp({ user, onLogout }) {
                   if(!amt){showToast("Enter a valid amount (e.g. 5L or 50000)","err");return;}
                   const ikey = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
                   const id   = `re_d${Date.now()}`;
-                  const entry = {id,repId:myRepId,clientCompany:clientName.trim(),zohoAccountId:"",dealType:"Linear TV",amount:amt,invoiceRef:invoiceRef.trim(),date:date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:""};
+                  const entry = {id,repId:myRepId,clientCompany:clientName.trim(),dealType:"Linear TV",amount:amt,invoiceRef:invoiceRef.trim(),date:date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:""};
                   setRevenueEntries(p=>[entry,...p]);
                   revSvc.createRevenueEntry({
                     id, repId:myRepId, clientCompany:clientName.trim(), amount:amt,
@@ -2296,7 +2289,7 @@ export function CROApp({ user, onLogout }) {
               BLANK_DEAL={BLANK_DEAL}
               onNavigate={setView}
               onNavigateRevenue={(prefill)=>{
-                if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||"",amount:prefill.amount?String(prefill.amount):""}))}
+                if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,amount:prefill.amount?String(prefill.amount):p.amount}))}
                 setView("revenue-log");
               }}
             />
@@ -2556,7 +2549,7 @@ export function CROApp({ user, onLogout }) {
           userRole={user_role}
           deals={deals}
           showToast={showToast}
-          onNavigateRevenue={(prefill) => { setLogOpen(false); if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||"",amount:prefill.amount?String(prefill.amount):""}))} setView('revenue-log'); }}
+          onNavigateRevenue={(prefill) => { setLogOpen(false); if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,amount:prefill.amount?String(prefill.amount):p.amount}))} setView('revenue-log'); }}
         />
       )}
       {/* MEETING DETAIL MODAL */}

@@ -113,7 +113,7 @@ export interface LogMeetingProps {
   deals: Deal[];
   showToast: (msg: string, type?: string) => void;
   /** Optional: navigate to revenue log. Receives optional prefill data. */
-  onNavigateRevenue?: (prefill?: { clientCompany?: string; amount?: number }) => void;
+  onNavigateRevenue?: (prefill?: { clientCompany?: string; agency?: string; amount?: number }) => void;
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */
@@ -130,10 +130,23 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
 
   const handleROReceived = () => {
     const deal = deals.find(d => d.id === form.dealId);
-    onNavigateRevenue?.({
-      clientCompany: form.client || form.clientAgencyName || deal?.clientCompany || "",
-      amount: deal?.amount,
-    });
+    const clientCompany = form.client || form.clientAgencyName || deal?.clientCompany || "";
+    const agency = form.agency || deal?.agency || "";
+    // Fire-and-forget: log a minimal touchpoint with RO Received stage
+    createTouchpoint({
+      repId:          parseInt(form.repId) || null,
+      region:         userRole?.region || "",
+      date:           TODAY,
+      touchpointType: form.touchpointType || "Deal Meeting",
+      stageUpdate:    "RO Received",
+      clientCompany,
+      dealId:         form.dealId || null,
+      contactName:    form.contactName || null,
+      meetingKind:    form.meetingKind || null,
+      actionItems:    [],
+      notes:          null,
+    }).catch(() => { /* fire-and-forget — non-fatal */ });
+    onNavigateRevenue?.({ clientCompany, agency, amount: deal?.amount });
     onClose();
   };
 
@@ -192,6 +205,12 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         .filter(i => i.what && i.from)
         .map(i => ({ action: i.what, neededFrom: i.from, dueDate: i.byWhen, notes: i.description }));
 
+      const feedbackExtra = [
+        form.pricingOption && `Pricing concern: ${form.pricingOption}`,
+        form.feedbackNote && `Feedback note: ${form.feedbackNote}`,
+      ].filter(Boolean).join("; ");
+      const combinedNotes = [form.nextStep, feedbackExtra].filter(Boolean).join(" | ") || null;
+
       const tp = await createTouchpoint({
         repId:          parseInt(form.repId) || null,
         region:         userRole?.region || "",
@@ -201,7 +220,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         clientFeedback: form.clientFeedback || null,
         stageUpdate:    form.stageUpdate   || null,
         actionItems,
-        notes:          form.nextStep      || null,
+        notes:          combinedNotes,
         clientCompany:  form.clientAgencyName || form.client || "",
         dealId:         form.dealId        || null,
         contactName:    form.contactName   || null,
@@ -511,11 +530,27 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
             >🟢 RO Received → Log Revenue</button>
           </div>
           {/* FIX 3: Conditional sub-fields based on feedback type */}
+          {form.clientFeedback === "Interested" && (
+            <div style={{ marginTop: 8 }}>
+              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>What does the client need?</label>
+              <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
+                placeholder="e.g. Revised proposal, specific time-slot, proof of reach…"
+                style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
+            </div>
+          )}
+          {(form.clientFeedback === "Not Interested" || form.clientFeedback === "No Budget") && (
+            <div style={{ marginTop: 8 }}>
+              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>{form.clientFeedback === "No Budget" ? "Budget situation" : "Why not interested?"}</label>
+              <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
+                placeholder={form.clientFeedback === "No Budget" ? "e.g. Q3 budget exhausted, finance freeze…" : "e.g. Already committed to competitor, not relevant…"}
+                style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
+            </div>
+          )}
           {form.clientFeedback === "Pricing Concern" && (
             <div style={{ marginTop: 8 }}>
               <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Pricing Objection Type</label>
               <select value={form.pricingOption} onChange={e => setF({ pricingOption: e.target.value })}
-                style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: "var(--surface)", border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+                style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
                 <option value="">Select…</option>
                 <option>Rate too high vs. reach</option>
                 <option>Competitor pricing cheaper</option>
@@ -531,7 +566,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
               <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Feedback Details</label>
               <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
                 placeholder="Describe the client's feedback…"
-                style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: "var(--surface)", border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
+                style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
             </div>
           )}
         </div>
