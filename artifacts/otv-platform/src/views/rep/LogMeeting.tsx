@@ -96,7 +96,7 @@ const BLANK_FORM: LogForm = {
 /* ── Deal entity needed for dropdown ───────────────────────────────────── */
 interface Deal {
   id: string; repId?: RepId; clientCompany: string;
-  contactName?: string; agency?: string; brand?: string; amount?: number;
+  contactName?: string; agency?: string; agencyName?: string; brand?: string; amount?: number;
   contactDesignation?: string; designation?: string; contactLevel?: string;
   phone?: string; mobile?: string;
 }
@@ -129,9 +129,14 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
   const [submitting, setSubmitting] = useState(false);
 
   const handleROReceived = () => {
-    const deal = deals.find(d => d.id === form.dealId);
-    const clientCompany = form.client || form.clientAgencyName || deal?.clientCompany || "";
-    const agency = form.agency || deal?.agency || "";
+    const clientCompany = form.client || form.clientAgencyName || "";
+    // Resolve deal: by dealId first, then best-match by repId + clientCompany
+    const deal = (form.dealId ? deals.find(d => d.id === form.dealId) : null)
+      ?? deals.find(d =>
+          String(d.repId ?? "") === String(form.repId) &&
+          (d.clientCompany || "").toLowerCase() === clientCompany.toLowerCase()
+        );
+    const agency = form.agency || deal?.agency || deal?.agencyName || "";
     // Background: create touchpoint + patch meeting status — non-blocking
     createTouchpoint({
       repId:          parseInt(form.repId) || null,
@@ -146,8 +151,8 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
       actionItems:    [],
       notes:          null,
     }).then(tp => onSubmit(tp)).catch(() => { /* non-fatal */ });
-    // Navigate immediately without waiting for API
-    onNavigateRevenue?.({ clientCompany, agency, amount: deal?.amount });
+    // Navigate immediately without waiting for API; amount defaults to 0 if unresolved
+    onNavigateRevenue?.({ clientCompany, agency, amount: deal?.amount ?? 0 });
     onClose();
   };
 
