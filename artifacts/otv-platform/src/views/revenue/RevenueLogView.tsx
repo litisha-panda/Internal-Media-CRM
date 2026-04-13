@@ -18,7 +18,7 @@ interface RevenueLogViewProps {
   setEditRevData: React.Dispatch<React.SetStateAction<Record<string, any>>>;
 }
 
-export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setRevForm, editingRevId, setEditingRevId, editRevData, setEditRevData }: RevenueLogViewProps) {
+export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setRevForm }: RevenueLogViewProps) {
   const {
     deals,
     setDeals,
@@ -47,6 +47,10 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
   } = useCROAppContext();
   const isAnnual = filterQ === "FY26 Annual";
 
+  // Notes-only edit state (immutability: only notes can be updated post-creation)
+  const [notesEditId, setNotesEditId] = useState<string|null>(null);
+  const [notesDraft, setNotesDraft]   = useState("");
+
   return (
     <>
           {/* ═══ REVENUE LOG ═══ */}
@@ -63,7 +67,6 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                     <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REVENUE LOG</div>
                     <div style={{fontSize:11,color:C.dim,marginTop:2}}>Log revenue booked per advertiser. Updates deal achieved amounts automatically.</div>
                   </div>
-                  {/* Total pill */}
                   <div style={{textAlign:"right"}}>
                     <div className="sans" style={{fontSize:22,fontWeight:800,color:C.green}}>{fmtR(totalRev)}</div>
                     <div style={{fontSize:9,color:C.dim,letterSpacing:".06em"}}>{filterQ} LOGGED</div>
@@ -107,10 +110,8 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                     const rf = revForm;
                     const setRf = setRevForm;
                     // Spec §8: Revenue Log client = clients in fully CRO-approved targetSubs for this rep
-                    // Note: clientAccounts.approvalStatus is never set; derive from targetSubs instead
                     const myApprovedAccts = isRep
                       ? (()=>{
-                          // Collect all client names from approved targetSubs for this rep
                           const approvedNames = new Set<string>(
                             targetSubs
                               .filter(s=>String(s.repId)===String(myRepId)&&s.status==="Approved")
@@ -120,24 +121,48 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                               )
                               .filter(Boolean)
                           );
-                          // Match to clientAccounts (for zohoAccountId, etc.)
                           const fromAccts = clientAccounts.filter(a=>String(a.repId)===String(myRepId)&&approvedNames.has(a.clientName));
                           const matched   = new Set(fromAccts.map(a=>a.clientName));
-                          // For approved names not yet in clientAccounts, create minimal stubs
                           const stubs = [...approvedNames]
                             .filter(n=>!matched.has(n))
                             .map(n=>({id:`stub_${n}`,clientName:n,repId:myRepId}));
                           return [...fromAccts,...stubs];
                         })()
-                      : clientAccounts; // Managers/admins see all accounts
+                      : clientAccounts;
+
+                    // Agency list from approved targetSubs
+                    const agencyList = [...new Set(
+                      targetSubs
+                        .filter(s=>(isRep?String(s.repId)===String(myRepId):true)&&s.status==="Approved")
+                        .flatMap(s=>(s.clients||[])
+                          .filter((cl:any)=>!cl.clientStatus||cl.clientStatus==="Approved")
+                          .map((cl:any)=>cl.agency||cl.agencyName||"")
+                          .filter(Boolean)
+                        )
+                    )].sort() as string[];
+
+                    // Brand list cascades from selected agency
+                    const brandList = [...new Set(
+                      targetSubs
+                        .filter(s=>(isRep?String(s.repId)===String(myRepId):true)&&s.status==="Approved")
+                        .flatMap(s=>(s.clients||[])
+                          .filter((cl:any)=>
+                            (!cl.clientStatus||cl.clientStatus==="Approved") &&
+                            (!rf.agencyName||(cl.agency||cl.agencyName||"")===rf.agencyName)
+                          )
+                          .map((cl:any)=>cl.brand||cl.brandName||"")
+                          .filter(Boolean)
+                        )
+                    )].sort() as string[];
+
                     return (
                       <div>
+                        {/* Row 1: Client + Deal Type */}
                         <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:8}}>
                           <div>
-                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>CLIENT / ADVERTISER</div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>CLIENT / ADVERTISER *</div>
                             <select value={rf.clientCompany} onChange={e=>{
                               const sel = e.target.value;
-                              // Auto-populate from clientAccount (the canonical source)
                               const matchAcct = myApprovedAccts.find((a:any)=>a.clientName===sel) as any;
                               setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
                             }}
@@ -155,14 +180,34 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                             </select>
                           </div>
                         </div>
+                        {/* Row 2: Agency + Brand */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                          <div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>AGENCY *</div>
+                            <select value={rf.agencyName||""} onChange={e=>setRf(p=>({...p,agencyName:e.target.value,brand:""}))}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.agencyName?C.blue:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                              <option value="">No agency / Direct</option>
+                              {agencyList.map(a=><option key={a} value={a}>{a}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>BRAND</div>
+                            <select value={rf.brand||""} onChange={e=>setRf(p=>({...p,brand:e.target.value}))}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                              <option value="">All brands / General</option>
+                              {brandList.map(b=><option key={b} value={b}>{b}</option>)}
+                            </select>
+                          </div>
+                        </div>
+                        {/* Row 3: Amount + Invoice + Date */}
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                           <div>
-                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>AMOUNT ₹</div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>AMOUNT ₹ *</div>
                             <input value={rf.amount} placeholder="e.g. 5L or 1Cr" onChange={e=>setRf(p=>({...p,amount:e.target.value}))}
                               style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                           </div>
                           <div>
-                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>INVOICE / PO REF</div>
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>INVOICE / PO REF *</div>
                             <input value={rf.invoiceRef} placeholder="INV-2024-XXX" onChange={e=>setRf(p=>({...p,invoiceRef:e.target.value}))}
                               style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                           </div>
@@ -172,6 +217,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                               style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
                           </div>
                         </div>
+                        {/* Notes */}
                         <div style={{marginBottom:10}}>
                           <div style={{fontSize:10,color:C.dim,marginBottom:3}}>NOTES</div>
                           <input value={rf.notes} placeholder="Optional notes" onChange={e=>setRf(p=>({...p,notes:e.target.value}))}
@@ -185,7 +231,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                           if(!amt){showToast("Invalid amount","err");return;}
                           const newId  = `re${Date.now()}`;
                           const ikey   = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-                          const entry = {id:newId,repId:isRep?myRepId:null,clientCompany:client,dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
+                          const entry = {id:newId,repId:isRep?myRepId:null,clientCompany:client,agencyName:rf.agencyName||"",brand:rf.brand||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
                           setRevenueEntries(p=>[entry,...p]);
                           revSvc.createRevenueEntry({
                             id:newId, repId:isRep?myRepId:undefined, clientCompany:client,
@@ -208,24 +254,21 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                                   assignedBy:activeUser, assignedByName:user_role?.name||"System", fromMeetingLog:false,
                                 }));
                                 setTasks(prev=>[...notifTasks,...prev]);
-                                // Mark their proposals as Released
                                 setIpProposals(prev=>prev.map(p=>otherPending.some(op=>op.id===p.id)?{...p,status:"Released"}:p));
                                 showToast(`IP slot committed. ${otherPending.length} rep${otherPending.length>1?"s":""} notified.`);
                               }
                             }
                           }
-                          // Part 3+9: Auto-set deal stage to "RO Received" when revenue is logged
+                          // Auto-set deal stage to "RO Received" when revenue is logged
                           const matchDeal = deals.find(d=>(isRep?String(d.repId)===String(myRepId):true)&&d.clientCompany===client&&qMatch(d.quarter));
                           if(matchDeal){
                             setDeals(p=>p.map(d=>d.id===matchDeal.id?{...d,stage:"RO Received",outcome:"RO Received",lastContact:TODAY}:d));
-                            // Update client account stage too
                             if (matchDeal.clientAccountId) {
                               setClientAccounts(p=>p.map(a=>a.id===matchDeal.clientAccountId?{...a,currentStage:"RO Received",lastContactDate:TODAY,updatedAt:TODAY}:a));
                             }
                           }
-                          setRf({clientCompany:"",clientAccountId:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
+                          setRf({clientCompany:"",clientAccountId:"",agencyName:"",brand:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
                           const totalFY = [...revenueEntries.filter(e=>(isRep?String(e.repId)===String(myRepId):true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
-                          // Part 9: Check if annual target reached
                           const annualTarget = isRep ? (getAnnualTarget(myRepId)?.amount||0) : 0;
                           if (annualTarget>0 && totalFY>=annualTarget) {
                             showToast(`Annual target achieved. ₹${(totalFY/100000).toFixed(1)}L this fiscal year.`);
@@ -249,73 +292,48 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                     <div className="card" style={{overflow:"hidden"}}>
                       <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
                         <thead><tr>
-                          {["Client","Deal Type","Amount","Invoice Ref","Date","Notes",""].map(h=>(
+                          {["Client","Agency","Deal Type","Amount","Invoice Ref","Date","Notes"].map(h=>(
                             <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
                           ))}
                         </tr></thead>
                         <tbody>
                           {myEntries.filter(e=>qMatch(e.quarter)).sort((a,b)=>b.date.localeCompare(a.date)).map(e=>(
-                            editingRevId===e.id ? (
-                              <tr key={e.id} style={{borderBottom:`1px solid ${C.border}`,background:C.s2}}>
-                                <td colSpan={7} style={{padding:"12px 14px"}}>
-                                  <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr 1fr",gap:8,marginBottom:8,alignItems:"end"}}>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>AMOUNT ₹</div>
-                                      <input value={editRevData.amount||""} onChange={e=>setEditRevData(p=>({...p,amount:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                                    </div>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
-                                      <select value={editRevData.dealType||"Linear TV"} onChange={ev=>setEditRevData(p=>({...p,dealType:ev.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                                        {dealTypes.map(d=><option key={d}>{d}</option>)}
-                                      </select>
-                                    </div>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>INVOICE REF</div>
-                                      <input value={editRevData.invoiceRef||""} onChange={e=>setEditRevData(p=>({...p,invoiceRef:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                                    </div>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>DATE</div>
-                                      <input type="date" value={editRevData.date||TODAY} onChange={e=>setEditRevData(p=>({...p,date:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                                    </div>
-                                    <div>
-                                      <div style={{fontSize:9,color:C.dim,marginBottom:3}}>NOTES</div>
-                                      <input value={editRevData.notes||""} onChange={e=>setEditRevData(p=>({...p,notes:e.target.value}))}
-                                        style={{width:"100%",padding:"5px 8px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}/>
-                                    </div>
-                                  </div>
-                                  <div style={{display:"flex",gap:8}}>
-                                    <button onClick={()=>{
-                                      const amt=parseCurrency(editRevData.amount);
-                                      if(!amt){showToast("Invalid amount","err");return;}
-                                      setRevenueEntries(p=>p.map(x=>x.id===e.id?{...x,...editRevData,amount:amt,editHistory:[...(x.editHistory||[]),{editedAt:new Date().toISOString(),editedBy:user_role?.name||activeUser,oldAmount:x.amount}]}:x));
-                                      setEditingRevId(null);showToast("Entry updated ✓");
-                                    }} style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Save</button>
-                                    <button onClick={()=>setEditingRevId(null)} style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Cancel</button>
-                                    <button onClick={()=>{if(!confirm("Delete this revenue entry?"))return;setRevenueEntries(p=>p.filter(x=>x.id!==e.id));setEditingRevId(null);showToast("Entry deleted");}}
-                                      style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",marginLeft:"auto"}}>🗑 Delete</button>
-                                  </div>
-                                </td>
-                              </tr>
-                            ) : (
                             <tr key={e.id} style={{borderBottom:`1px solid ${C.s2}`}}
                               onMouseOver={ev=>ev.currentTarget.style.background=C.s2}
                               onMouseOut={ev=>ev.currentTarget.style.background="transparent"}>
                               <td style={{padding:"10px 14px",fontWeight:700}}>{e.clientCompany}</td>
+                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{(e as any).agencyName||"—"}</td>
                               <td style={{padding:"10px 14px"}}><span style={{background:`${C.blue}18`,color:C.blue,padding:"1px 7px",borderRadius:5,fontSize:10}}>{e.dealType}</span></td>
                               <td style={{padding:"10px 14px",fontWeight:700,color:C.green}}>{fmtR(e.amount)}</td>
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{e.invoiceRef||"—"}</td>
                               <td style={{padding:"10px 14px",color:C.dim,fontSize:11}}>{e.date}</td>
-                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11,maxWidth:160}}>{e.notes||"—"}</td>
-                              <td style={{padding:"10px 14px",textAlign:"right"}}>
-                                <button onClick={()=>{setEditingRevId(e.id);setEditRevData({amount:(e.amount/100000)+"L",dealType:e.dealType,invoiceRef:e.invoiceRef||"",date:e.date,notes:e.notes||""});}}
-                                  style={{background:"transparent",border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"3px 10px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✏ Edit</button>
+                              <td style={{padding:"10px 14px",color:C.dim,fontSize:11,maxWidth:180}}>
+                                {notesEditId===e.id ? (
+                                  <div style={{display:"flex",gap:5,alignItems:"center"}}>
+                                    <input value={notesDraft} onChange={ev=>setNotesDraft(ev.target.value)}
+                                      style={{flex:1,padding:"3px 6px",background:C.surface,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}
+                                      autoFocus onKeyDown={ev=>{
+                                        if(ev.key==="Enter"){
+                                          setRevenueEntries(p=>p.map(x=>x.id===e.id?{...x,notes:notesDraft}:x));
+                                          setNotesEditId(null);showToast("Notes updated ✓");
+                                        }
+                                        if(ev.key==="Escape")setNotesEditId(null);
+                                      }}/>
+                                    <button onClick={()=>{setRevenueEntries(p=>p.map(x=>x.id===e.id?{...x,notes:notesDraft}:x));setNotesEditId(null);showToast("Notes updated ✓");}}
+                                      style={{background:`${C.green}22`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"2px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✓</button>
+                                    <button onClick={()=>setNotesEditId(null)}
+                                      style={{background:C.s3,border:`1px solid ${C.border}`,color:C.dim,borderRadius:4,padding:"2px 8px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✕</button>
+                                  </div>
+                                ) : (
+                                  <span style={{display:"flex",alignItems:"center",gap:5}}>
+                                    <span style={{flex:1}}>{e.notes||"—"}</span>
+                                    <button onClick={()=>{setNotesEditId(e.id);setNotesDraft(e.notes||"");}}
+                                      title="Edit notes"
+                                      style={{background:"transparent",border:"none",color:C.dim,cursor:"pointer",fontSize:11,padding:"1px 4px",opacity:0.6,flexShrink:0}}>✏</button>
+                                  </span>
+                                )}
                               </td>
                             </tr>
-                            )
                           ))}
                         </tbody>
                       </table>

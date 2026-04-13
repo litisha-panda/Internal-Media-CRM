@@ -6,7 +6,6 @@ import {
   IP_CATALOG,
   OUTCOMES,
 } from "../../constants";
-import ZohoSearchInput from "../../components/ZohoSearchInput";
 
 interface PipelineViewProps {
   view: string;
@@ -112,7 +111,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: Pipel
     if(!cl.lastContact||d.lastContact>cl.lastContact) cl.lastContact=d.lastContact;
   });
   const rtClients = Object.values(rtClientMap).sort((a:any,b:any)=>daysSince(b.lastContact)-daysSince(a.lastContact));
-  const BLANK_DEAL = { clientCompany:"", zohoAccountId:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", zohoAgencyId:"", reqs:[], auditLog:[] };
+  const BLANK_DEAL = { clientCompany:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", reqs:[], auditLog:[] };
   const BLANK_ACTION_REQUIRED = {what:"", from:"", description:"", byWhen:""};
 
   return (
@@ -240,7 +239,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: Pipel
                             <tbody>
                               {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 const cmt=(dealStage(d)==="Mail Confirmed")?(d.targetAmount||0):0;
                                 const inp=(["In Discussion","Negotiation"].includes(dealStage(d)))?(d.targetAmount||0):0;
@@ -331,7 +330,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: Pipel
                         targetAmount: parseCurrency(ipPropValue)||elem.rackRate||0,
                         lossReason:"", priority:"Regular", quarter:ip.quarter||filterQ,
                         notes:ipPropNote.trim(), nextStep:"", nextStepDate:"",
-                        agencyName:"", zohoAgencyId:"", reqs:[], auditLog:[],
+                        agencyName:"", reqs:[], auditLog:[],
                         ipId:ip.id, elemId:elem.id, ipPropId:propId,
                         lastDealMeetingDate:TODAY, lastContact:TODAY,
                       };
@@ -379,7 +378,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: Pipel
                               <tbody>
                                 {ipDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                   const rep=reps.find(r=>r.id===d.repId);
-                                  const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                  const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                   const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                   const cmt=(dealStage(d)==="Mail Confirmed")?(d.targetAmount||0):0;
                                   const inp=(["In Discussion","Negotiation"].includes(dealStage(d)))?(d.targetAmount||0):0;
@@ -740,7 +739,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: Pipel
                             <tbody>
                               {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 const cmt=(dealStage(d)==="Mail Confirmed")?(d.targetAmount||0):0;
                                 const inp=(["In Discussion","Negotiation"].includes(dealStage(d)))?(d.targetAmount||0):0;
@@ -799,7 +798,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: Pipel
                             <tbody>
                               {dtDeals.sort((a,b)=>(b.targetAmount||0)-(a.targetAmount||0)).map(d=>{
                                 const rep=reps.find(r=>r.id===d.repId);
-                                const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                                const ach=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                                 const pct=d.targetAmount>0?Math.round((ach/d.targetAmount)*100):0;
                                 const cmt=(dealStage(d)==="Mail Confirmed")?(d.targetAmount||0):0;
                                 const inp=(["In Discussion","Negotiation"].includes(dealStage(d)))?(d.targetAmount||0):0;

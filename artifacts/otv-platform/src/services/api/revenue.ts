@@ -10,7 +10,6 @@ export interface RevenueEntry {
   id: string;
   repId?: number | null;
   clientCompany: string;
-  zohoAccountId?: string | null;
   dealType: string;
   amount: number;
   invoiceRef: string;
@@ -24,7 +23,6 @@ export interface RevenueCreatePayload {
   id?: string;
   repId?: number | null;
   clientCompany: string;
-  zohoAccountId?: string;
   dealType?: string;
   amount: number;
   invoiceRef: string;

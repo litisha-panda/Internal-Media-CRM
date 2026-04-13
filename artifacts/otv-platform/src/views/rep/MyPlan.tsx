@@ -79,7 +79,6 @@ type Setter<T> = (updater: T | ((prev: T) => T)) => void;
 export interface MyPlanProps {
   userRole:       { repId?: RepId; id?: string; role?: string; region?: string } | null;
   activeUser:     string;
-  loginProvider:  string;
   isRep:          boolean;
   isNSH:          boolean;
   isRH:           boolean;
@@ -105,7 +104,7 @@ export interface MyPlanProps {
 /* ── Component ─────────────────────────────────────────────────────────── */
 export const MyPlan: React.FC<MyPlanProps> = (props) => {
   const {
-    userRole, activeUser, loginProvider,
+    userRole, activeUser,
     isRep, isNSH, isRH, isStrategy, isCRORole, isAdmin, isDigiOps,
     deals, filterQ,
     reps, countdown,
@@ -511,7 +510,6 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
           forDate={addPlanFor}
           form={planForm}
           deals={myDeals}
-          loginProvider={loginProvider}
           approvedTargetRows={approvedTargetRows}
           onFormChange={setPlanForm}
           onSubmit={(date) => doAddPlan(date, () => setAddPlanFor(null))}

@@ -5,7 +5,6 @@ import {
   TASK_STATUSES,
   OUTCOMES,
 } from "../../constants";
-import ZohoSearchInput from "../../components/ZohoSearchInput";
 
 interface NSHViewProps {
   view: string;

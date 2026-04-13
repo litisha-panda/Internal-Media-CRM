@@ -27,7 +27,6 @@ export interface NextStepItem {
 export interface Deal {
   id: string;
   clientCompany: string;
-  zohoAccountId?: string;
   repId?: string;
   repName?: string;
   clientAccountId?: string;
@@ -58,7 +57,6 @@ export interface Deal {
   priority?: string;
   channel?: string;
   agencyName?: string;
-  zohoAgencyId?: string;
   lossReason?: string;
   actionRequired?: ActionRequired[];
   nextStepItems?: NextStepItem[];
@@ -74,7 +72,6 @@ export interface RevenueEntry {
   id: string;
   repId: string;
   clientCompany: string;
-  zohoAccountId?: string;
   amount: number;
   invoiceRef?: string;
   date: string;
@@ -118,7 +115,6 @@ export interface Touchpoint {
   repId?: string;
   clientCompany?: string;
   clientAccountId?: string;
-  zohoAccountId?: string;
   dealId?: string;
   date: string;
   time?: string;
@@ -206,7 +202,6 @@ export interface ClientAccount {
   repId?: string;
   clientName?: string;
   clientCompany: string;
-  zohoAccountId?: string;
   industry?: string;
   region?: string;
   notes?: string;
@@ -252,7 +247,6 @@ export interface TaskForm {
 
 export interface DealForm {
   clientCompany: string;
-  zohoAccountId: string;
   repId: string;
   clientAccountId: string;
   contactName: string;
@@ -273,7 +267,6 @@ export interface DealForm {
   nextStep: string;
   nextStepDate: string;
   agencyName: string;
-  zohoAgencyId: string;
   reqs: any[];
   auditLog: AuditLogEntry[];
   _fromRO?: any;

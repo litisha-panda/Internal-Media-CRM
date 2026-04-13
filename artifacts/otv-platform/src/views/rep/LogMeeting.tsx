@@ -522,7 +522,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 }}
               >{opt}</button>
             ))}
-            {/* RO Received → navigate immediately, not a stored feedback value */}
+            {/* 6th chip — RO Received: triggers navigation immediately, no sub-fields */}
             <button
               type="button"
               onClick={handleROReceived}
@@ -533,15 +533,29 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 color: C.green,
                 fontWeight: 700,
               }}
-            >🟢 RO Received → Log Revenue</button>
+            >🟢 RO Received</button>
           </div>
-          {/* FIX 3: Conditional sub-fields based on feedback type */}
+          {/* Conditional sub-fields for each feedback type */}
           {form.clientFeedback === "Interested" && (
-            <div style={{ marginTop: 8 }}>
-              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>What does the client need?</label>
-              <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
-                placeholder="e.g. Revised proposal, specific time-slot, proof of reach…"
-                style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
+            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+              <div>
+                <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>What does the client need?</label>
+                <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
+                  placeholder="e.g. Revised proposal, specific time-slot, proof of reach…"
+                  style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
+              </div>
+              <div>
+                <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Deal Stage</label>
+                <select value={form.stageUpdate} onChange={e => setF({ stageUpdate: e.target.value })}
+                  style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+                  <option value="">Select current stage…</option>
+                  <option>Prospect</option>
+                  <option>In Discussion</option>
+                  <option>Proposal Sent</option>
+                  <option>Negotiation</option>
+                  <option>Mail Confirmed</option>
+                </select>
+              </div>
             </div>
           )}
           {(form.clientFeedback === "Not Interested" || form.clientFeedback === "No Budget") && (
@@ -553,31 +567,23 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
             </div>
           )}
           {form.clientFeedback === "Pricing Concern" && (
-            <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 6 }}>
-              <div>
-                <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Pricing Objection Type</label>
-                <select value={form.pricingOption} onChange={e => setF({ pricingOption: e.target.value })}
-                  style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
-                  <option value="">Select…</option>
-                  <option>Rate too high vs. reach</option>
-                  <option>Competitor pricing cheaper</option>
-                  <option>Category rate card issue</option>
-                  <option>Asked for discount / value-add</option>
-                  <option>Budget revised down</option>
-                  <option>Other pricing issue</option>
-                </select>
-              </div>
-              <div>
-                <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Additional Notes on Pricing</label>
-                <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
-                  placeholder="e.g. Client requested 15% discount, wants bonus spots…"
-                  style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />
-              </div>
+            <div style={{ marginTop: 8 }}>
+              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Pricing Objection Type</label>
+              <select value={form.pricingOption} onChange={e => setF({ pricingOption: e.target.value })}
+                style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
+                <option value="">Select…</option>
+                <option>Rate too high vs. reach</option>
+                <option>Competitor pricing cheaper</option>
+                <option>Category rate card issue</option>
+                <option>Asked for discount / value-add</option>
+                <option>Budget revised down</option>
+                <option>Other pricing issue</option>
+              </select>
             </div>
           )}
           {form.clientFeedback === "Other" && (
             <div style={{ marginTop: 8 }}>
-              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Feedback Details</label>
+              <label style={{ fontSize: 10, color: C.dim, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase" }}>Specify</label>
               <textarea rows={2} value={form.feedbackNote} onChange={e => setF({ feedbackNote: e.target.value })}
                 placeholder="Describe the client's feedback…"
                 style={{ marginTop: 4, width: "100%", resize: "none", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace", boxSizing: "border-box" }} />

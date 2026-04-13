@@ -1,5 +1,4 @@
 import React, { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import ZohoSearchInput from "../components/ZohoSearchInput";
 import { getSessionToken, setSessionToken as setSessionTokenLib, authHeaders, apiFetch, ApiError } from "../services/api/_client";
 import * as authSvc       from "../services/api/auth";
 import * as attendSvc     from "../services/api/attendance";
@@ -486,7 +485,6 @@ async function hashPwd(password) {
 
 // ─── LOGIN COMPONENT ──────────────────────────────────────────────────────────
 const GOOGLE_CLIENT_ID = "773380743026-i87vjdrj5n699von60sa3plqqv95mlem.apps.googleusercontent.com";
-const ZOHO_CLIENT_ID   = "1000.TQ0C2M1CLOJC0ES8EPEJJWG5LUJ9ON";
 
 // ── Session token store ───────────────────────────────────────────────────────
 // Replit's path-based proxy prevents httpOnly cookies from being forwarded reliably.
@@ -755,7 +753,7 @@ export function CROApp({ user, onLogout }) {
   const [planForm, setPlanForm]           = useState({agency:"",client:"",brand:"",contactName:"",phone:"",time:"10:00",agenda:"",pitchType:"",meetingType:"Physical",touchpointType:"Deal Meeting",meetingKind:"ACTIONABLE",needsMeet:false,syncToCalendar:false,calPlatform:"google"});
   const [planEditId, setPlanEditId]       = useState<string|null>(null);
   const [planEditForm, setPlanEditForm]   = useState({time:"",clientAgencyName:"",contactName:"",phone:"",agenda:"",pitchType:""});
-  const [loginProvider, setLoginProvider] = useState<"google"|"zoho"|"demo">("demo");
+  const [loginProvider, setLoginProvider] = useState<"google"|"demo">("demo");
   const planInlineState                   = useState(null); // [inlineLogPlan, setInlineLogPlan]
   const planInlineStatusState             = useState<string>(""); // [inlineLogStatus, setInlineLogStatus]
   const [planLoggedMsg, setPlanLoggedMsg] = useState<Record<string,string>>({}); // Part 8: post-log messages
@@ -860,10 +858,6 @@ export function CROApp({ user, onLogout }) {
   });
   const [clientMasterList, setClientMasterList] = usePersistedState<string[]>("otv_clientMaster", []);
   const [masterNewName, setMasterNewName]         = useState("");
-  const [zohoImporting, setZohoImporting]         = useState(false);
-  const [zohoAccounts, setZohoAccounts]           = useState<string[]>([]);
-  const [zohoError, setZohoError]                 = useState<string|null>(null);
-  const [zohoSearchQ, setZohoSearchQ]             = useState("");
 
   // ── DEAL INACTIVITY ENFORCEMENT — runs on load and when adminConfig changes ──
   useEffect(() => {
@@ -1109,7 +1103,7 @@ export function CROApp({ user, onLogout }) {
   const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,year:string,annualClients:{agencyName:string,clientName:string,brandName:string,q1Target:string,q2Target:string,q3Target:string,q4Target:string}[]}>({repId:"",year:String(new Date().getFullYear()),annualClients:[{agencyName:"",clientName:"",brandName:"",q1Target:"",q2Target:"",q3Target:"",q4Target:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState<any[]>([]);
-  const [revForm, setRevForm]                           = useState({clientCompany:"",agencyName:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
+  const [revForm, setRevForm]                           = useState({clientCompany:"",agencyName:"",brand:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [editingRevId, setEditingRevId]                 = useState<string|null>(null);
   const [editRevData, setEditRevData]                   = useState<any>({});
   const [importTab, setImportTab]                       = useState("targets");
@@ -1722,14 +1716,12 @@ export function CROApp({ user, onLogout }) {
   const closeTour = () => { setTourActive(false); setTourStep(0); };
   const openWelcome = () => { setTourActive(false); setShowWelcomeModal(true); };
 
-  // FIX 10: Trigger guided tour for rep when their first target is approved
+  // FIX 5: Trigger guided tour for rep when their first target is approved (runs once per device)
   React.useEffect(() => {
     if (!isRep) return;
     const myRepId = user_role?.repId;
     const hasApproved = targetSubs.some(s => String(s.repId) === String(myRepId) && s.status === "Approved");
-    const tourShownKey = `otv_target_approved_tour_${activeUser}`;
-    if (hasApproved && !localStorage.getItem(tourShownKey)) {
-      localStorage.setItem(tourShownKey, "1");
+    if (hasApproved && !localStorage.getItem("otv_tour_seen")) {
       openWelcome();
     }
   }, [targetSubs, isRep, activeUser]);
@@ -2139,7 +2131,7 @@ export function CROApp({ user, onLogout }) {
       {showWelcomeModal && (
         <WelcomeModal
           C={C} activeUser={activeUser} currentTourData={currentTourData}
-          startTour={startTour} onClose={()=>setShowWelcomeModal(false)}
+          startTour={startTour} onClose={()=>{ localStorage.setItem("otv_tour_seen","1"); setShowWelcomeModal(false); }}
         />
       )}
       {/* TOUR OVERLAY */}
@@ -2268,7 +2260,6 @@ export function CROApp({ user, onLogout }) {
             <MyPlan
               userRole={user_role}
               activeUser={activeUser}
-              loginProvider={loginProvider}
               isRep={isRep}
               isNSH={isNSHDashboard}
               isRH={isRH}

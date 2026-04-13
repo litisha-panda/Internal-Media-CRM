@@ -4,7 +4,6 @@ import type { ApiUser } from "../../services/api/auth";
 import { setSessionToken as setSessionTokenLib } from "../../services/api/_client";
 
 const GOOGLE_CLIENT_ID = "773380743026-i87vjdrj5n699von60sa3plqqv95mlem.apps.googleusercontent.com";
-const ZOHO_CLIENT_ID   = "1000.TQ0C2M1CLOJC0ES8EPEJJWG5LUJ9ON";
 
 function setSessionTokenStore(t: string | null): void {
   setSessionTokenLib(t);
@@ -99,50 +98,6 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       setLoading(false);
       setErr("Google Sign-In is still loading. Please wait a moment and try again.");
     }
-  }
-
-  function handleZohoClick() {
-    setErr(""); setLoading(true);
-    const redirectUri = window.location.origin + window.location.pathname.replace(/\/$/g, "");
-    const scope = "AaaServer.profile.Read";
-    const authUrl = `https://accounts.zoho.in/oauth/v2/auth?response_type=token&client_id=${ZOHO_CLIENT_ID}&scope=${encodeURIComponent(scope)}&redirect_uri=${encodeURIComponent(redirectUri)}&access_type=online&prompt=consent`;
-    const popup = window.open(authUrl, "zoho-login", "width=560,height=660,left=300,top=80");
-    if (!popup) {
-      setErr("Popup was blocked. Please allow popups for this site and try again.");
-      setLoading(false);
-      return;
-    }
-    const timer = setInterval(async () => {
-      try {
-        if (popup.closed) {
-          clearInterval(timer);
-          setErr("Zoho sign-in was cancelled.");
-          setLoading(false);
-          return;
-        }
-        const href = popup.location.href;
-        if (href && href.includes("access_token")) {
-          clearInterval(timer);
-          const hash = popup.location.hash.replace(/^#/, "");
-          const params = new URLSearchParams(hash);
-          const token = params.get("access_token");
-          popup.close();
-          try {
-            const resp = await fetch("https://accounts.zoho.in/oauth/v2/userinfo", {
-              headers: { Authorization: `Zoho-oauthtoken ${token}` },
-            });
-            const profile = await resp.json() as { display_name?: string; given_name?: string; first_name?: string; email?: string; picture?: string };
-            const displayName = profile.display_name || profile.given_name || profile.first_name || profile.email || "";
-            onLogin({ name: displayName, email: profile.email || "", picture: profile.picture, provider:"zoho" } as unknown as ApiUser);
-          } catch {
-            setErr("Could not fetch Zoho profile. Please try again.");
-            setLoading(false);
-          }
-        }
-      } catch {
-        // Cross-origin error while popup is on Zoho's domain — safe to ignore, keep polling
-      }
-    }, 500);
   }
 
   const handleEmail = async (e: React.FormEvent<HTMLFormElement>) => {
@@ -272,16 +227,6 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
                   onMouseOut={e=>(e.currentTarget.style.boxShadow="none")}>
                   <svg width="18" height="18" viewBox="0 0 18 18"><path fill="#4285F4" d="M16.51 8H8.98v3h4.3c-.18 1-.74 1.48-1.6 2.04v2.01h2.6a7.8 7.8 0 0 0 2.38-5.88c0-.57-.05-.66-.15-1.18z"/><path fill="#34A853" d="M8.98 17c2.16 0 3.97-.72 5.3-1.94l-2.6-2a4.8 4.8 0 0 1-7.18-2.54H1.83v2.07A8 8 0 0 0 8.98 17z"/><path fill="#FBBC05" d="M4.5 10.52a4.8 4.8 0 0 1 0-3.04V5.41H1.83a8 8 0 0 0 0 7.18l2.67-2.07z"/><path fill="#EA4335" d="M8.98 4.18c1.17 0 2.23.4 3.06 1.2l2.3-2.3A8 8 0 0 0 1.83 5.4L4.5 7.49a4.77 4.77 0 0 1 4.48-3.3z"/></svg>
                   Continue with Google
-                </button>
-
-                <button
-                  onClick={handleZohoClick}
-                  disabled={loading}
-                  style={{ display:"flex", alignItems:"center", gap:10, background:"#e42527", color:"#fff", border:"none", borderRadius:6, padding:"10px 16px", cursor:"pointer", fontSize:13, fontWeight:600, fontFamily:"'DM Sans',sans-serif", width:"100%", marginBottom:16, transition:"opacity .15s" }}
-                  onMouseOver={e=>(e.currentTarget.style.opacity=".88")}
-                  onMouseOut={e=>(e.currentTarget.style.opacity="1")}>
-                  <svg width="18" height="18" viewBox="0 0 40 40" fill="none"><rect width="40" height="40" rx="4" fill="#e42527"/><text x="50%" y="58%" dominantBaseline="middle" textAnchor="middle" fill="#fff" fontSize="16" fontWeight="bold" fontFamily="sans-serif">Z</text></svg>
-                  Continue with Zoho
                 </button>
 
                 <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14 }}>

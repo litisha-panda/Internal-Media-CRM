@@ -3,7 +3,6 @@ import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
   USER_ROLES,
 } from "../../constants";
-import ZohoSearchInput from "../../components/ZohoSearchInput";
 
 interface WarroomViewProps {
   view: string;
@@ -551,7 +550,7 @@ export function WarroomView({ view, setView, isMobile, rhWarroomClient, setRhWar
             const highRisk = allD
               .filter(d=>d.outcome!=="Mail Confirmed"&&d.outcome!=="Not Interested")
               .map(d=>{
-                const achieved=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&((d.zohoAccountId&&e.zohoAccountId&&d.zohoAccountId===e.zohoAccountId)||e.clientCompany===d.clientCompany)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
+                const achieved=revenueEntries.filter(e=>String(e.repId)===String(d.repId)&&e.clientCompany===d.clientCompany&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
                 const pct = d.targetAmount>0?Math.round((achieved/d.targetAmount)*100):0;
                 return {...d, pct};
               })

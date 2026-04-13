@@ -17,7 +17,6 @@ export interface AddPlanModalProps {
   forDate: string;
   form: PlanForm;
   deals: Deal[];
-  loginProvider: string;
   approvedTargetRows?: { agency: string; client: string; brand: string }[];
   onFormChange: React.Dispatch<React.SetStateAction<PlanForm>>;
   onSubmit: (date: string) => void;
@@ -25,7 +24,7 @@ export interface AddPlanModalProps {
 }
 
 export const AddPlanModal: React.FC<AddPlanModalProps> = ({
-  forDate, form: pf, deals, loginProvider, approvedTargetRows,
+  forDate, form: pf, deals, approvedTargetRows,
   onFormChange: setPf, onSubmit: doAddPlan, onClose,
 }) => {
   // rows is non-null whenever approvedTargetRows was explicitly passed in (even if empty)
