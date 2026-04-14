@@ -118,12 +118,10 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
   user, C, targetSubs, setTargetSubs, liveRoles, adminUsersLoading, fmtR, onComplete, openWelcomeTour, showToast,
 }) => {
   console.log("role is:", user.role);
-  // Normalize role: "SALES REP" → "SALES_REP", "REGION HEAD" → "REGION_HEAD"
-  const normalRole = (user.role || "").replace(/\s+/g, "_").toUpperCase();
-  const isRep   = normalRole === "SALES_REP";
-  const isRH    = normalRole === "REGION_HEAD";
-  const isNSH   = normalRole === "NSH";
-  const isAdmin = normalRole === "ADMIN";
+  const isRep   = user.role === "SALES_REP";
+  const isRH    = user.role === "REGION_HEAD";
+  const isNSH   = user.role === "NSH";
+  const isAdmin = user.role === "ADMIN";
 
   const stepLabels = isRep   ? ["Profile", "Targets", "Done"]
                    : isRH    ? ["Profile", "Approvals", "Done"]
