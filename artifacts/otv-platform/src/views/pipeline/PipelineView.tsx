@@ -111,7 +111,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: Pipel
     if(!cl.lastContact||d.lastContact>cl.lastContact) cl.lastContact=d.lastContact;
   });
   const rtClients = Object.values(rtClientMap).sort((a:any,b:any)=>daysSince(b.lastContact)-daysSince(a.lastContact));
-  const BLANK_DEAL = { clientCompany:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Prospect", stage:"Prospect", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", reqs:[], auditLog:[] };
+  const BLANK_DEAL = { clientCompany:"", repId:"", clientAccountId:"", contactName:"", designation:"", contactLevel:"", phone:"", email:"", dealType:"", outcome:"Quotation", stage:"Quotation", amount:"", pipelineAmount:"", targetAmount:"", lossReason:"", priority:"Regular", quarter:"Q1 FY26", notes:"", nextStep:"", nextStepDate:"", agencyName:"", reqs:[], auditLog:[] };
   const BLANK_ACTION_REQUIRED = {what:"", from:"", description:"", byWhen:""};
 
   return (
@@ -324,7 +324,7 @@ export function PipelineView({ view, setView, isMobile, rtTab, setRtTab }: Pipel
                         id:`d_ip_${Date.now()}`, repId:user_role?.repId, repName:myRep?.name||"",
                         region:myRep?.region||"", clientCompany:ipPropClient.trim(),
                         contactName:"", designation:"", contactLevel:"", phone:"", email:"",
-                        dealType:"IPs", outcome:"In Discussion", stage:"In Discussion",
+                        dealType:"IPs", outcome:"Quotation", stage:"Quotation",
                         amount: parseCurrency(ipPropValue)||elem.rackRate||0,
                         pipelineAmount: parseCurrency(ipPropValue)||elem.rackRate||0,
                         targetAmount: parseCurrency(ipPropValue)||elem.rackRate||0,
