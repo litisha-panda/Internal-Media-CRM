@@ -37,6 +37,8 @@ import { RHView } from "../views/rh/RHView";
 import { RHTeamsPlan } from "../views/rh/RHTeamsPlan";
 import { RHTargetApproval } from "../views/rh/RHTargetApproval";
 import { NSHView } from "../views/nsh/NSHView";
+import { NSHTargetApproval } from "../views/nsh/NSHTargetApproval";
+import { NSHRegionSummary } from "../views/nsh/NSHRegionSummary";
 
 import { DigiOpsView } from "../views/digiops/DigiOpsView";
 import { AppTopbar } from "../components/AppTopbar";
@@ -611,7 +613,8 @@ export function CROApp({ user, onLogout }) {
     const role = user?.role || "";
     if (role === "ADMIN" || user?.email==="admin@odishatv.com") return "admin-access";
     if (role === "REGION HEAD") return "rh-dashboard";
-    if (["SALES HEAD","CRO","SALES STRATEGY"].includes(role)) return "warroom";
+    if (role === "SALES HEAD") return "nsh-rh-scorecard";
+    if (["CRO","SALES STRATEGY"].includes(role)) return "warroom";
     if (role === "DIGI OPS") return "digi-deals";
     return "rep-dashboard"; // Sales Rep — lands on Dashboard
   };
@@ -1895,35 +1898,16 @@ export function CROApp({ user, onLogout }) {
       ]},
     ];
 
-    // ── NSH (logs meetings) ──
+    // ── NSH (National Sales Head) ──
     if (isNSH) return [
-      { label:"PLANNING",    items:[N("my-plan","My Plan","◎"), N("nsh-rh-plan","RH's Plan","◎"), N("nsh-regional-plan","Rep's Plan","◎")] },
-      { label:"COMMAND",     items:[
-        N("warroom","War Room","⬡",atRisk.length+overdueNext.length||undefined),
-        N("pipeline","Revenue Tracker","◈"),
-        N("targets","Targets","◎"),
-        N("target-approvals","Approvals","◎",targetSubs.filter(t=>t.status==="Pending NSH").length||undefined),
-        N("my-tasks","My Tasks","✓"),
-        N("escalations","Escalations","▲",escBadge),
+      { label:"NSH", items:[
+        N("nsh-rh-scorecard","Dashboard","◇"),
+        N("my-plan","My Plan","◎"),
+        N("nsh-region-summary","Region Summary","◈"),
+        N("nsh-target-approval","Target Approval","◎",targetSubs.filter(t=>t.status==="Pending NSH").length||undefined),
         N("internal-requests","Internal Requests","⬆",irInboxBadge),
-        N("compliance","Compliance","✦"),
-        N("hr","My HR Report","⊘",hrBadge),
-      ]},
-      { label:"REGION HEADS", items:[
-        N("nsh-rh-scorecard","All Region Heads","◇"),
-        N("nsh-rh-targets","RH Targets","◎"),
-        N("nsh-rh-tasks","RH Tasks","✓"),
-        N("nsh-rh-hr","RH's HR Reports","⊘"),
-      ]},
-      { label:"SALES REPS",  items:[
-        N("nsh-rep-scorecard","All Sales Reps","◇"),
-        N("nsh-rep-targets","Rep Targets","◎"),
-        N("nsh-rep-tasks","Rep Tasks","✓"),
-        N("nsh-rep-hr","Sales Reps' HR Reports","⊘"),
-      ]},
-      { label:"LEADERBOARD", items:[
-        N("lb-region","By Region","◇"),
-        N("lb-all","By Sales Rep","◇"),
+        N("my-tasks","My Tasks","✓"),
+        N("hr","HR Reports","⊘",hrBadge),
       ]},
     ];
 
@@ -2444,6 +2428,10 @@ export function CROApp({ user, onLogout }) {
             targetDrilldown={targetDrilldown} setTargetDrilldown={setTargetDrilldown}
             nshRepDrill={nshRepDrill} setNshRepDrill={setNshRepDrill}
           />
+          {/* ═══ NSH TARGET APPROVAL (region-aggregated) ═══ */}
+          {view==="nsh-target-approval" && isNSH && <NSHTargetApproval />}
+          {/* ═══ NSH REGION SUMMARY ═══ */}
+          {view==="nsh-region-summary" && isNSHDashboard && <NSHRegionSummary />}
           <DigiOpsView view={view} setView={setView} />
           {view==="ro-parser" && (
             <div>

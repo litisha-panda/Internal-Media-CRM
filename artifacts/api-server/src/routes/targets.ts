@@ -87,7 +87,9 @@ async function scopeCondition(user: any) {
     if (!repIds.length) return null;
     return inArray(targetSubmissions.repId, repIds);
   }
-  return undefined; // SALES HEAD, CRO, SALES STRATEGY, ADMIN see all
+  // SALES HEAD (NSH) sees all 'Pending NSH' submissions across all regions — no manager_id filter
+  if (role === "SALES HEAD") return eq(targetSubmissions.status, "Pending NSH");
+  return undefined; // CRO, SALES STRATEGY, ADMIN see all
 }
 
 // GET /api/targets — list (scoped by role)
@@ -99,6 +101,174 @@ router.get("/targets", requireAuth, async (req, res) => {
       ? await db.select().from(targetSubmissions).where(cond).orderBy(desc(targetSubmissions.createdAt))
       : await db.select().from(targetSubmissions).orderBy(desc(targetSubmissions.createdAt));
     res.json({ ok: true, data: rows });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
+  }
+});
+
+// POST /api/targets/region/:region/approve — NSH bulk-approves all Pending NSH subs in a region
+router.post("/targets/region/:region/approve", requireAuth, async (req, res) => {
+  try {
+    const u = req.user!;
+    if (u.role !== "SALES HEAD" && u.role !== "ADMIN") {
+      return void res.status(403).json({ ok: false, error: "Only SALES HEAD (NSH) can bulk-approve by region" });
+    }
+
+    const region = String(req.params["region"]);
+    const pending = await db
+      .select()
+      .from(targetSubmissions)
+      .where(and(eq(targetSubmissions.region, region), eq(targetSubmissions.status, "Pending NSH")));
+
+    if (!pending.length) {
+      return void res.status(404).json({ ok: false, error: "No Pending NSH submissions found for this region" });
+    }
+
+    const now = new Date().toISOString();
+    const nextStatus = TARGET_NEXT_STATUS["Pending NSH"] ?? "Pending CRO";
+
+    for (const sub of pending) {
+      const subLogEntry = {
+        step: "Pending NSH",
+        by: u.name,
+        role: u.role,
+        at: now,
+        action: "Approved",
+        note: req.body.note ?? "",
+        bulk: true,
+        region,
+      };
+      await db.update(targetSubmissions)
+        .set({
+          status:      nextStatus,
+          approvalLog: [...((sub.approvalLog as any[]) ?? []), subLogEntry],
+          updatedAt:   new Date(),
+        })
+        .where(eq(targetSubmissions.id, sub.id));
+
+      await db.insert(auditLog).values({
+        actorId:      u.id,
+        action:       `target.bulk_approved region=${region}`,
+        targetUserId: String(sub.repId),
+        details:      JSON.stringify({ submissionId: sub.id, fromStatus: "Pending NSH", toStatus: nextStatus }),
+      });
+
+      void logActivity({
+        userId:     u.id,
+        userName:   u.name,
+        userRole:   u.role,
+        region,
+        action:     "target.approved",
+        entityType: "target_submission",
+        entityId:   sub.id,
+        meta:       { fromStatus: "Pending NSH", toStatus: nextStatus, bulk: true },
+      });
+
+      if (sub.repId) {
+        try {
+          const repUsers = await db.select({ id: users.id }).from(users).where(eq(users.repId, sub.repId)).limit(1);
+          if (repUsers.length) {
+            void createNotification({
+              userId:     repUsers[0].id,
+              type:       "target_approved",
+              title:      `Target plan advanced to ${nextStatus}`,
+              body:       `${u.name} (NSH) approved your ${sub.quarter} target plan for region ${region}.`,
+              entityType: "target_submission",
+              entityId:   sub.id,
+            });
+          }
+        } catch { /* best-effort */ }
+      }
+    }
+
+    res.json({ ok: true, count: pending.length, nextStatus });
+  } catch (err: any) {
+    console.error(err);
+    res.status(500).json({ ok: false, error: "An internal error occurred" });
+  }
+});
+
+// POST /api/targets/region/:region/reject — NSH bulk-rejects all Pending NSH subs in a region
+router.post("/targets/region/:region/reject", requireAuth, async (req, res) => {
+  try {
+    const u = req.user!;
+    if (u.role !== "SALES HEAD" && u.role !== "ADMIN") {
+      return void res.status(403).json({ ok: false, error: "Only SALES HEAD (NSH) can bulk-reject by region" });
+    }
+
+    const region = String(req.params["region"]);
+    const note   = req.body.note ? String(req.body.note) : "";
+    if (!note) {
+      return void res.status(400).json({ ok: false, error: "Rejection remarks are required" });
+    }
+
+    const pending = await db
+      .select()
+      .from(targetSubmissions)
+      .where(and(eq(targetSubmissions.region, region), eq(targetSubmissions.status, "Pending NSH")));
+
+    if (!pending.length) {
+      return void res.status(404).json({ ok: false, error: "No Pending NSH submissions found for this region" });
+    }
+
+    const now = new Date().toISOString();
+
+    for (const sub of pending) {
+      const logEntry = {
+        step: "Pending NSH",
+        by: u.name,
+        role: u.role,
+        at: now,
+        action: "Rejected",
+        note,
+        bulk: true,
+        region,
+      };
+      await db.update(targetSubmissions)
+        .set({
+          status:      "Rejected",
+          approvalLog: [...((sub.approvalLog as any[]) ?? []), logEntry],
+          updatedAt:   new Date(),
+        })
+        .where(eq(targetSubmissions.id, sub.id));
+
+      await db.insert(auditLog).values({
+        actorId:      u.id,
+        action:       `target.bulk_rejected region=${region}`,
+        targetUserId: String(sub.repId),
+        details:      JSON.stringify({ submissionId: sub.id, note, region }),
+      });
+
+      void logActivity({
+        userId:     u.id,
+        userName:   u.name,
+        userRole:   u.role,
+        region,
+        action:     "target.rejected",
+        entityType: "target_submission",
+        entityId:   sub.id,
+        meta:       { fromStatus: "Pending NSH", note, bulk: true },
+      });
+
+      if (sub.repId) {
+        try {
+          const repUsers = await db.select({ id: users.id }).from(users).where(eq(users.repId, sub.repId)).limit(1);
+          if (repUsers.length) {
+            void createNotification({
+              userId:     repUsers[0].id,
+              type:       "target_rejected",
+              title:      `Target plan rejected by NSH`,
+              body:       note ? `Reason: ${note}` : `Your ${sub.quarter} target plan was rejected. Please revise and resubmit.`,
+              entityType: "target_submission",
+              entityId:   sub.id,
+            });
+          }
+        } catch { /* best-effort */ }
+      }
+    }
+
+    res.json({ ok: true, count: pending.length });
   } catch (err: any) {
     console.error(err);
     res.status(500).json({ ok: false, error: "An internal error occurred" });
