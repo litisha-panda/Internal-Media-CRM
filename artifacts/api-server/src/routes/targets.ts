@@ -1,7 +1,7 @@
 import { Router } from "express";
-import { db, targetSubmissions, targetAllocations, TARGET_APPROVAL_CHAIN, TARGET_NEXT_STATUS } from "@workspace/db";
+import { db, targetSubmissions, targetAllocations, users, auditLog, TARGET_APPROVAL_CHAIN, TARGET_NEXT_STATUS } from "@workspace/db";
 import type { ClientAllocation } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activityLog";
 import { createNotification } from "../lib/notifications";
@@ -70,27 +70,31 @@ function canApprove(user: {
     return { ok: false, reason: `Your role (${user.role}) cannot approve at status "${sub.status}" — expected ${required}` };
   }
 
-  // ── Hierarchy check: REGION HEAD may only approve reps in their own region ──
-  if (user.role === "REGION HEAD") {
-    if (!sub.region || sub.region !== user.region) {
-      return { ok: false, reason: `You can only approve target submissions for your region (${user.region ?? "unset"})` };
-    }
-  }
+  // REGION HEAD can approve any submission at "Pending RH" status (scoped by managerId at list level)
 
   return { ok: true };
 }
 
-function scopeCondition(user: any) {
+async function scopeCondition(user: any) {
   const role = user.role;
-  if (role === "SALES REP")    return eq(targetSubmissions.repId, user.repId!);
-  if (role === "REGION HEAD")  return eq(targetSubmissions.region, user.region!);
+  if (role === "SALES REP") return eq(targetSubmissions.repId, user.repId!);
+  if (role === "REGION HEAD") {
+    const directReports = await db
+      .select({ repId: users.repId })
+      .from(users)
+      .where(eq(users.managerId, String(user.id)));
+    const repIds = directReports.map(r => r.repId).filter((r): r is number => r !== null);
+    if (!repIds.length) return null;
+    return inArray(targetSubmissions.repId, repIds);
+  }
   return undefined; // SALES HEAD, CRO, SALES STRATEGY, ADMIN see all
 }
 
 // GET /api/targets — list (scoped by role)
 router.get("/targets", requireAuth, async (req, res) => {
   try {
-    const cond = scopeCondition(req.user!);
+    const cond = await scopeCondition(req.user!);
+    if (cond === null) return void res.json({ ok: true, data: [] });
     const rows = cond
       ? await db.select().from(targetSubmissions).where(cond).orderBy(desc(targetSubmissions.createdAt))
       : await db.select().from(targetSubmissions).orderBy(desc(targetSubmissions.createdAt));
@@ -184,7 +188,7 @@ router.post("/targets", requireAuth, async (req, res) => {
         .where(and(eq(targetSubmissions.repId, authorRepId), eq(targetSubmissions.quarter, annualQuarter)))
         .limit(10);
 
-      const activeExisting = existing.filter((r) => !["Rejected"].includes(r.status ?? ""));
+      const activeExisting = existing.filter((r) => !["Rejected", "Pending Rep"].includes(r.status ?? ""));
       if (activeExisting.length > 0) {
         return void res.status(409).json({
           ok: false,
@@ -273,7 +277,7 @@ router.post("/targets", requireAuth, async (req, res) => {
       .where(and(eq(targetSubmissions.repId, authorRepId), eq(targetSubmissions.quarter, quarter)))
       .limit(10);
 
-    const activeExisting = existing.filter((r) => !["Rejected"].includes(r.status ?? ""));
+    const activeExisting = existing.filter((r) => !["Rejected", "Pending Rep"].includes(r.status ?? ""));
     if (activeExisting.length > 0) {
       return void res.status(409).json({
         ok: false,
@@ -353,6 +357,18 @@ router.post("/targets/:id/approve", requireAuth, async (req, res) => {
       return void res.status(403).json({ ok: false, error: check.reason });
     }
 
+    // ── REGION HEAD: verify submission belongs to a direct report ──────────────
+    if (u.role === "REGION HEAD") {
+      const directReports = await db
+        .select({ repId: users.repId })
+        .from(users)
+        .where(eq(users.managerId, String(u.id)));
+      const repIds = directReports.map(r => r.repId).filter((r): r is number => r !== null);
+      if (!repIds.includes(sub.repId)) {
+        return void res.status(403).json({ ok: false, error: "You can only approve submissions from your direct reports" });
+      }
+    }
+
     const nextStatus = TARGET_NEXT_STATUS[sub.status!] ?? "Approved";
     const now = new Date().toISOString();
     const logEntry = { step: sub.status, by: u.name, role: u.role, at: now, action: "Approved", note: req.body.note ?? "" };
@@ -378,6 +394,16 @@ router.post("/targets/:id/approve", requireAuth, async (req, res) => {
       entityId:   sub.id,
       meta:       { fromStatus: sub.status, toStatus: nextStatus },
     });
+
+    // ── Audit log entry ──────────────────────────────────────────────────────
+    try {
+      await db.insert(auditLog).values({
+        actorId:      u.id,
+        action:       `target.approve (${sub.status} → ${nextStatus})`,
+        targetUserId: sub.repId ? String(sub.repId) : null,
+        details:      JSON.stringify({ submissionId: sub.id, repName: sub.repName, fromStatus: sub.status, toStatus: nextStatus }),
+      });
+    } catch { /* non-critical — don't fail the approve response */ }
 
     // Notify rep that their target moved forward
     if (sub.repId) {
@@ -424,13 +450,25 @@ router.post("/targets/:id/reject", requireAuth, async (req, res) => {
       return void res.status(403).json({ ok: false, error: check.reason });
     }
 
+    // ── REGION HEAD: verify submission belongs to a direct report ──────────────
+    if (u.role === "REGION HEAD") {
+      const directReports = await db
+        .select({ repId: users.repId })
+        .from(users)
+        .where(eq(users.managerId, String(u.id)));
+      const repIds = directReports.map(r => r.repId).filter((r): r is number => r !== null);
+      if (!repIds.includes(sub.repId)) {
+        return void res.status(403).json({ ok: false, error: "You can only reject submissions from your direct reports" });
+      }
+    }
+
     const now = new Date().toISOString();
     const logEntry = { step: sub.status, by: u.name, role: u.role, at: now, action: "Rejected", note: req.body.note ?? "" };
     const newLog = [...((sub.approvalLog as any[]) ?? []), logEntry];
 
     const updated = await db
       .update(targetSubmissions)
-      .set({ status: "Rejected", approvalLog: newLog, updatedAt: new Date() })
+      .set({ status: "Pending Rep", approvalLog: newLog, updatedAt: new Date() })
       .where(eq(targetSubmissions.id, String(req.params["id"])))
       .returning();
 
@@ -486,7 +524,7 @@ router.patch("/targets/:id", requireAuth, async (req, res) => {
     if (u.role === "SALES REP" && sub.repId !== u.repId) {
       return void res.status(403).json({ ok: false, error: "Cannot edit another rep's submission" });
     }
-    if (!["Rejected", "Pending RH"].includes(sub.status!)) {
+    if (!["Rejected", "Pending Rep", "Pending RH"].includes(sub.status!)) {
       return void res.status(400).json({ ok: false, error: "Cannot edit a submission already in the approval chain" });
     }
 

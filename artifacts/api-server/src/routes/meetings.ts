@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { db, meetings, touchpoints, users, tasks, internalRequests } from "@workspace/db";
-import { eq, and, desc, gte, lte } from "drizzle-orm";
+import { eq, and, desc, gte, lte, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { logActivity } from "../lib/activityLog";
 import { todayIST } from "../lib/date";
@@ -19,22 +19,21 @@ function tpId() {
 
 /**
  * Scope: SALES REP sees only their own.
- * REGION HEAD sees their region's reps.
+ * REGION HEAD sees direct reports (by managerId).
  * Elevated roles see all.
  */
 async function scopeCondition(user: any) {
   if (user.role === "SALES REP") {
     return eq(meetings.userId, user.id);
   }
-  if (user.role === "REGION HEAD" && user.region) {
-    const repsInRegion = await db
+  if (user.role === "REGION HEAD") {
+    const directReports = await db
       .select({ id: users.id })
       .from(users)
-      .where(and(eq(users.role, "SALES REP"), eq(users.region, user.region)));
-    const ids = repsInRegion.map((r) => r.id);
+      .where(eq(users.managerId, String(user.id)));
+    const ids = directReports.map(r => r.id);
     if (!ids.length) return eq(meetings.userId, "__none__");
-    // Build OR — Drizzle doesn't have inArray for text easily here; filter in JS
-    return eq(meetings.region, user.region);
+    return inArray(meetings.userId, ids);
   }
   return null; // elevated sees all
 }
@@ -55,8 +54,14 @@ router.get("/meetings", requireAuth, async (req, res) => {
     // Scope
     if (u.role === "SALES REP") {
       conditions.push(eq(meetings.userId, u.id));
-    } else if (u.role === "REGION HEAD" && u.region) {
-      conditions.push(eq(meetings.region, u.region));
+    } else if (u.role === "REGION HEAD") {
+      const directReports = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.managerId, String(u.id)));
+      const ids = directReports.map(r => r.id);
+      if (!ids.length) return void res.json({ ok: true, data: [] });
+      conditions.push(inArray(meetings.userId, ids));
     }
     // Elevated: no scope filter
 

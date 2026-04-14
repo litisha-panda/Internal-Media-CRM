@@ -1,6 +1,6 @@
 import { Router } from "express";
-import { db, deals, clientAccounts, STAGE_PROB } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { db, deals, clientAccounts, users, STAGE_PROB } from "@workspace/db";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { resolveOwnership } from "../lib/ownership";
 import { logActivity } from "../lib/activityLog";
@@ -16,17 +16,33 @@ function derivePipeline(deal: any) {
   return { ...deal, pipelineAmount: Math.round((deal.amount ?? 0) * prob / 100) };
 }
 
-function scopeCondition(user: any) {
+async function scopeCondition(user: any) {
   const role = user.role;
-  if (role === "SALES REP")   return eq(deals.repId,  user.repId!);
-  if (role === "REGION HEAD") return eq(deals.region, user.region!);
+  if (role === "SALES REP") return eq(deals.repId, user.repId!);
+  if (role === "REGION HEAD") {
+    const directReports = await db
+      .select({ repId: users.repId })
+      .from(users)
+      .where(eq(users.managerId, String(user.id)));
+    const repIds = directReports.map(r => r.repId).filter((r): r is number => r !== null);
+    if (!repIds.length) return null;
+    return inArray(deals.repId, repIds);
+  }
   return undefined;
 }
 
-function caCondition(user: any) {
+async function caCondition(user: any) {
   const role = user.role;
-  if (role === "SALES REP")   return eq(clientAccounts.repId,  user.repId!);
-  if (role === "REGION HEAD") return eq(clientAccounts.region, user.region!);
+  if (role === "SALES REP") return eq(clientAccounts.repId, user.repId!);
+  if (role === "REGION HEAD") {
+    const directReports = await db
+      .select({ repId: users.repId })
+      .from(users)
+      .where(eq(users.managerId, String(user.id)));
+    const repIds = directReports.map(r => r.repId).filter((r): r is number => r !== null);
+    if (!repIds.length) return null;
+    return inArray(clientAccounts.repId, repIds);
+  }
   return undefined;
 }
 
@@ -34,7 +50,8 @@ function caCondition(user: any) {
 
 router.get("/deals", requireAuth, async (req, res) => {
   try {
-    const cond = scopeCondition(req.user!);
+    const cond = await scopeCondition(req.user!);
+    if (cond === null) return void res.json({ ok: true, data: [] });
     const rows = cond
       ? await db.select().from(deals).where(cond).orderBy(desc(deals.updatedAt))
       : await db.select().from(deals).orderBy(desc(deals.updatedAt));
@@ -232,7 +249,8 @@ router.patch("/deals/:id", requireAuth, async (req, res) => {
 
 router.get("/client-accounts", requireAuth, async (req, res) => {
   try {
-    const cond = caCondition(req.user!);
+    const cond = await caCondition(req.user!);
+    if (cond === null) return void res.json({ ok: true, data: [] });
     const rows = cond
       ? await db.select().from(clientAccounts).where(cond).orderBy(desc(clientAccounts.updatedAt))
       : await db.select().from(clientAccounts).orderBy(desc(clientAccounts.updatedAt));

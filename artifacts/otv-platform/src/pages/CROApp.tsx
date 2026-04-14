@@ -34,6 +34,8 @@ import {
 import { TargetsView } from "../views/revenue/TargetsView";
 import { RevenueLogView } from "../views/revenue/RevenueLogView";
 import { RHView } from "../views/rh/RHView";
+import { RHTeamsPlan } from "../views/rh/RHTeamsPlan";
+import { RHTargetApproval } from "../views/rh/RHTargetApproval";
 import { NSHView } from "../views/nsh/NSHView";
 
 import { DigiOpsView } from "../views/digiops/DigiOpsView";
@@ -1884,20 +1886,12 @@ export function CROApp({ user, onLogout }) {
     if (isRH) return [
       { label:"MY TEAM", items:[
         N("rh-dashboard",        "Dashboard",           "⬡", rhDashBadge),
-        N("rh-team-plan",        "Team Meetings",       "◎"),
-        N("warroom",             "War Room",            "⬡"),
-        N("pipeline",            "Pipeline",            "◈"),
-      ]},
-      { label:"MY WORK", items:[
         N("my-plan",             "My Plan",             "◎"),
-        N("target-approvals",    "Approvals",           "◎", rhApprovalBadge),
+        N("rh-team-plan",        "Team's Plan",         "◎"),
+        N("target-approvals",    "Target Approval",     "◎", rhApprovalBadge),
+        N("internal-requests",   "Internal Requests",   "⬆", irBadge),
         N("my-tasks",            "My Tasks",            "✓", rhTaskBadge),
-        N("internal-requests",   "Requests",            "⬆", irBadge),
-      ]},
-      { label:"REPORTS", items:[
-        N("rh-escalations",      "Escalations",         "⚠", rhEscBadge),
-        N("rh-team-report",      "Team Report",         "◈"),
-        N("rh-my-hr",            "My HR",               "⊘", hrBadge),
+        N("rh-my-hr",            "HR Reports",          "⊘", hrBadge),
       ]},
     ];
 
@@ -2396,6 +2390,9 @@ export function CROApp({ user, onLogout }) {
             targetDrilldown={targetDrilldown} setTargetDrilldown={setTargetDrilldown}
             nshRepDrill={nshRepDrill} setNshRepDrill={setNshRepDrill}
           />
+          {/* ═══ RH-SPECIFIC VIEWS ═══ */}
+          {view==="rh-team-plan" && isRH && <RHTeamsPlan />}
+          {view==="target-approvals" && isRH && <RHTargetApproval />}
           {/* ═══ RH ESCALATIONS + TEAM ═══ */}
           <RHView
             view={view} setView={setView} isMobile={isMobile}

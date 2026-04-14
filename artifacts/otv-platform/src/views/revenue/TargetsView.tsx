@@ -624,11 +624,11 @@ export function TargetsView({
             const myRepId = user_role?.repId;
             const mySubs  = targetSubs.filter(t=>String(t.repId)===String(myRepId));
             const dealTypes = ["Linear TV","IPs","Digital","Media Solutions","Integrated Packages"];
-            const statusColor = s => s==="Approved"?C.green:s==="Pending RH"||s==="Pending NSH"||s==="Pending Strategy"||s==="Pending CRO"?C.orange:s==="Rejected"?C.red:C.dim;
+            const statusColor = s => s==="Approved"?C.green:s==="Pending RH"||s==="Pending NSH"||s==="Pending Strategy"||s==="Pending CRO"?C.orange:s==="Rejected"||s==="Pending Rep"?C.red:C.dim;
 
             // Summary stats — target only from APPROVED subs; achievement from revenue entries
             const qSubs         = mySubs.filter(s=>qMatch(s.quarter));
-            const allActiveSubs = qSubs.filter(s=>s.status!=="Rejected");
+            const allActiveSubs = qSubs.filter(s=>s.status!=="Rejected"&&s.status!=="Pending Rep");
             const approvedSubs  = qSubs.filter(s=>s.status==="Approved");
             const activeSub     = allActiveSubs.length > 0; // used to show/hide section
             const isFrozen      = approvedSubs.some(s=>s.frozenTarget!=null);
@@ -821,7 +821,7 @@ export function TargetsView({
                 {/* Current quarter client target vs achieved */}
                 {(()=>{
                   // Collect ALL non-rejected subs for this quarter (approved + pending)
-                  const activeSubs = mySubs.filter(s=>qMatch(s.quarter)&&s.status!=="Rejected");
+                  const activeSubs = mySubs.filter(s=>qMatch(s.quarter)&&s.status!=="Rejected"&&s.status!=="Pending Rep");
                   if(!activeSubs.length) return null;
                   // Flatten clients, tagging each with their parent sub's status and submitter
                   const allClients = activeSubs.flatMap(sub=>
@@ -893,10 +893,10 @@ export function TargetsView({
                 })()}
 
                 {/* REJECTED SUBMISSIONS — Edit & Resubmit */}
-                {qSubs.filter(s=>s.status==="Rejected").map(sub=>(
+                {qSubs.filter(s=>s.status==="Rejected"||s.status==="Pending Rep").map(sub=>(
                   <div key={sub.id} style={{marginBottom:20}}>
                     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-                      <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{filterQ} · Rejected Submission</div>
+                      <div style={{fontSize:10,color:C.red,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{filterQ} · {sub.status==="Pending Rep"?"Returned for Revision":"Rejected Submission"}</div>
                       {editSubId!==sub.id
                         ? <button onClick={()=>{ setEditSubId(sub.id); setEditSubClients(sub.clients.map(c=>({...c,targetAmount:String(c.targetAmount)}))); }}
                             style={{background:`${C.orange}18`,border:`1px solid ${C.orange}44`,color:C.orange,borderRadius:6,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
@@ -982,7 +982,7 @@ export function TargetsView({
           })()}
 
           {/* ═══ TARGET APPROVALS (RH / NSH / STRATEGY / CRO) ═══ */}
-          {view==="target-approvals" && !isRep && (()=>{
+          {view==="target-approvals" && !isRep && !isRH && (()=>{
             const pendingStep = isRH?"Pending RH":isNSH?"Pending NSH":isStrategy?"Pending Strategy":isCRORole?"Pending CRO":null;
             const nextStep    = isRH?"Pending NSH":isNSH?"Pending Strategy":isStrategy?"Pending CRO":isCRORole?"Approved":null;
             const myPending   = isRH
