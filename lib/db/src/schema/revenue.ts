@@ -20,6 +20,8 @@ export const revenueEntries = pgTable("revenue_entries", {
   date:          text("date"),
   quarter:       text("quarter"),
   fiscalYear:    text("fiscal_year").default("FY26"),
+  agencyName:    text("agency_name"),
+  brand:         text("brand"),
   notes:         text("notes"),
   isReversed:    boolean("is_reversed").notNull().default(false),
   reversalOf:    text("reversal_of"),

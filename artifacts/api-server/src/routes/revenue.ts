@@ -122,6 +122,7 @@ router.post("/revenue", requireAuth, async (req, res) => {
     const {
       id, clientCompany, dealType,
       amount, invoiceRef, date, quarter, fiscalYear,
+      agencyName, brand,
       notes, reversalOf, dealId, idempotencyKey,
     } = req.body;
 
@@ -180,6 +181,8 @@ router.post("/revenue", requireAuth, async (req, res) => {
         date:           date ?? null,
         quarter:        resolvedQuarter,
         fiscalYear:     fiscalYear ?? "FY26",
+        agencyName:     agencyName ?? null,
+        brand:          brand ?? null,
         notes:          notes ?? null,
         isReversed:     false,
         reversalOf:     reversalOf ?? null,
