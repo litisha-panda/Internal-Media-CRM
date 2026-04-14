@@ -131,12 +131,20 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
   const [submitting, setSubmitting] = useState(false);
   const [customClientMode, setCustomClientMode] = useState(false);
 
-  /* Derive unique client/agency picker options from approved target rows */
+  /* Derive unique client/agency picker options from approved target rows,
+     falling back to deals when no approved rows are available */
   const targetClientOptions = React.useMemo(() => {
-    if (!approvedTargetRows?.length) return [];
     const seen = new Set<string>();
     const opts: { key: string; agency: string; client: string; brand: string; label: string }[] = [];
-    for (const r of approvedTargetRows) {
+    const source: { agency: string; client: string; brand: string }[] = approvedTargetRows?.length
+      ? approvedTargetRows
+      : deals.map(d => ({
+          agency: d.agencyName || d.agency || "",
+          client: d.clientCompany || "",
+          brand:  d.brand || "",
+        }));
+    for (const r of source) {
+      if (!r.client) continue;
       const key = `${r.agency}|||${r.client}`;
       if (!seen.has(key)) {
         seen.add(key);
@@ -147,7 +155,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
       }
     }
     return opts.sort((a, b) => a.label.localeCompare(b.label));
-  }, [approvedTargetRows]);
+  }, [approvedTargetRows, deals]);
 
   const handleROReceived = () => {
     const clientCompany = form.client || form.clientAgencyName || "";
@@ -463,7 +471,10 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
               <label>{form.meetingWith === "agency" ? "Agency *" : "Client / Agency *"}</label>
               {!customClientMode ? (
                 <SearchableSelect
-                  options={targetClientOptions.map(o => ({ value: o.key, label: o.label }))}
+                  options={(form.meetingWith === "agency"
+                    ? targetClientOptions.filter(o => o.agency && o.agency !== "NA")
+                    : targetClientOptions
+                  ).map(o => ({ value: o.key, label: o.label }))}
                   value={(() => {
                     if (form.clientAgencyName === "N/A") return "NA";
                     const match = targetClientOptions.find(o => o.client === form.client && o.agency === form.agency);
