@@ -111,6 +111,8 @@ export interface LogMeetingProps {
   onSubmit: (tp: Touchpoint) => void;
   userRole: { repId?: RepId; region?: string } | null;
   deals: Deal[];
+  /** Approved target rows scoped to this rep — used to populate client/agency picker */
+  approvedTargetRows?: { agency: string; client: string; brand: string }[];
   showToast: (msg: string, type?: string) => void;
   /** Optional: navigate to revenue log. Receives optional prefill data. */
   onNavigateRevenue?: (prefill?: { clientCompany?: string; agency?: string; amount?: number; pitchType?: string }) => void;
@@ -119,7 +121,7 @@ export interface LogMeetingProps {
 /* ── Component ─────────────────────────────────────────────────────────── */
 export const LogMeeting: React.FC<LogMeetingProps> = ({
   open, meeting, onClose, onSubmit,
-  userRole, deals, showToast, onNavigateRevenue,
+  userRole, deals, approvedTargetRows, showToast, onNavigateRevenue,
 }) => {
   const { createTouchpoint } = useTouchpoints();
   const { createMeeting } = useMeetings();
@@ -127,6 +129,25 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
 
   const [form, setForm] = useState<LogForm>({ ...BLANK_FORM });
   const [submitting, setSubmitting] = useState(false);
+  const [customClientMode, setCustomClientMode] = useState(false);
+
+  /* Derive unique client/agency picker options from approved target rows */
+  const targetClientOptions = React.useMemo(() => {
+    if (!approvedTargetRows?.length) return [];
+    const seen = new Set<string>();
+    const opts: { key: string; agency: string; client: string; brand: string; label: string }[] = [];
+    for (const r of approvedTargetRows) {
+      const key = `${r.agency}|||${r.client}`;
+      if (!seen.has(key)) {
+        seen.add(key);
+        const label = r.agency && r.agency !== "NA"
+          ? `${r.client} (via ${r.agency})`
+          : r.client;
+        opts.push({ key, agency: r.agency, client: r.client, brand: r.brand, label });
+      }
+    }
+    return opts.sort((a, b) => a.label.localeCompare(b.label));
+  }, [approvedTargetRows]);
 
   const handleROReceived = () => {
     const clientCompany = form.client || form.clientAgencyName || "";
@@ -418,59 +439,66 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
               </div>
             </div>
 
-            {/* Client / Agency / Brand */}
+            {/* Client / Agency */}
             <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>Client / Agency / Brand</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 10 }}>
-              <div>
-                <label>Agency Name</label>
-                <input placeholder="e.g. Dentsu, Omnicom…" value={form.agency} onChange={e => setF({ agency: e.target.value })} />
-              </div>
-              <div>
-                <label>Client Name *</label>
-                <select value={form.dealId} onChange={e => {
-                  const deal = deals.find(d => d.id === e.target.value);
-                  setF({
-                    dealId:          e.target.value,
-                    clientAgencyName: deal?.clientCompany || "",
-                    client:           deal?.clientCompany || "",
-                    agency:           deal?.agency || form.agency,
-                    brand:            deal?.brand  || form.brand,
-                    contactName:      deal?.contactName || form.contactName,
-                    designation:      deal?.contactDesignation || deal?.designation || form.designation,
-                    contactLevel:     deal?.contactLevel || form.contactLevel,
-                    mobile:           deal?.phone || deal?.mobile || form.mobile,
-                  });
-                }}>
-                  <option value="">Select from CRM</option>
-                  {deals
-                    .filter(d => !form.repId || String(d.repId) === form.repId || Number(d.repId) === parseInt(form.repId))
-                    .map(d => <option key={d.id} value={d.id}>{d.clientCompany}</option>)}
+            <div style={{ marginBottom: 10 }}>
+              <label>Client / Agency *</label>
+              {!customClientMode ? (
+                <select
+                  value={(() => {
+                    if (!form.client && !form.agency) return "";
+                    if (form.clientAgencyName === "N/A") return "__na__";
+                    const match = targetClientOptions.find(o => o.client === form.client && o.agency === form.agency);
+                    return match ? match.key : "__custom__";
+                  })()}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === "__custom__") {
+                      setCustomClientMode(true);
+                      setF({ clientAgencyName: "", agency: "", client: "", brand: "" });
+                      return;
+                    }
+                    if (val === "__na__") {
+                      setF({ clientAgencyName: "N/A", agency: "N/A", client: "N/A", brand: "" });
+                      return;
+                    }
+                    if (val === "") {
+                      setF({ clientAgencyName: "", agency: "", client: "", brand: "" });
+                      return;
+                    }
+                    const opt = targetClientOptions.find(o => o.key === val);
+                    if (opt) {
+                      setF({ clientAgencyName: opt.client, agency: opt.agency, client: opt.client, brand: opt.brand });
+                    }
+                  }}
+                >
+                  <option value="">— Select client / agency —</option>
+                  {targetClientOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
+                  <option value="__na__">N/A (no specific client)</option>
+                  <option value="__custom__">+ Add new…</option>
                 </select>
-                {!form.dealId && (
-                  <input placeholder="Or type client name…" value={form.client} onChange={e => setF({ client: e.target.value, clientAgencyName: e.target.value })} style={{ marginTop: 4 }} />
-                )}
-              </div>
-              <div>
-                <label>Brand / Product</label>
-                <input placeholder="e.g. Surf Excel, Maggi…" value={form.brand} onChange={e => setF({ brand: e.target.value })} />
-              </div>
-            </div>
-            {!form.dealId && (
-              <div style={{ background: `${C.blue}08`, border: `1px solid ${C.blue}22`, borderRadius: 6, padding: "7px 10px", fontSize: 11, color: C.blue, marginBottom: 10 }}>
-                Tip: Select a client from the CRM dropdown to auto-link this touchpoint to your pipeline deal.
-              </div>
-            )}
-            {/* Deal value prompt */}
-            {(() => {
-              const selDeal = form.dealId ? deals.find(d => d.id === form.dealId) : null;
-              if (!selDeal || (selDeal.amount && selDeal.amount > 0)) return null;
-              return (
-                <div style={{ background: `${C.accent}10`, border: `1px solid ${C.accent}44`, borderRadius: 6, padding: "8px 10px", marginBottom: 10 }}>
-                  <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, textTransform: "uppercase", letterSpacing: ".06em", marginBottom: 4 }}>Deal has no value — set it now so it appears in pipeline</div>
-                  <input placeholder="e.g. 15,00,000" value={form.dealAmount} onChange={e => setF({ dealAmount: e.target.value })} style={{ fontSize: 12, width: "100%" }} />
+              ) : (
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <input
+                    autoFocus
+                    placeholder="Type client or agency name…"
+                    value={form.client || form.clientAgencyName}
+                    onChange={e => setF({ clientAgencyName: e.target.value, client: e.target.value, agency: "" })}
+                    style={{ flex: 1 }}
+                  />
+                  <button
+                    onClick={() => { setCustomClientMode(false); setF({ clientAgencyName: "", agency: "", client: "", brand: "" }); }}
+                    style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 4, color: C.dim, cursor: "pointer", padding: "4px 8px", fontSize: 11 }}
+                  >
+                    ← Back
+                  </button>
                 </div>
-              );
-            })()}
+              )}
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              <label>Brand / Product</label>
+              <input placeholder="e.g. Surf Excel, Maggi…" value={form.brand} onChange={e => setF({ brand: e.target.value })} />
+            </div>
             {/* Contact details */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
               <div><label>Name of Person Met *</label><input placeholder="Full name" value={form.contactName} onChange={e => setF({ contactName: e.target.value })} /></div>

@@ -5,7 +5,7 @@
  * No API calls, no hooks inside component.
  */
 
-import React from "react";
+import React, { useState } from "react";
 import { C } from "../../utils/palette";
 import type { PlanForm } from "../../views/rep/MyPlan";
 
@@ -29,6 +29,9 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
   forDate, form: pf, deals, approvedTargetRows,
   onFormChange: setPf, onSubmit: doAddPlan, onClose,
 }) => {
+  const [agencyCustom, setAgencyCustom] = useState(false);
+  const [clientCustom, setClientCustom] = useState(false);
+
   const rows = approvedTargetRows !== undefined ? approvedTargetRows : null;
 
   const allAgencies = rows != null
@@ -68,24 +71,70 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         {/* Agency */}
         <div style={{ marginBottom: 10 }}>
           <label style={labelStyle}>Agency</label>
-          <select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
-            style={inputStyle}>
-            <option value="">— No agency / Direct —</option>
-            <option value="NA">NA</option>
-            {allAgencies.map(a => <option key={a}>{a}</option>)}
-          </select>
+          {agencyCustom ? (
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                autoFocus
+                value={pf.agency}
+                onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
+                placeholder="Type agency name…"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button onClick={() => { setAgencyCustom(false); setPf(p => ({ ...p, agency: "", client: "", brand: "" })); }}
+                style={{ padding: "6px 10px", fontSize: 11, borderRadius: 4, border: `1px solid ${C.border}`, background: "transparent", color: C.dim, cursor: "pointer" }}>
+                ← Back
+              </button>
+            </div>
+          ) : (
+            <select
+              value={pf.agency}
+              onChange={e => {
+                if (e.target.value === "__custom__") { setAgencyCustom(true); setPf(p => ({ ...p, agency: "", client: "", brand: "" })); return; }
+                setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }));
+              }}
+              style={inputStyle}
+            >
+              <option value="">— No agency / Direct —</option>
+              <option value="NA">NA</option>
+              {allAgencies.map(a => <option key={a}>{a}</option>)}
+              <option value="__custom__">+ Add new…</option>
+            </select>
+          )}
         </div>
 
         {/* Client */}
         <div style={{ marginBottom: 10 }}>
           <label style={labelStyle}>Client *</label>
-          {clientOptions.length > 0
-            ? <select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))} style={inputStyle}>
-                <option value="">— Select client —</option>
-                {clientOptions.map(c => <option key={c}>{c}</option>)}
-              </select>
-            : <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *" style={inputStyle} />
-          }
+          {clientCustom ? (
+            <div style={{ display: "flex", gap: 6 }}>
+              <input
+                autoFocus
+                value={pf.client}
+                onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
+                placeholder="Type client name…"
+                style={{ ...inputStyle, flex: 1 }}
+              />
+              <button onClick={() => { setClientCustom(false); setPf(p => ({ ...p, client: "", brand: "" })); }}
+                style={{ padding: "6px 10px", fontSize: 11, borderRadius: 4, border: `1px solid ${C.border}`, background: "transparent", color: C.dim, cursor: "pointer" }}>
+                ← Back
+              </button>
+            </div>
+          ) : clientOptions.length > 0 ? (
+            <select
+              value={pf.client}
+              onChange={e => {
+                if (e.target.value === "__custom__") { setClientCustom(true); setPf(p => ({ ...p, client: "", brand: "" })); return; }
+                setPf(p => ({ ...p, client: e.target.value, brand: "" }));
+              }}
+              style={inputStyle}
+            >
+              <option value="">— Select client —</option>
+              {clientOptions.map(c => <option key={c}>{c}</option>)}
+              <option value="__custom__">+ Add new…</option>
+            </select>
+          ) : (
+            <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *" style={inputStyle} />
+          )}
         </div>
 
         {/* Brand */}

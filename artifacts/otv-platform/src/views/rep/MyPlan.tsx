@@ -127,35 +127,40 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
   const [planForm,      setPlanForm]      = useState<PlanForm>(BLANK_PLAN_FORM);
   const [logOpen,       setLogOpen]       = useState(false);
   const [logMeeting,    setLogMeeting]    = useState<Meeting | null>(null);
-  const [approvedTargetRows, setApprovedTargetRows] = useState<{quarter:string;agency:string;client:string;brand:string}[]>([]);
+  const [rawTargetSubs, setRawTargetSubs] = useState<any[]>([]);
 
   useEffect(() => {
-    apiFetch("/api/targets?status=Approved")
-      .then((res: any) => {
-        const rows: {quarter:string;agency:string;client:string;brand:string}[] = [];
-        (res?.data ?? res ?? []).forEach((sub: any) => {
-          // Derive which short quarter labels this submission covers.
-          // Annual targets (quarter="Annual-FY26") apply to all four quarters.
-          // Quarterly targets (quarter="Q1 FY26") apply to just that quarter.
-          const raw: string = sub.quarter ?? "";
-          const quarters: string[] = raw.startsWith("Annual")
-            ? ["Q1", "Q2", "Q3", "Q4"]
-            : [raw.slice(0, 2)];            // "Q1 FY26" → "Q1"
-          quarters.forEach(q => {
-            (sub.clients ?? []).forEach((c: any) => {
-              rows.push({
-                quarter: q,
-                agency:  c.agencyName  || c.agency    || "",
-                client:  c.clientCompany || c.clientName || "",
-                brand:   c.brand       || c.brandName  || "",
-              });
+    apiFetch("/api/targets")
+      .then((res: any) => setRawTargetSubs(res?.data ?? res ?? []))
+      .catch(() => {});
+  }, []);
+
+  const approvedTargetRows = React.useMemo(() => {
+    const myId = myRepId;
+    const rows: {quarter:string;agency:string;client:string;brand:string}[] = [];
+    rawTargetSubs
+      .filter((sub: any) =>
+        sub.status === "Approved" &&
+        (myId == null || String(sub.repId) === String(myId))
+      )
+      .forEach((sub: any) => {
+        const raw: string = sub.quarter ?? "";
+        const quarters: string[] = raw.startsWith("Annual")
+          ? ["Q1", "Q2", "Q3", "Q4"]
+          : [raw.slice(0, 2)];
+        quarters.forEach(q => {
+          (sub.clients ?? []).forEach((c: any) => {
+            rows.push({
+              quarter: q,
+              agency:  c.agencyName    || c.agency    || "",
+              client:  c.clientCompany || c.clientName || "",
+              brand:   c.brand         || c.brandName  || "",
             });
           });
         });
-        setApprovedTargetRows(rows);
-      })
-      .catch(() => {/* silently ignore — reps without approved targets see empty state */});
-  }, []);
+      });
+    return rows;
+  }, [rawTargetSubs, myRepId]);
 
   const openLog = (m: Meeting | null) => { setLogMeeting(m); setLogOpen(true); };
   const closeLog = () => { setLogOpen(false); setLogMeeting(null); };
@@ -529,6 +534,7 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
           onSubmit={handleLogSubmit}
           userRole={userRole}
           deals={myDeals}
+          approvedTargetRows={approvedTargetRows}
           showToast={showToast}
           onNavigateRevenue={onNavigateRevenue}
         />
