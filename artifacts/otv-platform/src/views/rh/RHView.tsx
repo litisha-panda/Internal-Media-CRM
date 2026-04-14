@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
   USER_ROLES,
+  QUARTERS,
   APPROVAL_SLA_DAYS,
   APPROVAL_TARGETS,
   TASK_STATUSES,
@@ -69,6 +70,7 @@ export function RHView({
     C,
     TODAY,
     TOMORROW,
+    CURRENT_FY,
   } = useCROAppContext();
   return (
     <>
@@ -341,12 +343,72 @@ export function RHView({
                   </div>
                   <div style={{fontSize:10,color:C.muted}}>{TODAY}</div>
                 </div>
-                <div style={{display:"flex",gap:8,marginBottom:16,marginTop:10,flexWrap:"wrap"}}>
+                {/* ── RH own 3-row KPI strip ── */}
+                {(()=>{
+                  const todayDate=new Date();
+                  const todayM=todayDate.getMonth()+1;
+                  const qIdx=todayM>=4&&todayM<=6?0:todayM>=7&&todayM<=9?1:todayM>=10&&todayM<=12?2:3;
+                  const currentQ=QUARTERS[qIdx];
+                  const MONTH_NAMES=["january","february","march","april","may","june","july","august","september","october","november","december"];
+                  const MONTH_LABELS=["January","February","March","April","May","June","July","August","September","October","November","December"];
+                  const currentMonthKey=MONTH_NAMES[todayDate.getMonth()];
+                  const currentMonth=MONTH_LABELS[todayDate.getMonth()];
+                  const currentMonthStr=`${todayDate.getFullYear()}-${String(todayM).padStart(2,"0")}`;
+                  const annualAch=revenueEntries.filter(e=>myRepIds2.includes(String(e.repId))&&(e.fiscalYear===CURRENT_FY||!e.fiscalYear)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
+                  const qTarget=targetSubs.filter(s=>myRepIds2.includes(String(s.repId))&&s.quarter===currentQ&&s.status==="Approved").reduce((s:number,t:any)=>s+(Number(t.totalTarget)||0),0);
+                  const qAch=revenueEntries.filter(e=>myRepIds2.includes(String(e.repId))&&e.quarter===currentQ).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
+                  const mTarget=targetSubs.filter(s=>myRepIds2.includes(String(s.repId))&&s.status==="Approved").reduce((s:number,t:any)=>s+(Number((t as any)[currentMonthKey])||0),0);
+                  const mAch=revenueEntries.filter(e=>myRepIds2.includes(String(e.repId))&&(String(e.date||"")).startsWith(currentMonthStr)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
+                  const rows=[
+                    {label:"Annual",  period:CURRENT_FY,   target:regionTarget,  ach:annualAch},
+                    {label:"Quarter", period:currentQ,     target:qTarget,       ach:qAch},
+                    {label:"Month",   period:currentMonth, target:mTarget,       ach:mAch},
+                  ];
+                  return (
+                    <div style={{marginBottom:16,marginTop:10}}>
+                      <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                        <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                          <thead><tr>
+                            {["Period","Target","Achieved","% Achieved","Shortfall"].map(h=>(
+                              <th key={h} style={{padding:"7px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`}}>{h}</th>
+                            ))}
+                          </tr></thead>
+                          <tbody>
+                            {rows.map(row=>{
+                              const pct=row.target>0?Math.min(999,Math.round(row.ach/row.target*100)):0;
+                              const sc=pct>=100?C.green:pct>=70?C.accent:pct>=40?C.orange:C.red;
+                              const sf=Math.max(0,row.target-row.ach);
+                              return (
+                                <tr key={row.label} style={{borderBottom:`1px solid ${C.s2}`}}>
+                                  <td style={{padding:"9px 14px"}}>
+                                    <div style={{fontWeight:700,fontSize:11}}>{row.label}</div>
+                                    <div style={{fontSize:9,color:C.dim}}>{row.period}</div>
+                                  </td>
+                                  <td style={{padding:"9px 14px",color:C.dim}}>{row.target>0?fmtR(row.target):<span style={{color:C.muted}}>—</span>}</td>
+                                  <td style={{padding:"9px 14px",color:C.green,fontWeight:600}}>{fmtR(row.ach)}</td>
+                                  <td style={{padding:"9px 14px"}}>
+                                    {row.target>0?(
+                                      <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                        <div style={{width:50,height:4,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                                          <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:sc,borderRadius:2}}/>
+                                        </div>
+                                        <span style={{fontWeight:700,color:sc,fontSize:11}}>{pct}%</span>
+                                      </div>
+                                    ):<span style={{color:C.muted,fontSize:11}}>No target</span>}
+                                  </td>
+                                  <td style={{padding:"9px 14px",color:sf>0?C.red:C.green,fontWeight:600}}>{row.target>0?fmtR(sf):"—"}</td>
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  );
+                })()}
+                <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
                   {[
-                    {label:"TARGET",   value:fmtR(regionTarget),    color:C.accent},
-                    {label:"ACHIEVED", value:fmtR(regionAchieved),  color:C.green},
-                    {label:"SHORTFALL",value:fmtR(regionShortfall), color:regionShortfall>0?C.red:C.green},
-                    {label:"PIPELINE", value:fmtR(regionPipeline),  color:C.blue},
+                    {label:"PIPELINE", value:fmtR(regionPipeline), color:C.blue},
                   ].map(card=>(
                     <div key={card.label} style={{flex:"1 1 100px",background:C.surface,border:`1px solid ${card.color}33`,borderLeft:`3px solid ${card.color}`,borderRadius:6,padding:"8px 12px"}}>
                       <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:3}}>{card.label}</div>
@@ -368,7 +430,7 @@ export function RHView({
                         {myReps.map(rep=>{
                           const rId=rep.repId;
                           const repTarget=targetSubs.filter(s=>String(s.repId)===String(rId)&&s.status==="Approved").reduce((s:number,t:any)=>s+(Number(t.totalTarget)||0),0);
-                          const repAch=revenueEntries.filter(e=>String(e.repId)===String(rId)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
+                          const repAch=revenueEntries.filter(e=>String(e.repId)===String(rId)&&(e.fiscalYear===CURRENT_FY||!e.fiscalYear)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
                           const repPct=repTarget>0?Math.min(999,Math.round(repAch/repTarget*100)):0;
                           const sc=repPct>=100?C.green:repPct>=70?C.accent:repPct>=40?C.orange:C.red;
                           return (
