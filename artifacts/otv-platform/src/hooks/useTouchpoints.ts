@@ -113,7 +113,7 @@ export function useTouchpoints(loggedIn = true): UseTouchpointsReturn {
     const optimistic = { ...payload, id: tempId } as Touchpoint;
     rawSetTouchpoints(prev => [...prev, optimistic]);
     try {
-      const created = await tpSvc.createTouchpoint(payload);
+      const created = await tpSvc.createTouchpoint({ ...payload, id: tempId });
       backendIds.current.add(created.id);
       rawSetTouchpoints(prev => prev.map(tp => tp.id === tempId ? created : tp));
       return created;

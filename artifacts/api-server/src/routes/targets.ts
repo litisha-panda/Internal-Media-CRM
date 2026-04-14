@@ -45,9 +45,9 @@ function crossCheckTotal(clients: ClientAllocation[], totalTarget: number): stri
 const router = Router();
 
 // ─── Role constants ───────────────────────────────────────────────────────────
-// ALL role names must match the canonical set in users.role:
-//   "SALES REP" | "REGION HEAD" | "SALES HEAD" | "SALES STRATEGY" | "CRO" | "ADMIN" | "DIGI OPS"
-// "NATIONAL SALES HEAD" is NOT a valid role — use "SALES HEAD".
+// ALL role names must match the canonical DB format (underscore):
+//   "SALES_REP" | "REGION_HEAD" | "SALES_HEAD" | "SALES_STRATEGY" | "CRO" | "ADMIN" | "DIGI_OPS"
+// "NATIONAL SALES HEAD" is NOT a valid role — use "SALES_HEAD".
 
 /**
  * Hierarchy-aware approval check.
@@ -77,8 +77,8 @@ function canApprove(user: {
 
 async function scopeCondition(user: any) {
   const role = user.role;
-  if (role === "SALES REP") return eq(targetSubmissions.repId, user.repId!);
-  if (role === "REGION HEAD") {
+  if (role === "SALES_REP") return eq(targetSubmissions.repId, user.repId!);
+  if (role === "REGION_HEAD") {
     const directReports = await db
       .select({ repId: users.repId })
       .from(users)
@@ -87,8 +87,8 @@ async function scopeCondition(user: any) {
     if (!repIds.length) return null;
     return inArray(targetSubmissions.repId, repIds);
   }
-  // SALES HEAD (NSH) sees all 'Pending NSH' submissions across all regions — no manager_id filter
-  if (role === "SALES HEAD") return eq(targetSubmissions.status, "Pending NSH");
+  // SALES_HEAD (NSH) sees all 'Pending NSH' submissions across all regions — no manager_id filter
+  if (role === "SALES_HEAD") return eq(targetSubmissions.status, "Pending NSH");
   return undefined; // CRO, SALES STRATEGY, ADMIN see all
 }
 
@@ -111,8 +111,8 @@ router.get("/targets", requireAuth, async (req, res) => {
 router.post("/targets/region/:region/approve", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    if (u.role !== "SALES HEAD" && u.role !== "ADMIN") {
-      return void res.status(403).json({ ok: false, error: "Only SALES HEAD (NSH) can bulk-approve by region" });
+    if (u.role !== "SALES_HEAD" && u.role !== "ADMIN") {
+      return void res.status(403).json({ ok: false, error: "Only SALES_HEAD (NSH) can bulk-approve by region" });
     }
 
     const region = String(req.params["region"]);
@@ -193,8 +193,8 @@ router.post("/targets/region/:region/approve", requireAuth, async (req, res) => 
 router.post("/targets/region/:region/reject", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    if (u.role !== "SALES HEAD" && u.role !== "ADMIN") {
-      return void res.status(403).json({ ok: false, error: "Only SALES HEAD (NSH) can bulk-reject by region" });
+    if (u.role !== "SALES_HEAD" && u.role !== "ADMIN") {
+      return void res.status(403).json({ ok: false, error: "Only SALES_HEAD (NSH) can bulk-reject by region" });
     }
 
     const region = String(req.params["region"]);
@@ -321,9 +321,9 @@ router.post("/targets", requireAuth, async (req, res) => {
     const isAnnual = req.body.year !== undefined || req.body.q1Target !== undefined;
 
     // ── Never trust client-supplied ownership for SALES REP ──────────────────
-    const authorRepId  = u.role === "SALES REP" ? u.repId!   : (req.body.repId   ?? u.repId ?? 0);
-    const authorRegion = u.role === "SALES REP" ? u.region!  : (req.body.region  ?? u.region ?? "");
-    const authorName   = u.role === "SALES REP" ? u.name     : (req.body.repName ?? u.name);
+    const authorRepId  = u.role === "SALES_REP" ? u.repId!   : (req.body.repId   ?? u.repId ?? 0);
+    const authorRegion = u.role === "SALES_REP" ? u.region!  : (req.body.region  ?? u.region ?? "");
+    const authorName   = u.role === "SALES_REP" ? u.name     : (req.body.repName ?? u.name);
 
     if (isAnnual) {
       // ── Annual schema ───────────────────────────────────────────────────────
@@ -527,8 +527,8 @@ router.post("/targets/:id/approve", requireAuth, async (req, res) => {
       return void res.status(403).json({ ok: false, error: check.reason });
     }
 
-    // ── REGION HEAD: verify submission belongs to a direct report ──────────────
-    if (u.role === "REGION HEAD") {
+    // ── REGION_HEAD: verify submission belongs to a direct report ─────────────
+    if (u.role === "REGION_HEAD") {
       const directReports = await db
         .select({ repId: users.repId })
         .from(users)
@@ -620,8 +620,8 @@ router.post("/targets/:id/reject", requireAuth, async (req, res) => {
       return void res.status(403).json({ ok: false, error: check.reason });
     }
 
-    // ── REGION HEAD: verify submission belongs to a direct report ──────────────
-    if (u.role === "REGION HEAD") {
+    // ── REGION_HEAD: verify submission belongs to a direct report ─────────────
+    if (u.role === "REGION_HEAD") {
       const directReports = await db
         .select({ repId: users.repId })
         .from(users)
@@ -691,7 +691,7 @@ router.patch("/targets/:id", requireAuth, async (req, res) => {
     if (!rows.length) return void res.status(404).json({ ok: false, error: "Not found" });
 
     const sub = rows[0];
-    if (u.role === "SALES REP" && sub.repId !== u.repId) {
+    if (u.role === "SALES_REP" && sub.repId !== u.repId) {
       return void res.status(403).json({ ok: false, error: "Cannot edit another rep's submission" });
     }
     if (!["Rejected", "Pending Rep", "Pending RH"].includes(sub.status!)) {

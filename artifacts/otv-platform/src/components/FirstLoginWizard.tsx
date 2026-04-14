@@ -251,11 +251,11 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
             id, repId: user.repId ?? user.id, repName: name.trim(), region,
             quarter: QUARTERS_FY[qi],
             clients: [{
-              clientCompany: row.clientName,
-              agency: row.agencyName === "NA" ? "" : row.agencyName,
-              brand: row.brandName,
+              clientName: row.clientName,
+              agencyName: row.agencyName === "NA" ? "" : row.agencyName,
+              brandName: row.brandName,
               dealType: "Linear TV",
-              targetAmount: qTotals[qi],
+              allocatedAmount: qTotals[qi],
             }],
             totalTarget: qTotals[qi],
             ...monthTotals,
@@ -294,37 +294,37 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
     }
   };
 
-  // RH/NSH: approve
+  // RH/NSH: approve — uses POST /api/targets/:id/approve (not PATCH)
   const approve = async (sub: any) => {
-    const nextStatus = isRH ? "Pending NSH" : "Pending CRO";
+    const nextStatus = isRH ? "Pending NSH" : "Pending Strategy";
     try {
-      await apiFetch(`/api/targets/${sub.id}`, {
-        method: "PATCH",
+      await apiFetch(`/api/targets/${sub.id}/approve`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: nextStatus }),
+        body: JSON.stringify({}),
       });
       setTargetSubs(p => p.map(s => s.id === sub.id ? { ...s, status: nextStatus } : s));
       setActioned(prev => new Set(prev).add(sub.id));
     } catch (e: any) {
-      showToast(e?.body?.error ?? "Failed to approve", "err");
+      showToast(e?.body?.error ?? e?.message ?? "Failed to approve", "err");
     }
   };
 
-  // RH/NSH: reject
+  // RH/NSH: reject — uses POST /api/targets/:id/reject (not PATCH)
   const reject = async (sub: any) => {
     if (!rejectNote.trim()) { showToast("Enter reject remarks", "err"); return; }
     try {
-      await apiFetch(`/api/targets/${sub.id}`, {
-        method: "PATCH",
+      await apiFetch(`/api/targets/${sub.id}/reject`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "Pending Rep", remarks: rejectNote.trim() }),
+        body: JSON.stringify({ note: rejectNote.trim() }),
       });
-      setTargetSubs(p => p.map(s => s.id === sub.id ? { ...s, status: "Pending Rep", remarks: rejectNote.trim() } : s));
+      setTargetSubs(p => p.map(s => s.id === sub.id ? { ...s, status: "Pending Rep" } : s));
       setActioned(prev => new Set(prev).add(sub.id));
       setRejectId(null);
       setRejectNote("");
     } catch (e: any) {
-      showToast(e?.body?.error ?? "Failed to reject", "err");
+      showToast(e?.body?.error ?? e?.message ?? "Failed to reject", "err");
     }
   };
 

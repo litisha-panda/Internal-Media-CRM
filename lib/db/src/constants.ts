@@ -161,9 +161,9 @@ export type IRStatus = (typeof IR_STATUSES)[number];
 // ─── Target approval chain ────────────────────────────────────────────────────
 // 4-level chain: Region Head → National Sales Head → Sales Strategy → CRO
 export const TARGET_APPROVAL_CHAIN: Record<string, string> = {
-  "Pending RH":       "REGION HEAD",
-  "Pending NSH":      "SALES HEAD",
-  "Pending Strategy": "SALES STRATEGY",
+  "Pending RH":       "REGION_HEAD",
+  "Pending NSH":      "SALES_HEAD",
+  "Pending Strategy": "SALES_STRATEGY",
   "Pending CRO":      "CRO",
 };
 
