@@ -27,18 +27,34 @@ function canViewFor(role: string): "self" | "region" | "all" {
   return "all";
 }
 
+// Normalize DB role format to space-separated UI format.
+// DB may store SALES_REP, REGION_HEAD, NSH, DIGI_OPS, SALES_STRATEGY
+// (underscore/legacy) — convert to the space format the frontend expects.
+function normalizeRole(raw: string): string {
+  const map: Record<string, string> = {
+    "SALES_REP":      "SALES REP",
+    "REGION_HEAD":    "REGION HEAD",
+    "SALES_HEAD":     "SALES HEAD",
+    "NSH":            "SALES HEAD",
+    "SALES_STRATEGY": "SALES STRATEGY",
+    "DIGI_OPS":       "DIGI OPS",
+  };
+  return map[raw] ?? raw;
+}
+
 // Safe user projection — never expose passwordHash or needsPwReset to API callers
 function safeUser(u: typeof users.$inferSelect) {
+  const role = normalizeRole(u.role);
   return {
     id:          u.id,
     name:        u.name,
     email:       u.email,
-    role:        u.role,
+    role,
     region:      u.region,
     repId:       u.repId,
     managerId:   u.managerId,
     status:      u.status,
-    canView:     canViewFor(u.role),
+    canView:     canViewFor(role),
     requestedAt: u.requestedAt,
     approvedAt:  u.approvedAt,
     approvedBy:  u.approvedBy,

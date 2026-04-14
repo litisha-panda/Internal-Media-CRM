@@ -45,12 +45,18 @@ export const USER_ROLES = [
   { id: "rh_east",        name: "Region Head – East",    role: "REGION HEAD",    canView: "region", region: "East",     repId: undefined as number|undefined },
   { id: "rh_west",        name: "Region Head – West",    role: "REGION HEAD",    canView: "region", region: "West",     repId: undefined as number|undefined },
   { id: "rh_national",    name: "Region Head – National",role: "REGION HEAD",    canView: "region", region: "National", repId: undefined as number|undefined },
+  { id: "rh_central",     name: "Region Head – Central", role: "REGION HEAD",    canView: "region", region: "Central",  repId: undefined as number|undefined },
+  { id: "digi_ops",       name: "Digi Ops Team",         role: "DIGI OPS",       canView: "all",    region: null as string|null, repId: undefined as number|undefined },
   { id: "rep_arjun",      name: "Arjun Mishra",          role: "SALES REP",      canView: "self",   region: "North",    repId: 1 },
   { id: "rep_priya",      name: "Priya Dash",            role: "SALES REP",      canView: "self",   region: "South",    repId: 2 },
   { id: "rep_rohit",      name: "Rohit Nanda",           role: "SALES REP",      canView: "self",   region: "East",     repId: 3 },
   { id: "rep_sneha",      name: "Sneha Patel",           role: "SALES REP",      canView: "self",   region: "West",     repId: 4 },
   { id: "rep_vikram",     name: "Vikram Sen",            role: "SALES REP",      canView: "self",   region: "National", repId: 5 },
   { id: "rep_meera",      name: "Meera Rao",             role: "SALES REP",      canView: "self",   region: "South",    repId: 6 },
+  { id: "rep_rahul",      name: "Rahul Sharma",          role: "SALES REP",      canView: "self",   region: "North",    repId: 7 },
+  { id: "rep_kavya",      name: "Kavya Singh",           role: "SALES REP",      canView: "self",   region: "North",    repId: 8 },
+  { id: "rep_manish",     name: "Manish Tiwari",         role: "SALES REP",      canView: "self",   region: "North",    repId: 9 },
+  { id: "rep_pooja",      name: "Pooja Agarwal",         role: "SALES REP",      canView: "self",   region: "North",    repId: 10 },
 ];
 
 export type Req = { dept: string; desc: string; status: string; raisedAt: string };

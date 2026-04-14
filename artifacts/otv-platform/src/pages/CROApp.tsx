@@ -704,34 +704,62 @@ export function CROApp({ user, onLogout }) {
     if (view === "hr") fetchAttendanceData();
   }, [view, fetchAttendanceData]);
 
-  // Derive activeUser from login email — prevents role spoofing via DevTools
+  // Derive activeUser from login email — prevents role spoofing via DevTools.
+  // Falls back to DB role when email is not in the hardcoded map so that
+  // unrecognised users get the correct role-based view instead of admin.
   const derivedUserId = useMemo(() => {
     if (!user?.email) return "admin";
     const email = user.email.toLowerCase();
-    // Direct email match against USER_ROLES name patterns
-    const emailToId = {
-      "darpan@odishatv.com":     "sales_analysis",
-      "saleshead@odishatv.com":  "sales_head",
-      "nsh@odishatv.com":        "sales_head",
-      "sachin@odishatv.com":     "sales_strategy",
-      "admin@odishatv.com":      "admin",
-      "digiops@odishatv.com":    "digi_ops",
-      "digital@odishatv.com":    "digi_ops",
+    const emailToId: Record<string, string> = {
+      "darpan@odishatv.com":      "sales_analysis",
+      "saleshead@odishatv.com":   "sales_head",
+      "nsh@odishatv.com":         "sales_head",
+      "sachin@odishatv.com":      "sales_strategy",
+      "admin@odishatv.com":       "admin",
+      "digiops@odishatv.com":     "digi_ops",
+      "digital@odishatv.com":     "digi_ops",
       "rh.national@odishatv.com": "rh_national",
-      "rh.north@odishatv.com":   "rh_north",
-      "rh.south@odishatv.com":   "rh_south",
-      "rh.east@odishatv.com":    "rh_east",
-      "rh.west@odishatv.com":    "rh_west",
-      "rh.central@odishatv.com": "rh_central",
-      "arjun@odishatv.com":      "rep_arjun",
-      "priya@odishatv.com":      "rep_priya",
-      "rohit@odishatv.com":      "rep_rohit",
-      "sneha@odishatv.com":      "rep_sneha",
-      "vikram@odishatv.com":     "rep_vikram",
-      "meera@odishatv.com":      "rep_meera",
+      "rh.north@odishatv.com":    "rh_north",
+      "rh.south@odishatv.com":    "rh_south",
+      "rh.east@odishatv.com":     "rh_east",
+      "rh.west@odishatv.com":     "rh_west",
+      "rh.central@odishatv.com":  "rh_central",
+      "arjun@odishatv.com":       "rep_arjun",
+      "priya@odishatv.com":       "rep_priya",
+      "rohit@odishatv.com":       "rep_rohit",
+      "sneha@odishatv.com":       "rep_sneha",
+      "vikram@odishatv.com":      "rep_vikram",
+      "meera@odishatv.com":       "rep_meera",
+      "rahul@odishatv.com":       "rep_rahul",
+      "kavya@odishatv.com":       "rep_kavya",
+      "manish@odishatv.com":      "rep_manish",
+      "pooja@odishatv.com":       "rep_pooja",
     };
-    return emailToId[email] || "admin";
-  }, [user?.email]);
+    if (emailToId[email]) return emailToId[email];
+
+    // Fallback: derive from DB role so unknown emails don't get admin privileges
+    const normRole = (user?.role || "").replace(/_/g, " ").toUpperCase();
+    if (normRole === "ADMIN") return "admin";
+    if (normRole === "CRO")                      return "sales_analysis";
+    if (normRole === "NSH" || normRole === "SALES HEAD") return "sales_head";
+    if (normRole === "SALES STRATEGY")           return "sales_strategy";
+    if (normRole === "DIGI OPS")                 return "digi_ops";
+    if (normRole === "REGION HEAD") {
+      const reg = (user?.region || "").toLowerCase();
+      if (reg === "north")   return "rh_north";
+      if (reg === "south")   return "rh_south";
+      if (reg === "east")    return "rh_east";
+      if (reg.startsWith("west")) return "rh_west";
+      if (reg === "national") return "rh_national";
+      if (reg === "central")  return "rh_central";
+      return "rh_north";
+    }
+    if (normRole === "SALES REP") {
+      const found = USER_ROLES.find(r => r.repId !== undefined && r.repId === user?.repId);
+      return found?.id || "rep_arjun";
+    }
+    return "admin";
+  }, [user?.email, user?.role, user?.region, user?.repId]);
   const [activeUser, setActiveUser] = useState(() => derivedUserId);
   const [filterRegion, setFilterRegion] = useState("All");
   const [filterQ, setFilterQ]     = useState("Q1 FY26");
@@ -1070,11 +1098,15 @@ export function CROApp({ user, onLogout }) {
         id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email,
         requestedAt: u.requestedAt ?? u.createdAt, intendedRole: u.role,
       })));
-      setLiveRoles(apiUsers.filter(u => u.status === "active").map(u => ({
-        id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email,
-        role: u.role, region: u.region ?? "",
-        canView: u.role === "SALES REP" ? "self" : u.role === "REGION HEAD" ? "region" : "all",
-      })));
+      setLiveRoles(apiUsers.filter(u => u.status === "active").map(u => {
+        // Normalize DB underscore roles (SALES_REP) to space format (SALES REP)
+        const uiRole = u.role.replace(/_/g, " ");
+        return {
+          id: `api_${u.id}`, _apiId: u.id, name: u.name, email: u.email,
+          role: uiRole, region: u.region ?? "",
+          canView: uiRole === "SALES REP" ? "self" : uiRole === "REGION HEAD" ? "region" : "all",
+        };
+      }));
       setAdminUsersError(null);
     } catch { setAdminUsersError("Network error — could not load users"); }
     finally { setAdminUsersLoading(false); }
@@ -1090,12 +1122,18 @@ export function CROApp({ user, onLogout }) {
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
-  // ── First-login wizard: fires when user.name is null/matches email
-  // and localStorage key not yet set. wizardDismissed allows completion to hide it.
-  const [wizardDismissed, setWizardDismissed]           = useState(false);
+  // ── First-login wizard: fires once per device (localStorage gate).
+  // ?reset_wizard=1 in the URL clears the key so the wizard re-fires for testing.
+  const [wizardDismissed, setWizardDismissed]           = useState(() => {
+    if (typeof window !== "undefined" &&
+        new URLSearchParams(window.location.search).get("reset_wizard") === "1") {
+      // Clear the key so the wizard fires again — useful for dev testing
+      try { if (user?.id) localStorage.removeItem(`otv_wizard_${user.id}`); } catch {}
+    }
+    return false;
+  });
   const showFirstLoginWizard = !wizardDismissed &&
     !!user &&
-    (!user.name || user.name === user.email) &&
     !localStorage.getItem(`otv_wizard_${user.id}`);
 
   // S9: Setup Wizard state
