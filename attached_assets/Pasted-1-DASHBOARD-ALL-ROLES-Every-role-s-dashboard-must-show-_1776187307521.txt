@@ -1,0 +1,30 @@
+1. DASHBOARD — ALL ROLES
+Every role's dashboard must show these KPI rows at the top:
+Row 1: Annual Target | Annual Achieved (YTD) | Annual Shortfall (YTD)
+Row 2: [Current Quarter] Target | [Current Quarter] Achieved (YTD) | [Current Quarter] Shortfall (YTD)  
+Row 3: [Current Month] Target | [Current Month] Achieved (YTD) | [Current Month] Shortfall (YTD)
+Current quarter and month derived automatically from today's date. Indian FY: Q1=Apr-Jun, Q2=Jul-Sep, Q3=Oct-Dec, Q4=Jan-Mar.
+
+Below KPIs, show a data table that varies by role:
+- SALES_REP: no table needed (individual rep)
+- REGION_HEAD: Rep Name | Annual Target | Annual Achieved | This Quarter Target | This Quarter Achieved | This Month Target | This Month Achieved. One row per rep under this RH.
+- NSH: Region | Annual Target | Annual Achieved | This Quarter | This Month. Clickable — clicking a region expands to show rep-wise rows. Clicking a rep shows client-wise rows.
+
+All figures derive dynamically from approved target_submissions (monthly columns) and revenue_entries.
+
+2. INTERNAL REQUESTS — fix the concept
+Internal Requests tab shows two sections:
+Section A: "Requests I've Raised" — IRs created by the current user (from meeting log or manually)
+Section B: "Requests Raised For Me" — IRs where current user is the assignee BUT these should also appear in My Tasks
+
+If someone else raises an IR and assigns it to me → it appears in My Tasks (not in my Internal Requests).
+My Tasks = all tasks assigned to me, including those auto-created from IR assignments.
+
+The approver action buttons (Accept/Reject/In Progress/Done) should appear on the IR card for the assigned person in their My Tasks view, not in Internal Requests.
+
+3. NSH SIDEBAR — fix
+NSH sidebar must show: Dashboard · My Plan · Region Summary · Target Approval · Internal Requests · My Tasks · HR Reports
+Remove "Team's Plan" from NSH — that belongs to RH only.
+"Region Summary" shows: number of meetings done by region (table: Region | RH | Meetings Scheduled | Meetings Logged | Pending Logs).
+
+TypeScript check — 0 errors.
