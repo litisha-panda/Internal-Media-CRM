@@ -1,0 +1,28 @@
+Fix the following wizard and invite bugs:
+
+1. ADMIN WIZARD SHOWING WRONG STEPS
+The Admin wizard must have exactly 2 steps:
+- Step 1: Full Name only (no region field, no reporting manager field)
+- Step 2: Assign unassigned reps to their Region Heads
+- NO guided tour for Admin at all
+Find FirstLoginWizard.tsx and fix the Admin role branch to remove region, manager, and target upload fields. Also remove the tour trigger for Admin on wizard completion.
+
+2. SALES REP / RH / NSH WIZARD — remove region field from NSH wizard entirely. NSH only enters their name in Step 1.
+
+3. GUIDED TOUR — the tour is showing old content. Update the TOUR_DATA slides in CROApp.tsx to match the current workflow:
+- Slide 1: My Plan — "Submit your monthly targets by uploading a CSV. Your RH must approve before you can start logging revenue."
+- Slide 2: Schedule Meeting — "Plan tomorrow's client meetings from My Plan. Add agency, client, pitch type (TV / TV+Digital / Brand Solution / IP)."
+- Slide 3: Log Meeting — "After each meeting, log the outcome. Select from 6 feedback types. If you received an RO, click RO Received to log revenue directly."
+- Slide 4: Revenue Log — "Log confirmed revenue here. Follow Agency > Client > Brand order. Match the pitch type from your meeting."
+- Slide 5: Pipeline — "Track all your deals by stage. New deals start at Quotation and move through the 7 stages."
+- Slide 6: Dashboard — "Your dashboard shows Annual, Quarterly, and Monthly targets vs achieved. All data updates in real time."
+Keep the same number of slides or adjust as needed — no old stage names.
+
+4. INVITE LINK NOT GENERATING
+In the Admin Users tab, the "+ Invite User" button opens a modal but the link is not being generated. Check:
+- Is POST /api/auth/invite route registered and working?
+- Is the frontend correctly calling the API and displaying the returned token as a link?
+- Fix any broken call or missing route registration.
+Log the API response to console so we can see what's returned.
+
+TypeScript check after — 0 errors expected.

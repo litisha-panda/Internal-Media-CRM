@@ -87,43 +87,57 @@ export function SetupWizardView({
 
             const totalTarget = wClients.reduce((s,c)=>s+MONTHS_FY.reduce((ms,m)=>ms+parseLakh(c[m.key]),0),0);
 
+            const MONTH_DB: Record<string,string> = {
+              apr:"april",may:"may",jun:"june",jul:"july",aug:"august",sep:"september",
+              oct:"october",nov:"november",dec:"december",jan:"january",feb:"february",mar:"march",
+            };
+
             const doSubmit = () => {
               if (!wRegion) { showToast("Select your region before submitting","err"); setWStep(1); return; }
               if (!wRM.trim()) { showToast("Enter your Reporting Manager's name before submitting","err"); setWStep(1); return; }
               const repIdInt = myRepId;
               const repName  = myRep?.name || user?.name || "Sales Rep";
-              const rhRegion = wRegion;
               const now      = new Date().toISOString();
-              // One submission per quarter — clients whose quarterly total > 0
-              const newSubs  = QUARTERS.slice(0,4).map((q,qi)=>{
-                const qMonths = MONTHS_FY.filter(m=>m.q===qi);
-                const clients = wClients.map(c=>({
-                  clientCompany: (c.client||c.agency||c.brand||"").trim(),
-                  agency: (c.agency||"").trim(),
-                  brand: (c.brand||"").trim(),
-                  dealType:"Linear TV",
-                  targetAmount: qMonths.reduce((s,m)=>s+parseLakh(c[m.key]),0),
-                })).filter(c=>c.clientCompany&&c.targetAmount>0);
-                if (clients.length===0) return null;
-                const total = clients.reduce((s,c)=>s+(c.targetAmount||0),0);
-                const id = `ts_wizard_${Date.now()}_q${qi}_${Math.random().toString(36).slice(2,4)}`;
-                // Monthly column sums for this quarter (other quarters' months = 0)
-                const monthTotals: Record<string,number> = {};
-                MONTHS_FY.forEach(m=>{
-                  monthTotals[m.key===`apr`?"april":m.key===`may`?"may":m.key===`jun`?"june":
-                    m.key===`jul`?"july":m.key===`aug`?"august":m.key===`sep`?"september":
-                    m.key===`oct`?"october":m.key===`nov`?"november":m.key===`dec`?"december":
-                    m.key===`jan`?"january":m.key===`feb`?"february":"march"] =
-                    m.q===qi ? wClients.reduce((s,c)=>s+parseLakh(c[m.key]),0) : 0;
-                });
-                return {id,repId:repIdInt,repName,region:rhRegion,quarter:q,clients,totalTarget:total,...monthTotals,
-                  status:"Pending RH",submittedAt:now,submittedByRole:"SALES REP",
-                  approvedAt:null,approvedBy:null,frozenTarget:null,awaitingApprovalSince:now,
-                  auditLog:[{at:now,by:"SELF",role:"SALES REP",action:"Submitted (Setup Wizard)"}]};
-              }).filter(Boolean);
-              if (newSubs.length===0) { showToast("Add at least one client with a target amount","err"); return; }
-              setTargetSubs(p=>[...(newSubs as any[]),...p]);
-              apiFetch("/api/targets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(newSubs[0])}).catch(()=>{});
+              const year     = new Date().getFullYear();
+
+              // Only keep clients that have a name and at least one non-zero month
+              const validClients = wClients.filter(c =>
+                (c.client||c.agency||c.brand||"").trim() &&
+                MONTHS_FY.reduce((s,m)=>s+parseLakh(c[m.key]),0) > 0
+              );
+              if (validClients.length===0) { showToast("Add at least one client with a target amount","err"); return; }
+
+              // Aggregate monthly totals across all clients (one annual submission)
+              const monthlyTotals: Record<string,number> = {};
+              MONTHS_FY.forEach(m => {
+                monthlyTotals[MONTH_DB[m.key]] = validClients.reduce((s,c)=>s+parseLakh(c[m.key]),0);
+              });
+              const annual = Object.values(monthlyTotals).reduce((s,v)=>s+v,0);
+
+              const clients = validClients.map(c=>({
+                clientCompany: (c.client||c.agency||c.brand||"").trim(),
+                agency: (c.agency||"").trim(),
+                brand: (c.brand||"").trim(),
+                dealType: "Linear TV",
+                targetAmount: MONTHS_FY.reduce((s,m)=>s+parseLakh(c[m.key]),0),
+              }));
+
+              const id = `ts_wizard_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
+              const payload = {
+                id, repId:repIdInt, repName, region:wRegion,
+                year,
+                clients,
+                totalTarget: annual,
+                ...monthlyTotals,
+                status:"Pending RH",
+                submittedAt:now, submittedByRole:"SALES REP",
+                approvedAt:null, approvedBy:null, frozenTarget:null,
+                awaitingApprovalSince:now,
+                auditLog:[{at:now,by:"SELF",role:"SALES REP",action:"Submitted (Setup Wizard)"}],
+              };
+
+              setTargetSubs(p=>[payload,...p]);
+              apiFetch("/api/targets",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify(payload)}).catch(()=>{});
               showToast("Target submitted for approval ✓");
               setView("rep-dashboard");
             };

@@ -1764,11 +1764,11 @@ export function CROApp({ user, onLogout }) {
   const closeTour = () => { setTourActive(false); setTourStep(0); };
   const openWelcome = () => { setTourActive(false); setShowWelcomeModal(true); };
 
-  // Trigger guided tour on the rep's FIRST login ever (when localStorage key not set).
-  // This fires immediately on first visit — no need to wait for an approved target.
+  // Trigger guided tour on the rep's FIRST login ever (per-user localStorage gate).
+  // Uses the same key that startTour() writes so it fires exactly once per user.
   React.useEffect(() => {
-    if (!isRep) return;
-    if (!localStorage.getItem("otv_tour_seen")) {
+    if (!isRep || !activeUser) return;
+    if (!localStorage.getItem(`otv_welcome_${activeUser}`)) {
       openWelcome();
     }
   }, [isRep, activeUser]);
