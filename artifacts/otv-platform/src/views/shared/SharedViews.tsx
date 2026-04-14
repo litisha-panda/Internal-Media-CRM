@@ -442,6 +442,12 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                           <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
                           {req.clientCompany&&<div style={{fontSize:11,color:C.dim,marginBottom:4}}>Re: {req.clientCompany}{deal?` · ${fmtR(deal.amount)}`:""}</div>}
                           {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:6,lineHeight:1.5}}>{req.details}</div>}
+                          {(req.dueDate||req.priority)&&(
+                            <div style={{display:"flex",gap:10,alignItems:"center",marginBottom:6,flexWrap:"wrap"}}>
+                              {req.dueDate&&<span style={{fontSize:10,fontWeight:600,color:req.dueDate<TODAY?C.red:C.dim}}>Due: {req.dueDate}{req.dueDate<TODAY?" (overdue)":""}</span>}
+                              {req.priority&&req.priority!=="Medium"&&<span style={{fontSize:10,fontWeight:700,color:req.priority==="Urgent"?C.red:req.priority==="High"?C.orange:C.green}}>Priority: {req.priority}</span>}
+                            </div>
+                          )}
                           {req.notes&&<div style={{fontSize:11,color:C.blue,background:`${C.blue}08`,padding:"5px 9px",borderRadius:5,marginBottom:6}}>💬 {req.notes}</div>}
                           {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:8}}>✓ {req.resolverNote}</div>}
                           {req.status!=="Done"&&req.status!=="Rejected"&&req.status!=="Withdrawn"&&(

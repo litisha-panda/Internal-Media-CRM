@@ -343,8 +343,9 @@ export function RHView({
                   </div>
                   <div style={{fontSize:10,color:C.muted}}>{TODAY}</div>
                 </div>
-                {/* ── RH own 3-row KPI strip ── */}
+                {/* ── RH own 3-row KPI strip (own target submissions, not team aggregate) ── */}
                 {(()=>{
+                  const myRepId=String(user_role?.repId||"");
                   const todayDate=new Date();
                   const todayM=todayDate.getMonth()+1;
                   const qIdx=todayM>=4&&todayM<=6?0:todayM>=7&&todayM<=9?1:todayM>=10&&todayM<=12?2:3;
@@ -354,15 +355,21 @@ export function RHView({
                   const currentMonthKey=MONTH_NAMES[todayDate.getMonth()];
                   const currentMonth=MONTH_LABELS[todayDate.getMonth()];
                   const currentMonthStr=`${todayDate.getFullYear()}-${String(todayM).padStart(2,"0")}`;
-                  const annualAch=revenueEntries.filter(e=>myRepIds2.includes(String(e.repId))&&(e.fiscalYear===CURRENT_FY||!e.fiscalYear)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
-                  const qTarget=targetSubs.filter(s=>myRepIds2.includes(String(s.repId))&&s.quarter===currentQ&&s.status==="Approved").reduce((s:number,t:any)=>s+(Number(t.totalTarget)||0),0);
-                  const qAch=revenueEntries.filter(e=>myRepIds2.includes(String(e.repId))&&e.quarter===currentQ).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
-                  const mTarget=targetSubs.filter(s=>myRepIds2.includes(String(s.repId))&&s.status==="Approved").reduce((s:number,t:any)=>s+(Number((t as any)[currentMonthKey])||0),0);
-                  const mAch=revenueEntries.filter(e=>myRepIds2.includes(String(e.repId))&&(String(e.date||"")).startsWith(currentMonthStr)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
+                  const ownSubs=targetSubs.filter(s=>String(s.repId)===myRepId&&s.status==="Approved");
+                  const ownAnnualTarget=ownSubs.reduce((sum,t)=>sum+(Number(t.totalTarget)||0),0);
+                  const ownAnnualAch=revenueEntries.filter(e=>String(e.repId)===myRepId&&(e.fiscalYear===CURRENT_FY||!e.fiscalYear)).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+                  const ownQSubs=ownSubs.filter(s=>s.quarter===currentQ);
+                  const ownQTarget=ownQSubs.reduce((sum,t)=>sum+(Number(t.totalTarget)||0),0);
+                  const ownQAch=revenueEntries.filter(e=>String(e.repId)===myRepId&&e.quarter===currentQ).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
+                  const ownMTarget=ownSubs.reduce((sum,t)=>{
+                    const rec=t as Record<string,unknown>;
+                    return sum+(Number(rec[currentMonthKey])||0);
+                  },0);
+                  const ownMAch=revenueEntries.filter(e=>String(e.repId)===myRepId&&(String(e.date||"")).startsWith(currentMonthStr)).reduce((sum,e)=>sum+(Number(e.amount)||0),0);
                   const rows=[
-                    {label:"Annual",  period:CURRENT_FY,   target:regionTarget,  ach:annualAch},
-                    {label:"Quarter", period:currentQ,     target:qTarget,       ach:qAch},
-                    {label:"Month",   period:currentMonth, target:mTarget,       ach:mAch},
+                    {label:"Annual",  period:CURRENT_FY,   target:ownAnnualTarget,  ach:ownAnnualAch},
+                    {label:"Quarter", period:currentQ,     target:ownQTarget,       ach:ownQAch},
+                    {label:"Month",   period:currentMonth, target:ownMTarget,       ach:ownMAch},
                   ];
                   return (
                     <div style={{marginBottom:16,marginTop:10}}>
