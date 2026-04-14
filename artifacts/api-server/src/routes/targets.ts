@@ -193,6 +193,17 @@ router.post("/targets", requireAuth, async (req, res) => {
         });
       }
 
+      // Monthly totals: prefer spread values from payload (sent by both SetupWizardView
+      // and PlanUploadModal as top-level fields); fall back to 0.
+      const monthlyFromBody = (key: string) => Math.round(Number(req.body[key] ?? 0) || 0);
+
+      // totalTarget: use annualClients-derived sum when non-zero; otherwise fall back to
+      // payload totalTarget (handles SetupWizardView which sends clientCompany/targetAmount
+      // instead of clientName/q1-q4Target, making annualClients sum = 0).
+      const effectiveTotal = totalAnnual > 0
+        ? Math.round(totalAnnual)
+        : Math.round(Number(req.body.totalTarget ?? 0) || 0);
+
       const now = new Date().toISOString();
       const row = await db
         .insert(targetSubmissions)
@@ -203,12 +214,25 @@ router.post("/targets", requireAuth, async (req, res) => {
           region:          authorRegion,
           quarter:         annualQuarter,
           clients:         annualClients as any[],
-          totalTarget:     Math.round(totalAnnual),
+          totalTarget:     effectiveTotal,
           status:          "Pending RH",
           submittedAt:     now,
           submittedByName: u.name,
           submittedByRole: u.role,
           approvalLog:     [],
+          // ── Monthly breakdown columns (Indian FY: April–March) ──────────────
+          april:     String(monthlyFromBody("april")),
+          may:       String(monthlyFromBody("may")),
+          june:      String(monthlyFromBody("june")),
+          july:      String(monthlyFromBody("july")),
+          august:    String(monthlyFromBody("august")),
+          september: String(monthlyFromBody("september")),
+          october:   String(monthlyFromBody("october")),
+          november:  String(monthlyFromBody("november")),
+          december:  String(monthlyFromBody("december")),
+          january:   String(monthlyFromBody("january")),
+          february:  String(monthlyFromBody("february")),
+          march:     String(monthlyFromBody("march")),
         })
         .onConflictDoNothing()
         .returning();

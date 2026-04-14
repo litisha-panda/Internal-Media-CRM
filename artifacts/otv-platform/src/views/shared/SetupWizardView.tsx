@@ -114,13 +114,18 @@ export function SetupWizardView({
               });
               const annual = Object.values(monthlyTotals).reduce((s,v)=>s+v,0);
 
-              const clients = validClients.map(c=>({
-                clientCompany: (c.client||c.agency||c.brand||"").trim(),
-                agency: (c.agency||"").trim(),
-                brand: (c.brand||"").trim(),
-                dealType: "Linear TV",
-                targetAmount: MONTHS_FY.reduce((s,m)=>s+parseLakh(c[m.key]),0),
-              }));
+              const clients = validClients.map(c=>{
+                const q1 = MONTHS_FY.filter(m=>m.q===0).reduce((s,m)=>s+parseLakh(c[m.key]),0);
+                const q2 = MONTHS_FY.filter(m=>m.q===1).reduce((s,m)=>s+parseLakh(c[m.key]),0);
+                const q3 = MONTHS_FY.filter(m=>m.q===2).reduce((s,m)=>s+parseLakh(c[m.key]),0);
+                const q4 = MONTHS_FY.filter(m=>m.q===3).reduce((s,m)=>s+parseLakh(c[m.key]),0);
+                return {
+                  clientName:  (c.client||c.brand||c.agency||"").trim(),
+                  agencyName:  (c.agency||"").trim() || null,
+                  brandName:   (c.brand||"").trim()  || null,
+                  q1Target: q1, q2Target: q2, q3Target: q3, q4Target: q4,
+                };
+              });
 
               const id = `ts_wizard_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
               const payload = {
