@@ -155,11 +155,17 @@ export function LoginScreen({ onLogin }: LoginScreenProps) {
       if (data.ok) {
         if (data.token) setSessionTokenStore(data.token);
         if (data.user) onLogin(data.user);
-      } else if ((data as { ok: false; httpStatus?: number }).httpStatus === 403) {
-        setPendingApproval({ name: (data as { ok: false; user?: { name?: string } }).user?.name || email, email: email.toLowerCase().trim() });
-        setLoading(false);
       } else {
-        setErr((data as { ok: false; error?: string }).error || "Incorrect email or password.");
+        const d = data as { ok: false; error?: string; httpStatus?: number; user?: { name?: string } };
+        // Only show the "pending approval" panel for genuinely-pending accounts.
+        // Revoked / wrong-password / other 403s must stay on the sign-in form.
+        if (d.httpStatus === 403 && d.error === "pending") {
+          setPendingApproval({ name: d.user?.name || email, email: email.toLowerCase().trim() });
+        } else if (d.httpStatus === 401) {
+          setErr("Invalid email or password");
+        } else {
+          setErr(d.error || "Sign in failed. Please try again.");
+        }
         setLoading(false);
       }
     } catch {
