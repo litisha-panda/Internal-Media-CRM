@@ -105,10 +105,18 @@ router.post("/auth/invite", requireAuth, requireAdmin, async (req, res) => {
       expiresAt,
     });
 
-    // Build invite URL from the request's origin header (set by the browser/proxy)
-    // Falls back to host header if origin is not present.
-    const origin     = (req.headers.origin as string | undefined) || `${req.protocol}://${req.get("host")}`;
-    const inviteUrl  = `${origin}/signup?invite=${token}`;
+    // Build invite URL: prefer REPLIT_DEV_DOMAIN (set in Replit hosted envs),
+    // then X-Forwarded-Host (set by the Replit proxy), then Origin header,
+    // then fall back to the raw host (which may be localhost:8080 in dev).
+    const replitDomain = process.env.REPLIT_DEV_DOMAIN;
+    const forwardedHost = req.headers["x-forwarded-host"] as string | undefined;
+    const origin = replitDomain
+      ? `https://${replitDomain}`
+      : forwardedHost
+      ? `https://${forwardedHost}`
+      : (req.headers.origin as string | undefined) || `${req.protocol}://${req.get("host")}`;
+    const inviteUrl  = `${origin}?invite=${token}`;
+    req.log.info({ origin, inviteUrl }, "invite URL built");
 
     res.json({ ok: true, token, inviteUrl, email: lowerEmail, expiresAt });
   } catch (err) {

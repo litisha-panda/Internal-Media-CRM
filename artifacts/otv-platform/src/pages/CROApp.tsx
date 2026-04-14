@@ -2675,6 +2675,7 @@ export function CROApp({ user, onLogout }) {
           targetSubs={targetSubs as any[]}
           setTargetSubs={setTargetSubs as any}
           liveRoles={liveRoles}
+          adminUsersLoading={adminUsersLoading}
           fmtR={fmtR}
           onComplete={() => setWizardDismissed(true)}
           openWelcomeTour={() => { openWelcome(); }}

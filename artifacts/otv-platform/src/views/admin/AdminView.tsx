@@ -157,10 +157,17 @@ export function AdminView({ view: _view }: AdminViewProps) {
     if (!inviteEmail.trim()) { showToast("Email required", "err"); return; }
     setInviteLoading(true);
     try {
+      console.log("[handleInvite] calling createInvite for:", inviteEmail.trim().toLowerCase());
       const result = await adminSvc.createInvite(inviteEmail.trim().toLowerCase());
+      console.log("[handleInvite] API response:", result);
       setInviteResult(result);
-    } catch { showToast("Invite failed", "err"); }
-    setInviteLoading(false);
+    } catch (err: any) {
+      console.error("[handleInvite] error:", err);
+      const msg = err?.body?.error ?? err?.message ?? "Invite failed";
+      showToast(msg, "err");
+    } finally {
+      setInviteLoading(false);
+    }
   };
 
   /* ── Export ──────────────────────────────────────────────────────────────── */

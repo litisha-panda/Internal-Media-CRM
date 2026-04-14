@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { apiFetch } from "../services/api/_client";
+import { USER_ROLES } from "../data";
 
 // ── Wizard regions (as specified) ──────────────────────────────────────────
 const WIZARD_REGIONS = ["North", "South", "West 1", "West 2", "Odisha", "Digital", "East"];
@@ -34,7 +35,7 @@ function parseCsv(text: string): CsvRow[] {
   const lines = text.split(/\r?\n/).filter(l => l.trim());
   if (lines.length < 2) return [];
   // skip header row
-  return lines.slice(1).map(line => {
+  const rows = lines.slice(1).map(line => {
     const cols = line.split(",").map(c => c.trim());
     const [agencyName = "", clientName = "", brandName = ""] = cols;
     const monthValues: number[] = FY_MONTHS.map((_, i) => Math.round(parseFloat(cols[3 + i] || "0") || 0));
@@ -45,6 +46,8 @@ function parseCsv(text: string): CsvRow[] {
     const q4 = monthValues[9] + monthValues[10] + monthValues[11];
     return { agencyName, clientName, brandName, months, q1, q2, q3, q4, annual: q1 + q2 + q3 + q4 };
   }).filter(r => r.clientName.trim());
+  console.log("[parseCsv] parsed", rows.length, "rows; first row:", rows[0] ?? null);
+  return rows;
 }
 
 function fmtINR(n: number): string {
@@ -100,7 +103,8 @@ interface FirstLoginWizardProps {
   C: any;
   targetSubs: any[];
   setTargetSubs: React.Dispatch<React.SetStateAction<any[]>>;
-  liveRoles: any[];    // active users list for manager/rep dropdowns
+  liveRoles: any[];    // active users list for manager/rep dropdowns (admin only)
+  adminUsersLoading?: boolean;
   fmtR: (v: number) => string;
   onComplete: () => void;
   openWelcomeTour: () => void;
@@ -111,9 +115,9 @@ interface FirstLoginWizardProps {
 // MAIN COMPONENT
 // ──────────────────────────────────────────────────────────────────────────
 export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
-  user, C, targetSubs, setTargetSubs, liveRoles, fmtR, onComplete, openWelcomeTour, showToast,
+  user, C, targetSubs, setTargetSubs, liveRoles, adminUsersLoading, fmtR, onComplete, openWelcomeTour, showToast,
 }) => {
-  const role = (user.role || "").toUpperCase().replace(" ", "_").replace(" ", "_");
+  console.log("role is:", user.role);
   // Normalize role: "SALES REP" → "SALES_REP", "REGION HEAD" → "REGION_HEAD"
   const normalRole = (user.role || "").replace(/\s+/g, "_").toUpperCase();
   const isRep   = normalRole === "SALES_REP";
@@ -158,9 +162,14 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
   const [managerAssignments, setManagerAssignments] = useState<Record<string, string>>({});
 
   // ── Region heads for Sales Rep dropdown ─────────────────────────────────
+  // liveRoles is only populated for ADMIN users (CROApp only calls refreshAdminUsers for admin).
+  // For non-admin users (reps), fall back to the static USER_ROLES constant so the dropdown
+  // is always populated with the 6 region heads.
   const regionHeads = liveRoles.filter(u =>
     (u.role || "").replace(/\s+/g, "_").toUpperCase() === "REGION_HEAD"
-  );
+  ).length > 0
+    ? liveRoles.filter(u => (u.role || "").replace(/\s+/g, "_").toUpperCase() === "REGION_HEAD")
+    : USER_ROLES.filter(u => u.role === "REGION HEAD");
 
   // ── Pending submissions for RH / NSH ────────────────────────────────────
   const pendingStatus = isRH ? "Pending RH" : "Pending NSH";
@@ -230,11 +239,13 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
     try {
       // Post one submission per row per quarter (where quarterly total > 0)
       const newSubs: any[] = [];
+      let totalAttempts = 0;
+      let total409 = 0;
       for (const row of csvRows) {
         const qTotals = [row.q1, row.q2, row.q3, row.q4];
         for (let qi = 0; qi < 4; qi++) {
           if (qTotals[qi] <= 0) continue;
-          const qMonths = FY_MONTHS.slice(qi * 3, qi * 3 + 3);
+          totalAttempts++;
           const monthTotals: Record<string, number> = {};
           FY_MONTHS.forEach(m => { monthTotals[m.key] = m.key in row.months ? row.months[m.key as MonthKey] : 0; });
           const id = `ts_wiz_${Date.now()}_${qi}_${Math.random().toString(36).slice(2, 5)}`;
@@ -256,21 +267,29 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
             awaitingApprovalSince: now,
             auditLog: [{ at: now, by: "SELF", role: "SALES REP", action: "Submitted via Setup Wizard" }],
           };
+          console.log("[submitCsv] posting payload:", payload);
           try {
             const result: any = await apiFetch("/api/targets", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify(payload),
             });
+            console.log("[submitCsv] success response:", result);
             newSubs.push(result?.data ?? payload);
           } catch (e: any) {
-            if (e?.status !== 409) throw e;
+            console.log("[submitCsv] error status:", e?.status, "body:", e?.body ?? e);
+            if (e?.status === 409) { total409++; }
+            else throw e;
           }
         }
+      }
+      if (totalAttempts > 0 && total409 === totalAttempts) {
+        showToast("Targets for these clients already exist — edit them from the Targets tab", "err");
       }
       if (newSubs.length > 0) setTargetSubs(p => [...newSubs, ...p]);
       setStep(2);
     } catch (e: any) {
+      console.error("[submitCsv] unhandled error:", e);
       showToast(e?.body?.error ?? "Failed to submit targets", "err");
     } finally {
       setSubmitting(false);
@@ -599,7 +618,11 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
           <>
             <h2 style={{ margin: "0 0 6px", fontSize: 20, fontWeight: 800, color: C.text, fontFamily: "'DM Sans',sans-serif" }}>Assign reps to their Region Heads</h2>
 
-            {unassignedReps.length === 0 ? (
+            {adminUsersLoading && liveRoles.length === 0 ? (
+              <div style={{ padding: "32px 0", textAlign: "center", color: C.dim, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
+                Loading users…
+              </div>
+            ) : unassignedReps.length === 0 ? (
               <>
                 <div style={{ padding: "24px 0", textAlign: "center", color: C.dim, fontSize: 13, fontFamily: "'DM Sans',sans-serif" }}>
                   All reps are assigned. You're good to go!
