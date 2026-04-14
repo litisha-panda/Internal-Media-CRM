@@ -1,4 +1,5 @@
 import { pgTable, text, integer, jsonb, timestamp, numeric } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 export const targetSubmissions = pgTable("target_submissions", {
   id:              text("id").primaryKey(),
@@ -16,6 +17,14 @@ export const targetSubmissions = pgTable("target_submissions", {
   frozenTarget:    integer("frozen_target"),
   createdAt:       timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).defaultNow(),
+  // Quarterly columns (kept in sync with DB)
+  q1Target:        numeric("q1_target",  { precision: 15, scale: 2 }).notNull().default("0"),
+  q2Target:        numeric("q2_target",  { precision: 15, scale: 2 }).notNull().default("0"),
+  q3Target:        numeric("q3_target",  { precision: 15, scale: 2 }).notNull().default("0"),
+  q4Target:        numeric("q4_target",  { precision: 15, scale: 2 }).notNull().default("0"),
+  annualTarget:    numeric("annual_target", { precision: 15, scale: 2 }).generatedAlwaysAs(
+    sql`COALESCE(q1_target, 0) + COALESCE(q2_target, 0) + COALESCE(q3_target, 0) + COALESCE(q4_target, 0)`
+  ),
   // Monthly breakdown columns (Indian FY: April–March)
   april:           numeric("april",     { precision: 15, scale: 2 }).notNull().default("0"),
   may:             numeric("may",       { precision: 15, scale: 2 }).notNull().default("0"),
