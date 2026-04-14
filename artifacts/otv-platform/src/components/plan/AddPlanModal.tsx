@@ -8,6 +8,7 @@
 import React, { useState } from "react";
 import { C } from "../../utils/palette";
 import type { PlanForm } from "../../views/rep/MyPlan";
+import { SearchableSelect } from "../ui/SearchableSelect";
 
 /** DB columns return integers; form fields use strings. Both are valid rep IDs. */
 type RepId = number | string | null | undefined;
@@ -86,19 +87,18 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
               </button>
             </div>
           ) : (
-            <select
-              value={pf.agency}
-              onChange={e => {
-                if (e.target.value === "__custom__") { setAgencyCustom(true); setPf(p => ({ ...p, agency: "", client: "", brand: "" })); return; }
-                setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }));
+            <SearchableSelect
+              options={allAgencies.filter(a => a && a !== "NA").map(a => ({ value: a, label: a }))}
+              value={pf.agency === "NA" ? "NA" : (allAgencies.includes(pf.agency) ? pf.agency : "")}
+              onChange={val => {
+                if (val === "NA") setPf(p => ({ ...p, agency: "NA", client: "", brand: "" }));
+                else setPf(p => ({ ...p, agency: val, client: "", brand: "" }));
               }}
-              style={inputStyle}
-            >
-              <option value="">— No agency / Direct —</option>
-              <option value="NA">NA</option>
-              {allAgencies.map(a => <option key={a}>{a}</option>)}
-              <option value="__custom__">+ Add new…</option>
-            </select>
+              onAddNew={() => { setAgencyCustom(true); setPf(p => ({ ...p, agency: "", client: "", brand: "" })); }}
+              placeholder="— No agency / Direct —"
+              naLabel="NA (no agency / direct)"
+              inputStyle={inputStyle}
+            />
           )}
         </div>
 
@@ -120,18 +120,14 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
               </button>
             </div>
           ) : clientOptions.length > 0 ? (
-            <select
-              value={pf.client}
-              onChange={e => {
-                if (e.target.value === "__custom__") { setClientCustom(true); setPf(p => ({ ...p, client: "", brand: "" })); return; }
-                setPf(p => ({ ...p, client: e.target.value, brand: "" }));
-              }}
-              style={inputStyle}
-            >
-              <option value="">— Select client —</option>
-              {clientOptions.map(c => <option key={c}>{c}</option>)}
-              <option value="__custom__">+ Add new…</option>
-            </select>
+            <SearchableSelect
+              options={clientOptions.map(c => ({ value: c, label: c }))}
+              value={clientOptions.includes(pf.client) ? pf.client : ""}
+              onChange={val => setPf(p => ({ ...p, client: val, brand: "" }))}
+              onAddNew={() => { setClientCustom(true); setPf(p => ({ ...p, client: "", brand: "" })); }}
+              placeholder="— Select client —"
+              inputStyle={inputStyle}
+            />
           ) : (
             <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *" style={inputStyle} />
           )}
@@ -171,10 +167,10 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
             style={inputStyle} />
         </div>
 
-        {/* Contact Name */}
+        {/* Representative Name */}
         <div style={{ marginBottom: 10 }}>
-          <label style={labelStyle}>Contact Name</label>
-          <input value={pf.contactName} onChange={e => setPf(p => ({ ...p, contactName: e.target.value }))} placeholder="Person you'll meet"
+          <label style={labelStyle}>Representative Name</label>
+          <input value={pf.contactName} onChange={e => setPf(p => ({ ...p, contactName: e.target.value }))} placeholder="Name of person you'll meet"
             style={inputStyle} />
         </div>
 

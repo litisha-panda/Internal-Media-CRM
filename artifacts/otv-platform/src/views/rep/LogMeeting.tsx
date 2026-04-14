@@ -9,6 +9,7 @@
 
 import React, { useState, useEffect } from "react";
 import { C, TODAY } from "../../utils/palette";
+import { SearchableSelect } from "../../components/ui/SearchableSelect";
 import { DEAL_STAGES } from "../../constants";
 import { useTouchpoints } from "../../hooks/useTouchpoints";
 import { useMeetings } from "../../hooks/useMeetings";
@@ -219,7 +220,12 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
   const handleSubmit = async () => {
     if (!form.repId) { showToast("Rep ID required", "err"); return; }
     if (!form.clientAgencyName?.trim() && !form.dealId) {
-      showToast("Select a client deal or enter a client company name", "err"); return;
+      const who = form.meetingWith === "agency" ? "an agency" : "a client or agency";
+      showToast(`Please select ${who} for this touchpoint`, "err"); return;
+    }
+    if (!form.contactName?.trim()) {
+      const rep = form.meetingWith === "agency" ? "Agency Representative" : "Client Representative";
+      showToast(`${rep} name is required`, "err"); return;
     }
     if (form.touchpointType === "Deal Meeting" && !form.stageUpdate && !form.status) {
       showToast("Select a stage update for this deal meeting", "err"); return;
@@ -456,39 +462,23 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
             <div style={{ marginBottom: 10 }}>
               <label>{form.meetingWith === "agency" ? "Agency *" : "Client / Agency *"}</label>
               {!customClientMode ? (
-                <select
+                <SearchableSelect
+                  options={targetClientOptions.map(o => ({ value: o.key, label: o.label }))}
                   value={(() => {
-                    if (!form.client && !form.agency) return "";
-                    if (form.clientAgencyName === "N/A") return "__na__";
+                    if (form.clientAgencyName === "N/A") return "NA";
                     const match = targetClientOptions.find(o => o.client === form.client && o.agency === form.agency);
-                    return match ? match.key : "__custom__";
+                    return match ? match.key : "";
                   })()}
-                  onChange={e => {
-                    const val = e.target.value;
-                    if (val === "__custom__") {
-                      setCustomClientMode(true);
-                      setF({ clientAgencyName: "", agency: "", client: "", brand: "" });
-                      return;
-                    }
-                    if (val === "__na__") {
-                      setF({ clientAgencyName: "N/A", agency: "N/A", client: "N/A", brand: "" });
-                      return;
-                    }
-                    if (val === "") {
-                      setF({ clientAgencyName: "", agency: "", client: "", brand: "" });
-                      return;
-                    }
+                  onChange={val => {
+                    if (val === "NA") { setF({ clientAgencyName: "N/A", agency: "N/A", client: "N/A", brand: "" }); return; }
+                    if (!val) { setF({ clientAgencyName: "", agency: "", client: "", brand: "" }); return; }
                     const opt = targetClientOptions.find(o => o.key === val);
-                    if (opt) {
-                      setF({ clientAgencyName: opt.client, agency: opt.agency, client: opt.client, brand: opt.brand });
-                    }
+                    if (opt) setF({ clientAgencyName: opt.client, agency: opt.agency, client: opt.client, brand: opt.brand });
                   }}
-                >
-                  <option value="">— Select client / agency —</option>
-                  {targetClientOptions.map(o => <option key={o.key} value={o.key}>{o.label}</option>)}
-                  <option value="__na__">N/A (no specific client)</option>
-                  <option value="__custom__">+ Add new…</option>
-                </select>
+                  onAddNew={() => { setCustomClientMode(true); setF({ clientAgencyName: "", agency: "", client: "", brand: "" }); }}
+                  placeholder={form.meetingWith === "agency" ? "Search agency…" : "Search client / agency…"}
+                  naLabel="N/A (general / relationship meeting)"
+                />
               ) : (
                 <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                   <input
