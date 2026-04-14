@@ -1079,10 +1079,11 @@ export function CROApp({ user, onLogout }) {
     finally { setAdminUsersLoading(false); }
   }, []);
   useEffect(() => {
+    if (user?.role !== "ADMIN") return; // only admin needs this poll
     refreshAdminUsers();
     const t = setInterval(refreshAdminUsers, 30_000);
     return () => clearInterval(t);
-  }, [refreshAdminUsers]);
+  }, [refreshAdminUsers, user?.role]);
   const [reps, setReps]                                 = usePersistedState("otv_reps", REPS);
   const [masterClients, setMasterClients]               = usePersistedState("otv_masterClients", []);
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
