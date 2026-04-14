@@ -1,0 +1,46 @@
+Fix two bugs:
+
+1. ADMIN WIZARD RECEIVING WRONG ROLE
+The console shows "role is: SALES REP" even when admin@odishatv.com is logged in.
+Root cause: FirstLoginWizard is receiving user.role from the frontend-derived USER_ROLES map, not from the actual authenticated session.
+
+Fix: In CROApp.tsx, find where FirstLoginWizard is rendered. The `user` prop being passed must use the authenticated user's role directly from the /api/auth/me response — not from any derived or hardcoded USER_ROLES constant.
+
+Specifically: when passing user to FirstLoginWizard, use the raw `user` object returned by the auth/me API call. This object has the correct role from the database (ADMIN, SALES_REP, REGION_HEAD, NSH etc.).
+
+After fix, the console.log("role is:", user.role) should print "ADMIN" when admin@odishatv.com logs in.
+
+2. CSV SUBMISSION PAYLOAD WRONG FORMAT
+The console shows the payload contains `quarter: 'Q1 FY26'` and the API returns 400 "Invalid client allocations".
+
+The targets API POST /api/targets expects this payload format:
+{
+  repId: number,
+  agencyName: string,
+  clientName: string,
+  brandName: string,
+  april: number,
+  may: number,
+  june: number,
+  july: number,
+  august: number,
+  september: number,
+  october: number,
+  november: number,
+  december: number,
+  january: number,
+  february: number,
+  march: number
+}
+
+One POST per CSV row (one row = one agency/client/brand combination with 12 monthly values).
+
+In FirstLoginWizard.tsx, fix the submitCsv function to:
+- Send one POST per parsed CSV row (not one per quarter)
+- Map the parsed months object directly to the 12 monthly fields above
+- Remove the `quarter` field from the payload entirely
+- Remove the `clients` array wrapper if present — each row is its own POST
+
+Also check artifacts/api-server/src/routes/targets.ts — verify the POST handler accepts individual monthly fields at the top level (not nested in a clients array). If the API route expects a different format, show me what it expects.
+
+TypeScript check after — 0 errors expected.
