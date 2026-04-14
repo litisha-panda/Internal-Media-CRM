@@ -188,7 +188,7 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
     try {
       const body: any = { name: name.trim() };
       if (isRep || isRH) body.region = region;
-      if (isRep && managerId) body.managerId = managerId;
+      if (isRep && managerId != null && !isNaN(managerId)) body.managerId = managerId;
       await apiFetch("/api/users/me", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
