@@ -368,11 +368,12 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                     const overdue = daysOld >= (req.slaHours/24) && req.status!=="Done";
                     const sc = statusColor(overdue?"Overdue":req.status);
                     const deal = deals.find(d=>d.id===req.dealId);
+                    const displayStatus = overdue?"OVERDUE":["Done","Rejected","Withdrawn"].includes(req.status)?req.status.toUpperCase():"OPEN";
                     return (
                       <div key={req.id} className="card" style={{padding:"14px 18px",marginBottom:8,borderLeft:`3px solid ${sc}`}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,flexWrap:"wrap",gap:8}}>
                           <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                            <span style={{background:`${sc}22`,color:sc,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{overdue?"OVERDUE":req.status}</span>
+                            <span style={{background:`${sc}22`,color:sc,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{displayStatus}</span>
                             <span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:600}}>{req.type}</span>
                             <span style={{background:C.s3,color:C.dim,padding:"2px 9px",borderRadius:8,fontSize:10}}>→ {req.dept}</span>
                           </div>
