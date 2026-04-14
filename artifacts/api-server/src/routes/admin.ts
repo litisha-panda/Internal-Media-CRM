@@ -36,6 +36,7 @@ function safeUser(u: typeof users.$inferSelect) {
     role:        u.role,
     region:      u.region,
     repId:       u.repId,
+    managerId:   u.managerId,
     status:      u.status,
     canView:     canViewFor(u.role),
     requestedAt: u.requestedAt,

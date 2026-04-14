@@ -2308,13 +2308,10 @@ export function CROApp({ user, onLogout }) {
             irStatusFilter={irStatusFilter} setIrStatusFilter={setIrStatusFilter}
           />
           {/* ═══ ADMIN ═══ */}
-          {(view==="admin-access"||view==="admin-approvals") && isAdmin && (
+          {(view==="admin-access"||view==="admin-approvals"||view==="admin-export"||view==="admin-system") && isAdmin && (
             <AdminView
               view={view}
-              pendingUsers={pendingUsers}
-              liveRoles={liveRoles}
-              adminUsersLoading={adminUsersLoading}
-              refreshAdminUsers={refreshAdminUsers}
+              setView={setView}
             />
           )}
 

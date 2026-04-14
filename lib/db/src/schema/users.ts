@@ -9,6 +9,7 @@ export const users = pgTable("otv_users", {
   role:          text("role").notNull(),
   region:        text("region"),
   repId:         integer("rep_id"),
+  managerId:     text("manager_id"),
   status:        text("status").notNull().default("pending"),
   needsPwReset:  boolean("needs_pw_reset").notNull().default(false),
   requestedAt:   timestamp("requested_at", { withTimezone: true }).defaultNow().notNull(),

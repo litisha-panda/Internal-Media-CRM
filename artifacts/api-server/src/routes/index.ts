@@ -18,6 +18,8 @@ import dailyPlansRouter from "./daily-plans";
 import rhTeamFeedRouter from "./rh-team-feed";
 import meetingsRouter from "./meetings";
 import attendanceRouter from "./attendance";
+import usersRouter from "./users";
+import exportRouter from "./export";
 
 const router: IRouter = Router();
 
@@ -62,5 +64,11 @@ router.use(meetingsRouter);
 
 // Phase 11 — Attendance records + exception chain
 router.use(attendanceRouter);
+
+// Phase 12 — User management (PATCH /api/users/:id with audit log)
+router.use(usersRouter);
+
+// Phase 12 — CSV export (GET /api/export/:type)
+router.use(exportRouter);
 
 export default router;

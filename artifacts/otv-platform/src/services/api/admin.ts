@@ -1,18 +1,19 @@
 /**
- * admin.ts — Admin API service: user management and rep profile updates.
+ * admin.ts — Admin API service: user management, invites, exports.
  */
 
 import { apiFetch } from "./_client";
 
 export interface AdminUser {
-  id: number;
+  id: string;
   name: string;
   email: string;
   role: string;
   region: string | null;
   repId: number | null;
-  status?: string;
-  _apiId?: number;
+  managerId: string | null;
+  status: string;
+  requestedAt?: string;
   [key: string]: unknown;
 }
 
@@ -31,8 +32,8 @@ export async function listAdminUsers(): Promise<AdminUser[]> {
 }
 
 /** POST /api/admin/users/:id/approve */
-export async function approveUser(apiId: number, role: string, region: string): Promise<void> {
-  await apiFetch(`/api/admin/users/${apiId}/approve`, {
+export async function approveUser(id: string, role: string, region: string): Promise<void> {
+  await apiFetch(`/api/admin/users/${id}/approve`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ role, region }),
@@ -40,27 +41,42 @@ export async function approveUser(apiId: number, role: string, region: string): 
 }
 
 /** POST /api/admin/users/:id/reject */
-export async function rejectUser(apiId: number): Promise<void> {
-  await apiFetch(`/api/admin/users/${apiId}/reject`, { method: "POST" });
+export async function rejectUser(id: string): Promise<void> {
+  await apiFetch(`/api/admin/users/${id}/reject`, { method: "POST" });
 }
 
-/** PATCH /api/admin/users/:id/role */
-export async function patchUserRole(apiId: number, role: string, region: string): Promise<void> {
-  await apiFetch(`/api/admin/users/${apiId}/role`, {
+/** PATCH /api/users/:id — update role, managerId, or status (with audit log) */
+export async function patchUser(
+  id: string,
+  patch: { role?: string; managerId?: string | null; status?: string },
+): Promise<void> {
+  await apiFetch(`/api/users/${id}`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ role, region }),
+    body: JSON.stringify(patch),
   });
 }
 
-/** DELETE /api/admin/users/:id */
-export async function deleteUser(apiId: number): Promise<void> {
-  await apiFetch(`/api/admin/users/${apiId}`, { method: "DELETE" });
+/** DELETE /api/admin/users/:id — revoke (soft-delete) */
+export async function deleteUser(id: string): Promise<void> {
+  await apiFetch(`/api/admin/users/${id}`, { method: "DELETE" });
+}
+
+/** POST /api/auth/invite — generate a 72-hour single-use invite link */
+export async function createInvite(email: string): Promise<{ inviteUrl: string; expiresAt: string }> {
+  const r = await apiFetch<{ ok: boolean; inviteUrl: string; expiresAt: string }>(
+    "/api/auth/invite",
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email }),
+    },
+  );
+  return r;
 }
 
 /**
  * PATCH /api/admin/reps/:repId — update a rep's region and/or reporting manager.
- * Authorization: SALES REP (own only), REGION HEAD (scoped), ADMIN (any).
  */
 export async function patchRepProfile(repId: number, patch: RepProfilePatch): Promise<void> {
   await apiFetch(`/api/admin/reps/${repId}`, {

@@ -1,5 +1,6 @@
 export * from "./app_state";
 export * from "./users";
+export * from "./audit_log";
 export * from "./sessions";
 export * from "./targets";
 export * from "./revenue";

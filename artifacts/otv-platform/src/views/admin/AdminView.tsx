@@ -1,261 +1,511 @@
-import React from "react";
-import { useCROAppContext, Deal, Rep, InternalReq } from "../../contexts/CROAppContext";
-import { apiFetch } from "../../services/api/_client";
+import React, { useState, useEffect } from "react";
+import { useCROAppContext } from "../../contexts/CROAppContext";
 import * as adminSvc from "../../services/api/admin";
+import { getSessionToken } from "../../services/api/_client";
+import { SystemConfigView } from "../system/SystemConfigView";
 
-interface PendingUser {
-  id: string | number;
-  _apiId: number;
-  name: string;
-  email: string;
-  requestedAt: string;
-  phone?: string;
-  designation?: string;
-  intendedRole?: string;
-  preferredRegion?: string;
+const USER_ROLES = ["SALES REP","REGION HEAD","SALES HEAD","CRO","SALES STRATEGY","DIGI OPS","ADMIN"];
+const REGIONS    = ["North","South","East","West","National","Central","Odisha","West 1","West 2","Digital"];
+
+/* Inline approve/reject actions for pending users */
+function PendingActions({ u, regionHeads, onApprove, onReject, C }: {
+  u: adminSvc.AdminUser;
+  regionHeads: adminSvc.AdminUser[];
+  onApprove: (u: adminSvc.AdminUser, role: string, region: string) => void;
+  onReject:  (u: adminSvc.AdminUser) => void;
+  C: Record<string, string>;
+}) {
+  const [role,   setRole]   = useState(u.role || "SALES REP");
+  const [region, setRegion] = useState(u.region || regionHeads[0]?.region || "North");
+  return (
+    <div style={{ display:"flex", gap:4, alignItems:"center", flexWrap:"wrap" }}>
+      <select value={role} onChange={e=>setRole(e.target.value)}
+        style={{ padding:"2px 5px", background:C.s2, border:`1px solid ${C.border}`, borderRadius:4, fontSize:10, fontFamily:"'DM Mono',monospace", color:C.text }}>
+        {USER_ROLES.filter(r=>r!=="ADMIN").map(r=><option key={r}>{r}</option>)}
+      </select>
+      <select value={region} onChange={e=>setRegion(e.target.value)}
+        style={{ padding:"2px 5px", background:C.s2, border:`1px solid ${C.border}`, borderRadius:4, fontSize:10, fontFamily:"'DM Mono',monospace", color:C.text }}>
+        {REGIONS.map(r=><option key={r}>{r}</option>)}
+      </select>
+      <button onClick={()=>onApprove(u, role, region)}
+        style={{ background:`${C.green}18`, border:"none", color:C.green, borderRadius:4, padding:"3px 8px", fontSize:10, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>
+        ✓
+      </button>
+      <button onClick={()=>onReject(u)}
+        style={{ background:`${C.red}18`, border:"none", color:C.red, borderRadius:4, padding:"3px 8px", fontSize:10, cursor:"pointer", fontFamily:"'DM Mono',monospace" }}>
+        ✕
+      </button>
+    </div>
+  );
 }
 
-interface LiveRole {
-  id: string | number;
-  _apiId: number;
-  name: string;
-  role: string;
-  region?: string;
-}
-
-interface AdminViewProps {
+export interface AdminViewProps {
   view: string;
-  pendingUsers: PendingUser[];
-  liveRoles: LiveRole[];
-  adminUsersLoading: boolean;
-  refreshAdminUsers: () => Promise<void>;
+  setView: (v: string) => void;
 }
 
-export function AdminView({
-  view,
-  pendingUsers,
-  liveRoles,
-  adminUsersLoading,
-  refreshAdminUsers,
-}: AdminViewProps) {
-  const {
-    deals,
-    internalReqs,
-    setInternalReqs,
-    showToast,
-    openNoteModal,
-    daysSince,
-    C,
-    ALL_ROLES,
-    REGIONS,
-    TODAY,
-    user,
-    setReps,
-  } = useCROAppContext();
+export function AdminView({ view: _view }: AdminViewProps) {
+  const { C, showToast, deals, user } = useCROAppContext() as any;
 
+  const [activeTab,      setActiveTab]      = useState<"users"|"export"|"system">("users");
+  const [allUsers,       setAllUsers]       = useState<adminSvc.AdminUser[]>([]);
+  const [usersLoading,   setUsersLoading]   = useState(false);
+
+  /* Invite modal */
+  const [inviteOpen,    setInviteOpen]    = useState(false);
+  const [inviteEmail,   setInviteEmail]   = useState("");
+  const [inviteRole,    setInviteRole]    = useState("SALES REP");
+  const [inviteResult,  setInviteResult]  = useState<{ inviteUrl:string; expiresAt:string }|null>(null);
+  const [inviteLoading, setInviteLoading] = useState(false);
+
+  /* Export */
+  const [exportFrom,    setExportFrom]    = useState("");
+  const [exportTo,      setExportTo]      = useState("");
+  const [exportRepId,   setExportRepId]   = useState("");
+  const [exportBusy,    setExportBusy]    = useState<string|null>(null);
+
+  /* ── Fetch users ─────────────────────────────────────────────────────────── */
+  const fetchUsers = async () => {
+    setUsersLoading(true);
+    try {
+      const u = await adminSvc.listAdminUsers();
+      setAllUsers(u);
+    } catch { /* silently ignore */ }
+    setUsersLoading(false);
+  };
+
+  useEffect(() => { fetchUsers(); }, []);
+
+  const regionHeads = allUsers.filter(u => u.role === "REGION HEAD" && u.status === "active");
+
+  /* ── User actions ────────────────────────────────────────────────────────── */
+  const handleRoleChange = async (u: adminSvc.AdminUser, role: string) => {
+    try {
+      await adminSvc.patchUser(u.id, { role });
+      showToast(`${u.name} role → ${role}`);
+      fetchUsers();
+    } catch { showToast("Role update failed", "err"); }
+  };
+
+  const handleManagerChange = async (u: adminSvc.AdminUser, managerId: string) => {
+    try {
+      await adminSvc.patchUser(u.id, { managerId: managerId || null });
+      showToast(`${u.name} manager updated`);
+      fetchUsers();
+    } catch { showToast("Manager update failed", "err"); }
+  };
+
+  const handleRevoke = async (u: adminSvc.AdminUser) => {
+    if (!window.confirm(`Revoke access for ${u.name}?`)) return;
+    try {
+      await adminSvc.deleteUser(u.id);
+      showToast(`${u.name}'s access revoked`, "err");
+      fetchUsers();
+    } catch { showToast("Revoke failed", "err"); }
+  };
+
+  const handleReactivate = async (u: adminSvc.AdminUser) => {
+    try {
+      await adminSvc.patchUser(u.id, { status: "active" });
+      showToast(`${u.name} reactivated`);
+      fetchUsers();
+    } catch { showToast("Reactivate failed", "err"); }
+  };
+
+  const handleApprove = async (u: adminSvc.AdminUser, role: string, region: string) => {
+    try {
+      await adminSvc.approveUser(u.id, role, region);
+      showToast(`${u.name} approved as ${role}`);
+      fetchUsers();
+    } catch { showToast("Approval failed", "err"); }
+  };
+
+  const handleReject = async (u: adminSvc.AdminUser) => {
+    try {
+      await adminSvc.rejectUser(u.id);
+      showToast(`${u.name} rejected`, "err");
+      fetchUsers();
+    } catch { showToast("Reject failed", "err"); }
+  };
+
+  /* ── Invite ──────────────────────────────────────────────────────────────── */
+  const handleInvite = async () => {
+    if (!inviteEmail.trim()) { showToast("Email required", "err"); return; }
+    setInviteLoading(true);
+    try {
+      const result = await adminSvc.createInvite(inviteEmail.trim().toLowerCase());
+      setInviteResult(result);
+    } catch { showToast("Invite failed", "err"); }
+    setInviteLoading(false);
+  };
+
+  /* ── Export ──────────────────────────────────────────────────────────────── */
+  const handleExport = async (type: string) => {
+    setExportBusy(type);
+    try {
+      const params = new URLSearchParams();
+      if (exportFrom)  params.set("from",  exportFrom);
+      if (exportTo)    params.set("to",    exportTo);
+      if (exportRepId) params.set("repId", exportRepId);
+      const url   = `/api/export/${type}?${params}`;
+      const token = getSessionToken();
+      const resp  = await fetch(url, {
+        credentials: "include",
+        headers: token ? { "X-Session-Token": token } : {},
+      });
+      if (!resp.ok) { showToast("Export failed", "err"); return; }
+      const blob = await resp.blob();
+      const href = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = href;
+      a.download = `otv-${type}-${new Date().toISOString().slice(0,10)}.csv`;
+      a.click();
+      URL.revokeObjectURL(href);
+      showToast(`${type} CSV downloaded`);
+    } catch { showToast("Export failed", "err"); }
+    setExportBusy(null);
+  };
+
+  /* ── Helpers ─────────────────────────────────────────────────────────────── */
+  const statusBadge = (s: string) => {
+    const col = s==="active" ? C.green : s==="pending" ? C.orange : C.red;
+    return (
+      <span style={{ background:`${col}18`, color:col, padding:"2px 8px", borderRadius:8,
+        fontSize:10, fontWeight:700, letterSpacing:.4, textTransform:"uppercase" as const }}>
+        {s}
+      </span>
+    );
+  };
+
+  const pending = allUsers.filter(u => u.status==="pending");
+  const active  = allUsers.filter(u => u.status==="active");
+  const revoked = allUsers.filter(u => u.status==="revoked");
+  const rows    = [...pending, ...active, ...revoked];
+
+  const inputStyle: React.CSSProperties = {
+    padding:"3px 6px", background:C.s2, border:`1px solid ${C.border}`,
+    borderRadius:4, fontSize:11, fontFamily:"'DM Mono',monospace", color:C.text,
+  };
+
+  /* ── Render ──────────────────────────────────────────────────────────────── */
   return (
     <div className="fin">
-      {/* Pre-launch demo data banner */}
-      {(()=>{
-        const DEMO_CLIENTS = ["Havells India","Berger Paints","Asian Paints"];
-        const demoFound = deals.some((d: Deal)=>DEMO_CLIENTS.includes(d.clientCompany));
-        if (!demoFound) return null;
-        return (
-          <div style={{background:`${C.red}12`,border:`2px solid ${C.red}`,borderRadius:10,padding:"14px 18px",marginBottom:20,display:"flex",alignItems:"flex-start",gap:14,flexWrap:"wrap"}}>
-            <div style={{fontSize:22,lineHeight:1}}>⚠️</div>
-            <div style={{flex:1}}>
-              <div className="sans" style={{fontWeight:800,fontSize:13,color:C.red,marginBottom:4}}>DEMO DATA IS ACTIVE — DO NOT ONBOARD REAL USERS YET</div>
-              <div style={{fontSize:11,color:C.dim,marginBottom:10}}>
-                Seed clients (Havells India, Berger Paints, Asian Paints etc.) are still in the database. Every new rep will see this fake data in their pipeline from day one. Run a full reset <strong>before</strong> the first real user logs in.
-              </div>
-              <button onClick={async()=>{
-                const typed = window.prompt("Type  RESET  (all caps) to wipe all demo data and start clean.\n\nThis cannot be undone.");
-                if(typed===null)return;
-                if(typed.trim()!=="RESET"){showToast("Reset cancelled — type RESET exactly","err");return;}
-                try{
-                  const j=await apiFetch("/api/state/reset-all",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({confirmText:"RESET",triggeredBy:user?.email||"admin",role:"ADMIN"})}) as { ok: boolean; error?: string };
-                  if(j.ok){Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));showToast("Demo data cleared — reloading…");setTimeout(()=>window.location.reload(),800);}
-                  else showToast("Reset failed: "+j.error,"err");
-                }catch{showToast("Reset failed","err");}
-              }} style={{background:C.red,border:"none",color:"#fff",borderRadius:6,padding:"8px 20px",fontSize:12,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                🗑 Clear All Demo Data Now
-              </button>
-            </div>
-          </div>
-        );
-      })()}
-
-      <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>
-        {view==="admin-access"?"ACCESS MANAGEMENT":"APPROVAL QUEUE"}
+      {/* Tab bar */}
+      <div style={{ display:"flex", gap:0, marginBottom:20, borderBottom:`1px solid ${C.border}` }}>
+        {([ ["users","Users"], ["export","Export"], ["system","System Config"] ] as const).map(([tab,label])=>(
+          <button key={tab} onClick={()=>setActiveTab(tab)}
+            style={{ padding:"9px 22px", background:"transparent", border:"none", cursor:"pointer",
+              fontSize:12, fontFamily:"'DM Mono',monospace", fontWeight:700, letterSpacing:.5,
+              color: activeTab===tab ? C.accent : C.dim,
+              borderBottom: `2px solid ${activeTab===tab ? C.accent : "transparent"}`,
+              marginBottom:-1, transition:"color .15s" }}>
+            {label.toUpperCase()}
+          </button>
+        ))}
       </div>
 
-      {/* ── ACCESS MANAGEMENT ── */}
-      {view==="admin-access" && (
+      {/* ─────────────────── USERS TAB ─────────────────────────────────────── */}
+      {activeTab==="users" && (
         <div>
-          {adminUsersLoading && (
-            <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:16,color:C.muted,fontSize:11}}>
-              <div style={{width:12,height:12,border:`2px solid ${C.border}`,borderTopColor:C.accent,borderRadius:"50%",animation:"spin 0.7s linear infinite"}} />
-              Refreshing user list...
-            </div>
-          )}
-          {pendingUsers.length>0&&(
-            <div style={{marginBottom:24}}>
-              <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
-                <div style={{fontSize:10,color:C.orange,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>Pending Access Requests</div>
-                <span style={{background:`${C.orange}22`,color:C.orange,padding:"1px 8px",borderRadius:8,fontSize:11,fontWeight:700}}>{pendingUsers.length}</span>
-              </div>
-              {pendingUsers.map((pu: PendingUser)=>(
-                <div key={pu.id} className="card" style={{padding:"14px 18px",marginBottom:8,borderLeft:`3px solid ${C.orange}`,display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                  <div style={{width:36,height:36,borderRadius:"50%",background:`${C.orange}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:14,fontWeight:700,color:C.orange,flexShrink:0}}>{pu.name[0]}</div>
-                  <div style={{flex:1}}>
-                    <div className="sans" style={{fontWeight:700,fontSize:13}}>{pu.name}</div>
-                    <div style={{fontSize:11,color:C.dim}}>{pu.email} · Requested {daysSince(pu.requestedAt)===0?"today":`${daysSince(pu.requestedAt)}d ago`}</div>
-                    {(pu.phone||pu.designation||pu.intendedRole) && (
-                      <div style={{display:"flex",flexWrap:"wrap",gap:6,marginTop:4}}>
-                        {pu.phone&&<span style={{fontSize:10,background:`${C.s2}`,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 7px",color:C.dim}}>📞 {pu.phone}</span>}
-                        {pu.designation&&<span style={{fontSize:10,background:`${C.s2}`,border:`1px solid ${C.border}`,borderRadius:4,padding:"1px 7px",color:C.dim}}>{pu.designation}</span>}
-                        {pu.intendedRole&&<span style={{fontSize:10,background:`${C.accent}18`,border:`1px solid ${C.accent}33`,borderRadius:4,padding:"1px 7px",color:C.accent,fontWeight:700}}>Wants: {pu.intendedRole}</span>}
-                        {pu.preferredRegion&&<span style={{fontSize:10,background:`${C.blue}18`,border:`1px solid ${C.blue}33`,borderRadius:4,padding:"1px 7px",color:C.blue}}>📍 {pu.preferredRegion}</span>}
-                      </div>
-                    )}
+          {/* Demo data banner */}
+          {(()=>{
+            const DEMO = ["Havells India","Berger Paints","Asian Paints"];
+            if (!(deals as any[]).some((d:any)=>DEMO.includes(d.clientCompany))) return null;
+            return (
+              <div style={{ background:`${C.red}12`, border:`2px solid ${C.red}`, borderRadius:10,
+                padding:"14px 18px", marginBottom:20, display:"flex", alignItems:"flex-start", gap:14 }}>
+                <div style={{ fontSize:22, lineHeight:1 }}>⚠️</div>
+                <div>
+                  <div className="sans" style={{ fontWeight:800, fontSize:13, color:C.red, marginBottom:4 }}>
+                    DEMO DATA IS ACTIVE — DO NOT ONBOARD REAL USERS YET
                   </div>
-                  <select id={`role-${pu.id}`} defaultValue={pu.intendedRole||"SALES REP"}
-                    style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
-                    {ALL_ROLES.filter((r: string)=>r!=="ADMIN").map((r: string)=><option key={r}>{r}</option>)}
-                  </select>
-                  <select id={`region-${pu.id}`} defaultValue={pu.preferredRegion||"North"}
-                    style={{padding:"5px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
-                    {REGIONS.map((r: string)=><option key={r}>{r}</option>)}
-                  </select>
-                  <div style={{display:"flex",gap:6}}>
-                    <button onClick={async ()=>{
-                      const roleEl   = document.getElementById(`role-${pu.id}`) as HTMLSelectElement|null;
-                      const regionEl = document.getElementById(`region-${pu.id}`) as HTMLSelectElement|null;
-                      const role     = roleEl?.value || "SALES REP";
-                      const region   = regionEl?.value || "North";
-                      try {
-                        await adminSvc.approveUser(pu._apiId, role, region);
-                        if (role === "SALES REP") {
-                          setReps((prev: Rep[]) => {
-                            const nextId = prev.length > 0 ? Math.max(...prev.map((r: Rep)=>Number(r.id))) + 1 : 1;
-                            return [...prev, {id:nextId, name:pu.name, region, role:"Sales Executive", target:0}];
-                          });
+                  <div style={{ fontSize:11, color:C.dim }}>
+                    Seed clients (Havells India, Berger Paints, Asian Paints) are still in the database.
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* Header row */}
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+            <div className="sans" style={{ fontSize:16, fontWeight:700 }}>
+              Users
+              {usersLoading && <span style={{ fontSize:10, color:C.dim, fontWeight:400, marginLeft:8 }}>loading…</span>}
+              {!usersLoading && <span style={{ fontSize:11, color:C.dim, fontWeight:400, marginLeft:8 }}>({rows.length})</span>}
+            </div>
+            <button onClick={()=>{ setInviteOpen(true); setInviteEmail(""); setInviteRole("SALES REP"); setInviteResult(null); }}
+              style={{ background:C.accent, color:"#fff", border:"none", borderRadius:6, padding:"7px 16px",
+                fontSize:11, fontFamily:"'DM Mono',monospace", fontWeight:700, cursor:"pointer" }}>
+              + Invite User
+            </button>
+          </div>
+
+          {/* Table */}
+          <div style={{ overflowX:"auto" }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+              <thead>
+                <tr style={{ borderBottom:`2px solid ${C.border}` }}>
+                  {["Name","Email","Role","Reports To","Region","Status","Action"].map(h=>(
+                    <th key={h} style={{ textAlign:"left", padding:"6px 10px", color:C.dim,
+                      fontSize:10, fontWeight:700, letterSpacing:.5, textTransform:"uppercase" as const,
+                      whiteSpace:"nowrap" as const }}>
+                      {h}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(u => {
+                  const isSalesRep = u.role==="SALES REP" || u.role==="SALES_REP";
+                  const isPending  = u.status==="pending";
+                  const mgr        = allUsers.find(m => m.id === u.managerId);
+                  const mgrRegion  = mgr?.region;
+
+                  return (
+                    <tr key={u.id} style={{ borderBottom:`1px solid ${C.border}`,
+                      background: isPending ? `${C.orange}08` : undefined }}>
+
+                      {/* Name */}
+                      <td style={{ padding:"9px 10px", fontWeight:600, whiteSpace:"nowrap" as const }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                          <div style={{ width:28, height:28, borderRadius:"50%", background:`${C.accent}22`,
+                            display:"flex", alignItems:"center", justifyContent:"center",
+                            fontSize:11, fontWeight:700, color:C.accent, flexShrink:0 }}>
+                            {u.name[0]}
+                          </div>
+                          {u.name}
+                        </div>
+                      </td>
+
+                      {/* Email */}
+                      <td style={{ padding:"9px 10px", color:C.dim, fontSize:11 }}>{u.email}</td>
+
+                      {/* Role */}
+                      <td style={{ padding:"9px 10px" }}>
+                        {isPending
+                          ? <span style={{ color:C.orange, fontSize:11 }}>{u.role || "—"}</span>
+                          : <select value={u.role} onChange={e=>handleRoleChange(u, e.target.value)} style={inputStyle}>
+                              {USER_ROLES.map(r=><option key={r}>{r}</option>)}
+                            </select>
                         }
-                        await refreshAdminUsers();
-                        showToast(`${pu.name} approved as ${role} ✓`);
-                      } catch { showToast("Network error — approval failed","err"); }
-                    }} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                      ✓ Approve
-                    </button>
-                    <button onClick={async ()=>{
-                      try {
-                        await adminSvc.rejectUser(pu._apiId);
-                        await refreshAdminUsers();
-                        showToast(`${pu.name} rejected`,"err");
-                      } catch { showToast("Network error","err"); }
-                    }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"5px 14px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>
-                      Reject
-                    </button>
-                  </div>
-                </div>
-              ))}
+                      </td>
+
+                      {/* Reports To */}
+                      <td style={{ padding:"9px 10px" }}>
+                        {isSalesRep && !isPending
+                          ? <select value={u.managerId||""} onChange={e=>handleManagerChange(u, e.target.value)} style={inputStyle}>
+                              <option value="">— None —</option>
+                              {regionHeads.map(rh=><option key={rh.id} value={rh.id}>{rh.name}</option>)}
+                            </select>
+                          : <span style={{ color:C.muted, fontSize:11 }}>{mgr?.name || "—"}</span>
+                        }
+                      </td>
+
+                      {/* Region — auto from manager for SALES REP */}
+                      <td style={{ padding:"9px 10px", fontSize:11, color:C.dim }}>
+                        {isSalesRep ? (mgrRegion || u.region || "—") : (u.region || "—")}
+                      </td>
+
+                      {/* Status */}
+                      <td style={{ padding:"9px 10px" }}>{statusBadge(u.status)}</td>
+
+                      {/* Action */}
+                      <td style={{ padding:"9px 10px", whiteSpace:"nowrap" as const }}>
+                        {isPending
+                          ? <PendingActions u={u} regionHeads={regionHeads} onApprove={handleApprove} onReject={handleReject} C={C} />
+                          : u.status==="active"
+                            ? <button onClick={()=>handleRevoke(u)}
+                                style={{ background:`${C.red}18`, border:"none", color:C.red, borderRadius:4,
+                                  padding:"4px 10px", fontSize:10, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>
+                                Revoke
+                              </button>
+                            : <button onClick={()=>handleReactivate(u)}
+                                style={{ background:`${C.green}18`, border:"none", color:C.green, borderRadius:4,
+                                  padding:"4px 10px", fontSize:10, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>
+                                Reactivate
+                              </button>
+                        }
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            {!usersLoading && rows.length===0 && (
+              <div style={{ textAlign:"center", padding:40, color:C.muted, fontSize:12 }}>No users</div>
+            )}
+          </div>
+
+          {/* Danger zone */}
+          <div style={{ marginTop:32, padding:"16px 18px", background:`${C.red}0a`,
+            border:`1px solid ${C.red}33`, borderRadius:8 }}>
+            <div style={{ fontWeight:700, fontSize:11, color:C.red, letterSpacing:1, marginBottom:6 }}>
+              DANGER ZONE — SYSTEM RESET
             </div>
-          )}
-
-          <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase",marginBottom:10}}>
-            Active Users ({liveRoles.length})
-          </div>
-          <div style={{display:"flex",flexDirection:"column",gap:6}}>
-            {liveRoles.map((u: LiveRole)=>(
-              <div key={u.id} className="card" style={{padding:"12px 16px",display:"flex",alignItems:"center",gap:12,flexWrap:"wrap"}}>
-                <div style={{width:32,height:32,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:13,fontWeight:700,color:C.accent,flexShrink:0}}>{u.name[0]}</div>
-                <div style={{flex:1,minWidth:120}}>
-                  <div className="sans" style={{fontWeight:700,fontSize:13}}>{u.name}</div>
-                  <div style={{fontSize:10,color:C.dim}}>{u.region||"All regions"}</div>
-                </div>
-                <select value={u.role} onChange={async (e: React.ChangeEvent<HTMLSelectElement>)=>{
-                  const newRole = e.target.value;
-                  try {
-                    await adminSvc.patchUserRole(u._apiId, newRole, u.region || "");
-                    await refreshAdminUsers();
-                    showToast(`${u.name} role updated to ${newRole}`);
-                  } catch { showToast("Network error","err"); }
-                }} style={{padding:"4px 8px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:11,fontFamily:"'DM Mono',monospace"}}>
-                  {ALL_ROLES.map((r: string)=><option key={r}>{r}</option>)}
-                </select>
-                <button onClick={async ()=>{
-                  if(!window.confirm(`Revoke access for ${u.name}?`)) return;
-                  try {
-                    await adminSvc.deleteUser(u._apiId);
-                    await refreshAdminUsers();
-                    showToast(`${u.name}'s access revoked`,"err");
-                  } catch { showToast("Network error","err"); }
-                }} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"4px 11px",fontSize:10,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Revoke</button>
-              </div>
-            ))}
-          </div>
-
-          <div style={{marginTop:28,padding:"16px 18px",background:`${C.red}0a`,border:`1px solid ${C.red}33`,borderRadius:8}}>
-            <div style={{fontWeight:700,fontSize:11,color:C.red,letterSpacing:1,marginBottom:6}}>DANGER ZONE — SYSTEM RESET</div>
-            <div style={{fontSize:11,color:C.dim,marginBottom:4}}>Wipes ALL data from the platform (deals, meetings, targets, reps, users, plans). Use once before going live. Cannot be undone.</div>
-            <div style={{fontSize:11,color:C.red,fontWeight:600,marginBottom:12}}>Admin access only. Each trigger is logged with your email and timestamp.</div>
-            <button onClick={async ()=>{
-              const typed = window.prompt('Type  RESET  (all caps) to confirm deletion of all platform data.\n\nThis cannot be undone. Your email and the timestamp will be logged.');
-              if (typed === null) return;
-              if (typed.trim() !== "RESET") { showToast("Reset cancelled — confirmation text did not match","err"); return; }
+            <div style={{ fontSize:11, color:C.dim, marginBottom:12 }}>
+              Wipes ALL data from the platform. Cannot be undone. Logged with your email and timestamp.
+            </div>
+            <button onClick={async()=>{
+              const typed = window.prompt("Type  RESET  (all caps) to confirm deletion of all platform data.\n\nThis cannot be undone.");
+              if (typed===null) return;
+              if (typed.trim()!=="RESET") { showToast("Reset cancelled — type RESET exactly", "err"); return; }
               try {
-                const j = await apiFetch("/api/state/reset-all", {
+                const token = getSessionToken();
+                const j = await fetch("/api/state/reset-all", {
                   method:"POST",
-                  headers:{"Content-Type":"application/json"},
-                  body: JSON.stringify({ confirmText:"RESET", triggeredBy: user?.email||"admin", role:"ADMIN" })
-                }) as { ok: boolean; error?: string };
-                if (j.ok) {
+                  headers:{ "Content-Type":"application/json", ...(token?{"X-Session-Token":token}:{}) },
+                  body: JSON.stringify({ confirmText:"RESET", triggeredBy: user?.email||"admin", role:"ADMIN" }),
+                });
+                const d = await j.json();
+                if (d.ok) {
                   Object.keys(localStorage).filter(k=>k.startsWith("otv_")).forEach(k=>localStorage.removeItem(k));
                   showToast("All data cleared — reloading…");
                   setTimeout(()=>window.location.reload(), 800);
                 } else {
-                  showToast("Reset failed: "+j.error,"err");
+                  showToast("Reset failed: "+d.error, "err");
                 }
-              } catch {
-                showToast("Reset failed","err");
-              }
-            }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:5,padding:"7px 18px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
+              } catch { showToast("Reset failed", "err"); }
+            }} style={{ background:`${C.red}18`, border:`1px solid ${C.red}44`, color:C.red, borderRadius:5,
+              padding:"7px 18px", fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontWeight:700 }}>
               ⚠ Reset All App Data
             </button>
           </div>
         </div>
       )}
 
-      {/* ── APPROVAL QUEUE ── */}
-      {view==="admin-approvals" && (
+      {/* ─────────────────── EXPORT TAB ────────────────────────────────────── */}
+      {activeTab==="export" && (
         <div>
-          <div style={{fontSize:11,color:C.dim,marginBottom:16}}>All pending approvals across teams.</div>
-          {internalReqs.filter((r: InternalReq)=>r.status!=="Done").length===0&&<div style={{textAlign:"center",padding:50,color:C.muted}}>No pending approvals.</div>}
-          {internalReqs.filter((r: InternalReq)=>r.status!=="Done").map((req: InternalReq)=>{
-            const daysOld=daysSince(req.raisedAt);
-            const overdue=daysOld>=(req.slaHours/24);
-            const sc=overdue?C.red:req.status==="In Progress"?C.blue:C.orange;
-            return (
-              <div key={req.id} className="card" style={{padding:"14px 18px",marginBottom:10,borderLeft:`3px solid ${sc}`}}>
-                <div style={{display:"flex",justifyContent:"space-between",marginBottom:6,flexWrap:"wrap",gap:8}}>
-                  <div style={{display:"flex",gap:8,flexWrap:"wrap"}}>
-                    <span style={{background:`${sc}22`,color:sc,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{overdue?"OVERDUE":req.status}</span>
-                    <span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:8,fontSize:10}}>{req.type}</span>
-                    <span style={{fontSize:11,color:C.dim}}>From: {req.raisedByName} → {req.dept}</span>
+          <div className="sans" style={{ fontSize:16, fontWeight:700, marginBottom:16 }}>Export Data</div>
+
+          {/* Filters */}
+          <div style={{ display:"flex", gap:14, flexWrap:"wrap", marginBottom:22, padding:"14px 16px",
+            background:C.s2, borderRadius:8, border:`1px solid ${C.border}` }}>
+            <div>
+              <label style={{ display:"block", fontSize:10, color:C.dim, textTransform:"uppercase" as const,
+                letterSpacing:.4, marginBottom:4 }}>From</label>
+              <input type="date" value={exportFrom} onChange={e=>setExportFrom(e.target.value)}
+                style={{ padding:"6px 10px", background:"#fff", border:`1px solid ${C.border}`, borderRadius:5,
+                  fontSize:12, fontFamily:"'DM Mono',monospace", color:C.text }} />
+            </div>
+            <div>
+              <label style={{ display:"block", fontSize:10, color:C.dim, textTransform:"uppercase" as const,
+                letterSpacing:.4, marginBottom:4 }}>To</label>
+              <input type="date" value={exportTo} onChange={e=>setExportTo(e.target.value)}
+                style={{ padding:"6px 10px", background:"#fff", border:`1px solid ${C.border}`, borderRadius:5,
+                  fontSize:12, fontFamily:"'DM Mono',monospace", color:C.text }} />
+            </div>
+            <div>
+              <label style={{ display:"block", fontSize:10, color:C.dim, textTransform:"uppercase" as const,
+                letterSpacing:.4, marginBottom:4 }}>Rep</label>
+              <select value={exportRepId} onChange={e=>setExportRepId(e.target.value)}
+                style={{ padding:"6px 10px", background:"#fff", border:`1px solid ${C.border}`, borderRadius:5,
+                  fontSize:12, fontFamily:"'DM Mono',monospace", color:C.text }}>
+                <option value="">All Reps</option>
+                {allUsers.filter(u=>u.role==="SALES REP"||u.role==="SALES_REP").map(u=>(
+                  <option key={u.id} value={String(u.repId||u.id)}>{u.name}</option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {/* Export buttons */}
+          <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+            {([
+              { type:"deals",    label:"Export Deals",    color:C.blue   },
+              { type:"revenue",  label:"Export Revenue",  color:C.green  },
+              { type:"meetings", label:"Export Meetings", color:C.accent },
+              { type:"targets",  label:"Export Targets",  color:C.orange },
+            ]).map(({ type, label, color })=>(
+              <button key={type} onClick={()=>handleExport(type)} disabled={exportBusy===type}
+                style={{ padding:"10px 24px", background:`${color}14`, border:`1.5px solid ${color}55`,
+                  borderRadius:7, color, fontSize:12, fontFamily:"'DM Mono',monospace", fontWeight:700,
+                  cursor:"pointer", opacity:exportBusy===type?.55:1, transition:"opacity .15s" }}>
+                {exportBusy===type ? "Exporting…" : label}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ marginTop:14, fontSize:11, color:C.dim }}>
+            Downloads a .csv file. Leave date fields blank to export all records.
+          </div>
+        </div>
+      )}
+
+      {/* ─────────────────── SYSTEM CONFIG TAB ─────────────────────────────── */}
+      {activeTab==="system" && (
+        <SystemConfigView view="admin-config" />
+      )}
+
+      {/* ─────────────────── INVITE MODAL ───────────────────────────────────── */}
+      {inviteOpen && (
+        <div className="overlay" onClick={()=>setInviteOpen(false)}>
+          <div className="modal fin" onClick={e=>e.stopPropagation()} style={{ width:460 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+              <div className="sans" style={{ fontSize:15, fontWeight:700 }}>Invite User</div>
+              <button onClick={()=>setInviteOpen(false)}
+                style={{ background:"transparent", border:"none", color:C.dim, fontSize:18, cursor:"pointer" }}>×</button>
+            </div>
+
+            {!inviteResult ? (
+              <>
+                <div style={{ marginBottom:10 }}>
+                  <label style={{ display:"block", fontSize:10, color:C.dim, textTransform:"uppercase" as const,
+                    letterSpacing:.4, marginBottom:4 }}>Email *</label>
+                  <input type="email" value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}
+                    placeholder="user@odishatv.com" autoFocus
+                    style={{ width:"100%", padding:"8px 10px", background:C.s2, border:`1px solid ${C.border}`,
+                      borderRadius:5, fontSize:12, fontFamily:"'DM Mono',monospace", color:C.text, boxSizing:"border-box" as const }} />
+                </div>
+                <div style={{ marginBottom:16 }}>
+                  <label style={{ display:"block", fontSize:10, color:C.dim, textTransform:"uppercase" as const,
+                    letterSpacing:.4, marginBottom:4 }}>Intended Role</label>
+                  <select value={inviteRole} onChange={e=>setInviteRole(e.target.value)}
+                    style={{ width:"100%", padding:"8px 10px", background:C.s2, border:`1px solid ${C.border}`,
+                      borderRadius:5, fontSize:12, fontFamily:"'DM Mono',monospace", color:C.text }}>
+                    {USER_ROLES.map(r=><option key={r}>{r}</option>)}
+                  </select>
+                  <div style={{ fontSize:10, color:C.muted, marginTop:4 }}>
+                    The invitee selects their final role during sign-up.
                   </div>
-                  <span style={{fontSize:10,color:overdue?C.red:C.muted}}>{daysOld===0?"Today":`${daysOld}d ago`}</span>
                 </div>
-                <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
-                {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8}}>{req.details}</div>}
-                <div style={{display:"flex",gap:8,justifyContent:"flex-end"}}>
-                  <button onClick={()=>setInternalReqs((p: InternalReq[])=>p.map((r: InternalReq)=>r.id===req.id?{...r,status:"In Progress"}:r))} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
-                  <button onClick={()=>{openNoteModal("Resolution Note", "Resolved by admin", (note: string) => setInternalReqs((p: InternalReq[])=>p.map((r: InternalReq)=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
+                <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                  <button onClick={()=>setInviteOpen(false)} className="btn btn-ghost">Cancel</button>
+                  <button onClick={handleInvite} disabled={inviteLoading} className="btn btn-primary">
+                    {inviteLoading ? "Generating…" : "Generate Invite Link"}
+                  </button>
                 </div>
-              </div>
-            );
-          })}
+              </>
+            ) : (
+              <>
+                <div style={{ background:`${C.green}14`, border:`1px solid ${C.green}44`, borderRadius:8,
+                  padding:"12px 14px", marginBottom:14 }}>
+                  <div style={{ fontSize:11, fontWeight:700, color:C.green, marginBottom:4 }}>✓ Invite link generated</div>
+                  <div style={{ fontSize:10, color:C.dim }}>
+                    Expires {new Date(inviteResult.expiresAt).toLocaleString("en-IN", { dateStyle:"medium", timeStyle:"short" })} (72 hours)
+                  </div>
+                </div>
+                <div style={{ display:"flex", gap:6, marginBottom:16 }}>
+                  <input readOnly value={inviteResult.inviteUrl}
+                    style={{ flex:1, padding:"7px 10px", background:C.s2, border:`1px solid ${C.border}`,
+                      borderRadius:5, fontSize:11, fontFamily:"'DM Mono',monospace", color:C.text }} />
+                  <button onClick={()=>{ navigator.clipboard.writeText(inviteResult!.inviteUrl); showToast("Copied!"); }}
+                    style={{ padding:"7px 14px", background:C.accent, color:"#fff", border:"none", borderRadius:5,
+                      fontSize:11, cursor:"pointer", fontFamily:"'DM Mono',monospace", fontWeight:700, whiteSpace:"nowrap" as const }}>
+                    Copy
+                  </button>
+                </div>
+                <div style={{ display:"flex", justifyContent:"flex-end" }}>
+                  <button onClick={()=>setInviteOpen(false)} className="btn btn-ghost">Done</button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       )}
     </div>
   );
 }
+
+export default AdminView;

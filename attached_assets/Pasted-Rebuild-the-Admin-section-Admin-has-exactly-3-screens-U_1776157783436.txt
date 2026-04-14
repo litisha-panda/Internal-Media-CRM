@@ -1,0 +1,61 @@
+Rebuild the Admin section. Admin has exactly 3 screens: Users, Export, System Config.
+
+--- SCREEN 1: Users ---
+Single table with these columns: Name | Email | Role | Reports To | Region | Status | Action
+
+Rules:
+- Role column is a dropdown (editable inline): SALES_REP, REGION_HEAD, NSH, CRO, DIGI_OPS, SALES_STRATEGY, ADMIN
+- "Reports To" dropdown only shows for rows where role = SALES_REP. Lists all users with role = REGION_HEAD
+- Region auto-fills from the selected RH's region when Reports To is set. Read-only field.
+- Status shows Active or Revoked
+- Action column: Revoke button for active users, Reactivate for revoked users
+- Saving role or Reports To calls PATCH /api/users/:id with { role, managerId }
+
+Add PATCH /api/users/:id route in artifacts/api-server/src/routes/users.ts:
+- Admin only (requireRole('ADMIN'))
+- Allowed fields: role, manager_id, status
+- After every update, insert a row into audit_log table
+
+Create audit_log table:
+CREATE TABLE IF NOT EXISTS audit_log (
+  id SERIAL PRIMARY KEY,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  actor_id TEXT REFERENCES otv_users(id),
+  action TEXT NOT NULL,
+  target_user_id TEXT REFERENCES otv_users(id),
+  details TEXT
+);
+
+Run that migration first, then build the route.
+
+"Invite User" button at top of Users screen:
+- Opens a modal: Name, Email, Role dropdown, Reports To dropdown (if SALES_REP selected)
+- On submit: calls POST /api/auth/invite-token to generate token, returns a copyable invite link
+- Show the link in the modal with a Copy button and expiry time (72 hours)
+
+--- SCREEN 2: Export ---
+Four buttons in a row: Export Deals | Export Revenue | Export Meetings | Export Targets
+Above the buttons: a date range picker (From / To) and a Rep dropdown (All Reps or specific rep)
+Each button calls GET /api/export/:type?from=&to=&repId= and downloads a CSV
+
+Add /api/export/:type route:
+- Admin only
+- type can be: deals, revenue, meetings, targets
+- Query the relevant table with optional date and repId filters
+- Return as CSV with Content-Disposition: attachment header
+
+--- SCREEN 3: System Config ---
+Already built — move it here unchanged. Do not modify any existing System Config logic.
+
+--- NOTIFICATIONS TABLE ---
+Also create this table now (needed for Plan C):
+CREATE TABLE IF NOT EXISTS notifications (
+  id SERIAL PRIMARY KEY,
+  user_id TEXT REFERENCES otv_users(id),
+  message TEXT NOT NULL,
+  link TEXT,
+  read BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+After all changes: TypeScript check on both packages, 0 errors expected.
