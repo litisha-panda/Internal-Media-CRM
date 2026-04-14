@@ -235,6 +235,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                           setRevenueEntries(p=>[entry,...p]);
                           revSvc.createRevenueEntry({
                             id:newId, repId:isRep?myRepId:undefined, clientCompany:client,
+                            agencyName:rf.agencyName||undefined, brand:rf.brand||undefined,
                             dealType:rf.dealType, amount:amt, invoiceRef:rf.invoiceRef, date:rf.date||TODAY,
                             quarter:entryQ, fiscalYear:CURRENT_FY, notes:rf.notes||undefined, idempotencyKey:ikey,
                           }).catch((err:any)=>{showToast(err?.body?.error||"Network error — entry may not be saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));});

@@ -10,6 +10,8 @@ export interface RevenueEntry {
   id: string;
   repId?: number | null;
   clientCompany: string;
+  agencyName?: string | null;
+  brand?: string | null;
   dealType: string;
   amount: number;
   invoiceRef: string;
@@ -23,6 +25,8 @@ export interface RevenueCreatePayload {
   id?: string;
   repId?: number | null;
   clientCompany: string;
+  agencyName?: string;
+  brand?: string;
   dealType?: string;
   amount: number;
   invoiceRef: string;
