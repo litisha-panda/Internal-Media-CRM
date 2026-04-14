@@ -250,26 +250,16 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
     <>
           {/* ═══ INTERNAL REQUESTS ═══ */}
           {view==="internal-requests" && (() => {
-            const IR_DEPTS = ["NSH","Sales Strategy","Branding Team","Content Team","Digital","Finance","Legal","CXO"];
             // Which dept "inbox" does the current user own?
             const myInboxDept = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":isDigiOps?"Digital":null;
             // Backend routedToRole code for this user (matches server-side DEPT_TO_ROLE output)
             const myRoleCode = isNSH?"SALES HEAD":isStrategy?"SALES STRATEGY":isCRORole?"CRO":isRH?"REGION HEAD":isDigiOps?"DIGI OPS":null;
-            // Requests ADDRESSED TO this user — by dept label OR by server-computed routedToRole
+            // Section B: requests addressed TO this user's dept/role
             const inboxReqs = myInboxDept ? internalReqs.filter(r => r.dept===myInboxDept || r.routedToRole===myRoleCode) : [];
-            const myReqs  = isRep
-              ? internalReqs.filter(r=>r.raisedBy===activeUser)
-              : isRH
-                ? internalReqs.filter(r=>r.raisedBy===activeUser || (r.dept==="Region Head" && USER_ROLES.find(u=>u.id===r.raisedBy)?.region===rhRegion))
-                : isDigiOps
-                  ? internalReqs.filter(r=>r.dept==="Digital")
-                  : internalReqs;
-            const filtered = irStatusFilter==="all" ? myReqs : myReqs.filter(r=>r.status===irStatusFilter);
-            const pending  = myReqs.filter(r=>r.status==="Pending"||r.status==="Overdue");
-            const inprog   = myReqs.filter(r=>r.status==="In Progress");
-            const done     = myReqs.filter(r=>r.status==="Done");
+            // Section A: requests raised BY this user
+            const myRaisedReqs = internalReqs.filter(r => r.raisedBy === activeUser);
 
-            const statusColor = s => s==="Done"?C.green:s==="In Progress"?C.blue:s==="Overdue"?C.red:s==="Withdrawn"?C.muted:C.orange;
+            const statusColor = (s: string) => s==="Done"?C.green:s==="In Progress"?C.blue:s==="Overdue"?C.red:s==="Withdrawn"?C.muted:C.orange;
 
             return (
               <div className="fin">
@@ -363,41 +353,73 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                   </div>
                 )}
 
-                {/* Summary pills */}
-                <div style={{display:"flex",gap:8,marginBottom:16,flexWrap:"wrap"}}>
-                  {[
-                    {label:"Pending / Overdue", count:pending.length, color:C.red},
-                    {label:"Accepted",           count:myReqs.filter(r=>r.status==="Accepted").length, color:C.green},
-                    {label:"In Progress",        count:inprog.length,  color:C.blue},
-                    {label:"Done",               count:done.length,    color:C.green},
-                    {label:"Rejected",           count:myReqs.filter(r=>r.status==="Rejected").length, color:C.red},
-                  ].map(s=>(
-                    <div key={s.label} style={{background:C.surface,border:`1px solid ${s.color}44`,borderRadius:8,padding:"10px 16px",minWidth:120}}>
-                      <div style={{fontSize:9,color:C.dim,fontWeight:700,letterSpacing:".08em",textTransform:"uppercase"}}>{s.label}</div>
-                      <div className="sans" style={{fontSize:22,fontWeight:800,color:s.color,marginTop:2}}>{s.count}</div>
-                    </div>
-                  ))}
+                {/* ══ SECTION A: MY REQUESTS ══ */}
+                <div style={{marginBottom:28}}>
+                  <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+                    <div className="sans" style={{fontSize:13,fontWeight:700,color:C.text,letterSpacing:".04em"}}>MY REQUESTS</div>
+                    <span style={{background:`${C.accent}22`,color:C.accent,borderRadius:10,padding:"1px 10px",fontSize:10,fontWeight:700}}>{myRaisedReqs.filter(r=>r.status!=="Done"&&r.status!=="Withdrawn"&&r.status!=="Rejected").length} active</span>
+                    <span style={{fontSize:10,color:C.dim}}>requests you raised</span>
+                  </div>
+                  {myRaisedReqs.length===0 && (
+                    <div style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:8,padding:"22px",textAlign:"center",color:C.muted,fontSize:12}}>You haven't raised any requests yet. Hit + New Request above.</div>
+                  )}
+                  {myRaisedReqs.sort((a,b)=>b.raisedAt?.localeCompare(a.raisedAt||"")||0).map(req=>{
+                    const daysOld = daysSince(req.raisedAt);
+                    const overdue = daysOld >= (req.slaHours/24) && req.status!=="Done";
+                    const sc = statusColor(overdue?"Overdue":req.status);
+                    const deal = deals.find(d=>d.id===req.dealId);
+                    return (
+                      <div key={req.id} className="card" style={{padding:"14px 18px",marginBottom:8,borderLeft:`3px solid ${sc}`}}>
+                        <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,flexWrap:"wrap",gap:8}}>
+                          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+                            <span style={{background:`${sc}22`,color:sc,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{overdue?"OVERDUE":req.status}</span>
+                            <span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:600}}>{req.type}</span>
+                            <span style={{background:C.s3,color:C.dim,padding:"2px 9px",borderRadius:8,fontSize:10}}>→ {req.dept}</span>
+                          </div>
+                          <span style={{fontSize:10,color:overdue?C.red:C.muted}}>{daysOld===0?"Today":`${daysOld}d ago`}{overdue?" — SLA breached":""}</span>
+                        </div>
+                        <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
+                        {req.clientCompany&&<div style={{fontSize:11,color:C.dim,marginBottom:4}}>Re: {req.clientCompany}{deal?` · ${fmtR(deal.amount)}`:""}</div>}
+                        {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:6,lineHeight:1.5}}>{req.details}</div>}
+                        {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:6}}>✓ {req.resolverNote}</div>}
+                        <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                          {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && req.type!=="Escalation" && daysOld>=(req.slaHours/24) && (
+                            <button onClick={()=>{
+                              const escalatedDept = req.dept==="NSH"?"CXO":req.dept==="Sales Strategy"?"NSH":req.dept==="Region Head"?"NSH":req.dept==="CXO"?"CXO":"Region Head";
+                              const escalated = {
+                                id:`ir${Date.now()}`,type:"Escalation",dept:escalatedDept,
+                                subject:`ESCALATION: ${req.subject}`,
+                                details:`Original request to ${req.dept} has breached SLA (${daysOld}d). Escalating for urgent action.\n\nOriginal: ${req.details||""}`,
+                                raisedBy:activeUser,raisedByName:user_role?.name||"",
+                                repId:user_role?.repId||req.repId||null,
+                                dealId:req.dealId||null,clientCompany:req.clientCompany||"",
+                                status:"Pending",raisedAt:TODAY,slaHours:24,resolvedAt:null,resolverNote:"",
+                              };
+                              setInternalReqs(p=>[escalated,...p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r)]);
+                              showToast(`Escalated to ${escalated.dept} ✓`);
+                            }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>↑ Escalate</button>
+                          )}
+                          {(isRep||isRH) && req.status==="Pending" && (
+                            <button onClick={()=>{setEditIrId(req.id);setIrForm({type:req.type||"Send Proposal",dept:req.dept||"NSH",subject:req.subject||"",details:req.details||"",clientCompany:req.clientCompany||""});}}
+                              style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✎ Edit</button>
+                          )}
+                          {isRep && (req.status==="Pending"||req.status==="Accepted") && (
+                            <button onClick={async()=>{try{await irSvc.withdrawIR(req.id);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}catch{showToast("Failed to withdraw","err");}}}
+                              style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
 
-                {/* Status filter */}
-                <div style={{display:"flex",gap:6,marginBottom:14,flexWrap:"wrap"}}>
-                  {["all","Pending","Accepted","In Progress","Done","Rejected","Withdrawn"].map(s=>(
-                    <button key={s} onClick={()=>setIrStatusFilter(s)}
-                      style={{padding:"4px 12px",borderRadius:20,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:irStatusFilter===s?700:400,
-                        background:irStatusFilter===s?C.accent:`${C.accent}12`,
-                        color:irStatusFilter===s?"#fff":C.dim,border:"none"}}>
-                      {s==="all"?"All":s}
-                    </button>
-                  ))}
-                </div>
-
-                {/* ── 📥 Inbox: Requests addressed TO this user's dept ── */}
+                {/* ══ SECTION B: ACTION REQUIRED ══ */}
                 {myInboxDept && (
-                  <div style={{marginBottom:24}}>
+                  <div>
                     <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
-                      <div className="sans" style={{fontSize:13,fontWeight:700,color:C.accent,letterSpacing:".04em"}}>📥 REQUESTS TO YOU</div>
-                      <span style={{background:`${C.accent}22`,color:C.accent,borderRadius:10,padding:"1px 10px",fontSize:10,fontWeight:700}}>{inboxReqs.filter(r=>r.status!=="Done").length} open</span>
-                      <div style={{fontSize:10,color:C.dim}}>directed to {myInboxDept}</div>
+                      <div className="sans" style={{fontSize:13,fontWeight:700,color:C.accent,letterSpacing:".04em"}}>ACTION REQUIRED</div>
+                      <span style={{background:`${C.accent}22`,color:C.accent,borderRadius:10,padding:"1px 10px",fontSize:10,fontWeight:700}}>{inboxReqs.filter(r=>r.status!=="Done"&&r.status!=="Rejected"&&r.status!=="Withdrawn").length} open</span>
+                      <div style={{fontSize:10,color:C.dim}}>directed to you ({myInboxDept})</div>
                     </div>
                     {inboxReqs.length===0 && (
                       <div style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:8,padding:"22px",textAlign:"center",color:C.muted,fontSize:12}}>No requests directed to you yet.</div>
@@ -420,48 +442,27 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                           <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
                           {req.clientCompany&&<div style={{fontSize:11,color:C.dim,marginBottom:4}}>Re: {req.clientCompany}{deal?` · ${fmtR(deal.amount)}`:""}</div>}
                           {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:6,lineHeight:1.5}}>{req.details}</div>}
-                          {req.priority&&req.priority!=="Medium"&&<div style={{fontSize:10,fontWeight:700,color:req.priority==="Urgent"?C.red:req.priority==="High"?C.orange:C.green,marginBottom:6}}>Priority: {req.priority}{req.dueDate?` · Needed by ${req.dueDate}`:""}</div>}
                           {req.notes&&<div style={{fontSize:11,color:C.blue,background:`${C.blue}08`,padding:"5px 9px",borderRadius:5,marginBottom:6}}>💬 {req.notes}</div>}
                           {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:8}}>✓ {req.resolverNote}</div>}
-                          {req.status!=="Done" && req.status!=="Rejected" && req.status!=="Withdrawn" && (
+                          {req.status!=="Done"&&req.status!=="Rejected"&&req.status!=="Withdrawn"&&(
                             <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                               {req.status==="Pending"&&(
-                                <button onClick={async()=>{
-                                  try{
-                                    await irSvc.acceptIR(req.id);
-                                    setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Accepted",acceptedAt:TODAY}:r));
-                                  }catch{showToast("Failed to accept request","err");}
-                                }}
+                                <button onClick={async()=>{try{await irSvc.acceptIR(req.id);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Accepted",acceptedAt:TODAY}:r));}catch{showToast("Failed to accept","err");}}}
                                   style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Accept</button>
                               )}
                               {req.status==="Pending"&&(
-                                <button onClick={()=>openNoteModal("Reason for rejection","Rejected",async note=>{
-                                  try{
-                                    await irSvc.rejectIR(req.id,note);
-                                    setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:r));
-                                  }catch{showToast("Failed to reject request","err");}
-                                })}
+                                <button onClick={()=>openNoteModal("Reason for rejection","Rejected",async note=>{try{await irSvc.rejectIR(req.id,note);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:r));}catch{showToast("Failed to reject","err");}})}
                                   style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✗ Reject</button>
                               )}
                               {req.status==="Accepted"&&(
-                                <button onClick={async()=>{
-                                  try{
-                                    await irSvc.markInProgress(req.id);
-                                    setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));
-                                  }catch{showToast("Failed to update request","err");}
-                                }}
+                                <button onClick={async()=>{try{await irSvc.markInProgress(req.id);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}catch{showToast("Failed to update","err");}}}
                                   style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark In Progress</button>
                               )}
                               {(req.status==="Accepted"||req.status==="In Progress")&&(
-                                <button onClick={()=>openNoteModal("Resolution Note","Resolved",async note=>{
-                                  try{
-                                    await irSvc.resolveIR(req.id,note);
-                                    setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r));
-                                  }catch{showToast("Failed to mark done","err");}
-                                })}
+                                <button onClick={()=>openNoteModal("Resolution Note","Resolved",async note=>{try{await irSvc.resolveIR(req.id,note);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r));}catch{showToast("Failed to mark done","err");}})}
                                   style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark Done</button>
                               )}
-                              {req.status!=="Pending"&&req.status!=="Accepted"&&(
+                              {req.status==="In Progress"&&(
                                 <button onClick={()=>openNoteModal("Add Note / Update","Noted",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,notes:note}:r)))}
                                   style={{background:`${C.accent}12`,border:`1px solid ${C.accent}33`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Note</button>
                               )}
@@ -470,80 +471,8 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                         </div>
                       );
                     })}
-                    <div style={{borderBottom:`1px solid ${C.border}`,marginBottom:20,marginTop:8}}/>
-                    <div className="sans" style={{fontSize:12,fontWeight:700,color:C.dim,letterSpacing:".04em",marginBottom:12}}>ALL REQUESTS (SYSTEM-WIDE)</div>
                   </div>
                 )}
-
-                {/* Request cards */}
-                {filtered.length===0 && <div style={{textAlign:"center",padding:50,color:C.muted}}>{irStatusFilter==="all"?"No requests yet. Hit + New Request to raise one.":"No requests with this status."}</div>}
-                {filtered.map(req=>{
-                  const daysOld = daysSince(req.raisedAt);
-                  const overdue = daysOld >= (req.slaHours/24) && req.status!=="Done";
-                  const sc = statusColor(overdue?"Overdue":req.status);
-                  const deal = deals.find(d=>d.id===req.dealId);
-                  return (
-                    <div key={req.id} className="card" style={{padding:"14px 18px",marginBottom:10,borderLeft:`3px solid ${sc}`}}>
-                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:6,flexWrap:"wrap",gap:8}}>
-                        <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
-                          <span style={{background:`${sc}22`,color:sc,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:700}}>{overdue?"OVERDUE":req.status}</span>
-                          <span style={{background:`${C.blue}18`,color:C.blue,padding:"2px 9px",borderRadius:8,fontSize:10,fontWeight:600}}>{req.type}</span>
-                          <span style={{background:C.s3,color:C.dim,padding:"2px 9px",borderRadius:8,fontSize:10}}>→ {req.dept}</span>
-                        </div>
-                        <span style={{fontSize:10,color:overdue?C.red:C.muted}}>{daysOld===0?"Today":`${daysOld}d ago`}{overdue?" — SLA breached":""}</span>
-                      </div>
-                      <div style={{fontWeight:700,fontSize:13,marginBottom:4}}>{req.subject}</div>
-                      {req.clientCompany&&<div style={{fontSize:11,color:C.dim,marginBottom:4}}>Re: {req.clientCompany}{deal?` · ${fmtR(deal.amount)}`:""}</div>}
-                      {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.5}}>{req.details}</div>}
-                      {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:8}}>✓ {req.resolverNote}</div>}
-                      <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
-                        {isNSHDashboard && req.status==="Accepted" && (
-                          <button onClick={async()=>{
-                            try{
-                              await irSvc.markInProgress(req.id);
-                              setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));
-                            }catch{showToast("Failed to update request","err");}
-                          }} style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark In Progress</button>
-                        )}
-                        {isNSHDashboard && (req.status==="Accepted"||req.status==="In Progress") && (
-                          <button onClick={()=>openNoteModal("Resolution Note","Resolved",async note=>{
-                            try{
-                              await irSvc.resolveIR(req.id,note);
-                              setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r));
-                            }catch{showToast("Failed to resolve request","err");}
-                          })} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark Done</button>
-                        )}
-                        {/* Escalate: visible to rep/RH for any active non-escalation request */}
-                        {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && req.type!=="Escalation" && (
-                          <button onClick={()=>{
-                            const escalatedDept = req.dept==="NSH"?"CXO":req.dept==="Sales Strategy"?"NSH":req.dept==="Region Head"?"NSH":req.dept==="CXO"?"CXO":"Region Head";
-                            const escalated = {
-                              id:`ir${Date.now()}`,
-                              type:"Escalation",
-                              dept: escalatedDept,
-                              subject:`ESCALATION: ${req.subject}`,
-                              details:`Original request to ${req.dept} has breached SLA (${daysOld}d). Escalating for urgent action.\n\nOriginal: ${req.details||""}`,
-                              raisedBy:activeUser, raisedByName:user_role?.name||"",
-                              repId:user_role?.repId||req.repId||null,
-                              dealId:req.dealId||null, clientCompany:req.clientCompany||"",
-                              status:"Pending", raisedAt:TODAY, slaHours:24, resolvedAt:null, resolverNote:"",
-                            };
-                            setInternalReqs(p=>[escalated,...p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r)]);
-                            showToast(`Escalated to ${escalated.dept} ✓`);
-                          }} style={{background:`${C.red}18`,border:`1px solid ${C.red}44`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>
-                            ↑ Escalate
-                          </button>
-                        )}
-                        {(isRep||isRH) && req.status==="Pending" && (
-                          <button onClick={()=>{setEditIrId(req.id);setIrForm({type:req.type||"Send Proposal",dept:req.dept||"NSH",subject:req.subject||"",details:req.details||"",clientCompany:req.clientCompany||""});}} style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✎ Edit</button>
-                        )}
-                        {isRep && (req.status==="Pending" || req.status==="Accepted") && (
-                          <button onClick={async()=>{try{await irSvc.withdrawIR(req.id);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}catch{showToast("Failed to withdraw request","err");}}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
               </div>
             );
           })()}

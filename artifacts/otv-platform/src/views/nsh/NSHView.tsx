@@ -33,6 +33,7 @@ export function NSHView({
     tasks,
     setTasks,
     revenueEntries,
+    targetSubs,
     reps,
     absenceReports,
     weeklyPlans,
@@ -50,6 +51,7 @@ export function NSHView({
     C,
     TODAY,
     TOMORROW,
+    CURRENT_FY,
   } = useCROAppContext();
   return (
     <>
@@ -343,52 +345,119 @@ export function NSHView({
 
           {/* ═══ NSH RH SCORECARD ═══ */}
           {view==="nsh-rh-scorecard" && isNSHDashboard && (()=>{
-            const RH_USERS=USER_ROLES.filter(u=>u.role==="REGION HEAD");
+            const drilledRegion = nshRHDrill;
+            const thStyle = (w?: number): React.CSSProperties => ({padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap",width:w?w:undefined});
+            const tdStyle: React.CSSProperties = {padding:"11px 14px",borderBottom:`1px solid ${C.s2}`};
             return (
               <div className="fin">
-                <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1,marginBottom:4}}>REGION HEAD SCORECARD</div>
-                <div style={{fontSize:11,color:C.dim,marginBottom:16}}>{filterQ} · How each region is performing</div>
-                {RH_USERS.map((rhu,rank)=>{
-                  const rd=deals.filter(d=>d.region===rhu.region&&qMatch(d.quarter));
-                  const rhRepIdSet=new Set(rd.map(d=>d.repId));
-                  const rC=revenueEntries.filter(e=>rhRepIdSet.has(e.repId)&&qMatch(e.quarter)).reduce((s,e)=>s+(e.amount||0),0);
-                  const rT=rd.reduce((s,d)=>s+(d.targetAmount||0),0);
-                  const rP=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)).reduce((s,d)=>s+d.amount,0);
-                  const rPct=rT>0?Math.round((rC/rT)*100):0;
-                  const rRisk=rd.filter(d=>!["Mail Confirmed","Not Interested"].includes(d.outcome)&&daysSince(d.lastContact)>=7).length;
-                  const rOver=rd.filter(d=>d.nextStepDate&&d.nextStepDate<TODAY&&d.outcome!=="Mail Confirmed").length;
-                  const rBlocked=rd.filter(d=>d.awaitingApproval&&d.outcome!=="Mail Confirmed").length;
-                  const sc=rPct>=80?C.green:rPct>=50?C.accent:C.red;
-                  const rankColor=rank===0?C.accent:rank===1?C.blue:C.dim;
-                  return (
-                    <div key={rhu.id} className="card" style={{padding:16,marginBottom:10}}>
-                      <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
-                        <div style={{width:28,height:28,borderRadius:"50%",background:`${rankColor}22`,border:`1px solid ${rankColor}44`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,fontWeight:800,color:rankColor,flexShrink:0}}>#{rank+1}</div>
-                        <div style={{flex:1}}>
-                          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:8,flexWrap:"wrap"}}>
-                            <span className="sans" style={{fontSize:15,fontWeight:700}}>{rhu.region} Region</span>
-                            <span style={{fontSize:11,color:C.dim}}>{reps.filter(r=>r.region===rhu.region).length} reps · {rd.length} deals</span>
-                          </div>
-                          <div style={{display:"grid",gridTemplateColumns:"repeat(5,1fr)",gap:8,marginBottom:8}}>
-                            {[["TARGET",fmtR(rT),C.dim],["CLOSED",fmtR(rC),C.green],["PIPELINE",fmtR(rP),C.accent],["ACHIEVE",`${rPct}%`,sc],["AT RISK",rRisk,rRisk>0?C.red:C.green]].map(([l,v,c]: [any,any,any])=>(
-                              <div key={l} style={{background:C.s2,borderRadius:5,padding:"7px 10px"}}>
-                                <div style={{fontSize:9,color:C.dim,letterSpacing:".06em",marginBottom:2}}>{l}</div>
-                                <div className="sans" style={{fontSize:14,fontWeight:700,color:c}}>{v}</div>
-                              </div>
-                            ))}
-                          </div>
-                          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-                            {rRisk>0&&<span style={{background:`${C.red}18`,color:C.red,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:600}}>{rRisk} at risk</span>}
-                            {rOver>0&&<span style={{background:`${C.orange}18`,color:C.orange,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:600}}>{rOver} overdue</span>}
-                            {rBlocked>0&&<span style={{background:`${C.orange}18`,color:C.orange,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:600}}>{rBlocked} awaiting approval</span>}
-                            {rRisk===0&&rOver===0&&<span style={{background:`${C.green}18`,color:C.green,padding:"2px 8px",borderRadius:6,fontSize:10,fontWeight:600}}>✓ On track</span>}
-                          </div>
-                        </div>
-                        <div style={{textAlign:"right",minWidth:56}}><div className="sans" style={{fontSize:32,fontWeight:800,color:sc,lineHeight:1}}>{rPct}%</div><div style={{fontSize:9,color:C.dim}}>achieved</div></div>
-                      </div>
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:14}}>
+                  <div>
+                    <div className="sans" style={{fontSize:18,fontWeight:700,letterSpacing:1}}>REGION SCORECARD</div>
+                    <div style={{fontSize:11,color:C.dim,marginTop:2}}>Annual targets vs YTD revenue · approved submissions only</div>
+                  </div>
+                  {drilledRegion&&(
+                    <button onClick={()=>setNshRHDrill(null)} style={{background:C.s2,border:`1px solid ${C.border}`,borderRadius:5,padding:"5px 12px",color:C.dim,fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>← All Regions</button>
+                  )}
+                </div>
+
+                {!drilledRegion ? (
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                      <thead><tr>
+                        <th style={thStyle()}>Region</th>
+                        <th style={thStyle()}>Annual Target</th>
+                        <th style={thStyle()}>YTD Revenue</th>
+                        <th style={thStyle(120)}>% Achieved</th>
+                        <th style={thStyle(60)}>Reps</th>
+                      </tr></thead>
+                      <tbody>
+                        {REGIONS.map(region=>{
+                          const regionRepIds=reps.filter(r=>r.region===region).map(r=>String(r.id));
+                          const annualTarget=targetSubs.filter(s=>regionRepIds.includes(String(s.repId))&&s.status==="Approved").reduce((s:number,t:any)=>s+(Number(t.totalTarget)||0),0);
+                          const ytdRevenue=revenueEntries.filter(e=>regionRepIds.includes(String(e.repId))&&(e.fiscalYear===CURRENT_FY||!e.fiscalYear)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
+                          const pct=annualTarget>0?Math.round(ytdRevenue/annualTarget*100):0;
+                          const sc=pct>=80?C.green:pct>=50?C.accent:C.red;
+                          return (
+                            <tr key={region}
+                              onClick={()=>setNshRHDrill(region)}
+                              style={{cursor:"pointer"}}
+                              onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                              onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                              <td style={tdStyle}>
+                                <div style={{display:"flex",alignItems:"center",gap:6}}>
+                                  <span className="sans" style={{fontWeight:700,fontSize:13}}>{region}</span>
+                                  <span style={{fontSize:9,color:C.muted}}>→</span>
+                                </div>
+                              </td>
+                              <td style={tdStyle}>{annualTarget>0?fmtR(annualTarget):<span style={{color:C.muted}}>—</span>}</td>
+                              <td style={{...tdStyle,color:C.green,fontWeight:600}}>{fmtR(ytdRevenue)}</td>
+                              <td style={tdStyle}>
+                                {annualTarget>0?(
+                                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                    <div style={{width:70,height:5,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                                      <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:sc,borderRadius:2}}/>
+                                    </div>
+                                    <span style={{fontWeight:700,color:sc}}>{pct}%</span>
+                                  </div>
+                                ):<span style={{color:C.muted,fontSize:11}}>No target</span>}
+                              </td>
+                              <td style={{...tdStyle,color:C.dim}}>{regionRepIds.length}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div>
+                    <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12,padding:"6px 12px",background:C.s2,borderRadius:6,borderLeft:`3px solid ${C.accent}`}}>
+                      <span className="sans" style={{fontWeight:700,fontSize:13}}>{drilledRegion} Region</span>
+                      <span style={{fontSize:10,color:C.dim}}>{reps.filter(r=>r.region===drilledRegion).length} reps</span>
                     </div>
-                  );
-                })}
+                    <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                      <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                        <thead><tr>
+                          <th style={thStyle()}>Rep</th>
+                          <th style={thStyle()}>Annual Target</th>
+                          <th style={thStyle()}>YTD Revenue</th>
+                          <th style={thStyle(140)}>% Achieved</th>
+                        </tr></thead>
+                        <tbody>
+                          {reps.filter(r=>r.region===drilledRegion).map(rep=>{
+                            const repTarget=targetSubs.filter(s=>String(s.repId)===String(rep.id)&&s.status==="Approved").reduce((s:number,t:any)=>s+(Number(t.totalTarget)||0),0);
+                            const repRevenue=revenueEntries.filter(e=>String(e.repId)===String(rep.id)&&(e.fiscalYear===CURRENT_FY||!e.fiscalYear)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
+                            const pct=repTarget>0?Math.round(repRevenue/repTarget*100):0;
+                            const sc=pct>=80?C.green:pct>=50?C.accent:C.red;
+                            return (
+                              <tr key={rep.id} style={{borderBottom:`1px solid ${C.s2}`}}
+                                onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                                onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                                <td style={tdStyle}>
+                                  <div style={{display:"flex",alignItems:"center",gap:7}}>
+                                    <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent}}>{String(rep.name)[0]}</div>
+                                    <span style={{fontWeight:600}}>{rep.name}</span>
+                                  </div>
+                                </td>
+                                <td style={tdStyle}>{repTarget>0?fmtR(repTarget):<span style={{color:C.muted}}>—</span>}</td>
+                                <td style={{...tdStyle,color:C.green,fontWeight:600}}>{fmtR(repRevenue)}</td>
+                                <td style={tdStyle}>
+                                  {repTarget>0?(
+                                    <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                      <div style={{width:70,height:5,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                                        <div style={{height:"100%",width:`${Math.min(pct,100)}%`,background:sc,borderRadius:2}}/>
+                                      </div>
+                                      <span style={{fontWeight:700,color:sc}}>{pct}%</span>
+                                    </div>
+                                  ):<span style={{color:C.muted,fontSize:11}}>No target</span>}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })()}

@@ -354,6 +354,54 @@ export function RHView({
                     </div>
                   ))}
                 </div>
+                {/* ── Per-Rep Achievement Table ── */}
+                <div style={{marginBottom:20}}>
+                  <div style={{fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase",marginBottom:10}}>TEAM ACHIEVEMENT · ANNUAL</div>
+                  <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:8,overflow:"hidden"}}>
+                    <table style={{width:"100%",borderCollapse:"collapse",fontSize:12}}>
+                      <thead><tr>
+                        {["Rep","Annual Target","YTD Revenue","% Achieved"].map(h=>(
+                          <th key={h} style={{padding:"8px 14px",background:C.s2,color:C.dim,fontWeight:600,fontSize:10,textTransform:"uppercase",textAlign:"left",borderBottom:`1px solid ${C.border}`,whiteSpace:"nowrap"}}>{h}</th>
+                        ))}
+                      </tr></thead>
+                      <tbody>
+                        {myReps.map(rep=>{
+                          const rId=rep.repId;
+                          const repTarget=targetSubs.filter(s=>String(s.repId)===String(rId)&&s.status==="Approved").reduce((s:number,t:any)=>s+(Number(t.totalTarget)||0),0);
+                          const repAch=revenueEntries.filter(e=>String(e.repId)===String(rId)).reduce((s:number,e:any)=>s+(Number(e.amount)||0),0);
+                          const repPct=repTarget>0?Math.min(999,Math.round(repAch/repTarget*100)):0;
+                          const sc=repPct>=100?C.green:repPct>=70?C.accent:repPct>=40?C.orange:C.red;
+                          return (
+                            <tr key={rep.id}
+                              onClick={()=>{setRhTeamFilter({rep:String(rId),dateRange:"today-tomorrow",client:"",status:""});setView("rh-team-plan");}}
+                              style={{borderBottom:`1px solid ${C.s2}`,cursor:"pointer"}}
+                              onMouseOver={e=>e.currentTarget.style.background=C.s2}
+                              onMouseOut={e=>e.currentTarget.style.background="transparent"}>
+                              <td style={{padding:"10px 14px"}}>
+                                <div style={{display:"flex",alignItems:"center",gap:7}}>
+                                  <div style={{width:22,height:22,borderRadius:"50%",background:`${C.accent}22`,display:"flex",alignItems:"center",justifyContent:"center",fontSize:10,fontWeight:700,color:C.accent}}>{rep.name[0]}</div>
+                                  <span style={{fontWeight:600}}>{rep.name}</span>
+                                </div>
+                              </td>
+                              <td style={{padding:"10px 14px",color:C.dim}}>{repTarget>0?fmtR(repTarget):"—"}</td>
+                              <td style={{padding:"10px 14px",color:C.green,fontWeight:600}}>{fmtR(repAch)}</td>
+                              <td style={{padding:"10px 14px"}}>
+                                {repTarget>0?(
+                                  <div style={{display:"flex",alignItems:"center",gap:8}}>
+                                    <div style={{width:60,height:5,background:C.s3,borderRadius:2,overflow:"hidden"}}>
+                                      <div style={{height:"100%",width:`${Math.min(repPct,100)}%`,background:sc,borderRadius:2}}/>
+                                    </div>
+                                    <span style={{fontWeight:700,color:sc,fontSize:11}}>{repPct}%</span>
+                                  </div>
+                                ):<span style={{color:C.muted,fontSize:11}}>No target</span>}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
                 <div style={{marginBottom:8,fontSize:10,color:C.dim,fontWeight:700,letterSpacing:".1em",textTransform:"uppercase"}}>
                   {flags.length===0?"STATUS FLAGS":`STATUS FLAGS · ${flags.length} item${flags.length!==1?"s":""} need attention`}
                 </div>
