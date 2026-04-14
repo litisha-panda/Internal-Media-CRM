@@ -46,6 +46,7 @@ interface Rep { id: RepId; name: string; region?: string; }
 
 /* ── Plan form for AddPlanModal ─────────────────────────────────────────── */
 export interface PlanForm {
+  quarter:        string;
   agency:         string;
   client:         string;
   brand:          string;
@@ -65,7 +66,7 @@ export interface PlanForm {
 }
 
 const BLANK_PLAN_FORM: PlanForm = {
-  agency: "", client: "", brand: "", contactName: "", phone: "",
+  quarter: "", agency: "", client: "", brand: "", contactName: "", phone: "",
   designation: "", contactEmail: "",
   time: "10:00", agenda: "", pitchType: "", meetingType: "Physical",
   touchpointType: "Deal Meeting", meetingKind: "ACTIONABLE",
@@ -126,15 +127,29 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
   const [planForm,      setPlanForm]      = useState<PlanForm>(BLANK_PLAN_FORM);
   const [logOpen,       setLogOpen]       = useState(false);
   const [logMeeting,    setLogMeeting]    = useState<Meeting | null>(null);
-  const [approvedTargetRows, setApprovedTargetRows] = useState<{agency:string;client:string;brand:string}[]>([]);
+  const [approvedTargetRows, setApprovedTargetRows] = useState<{quarter:string;agency:string;client:string;brand:string}[]>([]);
 
   useEffect(() => {
     apiFetch("/api/targets?status=Approved")
       .then((res: any) => {
-        const rows: {agency:string;client:string;brand:string}[] = [];
+        const rows: {quarter:string;agency:string;client:string;brand:string}[] = [];
         (res?.data ?? res ?? []).forEach((sub: any) => {
-          (sub.clients ?? []).forEach((c: any) => {
-            rows.push({ agency: c.agencyName || "", client: c.clientCompany || "", brand: c.brand || "" });
+          // Derive which short quarter labels this submission covers.
+          // Annual targets (quarter="Annual-FY26") apply to all four quarters.
+          // Quarterly targets (quarter="Q1 FY26") apply to just that quarter.
+          const raw: string = sub.quarter ?? "";
+          const quarters: string[] = raw.startsWith("Annual")
+            ? ["Q1", "Q2", "Q3", "Q4"]
+            : [raw.slice(0, 2)];            // "Q1 FY26" → "Q1"
+          quarters.forEach(q => {
+            (sub.clients ?? []).forEach((c: any) => {
+              rows.push({
+                quarter: q,
+                agency:  c.agencyName  || c.agency    || "",
+                client:  c.clientCompany || c.clientName || "",
+                brand:   c.brand       || c.brandName  || "",
+              });
+            });
           });
         });
         setApprovedTargetRows(rows);

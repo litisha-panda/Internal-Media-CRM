@@ -13,11 +13,13 @@ import type { PlanForm } from "../../views/rep/MyPlan";
 type RepId = number | string | null | undefined;
 interface Deal { id: string; clientCompany: string; repId?: RepId; agencyName?: string; agency?: string; brand?: string; }
 
+const PLAN_QUARTERS = ["Q1", "Q2", "Q3", "Q4"] as const;
+
 export interface AddPlanModalProps {
   forDate: string;
   form: PlanForm;
   deals: Deal[];
-  approvedTargetRows?: { agency: string; client: string; brand: string }[];
+  approvedTargetRows?: { quarter: string; agency: string; client: string; brand: string }[];
   onFormChange: React.Dispatch<React.SetStateAction<PlanForm>>;
   onSubmit: (date: string) => void;
   onClose: () => void;
@@ -29,15 +31,24 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
 }) => {
   // rows is non-null whenever approvedTargetRows was explicitly passed in (even if empty)
   const rows = approvedTargetRows !== undefined ? approvedTargetRows : null;
-  const allAgencies = rows
-    ? [...new Set(rows.map(r => r.agency).filter(Boolean))].sort()
+
+  // When using approved target rows, filter by selected quarter first.
+  // If no quarter is selected yet, nothing cascades — the agency/client/brand
+  // dropdowns show a "Select a quarter first" placeholder instead.
+  const quarterSelected = Boolean(pf.quarter);
+  const filteredRows = rows
+    ? (quarterSelected ? rows.filter(r => r.quarter === pf.quarter) : [])
+    : null;
+
+  const allAgencies = filteredRows != null
+    ? [...new Set(filteredRows.map(r => r.agency).filter(Boolean))].sort()
     : [...new Set(deals.map(d => d.agencyName || d.agency || "").filter(Boolean))].sort();
-  const clientsForAgency = rows
-    ? (pf.agency ? rows.filter(r => r.agency.toLowerCase() === pf.agency.toLowerCase()).map(r => r.client) : rows.map(r => r.client))
+  const clientsForAgency = filteredRows != null
+    ? (pf.agency ? filteredRows.filter(r => r.agency.toLowerCase() === pf.agency.toLowerCase()).map(r => r.client) : filteredRows.map(r => r.client))
     : (pf.agency ? deals.filter(d => (d.agencyName || d.agency || "").toLowerCase() === pf.agency.toLowerCase()).map(d => d.clientCompany) : deals.map(d => d.clientCompany));
   const clientOptions  = [...new Set(clientsForAgency)].sort();
-  const brandsForClient = rows
-    ? rows.filter(r => r.client.toLowerCase() === (pf.client || "").toLowerCase()).map(r => r.brand).filter(Boolean)
+  const brandsForClient = filteredRows != null
+    ? filteredRows.filter(r => r.client.toLowerCase() === (pf.client || "").toLowerCase()).map(r => r.brand).filter(Boolean)
     : deals.filter(d => d.clientCompany.toLowerCase() === (pf.client || "").toLowerCase()).flatMap(d => [d.brand].filter((b): b is string => Boolean(b)));
   const brandOptions   = [...new Set(brandsForClient)].sort();
 
@@ -85,15 +96,32 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
           </div>
         )}
 
+        {/* Quarter — first field when approved target rows are available */}
+        {rows && (
+          <div style={{ marginBottom: 10 }}>
+            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Quarter *</label>
+            <select value={pf.quarter}
+              onChange={e => setPf(p => ({ ...p, quarter: e.target.value, agency: "", client: "", brand: "" }))}
+              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${pf.quarter ? C.blue : C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+              <option value="">— Select quarter —</option>
+              {PLAN_QUARTERS.map(q => <option key={q} value={q}>{q}</option>)}
+            </select>
+          </div>
+        )}
+
         {/* Agency */}
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Agency</label>
           {rows
-            ? (<select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                <option value="">— No agency / Direct —</option>
-                {allAgencies.map(a => <option key={a}>{a}</option>)}
-              </select>)
+            ? !quarterSelected
+              ? <select disabled style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.muted}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.muted, opacity: .6 }}>
+                  <option>Select a quarter first</option>
+                </select>
+              : (<select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                  <option value="">— No agency / Direct —</option>
+                  {allAgencies.map(a => <option key={a}>{a}</option>)}
+                </select>)
             : allAgencies.length > 0
               ? <select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
                   style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
@@ -109,14 +137,18 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Client *</label>
           {rows
-            ? (<select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${clientOptions.length===0?C.muted:C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                <option value="">— Select client —</option>
-                {clientOptions.length === 0
-                  ? <option value="" disabled>No approved targets yet — contact your Region Head</option>
-                  : clientOptions.map(c => <option key={c}>{c}</option>)
-                }
-              </select>)
+            ? !quarterSelected
+              ? <select disabled style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.muted}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.muted, opacity: .6 }}>
+                  <option>Select a quarter first</option>
+                </select>
+              : (<select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${clientOptions.length===0?C.muted:C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                  <option value="">— Select client —</option>
+                  {clientOptions.length === 0
+                    ? <option value="" disabled>No approved targets for {pf.quarter} — contact your Region Head</option>
+                    : clientOptions.map(c => <option key={c}>{c}</option>)
+                  }
+                </select>)
             : clientOptions.length > 0
               ? <select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
                   style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
@@ -132,11 +164,15 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Brand Name</label>
           {rows
-            ? (<select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                <option value="">— No specific brand —</option>
-                {brandOptions.map(b => <option key={b}>{b}</option>)}
-              </select>)
+            ? !quarterSelected
+              ? <select disabled style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.muted}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.muted, opacity: .6 }}>
+                  <option>Select a quarter first</option>
+                </select>
+              : (<select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
+                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                  <option value="">— No specific brand —</option>
+                  {brandOptions.map(b => <option key={b}>{b}</option>)}
+                </select>)
             : brandOptions.length > 0
               ? <select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
                   style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
