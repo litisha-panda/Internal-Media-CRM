@@ -50,3 +50,36 @@ export async function patchIR(id: string, patch: IRPatch): Promise<void> {
     body: JSON.stringify(patch),
   });
 }
+
+/** POST /api/internal-requests/:id/accept */
+export async function acceptIR(id: string): Promise<void> {
+  await apiFetch(`/api/internal-requests/${id}/accept`, { method: "POST" });
+}
+
+/** POST /api/internal-requests/:id/in-progress */
+export async function markInProgress(id: string): Promise<void> {
+  await apiFetch(`/api/internal-requests/${id}/in-progress`, { method: "POST" });
+}
+
+/** POST /api/internal-requests/:id/resolve */
+export async function resolveIR(id: string, note?: string): Promise<void> {
+  await apiFetch(`/api/internal-requests/${id}/resolve`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note }),
+  });
+}
+
+/** POST /api/internal-requests/:id/reject */
+export async function rejectIR(id: string, note?: string): Promise<void> {
+  await apiFetch(`/api/internal-requests/${id}/reject`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ note }),
+  });
+}
+
+/** POST /api/internal-requests/:id/withdraw */
+export async function withdrawIR(id: string): Promise<void> {
+  await apiFetch(`/api/internal-requests/${id}/withdraw`, { method: "POST" });
+}

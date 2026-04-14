@@ -23,20 +23,20 @@ export interface AddPlanModalProps {
   onClose: () => void;
 }
 
+const PITCH_TYPES = ["TV", "TV+Digital", "Brand Solution", "IP"] as const;
+
 export const AddPlanModal: React.FC<AddPlanModalProps> = ({
   forDate, form: pf, deals, approvedTargetRows,
   onFormChange: setPf, onSubmit: doAddPlan, onClose,
 }) => {
-  // When approved target rows are available use them directly (no quarter filter).
-  // Without them fall back to the deals list.
   const rows = approvedTargetRows !== undefined ? approvedTargetRows : null;
 
   const allAgencies = rows != null
     ? [...new Set(rows.map(r => r.agency).filter(Boolean))].sort()
     : [...new Set(deals.map(d => d.agencyName || d.agency || "").filter(Boolean))].sort();
   const clientsForAgency = rows != null
-    ? (pf.agency ? rows.filter(r => r.agency.toLowerCase() === pf.agency.toLowerCase()).map(r => r.client) : rows.map(r => r.client))
-    : (pf.agency ? deals.filter(d => (d.agencyName || d.agency || "").toLowerCase() === pf.agency.toLowerCase()).map(d => d.clientCompany) : deals.map(d => d.clientCompany));
+    ? (pf.agency && pf.agency !== "NA" ? rows.filter(r => r.agency.toLowerCase() === pf.agency.toLowerCase()).map(r => r.client) : rows.map(r => r.client))
+    : (pf.agency && pf.agency !== "NA" ? deals.filter(d => (d.agencyName || d.agency || "").toLowerCase() === pf.agency.toLowerCase()).map(d => d.clientCompany) : deals.map(d => d.clientCompany));
   const clientOptions   = [...new Set(clientsForAgency)].sort();
   const brandsForClient = rows != null
     ? rows.filter(r => r.client.toLowerCase() === (pf.client || "").toLowerCase()).map(r => r.brand).filter(Boolean)
@@ -44,6 +44,14 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
   const brandOptions    = [...new Set(brandsForClient)].sort();
 
   const dateLabel = new Date(forDate + "T12:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "short" });
+
+  const inputStyle: React.CSSProperties = {
+    width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`,
+    borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box",
+  };
+  const labelStyle: React.CSSProperties = {
+    marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4,
+  };
 
   return (
     <div className="overlay" onClick={onClose}>
@@ -57,129 +65,85 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
           <button onClick={onClose} style={{ background: "transparent", border: "none", color: C.dim, fontSize: 18, cursor: "pointer" }}>×</button>
         </div>
 
-        {/* Meeting kind */}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ marginBottom: 5, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Meeting kind *</label>
-          <div style={{ display: "flex", gap: 8 }}>
-            {([ ["ACTIONABLE", "🎯", "Sales call · full details", "#1d5db4"], ["PR", "🤝", "Relationship · quick visit", "#15803d"] ] as [string, string, string, string][]).map(([mk, icon, sub, col]) => (
-              <button key={mk} onClick={() => setPf(p => ({ ...p, meetingKind: mk, touchpointType: mk === "PR" ? "Relationship" : p.touchpointType }))}
-                style={{ flex: 1, padding: "7px 10px", borderRadius: 7, border: `1.5px solid ${pf.meetingKind === mk ? col : C.border}`, background: pf.meetingKind === mk ? `${col}14` : "transparent", cursor: "pointer", textAlign: "left" }}>
-                <div style={{ fontSize: 12, fontWeight: 700, color: pf.meetingKind === mk ? col : C.text }}>{icon} {mk === "ACTIONABLE" ? "Deal" : "PR"}</div>
-                <div style={{ fontSize: 10, color: C.dim, marginTop: 1 }}>{sub}</div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Touchpoint type (ACTIONABLE only) */}
-        {pf.meetingKind !== "PR" && (
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ marginBottom: 5, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Touchpoint type *</label>
-            <div style={{ display: "flex", gap: 8 }}>
-              {([ ["Deal Meeting", "💼", "Updates pipeline & stage", "#1d5db4"], ["Relationship", "🤝", "Hi-hello · no pipeline impact", "#15803d"] ] as const).map(([tt, icon, sub, col]) => (
-                <button key={tt} onClick={() => setPf(p => ({ ...p, touchpointType: tt }))}
-                  style={{ flex: 1, padding: "7px 10px", borderRadius: 7, border: `1.5px solid ${pf.touchpointType === tt ? col : C.border}`, background: pf.touchpointType === tt ? `${col}14` : "transparent", cursor: "pointer", textAlign: "left" }}>
-                  <div style={{ fontSize: 12, fontWeight: 700, color: pf.touchpointType === tt ? col : C.text }}>{icon} {tt}</div>
-                  <div style={{ fontSize: 10, color: C.dim, marginTop: 1 }}>{sub}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Agency */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Agency</label>
-          {allAgencies.length > 0
-            ? <select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                <option value="">— No agency / Direct —</option>
-                {allAgencies.map(a => <option key={a}>{a}</option>)}
-              </select>
-            : <input value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value }))} placeholder="Agency name (optional)"
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
-          }
+          <label style={labelStyle}>Agency</label>
+          <select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
+            style={inputStyle}>
+            <option value="">— No agency / Direct —</option>
+            <option value="NA">NA</option>
+            {allAgencies.map(a => <option key={a}>{a}</option>)}
+          </select>
         </div>
 
         {/* Client */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Client *</label>
+          <label style={labelStyle}>Client *</label>
           {clientOptions.length > 0
-            ? <select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+            ? <select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))} style={inputStyle}>
                 <option value="">— Select client —</option>
                 {clientOptions.map(c => <option key={c}>{c}</option>)}
               </select>
-            : <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *"
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+            : <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *" style={inputStyle} />
           }
         </div>
 
-        {/* Brand Name */}
+        {/* Brand */}
         <div style={{ marginBottom: 10 }}>
-          <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Brand Name</label>
+          <label style={labelStyle}>Brand Name</label>
           {brandOptions.length > 0
-            ? <select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+            ? <select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))} style={inputStyle}>
                 <option value="">— No specific brand —</option>
                 {brandOptions.map(b => <option key={b}>{b}</option>)}
               </select>
-            : <input value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))} placeholder="Brand (optional)"
-                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+            : <input value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))} placeholder="Brand (optional)" style={inputStyle} />
           }
         </div>
 
-        {/* Contact Name + Time */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-          <div style={{ flex: 2 }}>
-            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Contact Name *</label>
-            <input value={pf.contactName} onChange={e => setPf(p => ({ ...p, contactName: e.target.value }))} placeholder="Person you'll meet"
-              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Time</label>
-            <input type="time" value={pf.time} onChange={e => setPf(p => ({ ...p, time: e.target.value }))}
-              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
-          </div>
+        {/* Pitch Type */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={labelStyle}>Pitch Type</label>
+          <select value={pf.pitchType} onChange={e => setPf(p => ({ ...p, pitchType: e.target.value }))} style={inputStyle}>
+            <option value="">— Select pitch type —</option>
+            {PITCH_TYPES.map(pt => <option key={pt} value={pt}>{pt}</option>)}
+          </select>
         </div>
 
-        {/* Designation + Contact Email */}
-        <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-          <div style={{ flex: 1 }}>
-            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Designation</label>
-            <input value={pf.designation} onChange={e => setPf(p => ({ ...p, designation: e.target.value }))} placeholder="e.g. Marketing Head"
-              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
-          </div>
-          <div style={{ flex: 1 }}>
-            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Contact Email</label>
-            <input type="email" value={pf.contactEmail} onChange={e => setPf(p => ({ ...p, contactEmail: e.target.value }))} placeholder="contact@brand.com"
-              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
-          </div>
+        {/* Time */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={labelStyle}>Time</label>
+          <input type="time" value={pf.time} onChange={e => setPf(p => ({ ...p, time: e.target.value }))} style={inputStyle} />
         </div>
 
-        {/* Phone Number + Meeting Format */}
+        {/* Notes */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={labelStyle}>Notes</label>
+          <input value={pf.agenda} onChange={e => setPf(p => ({ ...p, agenda: e.target.value }))} placeholder="Any notes or agenda points…"
+            style={inputStyle} />
+        </div>
+
+        {/* Contact Name */}
+        <div style={{ marginBottom: 10 }}>
+          <label style={labelStyle}>Contact Name</label>
+          <input value={pf.contactName} onChange={e => setPf(p => ({ ...p, contactName: e.target.value }))} placeholder="Person you'll meet"
+            style={inputStyle} />
+        </div>
+
+        {/* Phone + Meeting Format */}
         <div style={{ display: "flex", gap: 10, marginBottom: 10 }}>
           <div style={{ flex: 1 }}>
-            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Phone Number</label>
+            <label style={labelStyle}>Phone Number</label>
             <input type="tel" value={pf.phone} onChange={e => setPf(p => ({ ...p, phone: e.target.value }))} placeholder="+91 98765 43210"
-              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+              style={inputStyle} />
           </div>
           <div style={{ flex: 1 }}>
-            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Meeting Format</label>
-            <select value={pf.meetingType} onChange={e => setPf(p => ({ ...p, meetingType: e.target.value }))}
-              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+            <label style={labelStyle}>Meeting Format</label>
+            <select value={pf.meetingType} onChange={e => setPf(p => ({ ...p, meetingType: e.target.value }))} style={inputStyle}>
               <option>Physical</option>
               <option>Online</option>
               <option>Phone Call</option>
             </select>
           </div>
-        </div>
-
-        {/* Agenda */}
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Agenda</label>
-          <input value={pf.agenda} onChange={e => setPf(p => ({ ...p, agenda: e.target.value }))} placeholder="What will you discuss?"
-            style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
         </div>
 
         {/* Calendar sync */}
@@ -213,7 +177,7 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
         <div style={{ display: "flex", gap: 8, marginTop: 16, justifyContent: "flex-end" }}>
           <button className="btn btn-ghost" onClick={onClose}>Cancel</button>
           <button className="btn btn-primary" onClick={() => doAddPlan(forDate)}
-            disabled={!(pf.client || pf.agency).trim() || !pf.contactName.trim()}>
+            disabled={!(pf.client || pf.agency).trim()}>
             Plan This Meeting
           </button>
         </div>

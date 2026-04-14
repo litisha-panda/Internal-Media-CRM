@@ -21,6 +21,7 @@ export interface Meeting {
   contactEmail?: string | null;
   mode: string;
   agenda: string;
+  pitchType?: string | null;
   status: "planned" | "logged" | "missed" | "cancelled";
   touchpointId?: string | null;
   userId?: number | null;

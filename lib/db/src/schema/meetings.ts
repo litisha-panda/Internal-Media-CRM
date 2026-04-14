@@ -38,6 +38,9 @@ export const meetings = pgTable("meetings", {
   /** planned | logged | missed | cancelled */
   status:         text("status").notNull().default("planned"),
 
+  /** Pitch type selected when scheduling: TV | TV+Digital | Brand Solution | IP */
+  pitchType:      text("pitch_type"),
+
   /** Set when the rep logs this meeting — links back to the touchpoint created. */
   touchpointId:   text("touchpoint_id"),
 

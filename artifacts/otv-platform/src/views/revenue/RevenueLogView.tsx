@@ -155,22 +155,61 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                         )
                     )].sort() as string[];
 
+                    const pitchTypes = ["TV","TV+Digital","Brand Solution","IP"];
+                    // Filter clients by selected agency
+                    const clientsForAgency = rf.agencyName
+                      ? myApprovedAccts.filter((a:any)=>{
+                          const agencyMatch = targetSubs
+                            .filter(s=>(isRep?String(s.repId)===String(myRepId):true)&&s.status==="Approved")
+                            .flatMap(s=>(s.clients||[]).filter((cl:any)=>!cl.clientStatus||cl.clientStatus==="Approved").filter((cl:any)=>(cl.agency||cl.agencyName||"")===rf.agencyName).map((cl:any)=>cl.clientCompany||cl.clientName||""));
+                          return agencyMatch.includes(a.clientName);
+                        })
+                      : myApprovedAccts;
+
                     return (
                       <div>
-                        {/* Row 1: Client + Deal Type */}
-                        <div style={{display:"grid",gridTemplateColumns:"2fr 1fr",gap:8,marginBottom:8}}>
+                        {/* Row 1: Agency */}
+                        <div style={{marginBottom:8}}>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:3}}>AGENCY</div>
+                          <select value={rf.agencyName||""} onChange={e=>setRf(p=>({...p,agencyName:e.target.value,clientCompany:"",clientAccountId:"",brand:""}))}
+                            style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.agencyName?C.blue:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                            <option value="">No agency / Direct</option>
+                            <option value="NA">NA</option>
+                            {agencyList.map(a=><option key={a} value={a}>{a}</option>)}
+                          </select>
+                        </div>
+                        {/* Row 2: Client */}
+                        <div style={{marginBottom:8}}>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:3}}>CLIENT / ADVERTISER *</div>
+                          <select value={rf.clientCompany} onChange={e=>{
+                            const sel = e.target.value;
+                            const matchAcct = clientsForAgency.find((a:any)=>a.clientName===sel) as any;
+                            setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
+                          }}
+                            style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.clientCompany?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                            <option value="">Select from approved targets…</option>
+                            {clientsForAgency.sort((a,b)=>a.clientName.localeCompare(b.clientName)).map(a=><option key={a.id} value={a.clientName}>{a.clientName}</option>)}
+                          </select>
+                          {!rf.clientCompany&&<div style={{fontSize:9,color:C.dim,marginTop:2}}>Only approved target clients appear here.</div>}
+                        </div>
+                        {/* Row 3: Brand */}
+                        <div style={{marginBottom:8}}>
+                          <div style={{fontSize:10,color:C.dim,marginBottom:3}}>BRAND</div>
+                          <select value={rf.brand||""} onChange={e=>setRf(p=>({...p,brand:e.target.value}))}
+                            style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                            <option value="">All brands / General</option>
+                            {brandList.map(b=><option key={b} value={b}>{b}</option>)}
+                          </select>
+                        </div>
+                        {/* Row 4: Pitch Type + Deal Type */}
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                           <div>
-                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>CLIENT / ADVERTISER *</div>
-                            <select value={rf.clientCompany} onChange={e=>{
-                              const sel = e.target.value;
-                              const matchAcct = myApprovedAccts.find((a:any)=>a.clientName===sel) as any;
-                              setRf(p=>({...p,clientCompany:sel,clientAccountId:matchAcct?.id||"",dealType:matchAcct?.dealType||p.dealType,channel:matchAcct?.channel||""}));
-                            }}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.clientCompany?C.green:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                              <option value="">Select from approved targets…</option>
-                              {myApprovedAccts.sort((a,b)=>a.clientName.localeCompare(b.clientName)).map(a=><option key={a.id} value={a.clientName}>{a.clientName}</option>)}
+                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>PITCH TYPE</div>
+                            <select value={rf.pitchType||""} onChange={e=>setRf(p=>({...p,pitchType:e.target.value}))}
+                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.pitchType?C.accent:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
+                              <option value="">— Select pitch type —</option>
+                              {pitchTypes.map(pt=><option key={pt} value={pt}>{pt}</option>)}
                             </select>
-                            {!rf.clientCompany&&<div style={{fontSize:9,color:C.dim,marginTop:2}}>Only approved target clients appear here.</div>}
                           </div>
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>DEAL TYPE</div>
@@ -180,26 +219,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                             </select>
                           </div>
                         </div>
-                        {/* Row 2: Agency + Brand */}
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
-                          <div>
-                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>AGENCY *</div>
-                            <select value={rf.agencyName||""} onChange={e=>setRf(p=>({...p,agencyName:e.target.value,brand:""}))}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${rf.agencyName?C.blue:C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                              <option value="">No agency / Direct</option>
-                              {agencyList.map(a=><option key={a} value={a}>{a}</option>)}
-                            </select>
-                          </div>
-                          <div>
-                            <div style={{fontSize:10,color:C.dim,marginBottom:3}}>BRAND</div>
-                            <select value={rf.brand||""} onChange={e=>setRf(p=>({...p,brand:e.target.value}))}
-                              style={{width:"100%",padding:"7px 10px",background:C.s2,border:`1px solid ${C.border}`,borderRadius:4,color:C.text,fontSize:12,fontFamily:"'DM Mono',monospace"}}>
-                              <option value="">All brands / General</option>
-                              {brandList.map(b=><option key={b} value={b}>{b}</option>)}
-                            </select>
-                          </div>
-                        </div>
-                        {/* Row 3: Amount + Invoice + Date */}
+                        {/* Row 5: Amount + Invoice + Date */}
                         <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
                           <div>
                             <div style={{fontSize:10,color:C.dim,marginBottom:3}}>AMOUNT ₹ *</div>
@@ -231,13 +251,15 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                           if(!amt){showToast("Invalid amount","err");return;}
                           const newId  = `re${Date.now()}`;
                           const ikey   = `ikey_${Date.now()}_${Math.random().toString(36).slice(2,6)}`;
-                          const entry = {id:newId,repId:isRep?myRepId:null,clientCompany:client,agencyName:rf.agencyName||"",brand:rf.brand||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:rf.notes};
+                          const pitchNote = rf.pitchType ? `[Pitch: ${rf.pitchType}]` : "";
+                          const entryNotes = [pitchNote,rf.notes].filter(Boolean).join(" ");
+                          const entry = {id:newId,repId:isRep?myRepId:null,clientCompany:client,agencyName:rf.agencyName||"",brand:rf.brand||"",dealType:rf.dealType,amount:amt,invoiceRef:rf.invoiceRef,date:rf.date||TODAY,quarter:entryQ,fiscalYear:CURRENT_FY,notes:entryNotes};
                           setRevenueEntries(p=>[entry,...p]);
                           revSvc.createRevenueEntry({
                             id:newId, repId:isRep?myRepId:undefined, clientCompany:client,
                             agencyName:rf.agencyName||undefined, brand:rf.brand||undefined,
                             dealType:rf.dealType, amount:amt, invoiceRef:rf.invoiceRef, date:rf.date||TODAY,
-                            quarter:entryQ, fiscalYear:CURRENT_FY, notes:rf.notes||undefined, idempotencyKey:ikey,
+                            quarter:entryQ, fiscalYear:CURRENT_FY, notes:entryNotes||undefined, idempotencyKey:ikey,
                           }).catch((err:any)=>{showToast(err?.body?.error||"Network error — entry may not be saved","err");setRevenueEntries(p=>p.filter(e=>e.id!==newId));});
                           // Fix 6: IP slot committed — notify other reps with pending proposals for the same slot
                           if (rf.dealType==="IPs") {
@@ -268,7 +290,7 @@ export function RevenueLogView({ view, setView, revTab, setRevTab, revForm, setR
                               setClientAccounts(p=>p.map(a=>a.id===matchDeal.clientAccountId?{...a,currentStage:"RO Received",lastContactDate:TODAY,updatedAt:TODAY}:a));
                             }
                           }
-                          setRf({clientCompany:"",clientAccountId:"",agencyName:"",brand:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
+                          setRf({clientCompany:"",clientAccountId:"",agencyName:"",brand:"",pitchType:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:TODAY,notes:""});
                           const totalFY = [...revenueEntries.filter(e=>(isRep?String(e.repId)===String(myRepId):true)&&e.fiscalYear===CURRENT_FY),entry].reduce((s,e)=>s+(e.amount||0),0);
                           const annualTarget = isRep ? (getAnnualTarget(myRepId)?.amount||0) : 0;
                           if (annualTarget>0 && totalFY>=annualTarget) {

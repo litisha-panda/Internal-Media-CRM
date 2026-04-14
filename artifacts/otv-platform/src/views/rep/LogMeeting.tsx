@@ -113,7 +113,7 @@ export interface LogMeetingProps {
   deals: Deal[];
   showToast: (msg: string, type?: string) => void;
   /** Optional: navigate to revenue log. Receives optional prefill data. */
-  onNavigateRevenue?: (prefill?: { clientCompany?: string; agency?: string; amount?: number }) => void;
+  onNavigateRevenue?: (prefill?: { clientCompany?: string; agency?: string; amount?: number; pitchType?: string }) => void;
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */
@@ -137,6 +137,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
           (d.clientCompany || "").toLowerCase() === clientCompany.toLowerCase()
         );
     const agency = form.agency || deal?.agency || deal?.agencyName || "";
+    const pitchType = form.pitchType || "";
     // Background: create touchpoint + patch meeting status — non-blocking
     createTouchpoint({
       repId:          parseInt(form.repId) || null,
@@ -152,7 +153,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
       notes:          null,
     }).then(tp => onSubmit(tp)).catch(() => { /* non-fatal */ });
     // Navigate immediately without waiting for API; amount defaults to 0 if unresolved
-    onNavigateRevenue?.({ clientCompany, agency, amount: deal?.amount ?? 0 });
+    onNavigateRevenue?.({ clientCompany, agency, amount: deal?.amount ?? 0, pitchType });
     onClose();
   };
 
@@ -183,6 +184,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
         mobile:          (meeting.contactPhone as string) || "",
         meetingType:     meeting.mode || "Physical",
         agenda:          meeting.agenda || "",
+        pitchType:       (meeting.pitchType as string) || "",
       });
     } else {
       setForm({ ...BLANK_FORM, repId: String(userRole?.repId ?? "") });

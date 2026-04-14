@@ -1151,7 +1151,7 @@ export function CROApp({ user, onLogout }) {
   const [planUploadForm, setPlanUploadForm]             = useState<{repId:string,year:string,annualClients:{agencyName:string,clientName:string,brandName:string,q1Target:string,q2Target:string,q3Target:string,q4Target:string}[]}>({repId:"",year:String(new Date().getFullYear()),annualClients:[{agencyName:"",clientName:"",brandName:"",q1Target:"",q2Target:"",q3Target:"",q4Target:""}]});
   const [editSubId, setEditSubId]                       = useState(null);
   const [editSubClients, setEditSubClients]             = useState<any[]>([]);
-  const [revForm, setRevForm]                           = useState({clientCompany:"",agencyName:"",brand:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
+  const [revForm, setRevForm]                           = useState({clientCompany:"",agencyName:"",brand:"",pitchType:"",dealType:"Linear TV",amount:"",invoiceRef:"",date:"",notes:""});
   const [editingRevId, setEditingRevId]                 = useState<string|null>(null);
   const [editRevData, setEditRevData]                   = useState<any>({});
   const [importTab, setImportTab]                       = useState("targets");
@@ -2346,7 +2346,7 @@ export function CROApp({ user, onLogout }) {
               BLANK_DEAL={BLANK_DEAL}
               onNavigate={setView}
               onNavigateRevenue={(prefill)=>{
-                if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,agencyName:prefill.agency||p.agencyName,amount:prefill.amount!==undefined?String(prefill.amount):p.amount}))}
+                if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,agencyName:prefill.agency||p.agencyName,amount:prefill.amount!==undefined?String(prefill.amount):p.amount,pitchType:prefill.pitchType||p.pitchType}))}
                 setView("revenue-log");
               }}
             />
@@ -2603,7 +2603,7 @@ export function CROApp({ user, onLogout }) {
           userRole={user_role}
           deals={deals}
           showToast={showToast}
-          onNavigateRevenue={(prefill) => { setLogOpen(false); if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,agencyName:prefill.agency||p.agencyName,amount:prefill.amount!==undefined?String(prefill.amount):p.amount}))} setView('revenue-log'); }}
+          onNavigateRevenue={(prefill) => { setLogOpen(false); if(prefill){setRevForm(p=>({...p,clientCompany:prefill.clientCompany||p.clientCompany,agencyName:prefill.agency||p.agencyName,amount:prefill.amount!==undefined?String(prefill.amount):p.amount,pitchType:prefill.pitchType||p.pitchType}))} setView('revenue-log'); }}
         />
       )}
       {/* MEETING DETAIL MODAL */}

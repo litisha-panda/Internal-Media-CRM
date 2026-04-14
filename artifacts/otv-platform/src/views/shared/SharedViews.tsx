@@ -1,4 +1,5 @@
 import * as attendSvc from "../../services/api/attendance";
+import * as irSvc from "../../services/api/internalRequests";
 import React, { useState, useRef } from "react";
 import { useCROAppContext } from "../../contexts/CROAppContext";
 import {
@@ -252,8 +253,10 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
             const IR_DEPTS = ["NSH","Sales Strategy","Branding Team","Content Team","Digital","Finance","Legal","CXO"];
             // Which dept "inbox" does the current user own?
             const myInboxDept = isNSH?"NSH":isStrategy?"Sales Strategy":isCRORole?"CRO":isRH?"Region Head":isDigiOps?"Digital":null;
-            // Requests ADDRESSED TO the current user's department
-            const inboxReqs = myInboxDept ? internalReqs.filter(r=>r.dept===myInboxDept) : [];
+            // Backend routedToRole code for this user (matches server-side DEPT_TO_ROLE output)
+            const myRoleCode = isNSH?"SALES HEAD":isStrategy?"SALES STRATEGY":isCRORole?"CRO":isRH?"REGION HEAD":isDigiOps?"DIGI OPS":null;
+            // Requests ADDRESSED TO this user — by dept label OR by server-computed routedToRole
+            const inboxReqs = myInboxDept ? internalReqs.filter(r => r.dept===myInboxDept || r.routedToRole===myRoleCode) : [];
             const myReqs  = isRep
               ? internalReqs.filter(r=>r.raisedBy===activeUser)
               : isRH
@@ -420,22 +423,48 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                           {req.priority&&req.priority!=="Medium"&&<div style={{fontSize:10,fontWeight:700,color:req.priority==="Urgent"?C.red:req.priority==="High"?C.orange:C.green,marginBottom:6}}>Priority: {req.priority}{req.dueDate?` · Needed by ${req.dueDate}`:""}</div>}
                           {req.notes&&<div style={{fontSize:11,color:C.blue,background:`${C.blue}08`,padding:"5px 9px",borderRadius:5,marginBottom:6}}>💬 {req.notes}</div>}
                           {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:8}}>✓ {req.resolverNote}</div>}
-                          {req.status!=="Done" && req.status!=="Rejected" && (
+                          {req.status!=="Done" && req.status!=="Rejected" && req.status!=="Withdrawn" && (
                             <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
                               {req.status==="Pending"&&(
-                                <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Accepted",acceptedAt:TODAY}:r))}
+                                <button onClick={async()=>{
+                                  try{
+                                    await irSvc.acceptIR(req.id);
+                                    setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Accepted",acceptedAt:TODAY}:r));
+                                  }catch{showToast("Failed to accept request","err");}
+                                }}
                                   style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>✓ Accept</button>
                               )}
-                              {req.status!=="In Progress"&&req.status!=="Accepted"&&(
-                                <button onClick={()=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r))}
-                                  style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>In Progress</button>
+                              {req.status==="Pending"&&(
+                                <button onClick={()=>openNoteModal("Reason for rejection","Rejected",async note=>{
+                                  try{
+                                    await irSvc.rejectIR(req.id,note);
+                                    setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:r));
+                                  }catch{showToast("Failed to reject request","err");}
+                                })}
+                                  style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✗ Reject</button>
                               )}
-                              <button onClick={()=>openNoteModal("Add Note / Update","Noted",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,notes:note}:r)))}
-                                style={{background:`${C.accent}12`,border:`1px solid ${C.accent}33`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Note</button>
-                              <button onClick={()=>openNoteModal("Resolution Note","Resolved",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)))}
-                                style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark Done</button>
-                              <button onClick={()=>openNoteModal("Reason for rejection","Rejected",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Rejected",resolvedAt:TODAY,resolverNote:note}:r)))}
-                                style={{background:`${C.red}12`,border:`1px solid ${C.red}33`,color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✗ Reject</button>
+                              {req.status==="Accepted"&&(
+                                <button onClick={async()=>{
+                                  try{
+                                    await irSvc.markInProgress(req.id);
+                                    setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));
+                                  }catch{showToast("Failed to update request","err");}
+                                }}
+                                  style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark In Progress</button>
+                              )}
+                              {(req.status==="Accepted"||req.status==="In Progress")&&(
+                                <button onClick={()=>openNoteModal("Resolution Note","Resolved",async note=>{
+                                  try{
+                                    await irSvc.resolveIR(req.id,note);
+                                    setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r));
+                                  }catch{showToast("Failed to mark done","err");}
+                                })}
+                                  style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark Done</button>
+                              )}
+                              {req.status!=="Pending"&&req.status!=="Accepted"&&(
+                                <button onClick={()=>openNoteModal("Add Note / Update","Noted",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,notes:note}:r)))}
+                                  style={{background:`${C.accent}12`,border:`1px solid ${C.accent}33`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Note</button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -468,11 +497,21 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                       {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:8,lineHeight:1.5}}>{req.details}</div>}
                       {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:8}}>✓ {req.resolverNote}</div>}
                       <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
-                        {isNSHDashboard && req.status!=="Done" && (
-                          <>
-                            <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));}} style={{background:`${C.blue}18`,border:"none",color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Mark In Progress</button>
-                            <button onClick={()=>{openNoteModal("Resolution Note", "Resolved", note => setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r)));}} style={{background:`${C.green}18`,border:"none",color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Resolve</button>
-                          </>
+                        {isNSHDashboard && req.status==="Accepted" && (
+                          <button onClick={async()=>{
+                            try{
+                              await irSvc.markInProgress(req.id);
+                              setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"In Progress"}:r));
+                            }catch{showToast("Failed to update request","err");}
+                          }} style={{background:`${C.blue}18`,border:`1px solid ${C.blue}44`,color:C.blue,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark In Progress</button>
+                        )}
+                        {isNSHDashboard && (req.status==="Accepted"||req.status==="In Progress") && (
+                          <button onClick={()=>openNoteModal("Resolution Note","Resolved",async note=>{
+                            try{
+                              await irSvc.resolveIR(req.id,note);
+                              setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Done",resolvedAt:TODAY,resolverNote:note}:r));
+                            }catch{showToast("Failed to resolve request","err");}
+                          })} style={{background:`${C.green}18`,border:`1px solid ${C.green}44`,color:C.green,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace",fontWeight:700}}>Mark Done</button>
                         )}
                         {/* Escalate: visible to rep/RH for any active non-escalation request */}
                         {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && req.type!=="Escalation" && (
@@ -498,8 +537,8 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                         {(isRep||isRH) && req.status==="Pending" && (
                           <button onClick={()=>{setEditIrId(req.id);setIrForm({type:req.type||"Send Proposal",dept:req.dept||"NSH",subject:req.subject||"",details:req.details||"",clientCompany:req.clientCompany||""});}} style={{background:`${C.accent}18`,border:`1px solid ${C.accent}44`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>✎ Edit</button>
                         )}
-                        {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && (
-                          <button onClick={()=>{setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
+                        {isRep && (req.status==="Pending" || req.status==="Accepted") && (
+                          <button onClick={async()=>{try{await irSvc.withdrawIR(req.id);setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,status:"Withdrawn"}:r));showToast("Request withdrawn");}catch{showToast("Failed to withdraw request","err");}}} style={{background:`${C.red}18`,border:"none",color:C.red,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>Withdraw</button>
                         )}
                       </div>
                     </div>

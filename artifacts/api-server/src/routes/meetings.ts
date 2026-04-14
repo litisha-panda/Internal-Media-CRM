@@ -165,6 +165,7 @@ router.post("/meetings", requireAuth, async (req, res) => {
       mode,
       actionableType,
       agenda,
+      pitchType,
     } = req.body;
 
     if (!date || !clientName) {
@@ -189,6 +190,7 @@ router.post("/meetings", requireAuth, async (req, res) => {
       mode:           mode ? String(mode) : null,
       actionableType: actionableType ? String(actionableType) : null,
       agenda:         agenda ? String(agenda) : null,
+      pitchType:      pitchType ? String(pitchType) : null,
       status:         "planned",
       touchpointId:   null,
     };
@@ -239,7 +241,7 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
     const {
       date, time, meetingKind, agencyName, clientName, brandName,
       contactName, contactPhone, designation, contactEmail,
-      mode, actionableType, agenda, status, touchpointId,
+      mode, actionableType, agenda, pitchType, status, touchpointId,
     } = req.body;
 
     const updates: Partial<typeof mtg> = { updatedAt: new Date() };
@@ -256,6 +258,7 @@ router.patch("/meetings/:id", requireAuth, async (req, res) => {
     if (mode !== undefined)           updates.mode = mode;
     if (actionableType !== undefined) updates.actionableType = actionableType;
     if (agenda !== undefined)         updates.agenda = agenda;
+    if (pitchType !== undefined)      updates.pitchType = pitchType ?? null;
     if (status !== undefined) {
       const VALID_STATUSES = ["planned", "logged", "missed", "cancelled"];
       const s = String(status);

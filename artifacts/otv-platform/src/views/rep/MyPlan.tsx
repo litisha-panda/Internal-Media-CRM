@@ -99,7 +99,7 @@ export interface MyPlanProps {
   qMatch:         (q: string) => boolean;
   BLANK_DEAL:     Record<string, unknown>;
   onNavigate:     (view: string) => void;
-  onNavigateRevenue: (prefill?: { clientCompany?: string; agency?: string; amount?: number }) => void;
+  onNavigateRevenue: (prefill?: { clientCompany?: string; agency?: string; amount?: number; pitchType?: string }) => void;
 }
 
 /* ── Component ─────────────────────────────────────────────────────────── */
@@ -233,7 +233,7 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
         region:       userRole?.region || "",
         date,
         time:         planTime,
-        meetingKind:  pf.meetingKind || "ACTIONABLE",
+        meetingKind:  "ACTIONABLE",
         agencyName:   pf.agency || "",
         clientName,
         brandName:    pf.brand  || "",
@@ -243,6 +243,7 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
         contactEmail: pf.contactEmail || null,
         mode:         pf.meetingType || "Physical",
         agenda:       pf.agenda || "",
+        pitchType:    pf.pitchType || null,
         status:       "planned",
       });
       showToast(didSyncCalendar ? "Meeting planned ✓ · Calendar opening…" : "Meeting planned ✓");
@@ -389,19 +390,6 @@ export const MyPlan: React.FC<MyPlanProps> = (props) => {
         </div>
       </div>
 
-      {/* Quick-action CTAs (rep only) */}
-      {isRep && (
-        <div style={{ display: "flex", gap: 8, marginBottom: 14 }}>
-          <button onClick={() => openLog(null)}
-            style={{ flex: 1, background: C.accent, color: "#fff", border: "none", borderRadius: 6, padding: "9px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
-            + Log Touchpoint
-          </button>
-          <button onClick={() => { setDealForm(p => ({ ...p, ...BLANK_DEAL, repId: String(myRepId || ""), quarter: filterQ })); setAddDealOpen(true); }}
-            style={{ flex: 1, background: C.blue, color: "#fff", border: "none", borderRadius: 6, padding: "9px 0", fontSize: 12, fontWeight: 700, cursor: "pointer", fontFamily: "'DM Mono',monospace" }}>
-            + Add Deal
-          </button>
-        </div>
-      )}
 
       {/* TODAY / TOMORROW compliance strip */}
       <div style={{ display: "flex", gap: 10, marginBottom: 14, flexWrap: "wrap" }}>
