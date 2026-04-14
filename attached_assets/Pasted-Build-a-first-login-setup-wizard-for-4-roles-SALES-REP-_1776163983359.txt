@@ -1,0 +1,135 @@
+Build a first-login setup wizard for 4 roles: SALES_REP, REGION_HEAD, NSH, ADMIN.
+
+TRIGGER: After login, check if user.name is null or equals user.email. If yes, show the wizard fullscreen. Cannot be dismissed. Only fires once — after completion, save localStorage key "otv_wizard_[userId]" = "1" so it never fires again for that user on that device.
+
+All wizards are fullscreen modals with a step indicator at the top.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SALES REP WIZARD (3 steps)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1 — Profile
+Title: "Welcome! Let's set up your profile"
+Fields:
+- Full Name (text, required)
+- Region (dropdown: North, South, West 1, West 2, Odisha, Digital, East)
+- Reporting Manager (dropdown: all users with role = REGION_HEAD, show name)
+On Continue: PATCH /api/users/me with { name, region, managerId }
+
+STEP 2 — Upload Targets
+Title: "Upload your annual targets"
+
+Show these instructions before the download button:
+"How to fill the file:
+1. Agency Name — enter the media agency name (e.g. Mindshare, Dentsu). If the client deals directly with no agency, enter NA.
+2. Client Name — enter the advertiser/brand name.
+3. Brand Name — enter the specific brand or product (e.g. Surf Excel, Horlicks). If the client has only one brand, repeat the client name.
+4. April through March — enter monthly targets in rupees (numbers only, no commas or ₹ symbol)."
+
+- "Download Sample File" button downloads a CSV with these exact headers:
+  Agency Name,Client Name,Brand Name,April,May,June,July,August,September,October,November,December
+  And one example row:
+  NA,Star Sports,Star Sports,500000,500000,600000,600000,600000,700000,700000,700000,800000,800000,900000,900000
+- CSV upload input below
+- On upload: parse CSV, show preview table with columns:
+  Agency | Client | Brand | Apr | May | Jun | Jul | Aug | Sep | Oct | Nov | Dec | Q1(auto) | Q2(auto) | Q3(auto) | Q4(auto) | Annual(auto)
+  Q1=Apr+May+Jun, Q2=Jul+Aug+Sep, Q3=Oct+Nov+Dec, Q4=Jan+Feb+Mar, Annual=all 12
+- "Confirm & Submit" button
+- On confirm: POST each row to /api/targets/submit with status = 'Pending RH'
+- Run migration first:
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS april NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS may NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS june NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS july NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS august NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS september NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS october NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS november NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS december NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS january NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS february NUMERIC DEFAULT 0;
+  ALTER TABLE target_submissions ADD COLUMN IF NOT EXISTS march NUMERIC DEFAULT 0;
+
+STEP 3 — Done
+Title: "You're all set!"
+Body: "Your targets have been submitted for approval. You'll be notified once your Region Head reviews them."
+Button: "Start Tour" → closes wizard, fires guided tour
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+REGION HEAD WIZARD (3 steps)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1 — Profile
+Title: "Welcome! Let's set up your profile"
+Fields:
+- Full Name (text, required)
+- Region (dropdown: North, South, West 1, West 2, Odisha, Digital, East)
+On Continue: PATCH /api/users/me with { name, region }
+
+STEP 2 — Review Your Team's Targets
+Title: "Your team has submitted targets for approval"
+- Query target_submissions where status = 'Pending RH' AND rep's manager_id = current user's id
+- If no submissions: show "No targets pending yet. You'll approve them from the Target Approvals tab." with a Continue button
+- If submissions exist: show table with columns:
+  Sales Rep | Agency | Client | Brand | Apr | May | Jun | Jul | Aug | Sep | Oct | Nov | Dec | Q1(auto) | Q2(auto) | Q3(auto) | Q4(auto) | Annual(auto) | Action
+- Action per row: green Approve button + red Reject button
+- Reject opens inline remarks input + Confirm button
+- Approve: update status to 'Pending NSH'
+- Reject: update status to 'Pending Rep', save remarks, create in-app notification for the rep: "Your target for [Client] was rejected by [RH Name]: [remarks]"
+- Continue button appears once at least one row has been actioned (or immediately if empty state)
+
+STEP 3 — Done
+Title: "You're ready to go!"
+Body: "Approved targets move to NSH for final sign-off. You can review new submissions anytime from the Target Approvals tab."
+Button: "Start Tour" → fires guided tour
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+NSH WIZARD (3 steps)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1 — Profile
+Title: "Welcome! Let's set up your profile"
+Fields:
+- Full Name (text, required)
+No region selection — NSH oversees all regions.
+On Continue: PATCH /api/users/me with { name }
+
+STEP 2 — Review Pending Approvals
+Title: "Targets are waiting for your approval"
+- Query target_submissions where status = 'Pending NSH'
+- If none: show "No targets pending yet. You'll approve them from the Target Approvals tab." with Continue button
+- If submissions exist: show same table format as RH wizard
+- Approve: update status to 'Pending CRO'
+- Reject: update status to 'Pending Rep', save remarks, create in-app notification for the rep
+- Continue button appears once at least one row actioned or empty state
+
+STEP 3 — Done
+Title: "You're ready to go!"
+Body: "Approved targets move to CRO for final sign-off."
+Button: "Start Tour" → fires guided tour
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+ADMIN WIZARD (2 steps)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+STEP 1 — Profile
+Title: "Welcome, Admin!"
+Fields:
+- Full Name (text, required)
+On Continue: PATCH /api/users/me with { name }
+
+STEP 2 — Assign Your Team
+Title: "Assign reps to their Region Heads"
+- Show all users with role = SALES_REP where manager_id is null
+- Each row: Rep Name | Email | Reports To (dropdown of all REGION_HEAD users, show name)
+- If all reps already assigned: show "All reps are assigned. You're good to go!" with Done button
+- "Save & Continue" button saves all assignments via PATCH /api/users/:id for each changed row
+No tour for Admin.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+SHARED REQUIREMENTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━
+- Add PATCH /api/users/me route: allows the current authenticated user to update their own name, region, and managerId. No role restriction — any logged-in user can update their own profile.
+- The wizard must not show for roles other than SALES_REP, REGION_HEAD, NSH, ADMIN.
+- After wizard completion set localStorage "otv_wizard_[userId]" = "1" so it never fires again.
+- TypeScript check after all changes — 0 errors expected.
