@@ -413,32 +413,50 @@ router.post("/auth/seed-demo", async (req, res) => {
 });
 
 // ─── PATCH /api/users/me ─────────────────────────────────────────────────────
-// Self-service region update. SALES REP only — region is not an auth boundary for reps.
-// Region Heads and above must have their region changed by an Admin (region is their
-// authorization scope and self-reassignment would widen cross-region data access).
-const VALID_REGIONS_SET = new Set(["North","South","East","West","National","Central"]);
+// Self-service profile update — any authenticated user may update their own
+// name, region, and/or managerId. Used by the first-login setup wizard.
+const VALID_REGIONS_ME = new Set([
+  "North","South","East","West","National","Central",
+  "West 1","West 2","Odisha","Digital",
+]);
 router.patch("/users/me", requireAuth, async (req, res) => {
   try {
     const u = req.user!;
-    // Only SALES REP may self-update their region. All other roles are denied.
-    if (u.role !== "SALES REP") {
-      return void res.status(403).json({
-        ok:    false,
-        error: "Only Sales Reps may use this endpoint. Other roles require an Admin to update their region.",
-      });
+    const { name, region, managerId } = req.body as {
+      name?: string;
+      region?: string;
+      managerId?: number | null;
+    };
+
+    // At least one field must be provided.
+    if (name === undefined && region === undefined && managerId === undefined) {
+      return void res.status(400).json({ ok: false, error: "No update fields provided" });
     }
-    const { region } = req.body as { region?: string };
-    if (!region || !VALID_REGIONS_SET.has(region)) {
+
+    // Validate provided fields.
+    if (name !== undefined && (typeof name !== "string" || !name.trim())) {
+      return void res.status(400).json({ ok: false, error: "name must be a non-empty string" });
+    }
+    if (region !== undefined && !VALID_REGIONS_ME.has(region)) {
       return void res.status(400).json({
         ok: false,
-        error: `region must be one of: North, South, East, West, National, Central`,
+        error: `Invalid region. Must be one of: ${[...VALID_REGIONS_ME].join(", ")}`,
       });
     }
+    if (managerId !== undefined && managerId !== null && !Number.isInteger(managerId)) {
+      return void res.status(400).json({ ok: false, error: "managerId must be an integer or null" });
+    }
+
+    const patch: Record<string, any> = { updatedAt: new Date() };
+    if (name !== undefined)      patch.name      = name.trim();
+    if (region !== undefined)    patch.region    = region;
+    if (managerId !== undefined) patch.managerId = managerId;
+
     const [updated] = await db
       .update(users)
-      .set({ region, updatedAt: new Date() })
+      .set(patch)
       .where(eq(users.id, u.id))
-      .returning({ id: users.id, region: users.region, role: users.role, name: users.name });
+      .returning({ id: users.id, name: users.name, region: users.region, role: users.role });
 
     if (!updated) return void res.status(404).json({ ok: false, error: "User not found" });
     res.json({ ok: true, user: updated });

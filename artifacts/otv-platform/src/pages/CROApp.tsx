@@ -42,6 +42,7 @@ import { WelcomeModal } from "../components/WelcomeModal";
 import { TourOverlay } from "../components/TourOverlay";
 import { MeetingDetailModal } from "../components/MeetingDetailModal";
 import { PlanUploadModal } from "../components/PlanUploadModal";
+import { FirstLoginWizard } from "../components/FirstLoginWizard";
 import { AddDealModal } from "../components/AddDealModal";
 import { EditIRModal } from "../components/EditIRModal";
 import { ExceptionModal } from "../components/ExceptionModal";
@@ -1089,6 +1090,14 @@ export function CROApp({ user, onLogout }) {
   const [newClients, setNewClients]                     = useState([{clientCompany:"",dealType:"Linear TV",targetAmount:""}]);
   const [addClientModalOpen, setAddClientModalOpen]     = useState(false);
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
+  // ── First-login wizard: fires when user.name is null/matches email
+  // and localStorage key not yet set. wizardDismissed allows completion to hide it.
+  const [wizardDismissed, setWizardDismissed]           = useState(false);
+  const showFirstLoginWizard = !wizardDismissed &&
+    !!user &&
+    (!user.name || user.name === user.email) &&
+    !localStorage.getItem(`otv_wizard_${user.id}`);
+
   // S9: Setup Wizard state
   const [wizardStep, setWizardStep]                     = useState(0);
   const [wizardClients, setWizardClients]               = useState<Record<string,string>[]>([{agency:"",client:"",brand:"",apr:"",may:"",jun:"",jul:"",aug:"",sep:"",oct:"",nov:"",dec:"",jan:"",feb:"",mar:""}]);
@@ -2619,6 +2628,21 @@ export function CROApp({ user, onLogout }) {
 
       {/* TOAST */}
       {toast && <div className="fin" style={{position:"fixed",bottom:18,right:18,background:toast.type==="err"?C.red:C.green,color:"#fff",padding:"9px 16px",borderRadius:5,fontWeight:700,fontSize:12,zIndex:999,boxShadow:"0 4px 20px rgba(0,0,0,.5)"}}>{toast.msg}</div>}
+
+      {/* ═══ FIRST-LOGIN SETUP WIZARD ═══ */}
+      {showFirstLoginWizard && (
+        <FirstLoginWizard
+          user={user}
+          C={C}
+          targetSubs={targetSubs as any[]}
+          setTargetSubs={setTargetSubs as any}
+          liveRoles={liveRoles}
+          fmtR={fmtR}
+          onComplete={() => setWizardDismissed(true)}
+          openWelcomeTour={() => { openWelcome(); }}
+          showToast={showToast}
+        />
+      )}
     </div>
     </CROAppProvider>
   );
