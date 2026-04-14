@@ -22,11 +22,16 @@ const VALID_STATUSES = ["active", "revoked"] as const;
 // Allowed fields: role, managerId (→ manager_id), status
 // Writes one audit_log row per call.
 router.patch("/users/:id", requireAuth, requireAdmin, async (req, res) => {
-  const id = String(req.params["id"]);
-  const { role, managerId, status } =
-    req.body as { role?: string; managerId?: string; status?: string };
+  const id   = String(req.params["id"]);
+  const body = req.body as { role?: string; managerId?: string | null; status?: string };
 
-  if (!role && !managerId && status === undefined) {
+  const { role, status } = body;
+  // Use hasOwnProperty so that { managerId: null } (clearing manager) is treated
+  // as a valid field, not as "no fields provided" (null is falsy, so !null === true).
+  const hasManagerId = Object.prototype.hasOwnProperty.call(body, "managerId");
+  const managerId    = body.managerId;
+
+  if (!role && !hasManagerId && status === undefined) {
     res.status(400).json({ ok: false, error: "Provide at least one of: role, managerId, status" });
     return;
   }
@@ -53,7 +58,7 @@ router.patch("/users/:id", requireAuth, requireAdmin, async (req, res) => {
       patch.role = role;
       changes.push(`role→${role}`);
     }
-    if (managerId !== undefined) {
+    if (hasManagerId) {
       patch.managerId = managerId || null;
       changes.push(`managerId→${managerId || "null"}`);
     }

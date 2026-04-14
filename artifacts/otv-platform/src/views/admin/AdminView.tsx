@@ -7,6 +7,20 @@ import { SystemConfigView } from "../system/SystemConfigView";
 const USER_ROLES = ["SALES REP","REGION HEAD","SALES HEAD","CRO","SALES STRATEGY","DIGI OPS","ADMIN"];
 const REGIONS    = ["North","South","East","West","National","Central","Odisha","West 1","West 2","Digital"];
 
+// DB may store roles with underscores (SALES_REP) or legacy codes (NSH) — normalize to UI space-format.
+const ROLE_DB_TO_UI: Record<string, string> = {
+  "SALES_REP":      "SALES REP",
+  "REGION_HEAD":    "REGION HEAD",
+  "SALES_HEAD":     "SALES HEAD",
+  "NSH":            "SALES HEAD",
+  "DIGI_OPS":       "DIGI OPS",
+  "SALES_STRATEGY": "SALES STRATEGY",
+};
+const toUIRole = (r: string): string => ROLE_DB_TO_UI[r] ?? r;
+
+// Accept both DB underscore and legacy space variants of Region Head.
+const isRegionHead = (r: string) => r === "REGION HEAD" || r === "REGION_HEAD";
+
 /* Inline approve/reject actions for pending users */
 function PendingActions({ u, regionHeads, onApprove, onReject, C }: {
   u: adminSvc.AdminUser;
@@ -58,6 +72,13 @@ export function AdminView({ view: _view }: AdminViewProps) {
   const [inviteResult,  setInviteResult]  = useState<{ inviteUrl:string; expiresAt:string }|null>(null);
   const [inviteLoading, setInviteLoading] = useState(false);
 
+  /* Per-row save feedback: brief "Saved ✓" indicator after successful patch */
+  const [savedRows, setSavedRows] = useState<Set<string>>(new Set());
+  const flashSaved = (id: string) => {
+    setSavedRows(s => new Set(s).add(id));
+    setTimeout(() => setSavedRows(s => { const n = new Set(s); n.delete(id); return n; }), 1600);
+  };
+
   /* Export */
   const [exportFrom,    setExportFrom]    = useState("");
   const [exportTo,      setExportTo]      = useState("");
@@ -76,21 +97,24 @@ export function AdminView({ view: _view }: AdminViewProps) {
 
   useEffect(() => { fetchUsers(); }, []);
 
-  const regionHeads = allUsers.filter(u => u.role === "REGION HEAD" && u.status === "active");
+  // Accept both "REGION HEAD" (space) and "REGION_HEAD" (underscore) — DB may have either.
+  const regionHeads = allUsers.filter(u => isRegionHead(u.role) && u.status === "active");
 
   /* ── User actions ────────────────────────────────────────────────────────── */
   const handleRoleChange = async (u: adminSvc.AdminUser, role: string) => {
     try {
       await adminSvc.patchUser(u.id, { role });
-      showToast(`${u.name} role → ${role}`);
+      flashSaved(u.id);
       fetchUsers();
     } catch { showToast("Role update failed", "err"); }
   };
 
   const handleManagerChange = async (u: adminSvc.AdminUser, managerId: string) => {
     try {
+      // Send null explicitly when clearing manager so the backend recognises it
+      // as an intentional "clear" rather than "field not provided".
       await adminSvc.patchUser(u.id, { managerId: managerId || null });
-      showToast(`${u.name} manager updated`);
+      flashSaved(u.id);
       fetchUsers();
     } catch { showToast("Manager update failed", "err"); }
   };
@@ -284,20 +308,38 @@ export function AdminView({ view: _view }: AdminViewProps) {
                       {/* Role */}
                       <td style={{ padding:"9px 10px" }}>
                         {isPending
-                          ? <span style={{ color:C.orange, fontSize:11 }}>{u.role || "—"}</span>
-                          : <select value={u.role} onChange={e=>handleRoleChange(u, e.target.value)} style={inputStyle}>
-                              {USER_ROLES.map(r=><option key={r}>{r}</option>)}
-                            </select>
+                          ? <span style={{ color:C.orange, fontSize:11 }}>{toUIRole(u.role) || "—"}</span>
+                          : <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                              <select
+                                value={toUIRole(u.role)}
+                                onChange={e=>handleRoleChange(u, e.target.value)}
+                                style={{ ...inputStyle, borderColor: savedRows.has(u.id) ? C.green : undefined }}
+                              >
+                                {USER_ROLES.map(r=><option key={r}>{r}</option>)}
+                              </select>
+                              {savedRows.has(u.id) && (
+                                <span style={{ fontSize:9, color:C.green, fontWeight:700, whiteSpace:"nowrap" as const }}>✓ Saved</span>
+                              )}
+                            </div>
                         }
                       </td>
 
                       {/* Reports To */}
                       <td style={{ padding:"9px 10px" }}>
                         {isSalesRep && !isPending
-                          ? <select value={u.managerId||""} onChange={e=>handleManagerChange(u, e.target.value)} style={inputStyle}>
-                              <option value="">— None —</option>
-                              {regionHeads.map(rh=><option key={rh.id} value={rh.id}>{rh.name}</option>)}
-                            </select>
+                          ? <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                              <select
+                                value={u.managerId||""}
+                                onChange={e=>handleManagerChange(u, e.target.value)}
+                                style={{ ...inputStyle, borderColor: savedRows.has(u.id) ? C.green : undefined }}
+                              >
+                                <option value="">— None —</option>
+                                {regionHeads.map(rh=><option key={rh.id} value={rh.id}>{rh.name}</option>)}
+                              </select>
+                              {savedRows.has(u.id) && (
+                                <span style={{ fontSize:9, color:C.green, fontWeight:700, whiteSpace:"nowrap" as const }}>✓ Saved</span>
+                              )}
+                            </div>
                           : <span style={{ color:C.muted, fontSize:11 }}>{mgr?.name || "—"}</span>
                         }
                       </td>
