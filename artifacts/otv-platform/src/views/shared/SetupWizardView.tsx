@@ -77,7 +77,15 @@ export function SetupWizardView({
               return Math.round(parseFloat(s)||0);
             };
 
-            const totalTarget = wClients.reduce((s,c)=>s+parseLakh(c.q1)+parseLakh(c.q2)+parseLakh(c.q3)+parseLakh(c.q4),0);
+            // Monthly field keys in Indian FY order (Apr–Mar)
+            const MONTHS_FY = [
+              {key:"apr",label:"April",  q:0}, {key:"may",label:"May",    q:0}, {key:"jun",label:"June",   q:0},
+              {key:"jul",label:"July",   q:1}, {key:"aug",label:"August", q:1}, {key:"sep",label:"Sep",    q:1},
+              {key:"oct",label:"October",q:2}, {key:"nov",label:"Nov",    q:2}, {key:"dec",label:"Dec",    q:2},
+              {key:"jan",label:"January",q:3}, {key:"feb",label:"Feb",    q:3}, {key:"mar",label:"March",  q:3},
+            ] as const;
+
+            const totalTarget = wClients.reduce((s,c)=>s+MONTHS_FY.reduce((ms,m)=>ms+parseLakh(c[m.key]),0),0);
 
             const doSubmit = () => {
               if (!wRegion) { showToast("Select your region before submitting","err"); setWStep(1); return; }
@@ -86,18 +94,32 @@ export function SetupWizardView({
               const repName  = myRep?.name || user?.name || "Sales Rep";
               const rhRegion = wRegion;
               const now      = new Date().toISOString();
+              // One submission per quarter — clients whose quarterly total > 0
               const newSubs  = QUARTERS.slice(0,4).map((q,qi)=>{
+                const qMonths = MONTHS_FY.filter(m=>m.q===qi);
                 const clients = wClients.map(c=>({
                   clientCompany: (c.client||c.agency||c.brand||"").trim(),
-                  agency: c.agency.trim(),
-                  brand: c.brand.trim(),
+                  agency: (c.agency||"").trim(),
+                  brand: (c.brand||"").trim(),
                   dealType:"Linear TV",
-                  targetAmount: parseLakh(qi===0?c.q1:qi===1?c.q2:qi===2?c.q3:c.q4),
+                  targetAmount: qMonths.reduce((s,m)=>s+parseLakh(c[m.key]),0),
                 })).filter(c=>c.clientCompany&&c.targetAmount>0);
                 if (clients.length===0) return null;
                 const total = clients.reduce((s,c)=>s+(c.targetAmount||0),0);
                 const id = `ts_wizard_${Date.now()}_q${qi}_${Math.random().toString(36).slice(2,4)}`;
-                return {id,repId:repIdInt,repName,region:rhRegion,quarter:q,clients,totalTarget:total,status:"Pending RH",submittedAt:now,submittedByRole:"SALES REP",approvedAt:null,approvedBy:null,frozenTarget:null,awaitingApprovalSince:now,auditLog:[{at:now,by:"SELF",role:"SALES REP",action:"Submitted (Setup Wizard)"}]};
+                // Monthly column sums for this quarter (other quarters' months = 0)
+                const monthTotals: Record<string,number> = {};
+                MONTHS_FY.forEach(m=>{
+                  monthTotals[m.key===`apr`?"april":m.key===`may`?"may":m.key===`jun`?"june":
+                    m.key===`jul`?"july":m.key===`aug`?"august":m.key===`sep`?"september":
+                    m.key===`oct`?"october":m.key===`nov`?"november":m.key===`dec`?"december":
+                    m.key===`jan`?"january":m.key===`feb`?"february":"march"] =
+                    m.q===qi ? wClients.reduce((s,c)=>s+parseLakh(c[m.key]),0) : 0;
+                });
+                return {id,repId:repIdInt,repName,region:rhRegion,quarter:q,clients,totalTarget:total,...monthTotals,
+                  status:"Pending RH",submittedAt:now,submittedByRole:"SALES REP",
+                  approvedAt:null,approvedBy:null,frozenTarget:null,awaitingApprovalSince:now,
+                  auditLog:[{at:now,by:"SELF",role:"SALES REP",action:"Submitted (Setup Wizard)"}]};
               }).filter(Boolean);
               if (newSubs.length===0) { showToast("Add at least one client with a target amount","err"); return; }
               setTargetSubs(p=>[...(newSubs as any[]),...p]);
@@ -228,15 +250,17 @@ export function SetupWizardView({
                 {wStep===2 && (
                   <div style={{background:C.surface,border:`1px solid ${C.border}`,borderRadius:10,padding:20}}>
                     <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:4}}>Set Your Targets</div>
-                    <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif",marginBottom:14}}>Add clients and quarterly targets. You can always add more later from the Target Submission page.</div>
+                    <div style={{fontSize:11,color:C.dim,fontFamily:"'DM Sans',sans-serif",marginBottom:14}}>Add clients and enter monthly targets (April–March). Quarterly and annual totals are calculated automatically.</div>
 
-                    {wClients.map((c,ci)=>(
+                    {wClients.map((c,ci)=>{
+                      const qTotals = [0,1,2,3].map(qi=>MONTHS_FY.filter(m=>m.q===qi).reduce((s,m)=>s+parseLakh(c[m.key]),0));
+                      return (
                       <div key={ci} style={{border:`1px solid ${C.border}`,borderRadius:8,padding:14,marginBottom:10,background:C.s2}}>
                         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
                           <div style={{fontSize:11,fontWeight:700,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>Client {ci+1}</div>
                           {wClients.length>1&&<button onClick={()=>setWClients(p=>p.filter((_,i)=>i!==ci))} style={{background:"none",border:"none",color:C.red,cursor:"pointer",fontSize:12}}>✕</button>}
                         </div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:10}}>
                           <div>
                             <label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3,fontFamily:"'DM Sans',sans-serif"}}>Agency (opt.)</label>
                             <input value={c.agency} onChange={e=>setWClients(p=>p.map((x,i)=>i===ci?{...x,agency:e.target.value}:x))} placeholder="e.g. Dentsu" style={{fontSize:12}} />
@@ -250,18 +274,32 @@ export function SetupWizardView({
                             <input value={c.brand} onChange={e=>setWClients(p=>p.map((x,i)=>i===ci?{...x,brand:e.target.value}:x))} placeholder="e.g. Nexon" style={{fontSize:12}} />
                           </div>
                         </div>
-                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr 1fr",gap:6}}>
-                          {(["Q1","Q2","Q3","Q4"] as const).map((q,qi)=>(
-                            <div key={q}>
-                              <label style={{fontSize:10,color:C.dim,display:"block",marginBottom:3,fontFamily:"'DM Sans',sans-serif"}}>{q} FY26 (₹)</label>
-                              <input value={c[q.toLowerCase() as "q1"|"q2"|"q3"|"q4"]} onChange={e=>setWClients(p=>p.map((x,i)=>i===ci?{...x,[q.toLowerCase()]:e.target.value}:x))} placeholder="e.g. 25L" style={{fontSize:12}} />
+                        {/* Monthly inputs — 4 rows of 3 (one per quarter) */}
+                        {[0,1,2,3].map(qi=>{
+                          const qMonths = MONTHS_FY.filter(m=>m.q===qi);
+                          const qLabels = ["Q1 (Apr–Jun)","Q2 (Jul–Sep)","Q3 (Oct–Dec)","Q4 (Jan–Mar)"];
+                          return (
+                            <div key={qi} style={{marginBottom:8}}>
+                              <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:4}}>
+                                <span style={{fontSize:9,fontWeight:700,color:C.muted,letterSpacing:".08em",textTransform:"uppercase",fontFamily:"'DM Sans',sans-serif"}}>{qLabels[qi]}</span>
+                                {qTotals[qi]>0&&<span style={{fontSize:10,color:C.green,fontFamily:"'DM Sans',sans-serif"}}>{fmtR(qTotals[qi])}</span>}
+                              </div>
+                              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:6}}>
+                                {qMonths.map(m=>(
+                                  <div key={m.key}>
+                                    <label style={{fontSize:9,color:C.dim,display:"block",marginBottom:2,fontFamily:"'DM Sans',sans-serif"}}>{m.label} (₹)</label>
+                                    <input value={c[m.key]} onChange={e=>setWClients(p=>p.map((x,i)=>i===ci?{...x,[m.key]:e.target.value}:x))} placeholder="0" style={{fontSize:11}} />
+                                  </div>
+                                ))}
+                              </div>
                             </div>
-                          ))}
-                        </div>
+                          );
+                        })}
                       </div>
-                    ))}
+                      );
+                    })}
 
-                    <button onClick={()=>setWClients(p=>[...p,{agency:"",client:"",brand:"",q1:"",q2:"",q3:"",q4:""}])}
+                    <button onClick={()=>setWClients(p=>[...p,{agency:"",client:"",brand:"",apr:"",may:"",jun:"",jul:"",aug:"",sep:"",oct:"",nov:"",dec:"",jan:"",feb:"",mar:""}])}
                       style={{width:"100%",padding:"8px 0",border:`1px dashed ${C.border}`,background:"transparent",color:C.blue,borderRadius:6,fontSize:12,cursor:"pointer",marginBottom:14,fontFamily:"'DM Mono',monospace"}}>
                       + Add another client
                     </button>
@@ -281,8 +319,9 @@ export function SetupWizardView({
                     <div style={{fontSize:13,fontWeight:700,color:C.text,fontFamily:"'DM Sans',sans-serif",marginBottom:12}}>Review & Submit</div>
                     <div style={{marginBottom:14}}>
                       {wClients.filter(c=>c.client||c.agency).map((c,ci)=>{
-                        const qs = {Q1:parseLakh(c.q1),Q2:parseLakh(c.q2),Q3:parseLakh(c.q3),Q4:parseLakh(c.q4)};
-                        const tot = Object.values(qs).reduce((s,v)=>s+v,0);
+                        const qTots = [0,1,2,3].map(qi=>MONTHS_FY.filter(m=>m.q===qi).reduce((s,m)=>s+parseLakh(c[m.key]),0));
+                        const qLabelsShort = ["Q1","Q2","Q3","Q4"];
+                        const tot = qTots.reduce((s,v)=>s+v,0);
                         return (
                           <div key={ci} style={{padding:"10px 14px",background:C.s2,borderRadius:7,marginBottom:8}}>
                             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}>
@@ -290,8 +329,8 @@ export function SetupWizardView({
                               <div style={{fontWeight:700,fontSize:12,color:C.green}}>{fmtR(tot)}</div>
                             </div>
                             <div style={{display:"flex",gap:8}}>
-                              {Object.entries(qs).filter(([,v])=>v>0).map(([q,v])=>(
-                                <div key={q} style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>{q}: {fmtR(v as number)}</div>
+                              {qTots.map((v,qi)=>v>0&&(
+                                <div key={qi} style={{fontSize:10,color:C.dim,fontFamily:"'DM Sans',sans-serif"}}>{qLabelsShort[qi]}: {fmtR(v)}</div>
                               ))}
                             </div>
                           </div>

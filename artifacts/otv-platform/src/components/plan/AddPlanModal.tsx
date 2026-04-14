@@ -13,8 +13,6 @@ import type { PlanForm } from "../../views/rep/MyPlan";
 type RepId = number | string | null | undefined;
 interface Deal { id: string; clientCompany: string; repId?: RepId; agencyName?: string; agency?: string; brand?: string; }
 
-const PLAN_QUARTERS = ["Q1", "Q2", "Q3", "Q4"] as const;
-
 export interface AddPlanModalProps {
   forDate: string;
   form: PlanForm;
@@ -29,28 +27,21 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
   forDate, form: pf, deals, approvedTargetRows,
   onFormChange: setPf, onSubmit: doAddPlan, onClose,
 }) => {
-  // rows is non-null whenever approvedTargetRows was explicitly passed in (even if empty)
+  // When approved target rows are available use them directly (no quarter filter).
+  // Without them fall back to the deals list.
   const rows = approvedTargetRows !== undefined ? approvedTargetRows : null;
 
-  // When using approved target rows, filter by selected quarter first.
-  // If no quarter is selected yet, nothing cascades — the agency/client/brand
-  // dropdowns show a "Select a quarter first" placeholder instead.
-  const quarterSelected = Boolean(pf.quarter);
-  const filteredRows = rows
-    ? (quarterSelected ? rows.filter(r => r.quarter === pf.quarter) : [])
-    : null;
-
-  const allAgencies = filteredRows != null
-    ? [...new Set(filteredRows.map(r => r.agency).filter(Boolean))].sort()
+  const allAgencies = rows != null
+    ? [...new Set(rows.map(r => r.agency).filter(Boolean))].sort()
     : [...new Set(deals.map(d => d.agencyName || d.agency || "").filter(Boolean))].sort();
-  const clientsForAgency = filteredRows != null
-    ? (pf.agency ? filteredRows.filter(r => r.agency.toLowerCase() === pf.agency.toLowerCase()).map(r => r.client) : filteredRows.map(r => r.client))
+  const clientsForAgency = rows != null
+    ? (pf.agency ? rows.filter(r => r.agency.toLowerCase() === pf.agency.toLowerCase()).map(r => r.client) : rows.map(r => r.client))
     : (pf.agency ? deals.filter(d => (d.agencyName || d.agency || "").toLowerCase() === pf.agency.toLowerCase()).map(d => d.clientCompany) : deals.map(d => d.clientCompany));
-  const clientOptions  = [...new Set(clientsForAgency)].sort();
-  const brandsForClient = filteredRows != null
-    ? filteredRows.filter(r => r.client.toLowerCase() === (pf.client || "").toLowerCase()).map(r => r.brand).filter(Boolean)
+  const clientOptions   = [...new Set(clientsForAgency)].sort();
+  const brandsForClient = rows != null
+    ? rows.filter(r => r.client.toLowerCase() === (pf.client || "").toLowerCase()).map(r => r.brand).filter(Boolean)
     : deals.filter(d => d.clientCompany.toLowerCase() === (pf.client || "").toLowerCase()).flatMap(d => [d.brand].filter((b): b is string => Boolean(b)));
-  const brandOptions   = [...new Set(brandsForClient)].sort();
+  const brandOptions    = [...new Set(brandsForClient)].sort();
 
   const dateLabel = new Date(forDate + "T12:00:00").toLocaleDateString("en-IN", { weekday: "long", day: "2-digit", month: "short" });
 
@@ -96,91 +87,45 @@ export const AddPlanModal: React.FC<AddPlanModalProps> = ({
           </div>
         )}
 
-        {/* Quarter — first field when approved target rows are available */}
-        {rows && (
-          <div style={{ marginBottom: 10 }}>
-            <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Quarter *</label>
-            <select value={pf.quarter}
-              onChange={e => setPf(p => ({ ...p, quarter: e.target.value, agency: "", client: "", brand: "" }))}
-              style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${pf.quarter ? C.blue : C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-              <option value="">— Select quarter —</option>
-              {PLAN_QUARTERS.map(q => <option key={q} value={q}>{q}</option>)}
-            </select>
-          </div>
-        )}
-
         {/* Agency */}
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Agency</label>
-          {rows
-            ? !quarterSelected
-              ? <select disabled style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.muted}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.muted, opacity: .6 }}>
-                  <option>Select a quarter first</option>
-                </select>
-              : (<select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                  <option value="">— No agency / Direct —</option>
-                  {allAgencies.map(a => <option key={a}>{a}</option>)}
-                </select>)
-            : allAgencies.length > 0
-              ? <select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                  <option value="">— No agency —</option>
-                  {allAgencies.map(a => <option key={a}>{a}</option>)}
-                </select>
-              : <input value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value }))} placeholder="Agency name (optional)"
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+          {allAgencies.length > 0
+            ? <select value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value, client: "", brand: "" }))}
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                <option value="">— No agency / Direct —</option>
+                {allAgencies.map(a => <option key={a}>{a}</option>)}
+              </select>
+            : <input value={pf.agency} onChange={e => setPf(p => ({ ...p, agency: e.target.value }))} placeholder="Agency name (optional)"
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
           }
         </div>
 
         {/* Client */}
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Client *</label>
-          {rows
-            ? !quarterSelected
-              ? <select disabled style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.muted}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.muted, opacity: .6 }}>
-                  <option>Select a quarter first</option>
-                </select>
-              : (<select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${clientOptions.length===0?C.muted:C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                  <option value="">— Select client —</option>
-                  {clientOptions.length === 0
-                    ? <option value="" disabled>No approved targets for {pf.quarter} — contact your Region Head</option>
-                    : clientOptions.map(c => <option key={c}>{c}</option>)
-                  }
-                </select>)
-            : clientOptions.length > 0
-              ? <select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                  <option value="">— Select client —</option>
-                  {clientOptions.map(c => <option key={c}>{c}</option>)}
-                </select>
-              : <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *"
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+          {clientOptions.length > 0
+            ? <select value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value, brand: "" }))}
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                <option value="">— Select client —</option>
+                {clientOptions.map(c => <option key={c}>{c}</option>)}
+              </select>
+            : <input value={pf.client} onChange={e => setPf(p => ({ ...p, client: e.target.value }))} placeholder="Client / Advertiser *"
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
           }
         </div>
 
         {/* Brand Name */}
         <div style={{ marginBottom: 10 }}>
           <label style={{ marginBottom: 4, display: "block", fontSize: 11, color: C.dim, textTransform: "uppercase", letterSpacing: .4 }}>Brand Name</label>
-          {rows
-            ? !quarterSelected
-              ? <select disabled style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.muted}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.muted, opacity: .6 }}>
-                  <option>Select a quarter first</option>
-                </select>
-              : (<select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                  <option value="">— No specific brand —</option>
-                  {brandOptions.map(b => <option key={b}>{b}</option>)}
-                </select>)
-            : brandOptions.length > 0
-              ? <select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
-                  <option value="">— Select brand —</option>
-                  {brandOptions.map(b => <option key={b}>{b}</option>)}
-                </select>
-              : <input value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))} placeholder="Brand (optional)"
-                  style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
+          {brandOptions.length > 0
+            ? <select value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))}
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text }}>
+                <option value="">— No specific brand —</option>
+                {brandOptions.map(b => <option key={b}>{b}</option>)}
+              </select>
+            : <input value={pf.brand} onChange={e => setPf(p => ({ ...p, brand: e.target.value }))} placeholder="Brand (optional)"
+                style={{ width: "100%", padding: "8px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 5, fontSize: 12, fontFamily: "'DM Mono',monospace", color: C.text, boxSizing: "border-box" }} />
           }
         </div>
 

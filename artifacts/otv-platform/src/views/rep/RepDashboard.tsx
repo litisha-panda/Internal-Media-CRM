@@ -18,6 +18,7 @@ export interface RepDashboardProps {
   userRole: { repId?: RepId; id?: string; region?: string } | null;
   activeUser: string;
   currentQ: string;
+  currentMonth: string;
   annualTgt: number;
   ach: number;
   comm: number;
@@ -26,6 +27,8 @@ export interface RepDashboardProps {
   pct: number;
   qTarget: number;
   qAch: number;
+  mTarget: number;
+  mAch: number;
   targetApprovalStatus: "none" | "pending" | "approved";
   internalReqs: IR[];
   hrBadge: number | null;
@@ -35,9 +38,10 @@ export interface RepDashboardProps {
 }
 
 export const RepDashboard: React.FC<RepDashboardProps> = ({
-  userRole, activeUser, currentQ,
+  userRole, activeUser, currentQ, currentMonth,
   annualTgt, ach, comm, inpl, sf, pct,
-  qTarget, qAch, targetApprovalStatus,
+  qTarget, qAch, mTarget, mAch,
+  targetApprovalStatus,
   internalReqs, hrBadge,
   stackedBar,
   onLogRevenue, onNavigate,
@@ -111,13 +115,41 @@ export const RepDashboard: React.FC<RepDashboardProps> = ({
         </p>
       </div>
 
-      {/* KPI Cards */}
-      <div style={{ display: "flex", gap: 12, marginBottom: 16, flexWrap: "wrap" }}>
-        <Card label="Annual Target"        value={fmtR(annualTgt)} sub={targetApprovalStatus === "pending" ? "Pending approval" : targetApprovalStatus === "none" ? "Not set yet" : undefined} color={C.blue} />
-        <Card label={`${currentQ} Target`} value={qTarget > 0 ? fmtR(qTarget) : "—"} sub={qTarget > 0 ? `Achieved ${fmtR(qAch)}` : undefined} color={"#7920e8"} />
-        <Card label="Achieved (FY)"        value={fmtR(ach)} sub={annualTgt > 0 ? `${pct}% of annual target` : undefined} color={C.green} />
-        <Card label="Shortfall"            value={annualTgt > 0 ? fmtR(sf) : "—"} sub={annualTgt > 0 && sf === 0 ? "On track 🎉" : undefined} color={sf > 0 ? C.red : C.green} />
-      </div>
+      {/* KPI Cards — 3 rows × 3 cards */}
+      {(["Annual", currentQ, currentMonth] as const).map((period, ri) => {
+        const tgt = ri === 0 ? annualTgt : ri === 1 ? qTarget : mTarget;
+        const achieved = ri === 0 ? ach : ri === 1 ? qAch : mAch;
+        const shortfall = Math.max(0, tgt - achieved);
+        const rowColor = ri === 0 ? C.blue : ri === 1 ? "#7920e8" : "#0ea5a0";
+        const label = ri === 0 ? "Annual" : ri === 1 ? currentQ : currentMonth;
+        const isPending = ri === 0 && targetApprovalStatus === "pending";
+        const notSet    = ri === 0 && targetApprovalStatus === "none";
+        return (
+          <div key={period} style={{ display: "flex", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
+            <div style={{ width: 4, borderRadius: 2, background: rowColor, flexShrink: 0, minHeight: 56, alignSelf: "stretch" }} />
+            <div style={{ flex: 1, display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <Card
+                label={`${label} Target`}
+                value={tgt > 0 ? fmtR(tgt) : (isPending ? "Pending" : notSet ? "Not set" : "—")}
+                sub={isPending ? "Awaiting approval" : notSet ? "Complete setup →" : undefined}
+                color={rowColor}
+              />
+              <Card
+                label={`${label} Achieved`}
+                value={fmtR(achieved)}
+                sub={tgt > 0 ? `${Math.min(100, Math.round((achieved / tgt) * 100))}% of target` : undefined}
+                color={C.green}
+              />
+              <Card
+                label={`${label} Shortfall`}
+                value={tgt > 0 ? fmtR(shortfall) : "—"}
+                sub={tgt > 0 && shortfall === 0 ? "On track 🎉" : undefined}
+                color={shortfall > 0 ? C.red : C.green}
+              />
+            </div>
+          </div>
+        );
+      })}
 
       {/* Progress bar */}
       {annualTgt > 0 && (

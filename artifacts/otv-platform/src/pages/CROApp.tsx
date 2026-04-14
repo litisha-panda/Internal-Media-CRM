@@ -1091,7 +1091,7 @@ export function CROApp({ user, onLogout }) {
   const [addClientForm, setAddClientForm]               = useState({clientCompany:"",dealType:"Linear TV",targetAmount:""});
   // S9: Setup Wizard state
   const [wizardStep, setWizardStep]                     = useState(0);
-  const [wizardClients, setWizardClients]               = useState<{agency:string,client:string,brand:string,q1:string,q2:string,q3:string,q4:string}[]>([{agency:"",client:"",brand:"",q1:"",q2:"",q3:"",q4:""}]);
+  const [wizardClients, setWizardClients]               = useState<Record<string,string>[]>([{agency:"",client:"",brand:"",apr:"",may:"",jun:"",jul:"",aug:"",sep:"",oct:"",nov:"",dec:"",jan:"",feb:"",mar:""}]);
   const [wizardRegion, setWizardRegion]                 = useState("");
   const [wizardRM, setWizardRM]                         = useState("");
   // Track whether the wizard was pre-filled from myRep — prevents re-filling after user clears RM
@@ -1717,15 +1717,14 @@ export function CROApp({ user, onLogout }) {
   const closeTour = () => { setTourActive(false); setTourStep(0); };
   const openWelcome = () => { setTourActive(false); setShowWelcomeModal(true); };
 
-  // FIX 5: Trigger guided tour for rep when their first target is approved (runs once per device)
+  // Trigger guided tour on the rep's FIRST login ever (when localStorage key not set).
+  // This fires immediately on first visit — no need to wait for an approved target.
   React.useEffect(() => {
     if (!isRep) return;
-    const myRepId = user_role?.repId;
-    const hasApproved = targetSubs.some(s => String(s.repId) === String(myRepId) && s.status === "Approved");
-    if (hasApproved && !localStorage.getItem("otv_tour_seen")) {
+    if (!localStorage.getItem("otv_tour_seen")) {
       openWelcome();
     }
-  }, [targetSubs, isRep, activeUser]);
+  }, [isRep, activeUser]);
 
   // ── APPROVAL HELPERS ──
   const APPROVAL_THRESHOLDS = {
@@ -2205,12 +2204,31 @@ export function CROApp({ user, onLogout }) {
             const inpl      = getInPlay(myRepId);
             const sf        = getShortfall(annualTgt, myRepId);
             const pct       = annualTgt > 0 ? Math.min(100, Math.round((ach / annualTgt) * 100)) : 0;
-            const todayM    = new Date().getMonth() + 1;
+
+            // Indian FY quarter derived from today's date — no dropdown needed
+            const todayDate = new Date();
+            const todayM    = todayDate.getMonth() + 1; // 1-12
             const qIdx      = todayM >= 4 && todayM <= 6 ? 0 : todayM >= 7 && todayM <= 9 ? 1 : todayM >= 10 && todayM <= 12 ? 2 : 3;
             const currentQ  = QUARTERS[qIdx];
             const qSubs     = targetSubs.filter(s => String(s.repId)===String(myRepId) && s.quarter === currentQ && s.status === "Approved");
             const qTarget   = qSubs.reduce((s,x) => s + (x.totalTarget||0), 0);
             const qAch      = revenueEntries.filter(e => String(e.repId)===String(myRepId) && e.quarter === currentQ).reduce((s,e) => s + (parseCurrency(e.amount||"0")||0), 0);
+
+            // Current month KPIs — Indian FY month names map to DB column names
+            const MONTH_NAMES = ["january","february","march","april","may","june","july","august","september","october","november","december"];
+            const MONTH_LABELS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
+            const currentMonthKey   = MONTH_NAMES[todayDate.getMonth()]; // e.g. "april"
+            const currentMonth      = MONTH_LABELS[todayDate.getMonth()]; // e.g. "April"
+            const currentMonthStr   = `${todayDate.getFullYear()}-${String(todayM).padStart(2,"0")}`; // "2026-04"
+            // Sum the current month's column from all approved submissions for this rep.
+            // Drizzle numeric columns are returned as strings — coerce with Number().
+            const mTarget = targetSubs
+              .filter(s => String(s.repId)===String(myRepId) && s.status==="Approved")
+              .reduce((sum, s) => sum + (Number((s as any)[currentMonthKey]) || 0), 0);
+            const mAch = revenueEntries
+              .filter(e => String(e.repId)===String(myRepId) && (String(e.date||"")).startsWith(currentMonthStr))
+              .reduce((sum, e) => sum + (parseCurrency(e.amount||"0")||0), 0);
+
             const myTargetSub  = targetSubs.find(s => String(s.repId)===String(myRepId));
             const targetApprovalStatus = !myTargetSub ? "none" : myTargetSub.status === "Approved" ? "approved" : "pending";
             return (
@@ -2218,6 +2236,7 @@ export function CROApp({ user, onLogout }) {
                 userRole={user_role}
                 activeUser={activeUser}
                 currentQ={currentQ}
+                currentMonth={currentMonth}
                 annualTgt={annualTgt}
                 ach={ach}
                 comm={comm}
@@ -2226,6 +2245,8 @@ export function CROApp({ user, onLogout }) {
                 pct={pct}
                 qTarget={qTarget}
                 qAch={qAch}
+                mTarget={mTarget}
+                mAch={mAch}
                 targetApprovalStatus={targetApprovalStatus}
                 internalReqs={internalReqs as any}
                 hrBadge={hrBadge}

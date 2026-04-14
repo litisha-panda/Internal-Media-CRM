@@ -89,8 +89,8 @@ export function AppTopbar({
       )}
 
       <div style={{display:"flex",alignItems:"center",gap:10}}>
-        {user_role?.role !== "ADMIN" && <select value={filterQ} onChange={e=>setFilterQ(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px"}}>{QUARTERS.map(q=><option key={q}>{q}</option>)}</select>}
-        {user_role?.role !== "ADMIN" && user_role.canView==="all" && <select value={filterRegion} onChange={e=>setFilterRegion(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px"}}><option>All</option>{REGIONS.map(r=><option key={r}>{r}</option>)}</select>}
+        {user_role?.role !== "ADMIN" && !isRep && <select value={filterQ} onChange={e=>setFilterQ(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px"}}>{QUARTERS.map(q=><option key={q}>{q}</option>)}</select>}
+        {user_role?.role !== "ADMIN" && !isRep && user_role.canView==="all" && <select value={filterRegion} onChange={e=>setFilterRegion(e.target.value)} style={{width:"auto",fontSize:11,padding:"4px 8px"}}><option>All</option>{REGIONS.map(r=><option key={r}>{r}</option>)}</select>}
         <div style={{width:1,height:20,background:C.border}} />
         {["CXO","CEO","CRO"].includes(user_role?.role) && (
           <div style={{display:"flex",alignItems:"center",gap:5}}>
