@@ -549,11 +549,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
                 <select value={form.stageUpdate} onChange={e => setF({ stageUpdate: e.target.value })}
                   style={{ marginTop: 4, width: "100%", padding: "7px 10px", background: C.s2, border: `1px solid ${C.border}`, borderRadius: 4, color: C.text, fontSize: 12, fontFamily: "'DM Mono',monospace" }}>
                   <option value="">Select current stage…</option>
-                  <option>Prospect</option>
-                  <option>In Discussion</option>
-                  <option>Proposal Sent</option>
-                  <option>Negotiation</option>
-                  <option>Mail Confirmed</option>
+                  {DEAL_STAGES.map(s => <option key={s}>{s}</option>)}
                 </select>
               </div>
             </div>
