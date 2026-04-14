@@ -2349,7 +2349,6 @@ export function CROApp({ user, onLogout }) {
             irFormOpen={irFormOpen} setIrFormOpen={setIrFormOpen}
             irForm={irForm} setIrForm={setIrForm}
             editIrId={editIrId} setEditIrId={setEditIrId}
-            irStatusFilter={irStatusFilter} setIrStatusFilter={setIrStatusFilter}
           />
           {/* ═══ ADMIN ═══ */}
           {(view==="admin-access"||view==="admin-approvals"||view==="admin-export"||view==="admin-system") && isAdmin && (

@@ -217,8 +217,8 @@ export function LeaderboardView({ view, setView, lbTab, setLbTab }: LeaderboardV
   );
 }
 
-interface InternalRequestsViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; irFormOpen: boolean; setIrFormOpen: React.Dispatch<React.SetStateAction<boolean>>; irForm: Record<string,any>; setIrForm: React.Dispatch<React.SetStateAction<Record<string,any>>>; editIrId: string | null; setEditIrId: React.Dispatch<React.SetStateAction<string | null>>; irStatusFilter: string; setIrStatusFilter: React.Dispatch<React.SetStateAction<string>>; }
-export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen, irForm, setIrForm, editIrId, setEditIrId, irStatusFilter, setIrStatusFilter }: InternalRequestsViewProps) {
+interface InternalRequestsViewProps { view: string; setView: React.Dispatch<React.SetStateAction<string>>; irFormOpen: boolean; setIrFormOpen: React.Dispatch<React.SetStateAction<boolean>>; irForm: Record<string,any>; setIrForm: React.Dispatch<React.SetStateAction<Record<string,any>>>; editIrId: string | null; setEditIrId: React.Dispatch<React.SetStateAction<string | null>>; }
+export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen, irForm, setIrForm, editIrId, setEditIrId }: InternalRequestsViewProps) {
   const {
     user, deals, setDeals, meetings, setMeetings, tasks, setTasks, targetSubs, setTargetSubs, revenueEntries, setRevenueEntries, clientAccounts, setClientAccounts, touchpoints, internalReqs, setInternalReqs,
     reps, setReps, masterClients, setMasterClients, clientMasterList, setClientMasterList,
@@ -383,6 +383,10 @@ export function InternalRequestsView({ view, setView, irFormOpen, setIrFormOpen,
                         {req.details&&<div style={{fontSize:11,color:C.dim,marginBottom:6,lineHeight:1.5}}>{req.details}</div>}
                         {req.resolverNote&&<div style={{fontSize:11,color:C.green,background:`${C.green}08`,padding:"6px 10px",borderRadius:5,marginBottom:6}}>✓ {req.resolverNote}</div>}
                         <div style={{display:"flex",gap:8,justifyContent:"flex-end",flexWrap:"wrap"}}>
+                          {req.status!=="Done"&&req.status!=="Rejected"&&req.status!=="Withdrawn"&&(
+                            <button onClick={()=>openNoteModal("Add Note / Update","Noted",note=>setInternalReqs(p=>p.map(r=>r.id===req.id?{...r,notes:note}:r)))}
+                              style={{background:`${C.accent}12`,border:`1px solid ${C.accent}33`,color:C.accent,borderRadius:4,padding:"3px 11px",fontSize:11,cursor:"pointer",fontFamily:"'DM Mono',monospace"}}>+ Note</button>
+                          )}
                           {(isRep||isRH) && req.status!=="Done" && req.status!=="Withdrawn" && req.type!=="Escalation" && daysOld>=(req.slaHours/24) && (
                             <button onClick={()=>{
                               const escalatedDept = req.dept==="NSH"?"CXO":req.dept==="Sales Strategy"?"NSH":req.dept==="Region Head"?"NSH":req.dept==="CXO"?"CXO":"Region Head";
