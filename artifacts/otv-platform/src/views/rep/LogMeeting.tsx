@@ -24,8 +24,6 @@ type RepId = number | string | null | undefined;
 const PITCH_TYPES    = ["Generic", "FCT", "Property", "IP", "Non-FCT Element", "IPs", "Others"];
 const MEETING_STATUS = ["Meeting Done", "Rescheduled", "Cancelled", "Follow-up Pending", "Proposal Shared", "Negotiation"];
 const MEETING_TYPES  = ["Physical", "Online", "Phone Call"];
-const ACTION_TYPES   = ["Approval needed", "Document needed", "Attend a meeting", "Introduction needed", "Flag for follow-up"];
-const APPROVAL_TARGETS = ["Region Head", "NSH", "Branding Team", "Content Team", "Sales Strategy", "Digital", "Finance", "Legal", "CXO"];
 
 const BLANK_ACTION = { what: "", from: "", description: "", byWhen: "" };
 
@@ -49,6 +47,7 @@ interface LogForm {
   meetingTime: string;
   meetingKind: string;
   touchpointType: string;
+  meetingWith: "client" | "agency";
   clientAgencyName: string;
   agency: string;
   client: string;
@@ -83,7 +82,7 @@ interface LogForm {
 
 const BLANK_FORM: LogForm = {
   repId: "", dealId: "", meetingDbId: "", meetingTime: "", meetingKind: "ACTIONABLE",
-  touchpointType: "Deal Meeting", clientAgencyName: "", agency: "", client: "", brand: "",
+  touchpointType: "Deal Meeting", meetingWith: "client", clientAgencyName: "", agency: "", client: "", brand: "",
   contactName: "", mobile: "", designation: "", contactLevel: "",
   meetingType: "Physical", pitchType: "", agenda: "", clientFeedback: "",
   feedbackNote: "", pricingOption: "",
@@ -439,10 +438,23 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
               </div>
             </div>
 
+            {/* Meeting with toggle */}
+            <div style={{ marginBottom: 10 }}>
+              <label>Meeting with</label>
+              <div style={{ display: "flex", gap: 6, marginTop: 4 }}>
+                {(["client", "agency"] as const).map(type => (
+                  <button key={type} onClick={() => setF({ meetingWith: type })}
+                    style={{ flex: 1, padding: "7px 12px", fontSize: 11, borderRadius: 5, border: `1px solid ${form.meetingWith === type ? C.accent : C.border}`, background: form.meetingWith === type ? `${C.accent}18` : "transparent", color: form.meetingWith === type ? C.accent : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", fontWeight: form.meetingWith === type ? 700 : 400, transition: "all .1s", textAlign: "center" }}>
+                    {type === "client" ? "🏢 Client" : "📋 Agency"}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Client / Agency */}
             <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>Client / Agency / Brand</div>
             <div style={{ marginBottom: 10 }}>
-              <label>Client / Agency *</label>
+              <label>{form.meetingWith === "agency" ? "Agency *" : "Client / Agency *"}</label>
               {!customClientMode ? (
                 <select
                   value={(() => {
@@ -501,7 +513,7 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
             </div>
             {/* Contact details */}
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10, marginBottom: 14 }}>
-              <div><label>Name of Person Met *</label><input placeholder="Full name" value={form.contactName} onChange={e => setF({ contactName: e.target.value })} /></div>
+              <div><label>{form.meetingWith === "agency" ? "Agency Representative *" : "Client Representative *"}</label><input placeholder="Full name" value={form.contactName} onChange={e => setF({ contactName: e.target.value })} /></div>
               <div><label>Designation</label><input placeholder="e.g. VP Marketing" value={form.designation} onChange={e => setF({ designation: e.target.value })} /></div>
               <div>
                 <label>Contact Level</label>
@@ -518,19 +530,17 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
 
         {/* SECTION 3 — Touchpoint Content */}
         <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 8 }}>Touchpoint Content</div>
-        {!isFromPlan && (
-          <div style={{ marginBottom: 10 }}>
-            <label>Pitch Type <span style={{ color: C.dim, fontWeight: 400 }}>(what did you pitch?)</span></label>
-            <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-              {PITCH_TYPES.map(pt => (
-                <button key={pt} onClick={() => setF({ pitchType: pt })}
-                  style={{ padding: "5px 12px", fontSize: 11, borderRadius: 4, border: `1px solid ${form.pitchType === pt ? C.accent : C.border}`, background: form.pitchType === pt ? `${C.accent}22` : C.s2, color: form.pitchType === pt ? C.accent : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all .1s" }}>
-                  {pt}
-                </button>
-              ))}
-            </div>
+        <div style={{ marginBottom: 10 }}>
+          <label>Pitch Type <span style={{ color: C.dim, fontWeight: 400 }}>(what did you pitch?)</span></label>
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            {PITCH_TYPES.map(pt => (
+              <button key={pt} onClick={() => setF({ pitchType: pt === form.pitchType ? "" : pt })}
+                style={{ padding: "5px 12px", fontSize: 11, borderRadius: 4, border: `1px solid ${form.pitchType === pt ? C.accent : C.border}`, background: form.pitchType === pt ? `${C.accent}22` : C.s2, color: form.pitchType === pt ? C.accent : C.dim, cursor: "pointer", fontFamily: "'DM Mono',monospace", transition: "all .1s" }}>
+                {pt}
+              </button>
+            ))}
           </div>
-        )}
+        </div>
         <div style={{ marginBottom: 10 }}>
           <label>Discussion <span style={{ color: C.dim, fontWeight: 400 }}>(what happened in the meeting)</span></label>
           <textarea rows={3} placeholder="What did you discuss? Campaign ideas, budget conversations, client objections, brand insights..." value={form.discussion} onChange={e => setF({ discussion: e.target.value })} style={{ resize: "vertical" }} />
@@ -617,53 +627,40 @@ export const LogMeeting: React.FC<LogMeetingProps> = ({
           )}
         </div>
 
-        {/* SECTION 4 — Blockers / Help Needed */}
-        <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>Blockers / Help Needed <span style={{ fontWeight: 400, color: C.dim, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(optional)</span></div>
-        <div style={{ fontSize: 10, color: C.dim, marginBottom: 8 }}>Something you need from another person or team to progress this deal. Each item auto-creates a tracked task + escalation.</div>
-        <div style={{ background: `${C.purple}06`, border: `1.5px solid ${C.purple}33`, borderRadius: 8, padding: "12px 14px", marginBottom: 14 }}>
-          <div style={{ fontSize: 11, color: C.purple, fontWeight: 700, marginBottom: 8 }}>Leave blank if no blockers — skip straight to Stage Update below.</div>
+        {/* SECTION 4 — What needs to happen next? */}
+        <div style={{ fontSize: 10, color: C.accent, fontWeight: 700, letterSpacing: ".1em", textTransform: "uppercase", marginBottom: 4 }}>What needs to happen next? <span style={{ fontWeight: 400, color: C.dim, textTransform: "none", letterSpacing: 0, fontSize: 10 }}>(optional)</span></div>
+        <div style={{ fontSize: 10, color: C.dim, marginBottom: 8 }}>Each item auto-creates a tracked task. Leave blank if no action items.</div>
+        <div style={{ marginBottom: 14 }}>
           {(form.actionRequired || [{ ...BLANK_ACTION }]).map((item, idx) => (
-            <div key={idx} style={{ background: C.surface, border: `1px solid ${C.border}`, borderRadius: 7, padding: "10px 12px", marginBottom: 8 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 6 }}>
-                <div>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 3 }}>What do I need? *</div>
-                  <select value={item.what || ""} onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], what: e.target.value }; setF({ actionRequired: arr }); }}>
-                    <option value="">Select type…</option>
-                    {ACTION_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-                  </select>
-                </div>
-                <div>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 3 }}>Needed From *</div>
-                  <select value={item.from || ""} onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], from: e.target.value }; setF({ actionRequired: arr }); }}>
-                    <option value="">Department / person…</option>
-                    <optgroup label="Internal Departments">{APPROVAL_TARGETS.map(t => <option key={t} value={t}>{t}</option>)}</optgroup>
-                    <optgroup label="Self"><option value="Self">Myself</option></optgroup>
-                    <optgroup label="Client"><option value="Client">Client</option></optgroup>
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 150px 28px", gap: 8, alignItems: "end" }}>
-                <div>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 3 }}>Description <span style={{ fontWeight: 400, color: C.muted }}>(max 150 chars)</span></div>
-                  <input maxLength={150} placeholder="What exactly is needed…" value={item.description || ""} onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], description: e.target.value }; setF({ actionRequired: arr }); }} />
-                </div>
-                <div>
-                  <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, letterSpacing: ".06em", textTransform: "uppercase", marginBottom: 3 }}>By When *</div>
-                  <input type="date" min="2020-01-01" max="2099-12-31" value={item.byWhen || ""} onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], byWhen: e.target.value }; setF({ actionRequired: arr }); }} />
-                </div>
-                <button onClick={() => { const arr = (form.actionRequired || []).filter((_, i) => i !== idx); setF({ actionRequired: arr.length ? arr : [{ ...BLANK_ACTION }] }); }}
-                  style={{ background: "transparent", border: "none", color: C.muted, cursor: "pointer", fontSize: 14, padding: 0, lineHeight: 1, textAlign: "center", height: 34 }}>✕</button>
-              </div>
-              {item.what && item.from && (
-                <div style={{ marginTop: 6, fontSize: 10, color: C.purple, fontWeight: 600 }}>
-                  → Auto-creates task for <strong>{item.from}</strong>{item.byWhen ? ` · due ${item.byWhen}` : ""}. If overdue, escalates: RH → NSH → Strategy → CRO.
-                </div>
-              )}
+            <div key={idx} style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 6 }}>
+              <input
+                placeholder="What needs to happen? e.g. Send revised proposal"
+                value={item.what}
+                onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], what: e.target.value }; setF({ actionRequired: arr }); }}
+                style={{ flex: 2 }}
+              />
+              <select
+                value={item.from}
+                onChange={e => { const arr = [...(form.actionRequired || [])]; arr[idx] = { ...arr[idx], from: e.target.value }; setF({ actionRequired: arr }); }}
+                style={{ flex: 1 }}
+              >
+                <option value="">Who?</option>
+                <option value="Self">Self</option>
+                <option value="Creative">Creative</option>
+                <option value="Digital">Digital</option>
+                <option value="Pricing">Pricing</option>
+                <option value="NSH">NSH</option>
+                <option value="Client">Client</option>
+              </select>
+              <button
+                onClick={() => { const arr = (form.actionRequired || []).filter((_, i) => i !== idx); setF({ actionRequired: arr.length ? arr : [{ ...BLANK_ACTION }] }); }}
+                style={{ background: "transparent", border: "none", color: C.muted, cursor: "pointer", fontSize: 16, padding: "0 4px", lineHeight: 1, flexShrink: 0 }}
+              >✕</button>
             </div>
           ))}
           <button onClick={() => setF({ actionRequired: [...(form.actionRequired || []), { ...BLANK_ACTION }] })}
-            style={{ background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 5, padding: "5px 14px", color: C.dim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", marginTop: 4, width: "100%" }}>
-            + Add another action item
+            style={{ background: "transparent", border: `1px dashed ${C.border}`, borderRadius: 5, padding: "5px 14px", color: C.dim, fontSize: 11, cursor: "pointer", fontFamily: "'DM Mono',monospace", width: "100%" }}>
+            + Add action item
           </button>
         </div>
 
