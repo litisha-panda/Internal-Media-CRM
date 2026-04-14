@@ -1976,10 +1976,7 @@ export function CROApp({ user, onLogout }) {
 
     // ── ADMIN ──
     if (isAdmin) return [
-      { label:"ACCESS",    items:[N("admin-access","Access Management","◎",pendingUsers.length||undefined)] },
-      { label:"PLATFORM",  items:[N("import","Target Import","⬆"), N("admin-config","Platform Config","⚙")] },
-      { label:"MONITOR",   items:[N("warroom","War Room","⬡"), N("pipeline","Revenue Tracker","◈")] },
-      { label:"APPROVALS", items:[N("admin-approvals","Approval Queue","✦",(internalReqs as any[]).filter((r:any)=>r.status==="Pending"||r.status==="Overdue").length||undefined)] },
+      { label:"ACCESS", items:[N("admin-access","Access Management","◎",pendingUsers.length||undefined)] },
     ];
 
     // Fallback — should never reach here but prevents blank screen
