@@ -99,7 +99,7 @@ const inputStyle = (C: any): React.CSSProperties => ({
 // PROPS
 // ──────────────────────────────────────────────────────────────────────────
 interface FirstLoginWizardProps {
-  user: { id: number; name: string | null; email: string; role: string; region?: string | null };
+  user: { id: number; name: string | null; email: string; role: string; region?: string | null; repId?: number | null };
   C: any;
   targetSubs: any[];
   setTargetSubs: React.Dispatch<React.SetStateAction<any[]>>;
@@ -250,7 +250,7 @@ export const FirstLoginWizard: React.FC<FirstLoginWizardProps> = ({
           FY_MONTHS.forEach(m => { monthTotals[m.key] = m.key in row.months ? row.months[m.key as MonthKey] : 0; });
           const id = `ts_wiz_${Date.now()}_${qi}_${Math.random().toString(36).slice(2, 5)}`;
           const payload = {
-            id, repId: user.id, repName: name.trim(), region,
+            id, repId: user.repId ?? user.id, repName: name.trim(), region,
             quarter: QUARTERS_FY[qi],
             clients: [{
               clientCompany: row.clientName,
